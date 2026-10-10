@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dipendenze autorizzate a eseguire script di build (binari nativi/opzionali).
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true

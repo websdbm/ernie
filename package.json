@@ -1,0 +1,30 @@
+{
+  "name": "ernie",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ernie: agente AI personale persistente (backend TypeScript + client iOS)",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:api": "node --env-file-if-exists=.env --import tsx --conditions=development --watch apps/api/src/index.ts",
+    "dev:worker": "node --env-file-if-exists=.env --import tsx --conditions=development --watch apps/worker/src/index.ts",
+    "migrate": "node --env-file-if-exists=.env --import tsx --conditions=development packages/db/src/cli.ts",
+    "clean": "rm -rf apps/*/dist packages/*/dist apps/*/*.tsbuildinfo packages/*/*.tsbuildinfo reports coverage"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

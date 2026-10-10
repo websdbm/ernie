@@ -1,0 +1,19 @@
+# Configurazione LiteLLM per il profilo opzionale `litellm` di docker-compose.
+# Il Model Gateway predefinito di Ernie è il model router di Mastra (vedi ARCHITECTURE.md);
+# LiteLLM è un'alternativa centralizzata, utile per budget/virtual key condivisi.
+model_list:
+  - model_name: ernie-light
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: ernie-standard
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-4.5
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: ernie-embeddings
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  drop_params: true

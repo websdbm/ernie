@@ -1,0 +1,17 @@
+{
+  "name": "@ernie/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Worker BullMQ: job di sistema, consolidamento memoria, automazioni",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ernie/config": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "bullmq": "^6.3.12",
+    "ioredis": "^5.6.0"
+  }
+}

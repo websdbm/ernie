@@ -1,0 +1,21 @@
+# dipendenze e build
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+reports/
+
+# segreti e configurazione locale
+.env
+.env.*
+!.env.example
+
+# sistema
+.DS_Store
+*.log
+
+# iOS (Xcode)
+apps/ios/**/xcuserdata/
+apps/ios/**/DerivedData/
+apps/ios/**/*.xcuserstate
+apps/ios/**/.build/

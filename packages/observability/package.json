@@ -1,0 +1,21 @@
+{
+  "name": "@ernie/observability",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Logging strutturato, identificativi di correlazione e (in seguito) metriche e cost tracking",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "pino": "^10.4.0",
+    "pino-pretty": "^13.2.0"
+  }
+}

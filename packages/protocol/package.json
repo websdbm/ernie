@@ -1,0 +1,20 @@
+{
+  "name": "@ernie/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Protocollo client-server versionato (eventi, envelope, utilità di ordinamento e deduplica)",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

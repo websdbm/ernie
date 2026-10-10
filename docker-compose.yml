@@ -1,0 +1,113 @@
+name: ernie
+
+x-app: &app
+  image: ernie-app:local
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile
+    args:
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+  env_file:
+    - path: ./.env
+      required: false
+  environment:
+    NODE_ENV: production
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
+    REDIS_URL: redis://redis:6379
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ernie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ernie}
+      POSTGRES_DB: ${POSTGRES_DB:-ernie}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  migrate:
+    <<: *app
+    command: ["node", "packages/db/dist/cli.js", "up"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["node", "apps/api/dist/index.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  worker:
+    <<: *app
+    command: ["node", "apps/worker/dist/index.js"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Profilo opzionale: gateway LiteLLM (OpenAI-compatible) su :4000.
+  # Avvio: docker compose --profile litellm up -d
+  litellm:
+    image: docker.litellm.ai/berriai/litellm:latest
+    profiles: ["litellm"]
+    restart: unless-stopped
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-change-me}
+    volumes:
+      - ./infrastructure/docker/litellm.config.yaml:/etc/litellm/config.yaml:ro
+    ports:
+      - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
+
+volumes:
+  pgdata:
+  redisdata:
