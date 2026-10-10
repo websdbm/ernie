@@ -1,6 +1,6 @@
 # Ernie — Piano di implementazione
 
-> Stato aggiornato al 10 ottobre 2026. Ogni milestone ha criteri di accettazione verificabili; non si passa alla successiva finché la corrente non è verificata (lint, typecheck, test, e dove previsto Docker e smoke test).
+> Stato aggiornato al 10 ottobre 2026 (allineato ad ARCHITECTURE.md v0.2: le voci A.x/B.x/C.x rimandano a `docs/research/03-revisione.md` §5). Ogni milestone ha criteri di accettazione verificabili; non si passa alla successiva finché la corrente non è verificata (lint, typecheck, test, e dove previsto Docker e smoke test).
 
 Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/da chiarire
 
@@ -17,8 +17,8 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ⏳ |
 | M8 | Voce avanzata: modalità continua, sintesi incrementale, interruzione, errori audio | ⏳ |
 | M9 | Ottimizzazione: benchmark token, cache, profilazione, latenza, e2e, hardening | ⏳ |
-| M10 | Avatar 3D: valutazione motori (Unreal o equivalenti), spike, integrazione | ⏳ |
-| R | Ricerca bibliografica (3 ricercatori + revisore) e integrazione nei documenti | 🔧 |
+| M10 | Avatar 3D: spike S1–S6, scelta RealityKit vs WKWebView/TalkingHead, lip-sync on-device, integrazione | ⏳ |
+| R | Ricerca bibliografica (3 ricercatori + revisore) e integrazione nei documenti | ✅ |
 
 ## M1 — Fondamenta ✅
 
@@ -44,66 +44,80 @@ Deviazioni dichiarate rispetto al prompt: `packages/protocol` anticipato alla M1
 
 ## M2 — Agente minimo ⏳
 
-Ambito: `packages/agent-core`, `packages/soul`, `packages/model-gateway`; `apps/api` con WebSocket (`@fastify/websocket`), autenticazione con chiave API (hash in `api_keys`), sessioni (Mastra threads), streaming testuale via eventi v1; persistenza conversazioni in Postgres (`PostgresStore`); tabelle `souls`/`soul_versions`, `llm_calls`.
+Ambito: `packages/agent-core`, `packages/soul`, `packages/model-gateway`; `apps/api` con WebSocket (`@fastify/websocket`), autenticazione con chiave API (hash in `api_keys`), sessioni (Mastra threads), streaming via eventi v1/v1.1; persistenza conversazioni (`PostgresStore`); tabelle `souls`/`soul_versions`, `llm_calls`; primo set di policy RLS.
 
 Criteri di accettazione:
 - [ ] `session.start` + `user.message` producono `assistant.started`, `assistant.text.delta`*, `assistant.text.completed`, `assistant.completed` con `usage` reale del provider.
-- [ ] Core Soul ≤ 400 token verificato da test; Context Soul caricato per tag.
-- [ ] Mappa classi → modelli risolta da `GET https://openrouter.ai/api/v1/models` e salvata in configurazione (nessun ID ipotizzato).
-- [ ] Riconnessione con `resumeFromSeq` rinvia gli eventi mancanti; `user.cancel` interrompe lo stream (`assistant.cancelled`).
-- [ ] Ogni chiamata LLM registrata in `llm_calls` con token, costo stimato/effettivo, latenza, modello.
-- [ ] Richieste non autenticate → 401; dati filtrati per `user_id`.
+- [ ] **Prefisso stabile** (A.3): ordine fisso tool → Core Soul → snapshot → riassunto → turni → messaggio; parti variabili in coda; JSON deterministico; `cache_control` sul blocco stabile; test che due turni consecutivi producano lo stesso prefisso byte-per-byte.
+- [ ] **Spike passthrough OpenRouter** (03 §4): richieste reali con lettura di `cached_tokens`/`cache_write_tokens`; verifica di quali feature native sopravvivono; log del payload costruito da Mastra (ordine tool, posizione `instructions`); esito documentato in `docs/research/00-fonti-verificate.md`. Se l'ordine non è controllabile: assemblaggio proprio, Mastra per storage/memoria/tool.
+- [ ] Core Soul ≤ 400 token verificato da test; Context Soul scelto a livello di sessione (A.6).
+- [ ] Mappa classi → modelli risolta da `GET https://openrouter.ai/api/v1/models` e salvata in configurazione; `session_id` OpenRouter = sessione Ernie.
+- [ ] **`llm_calls`** con `cost_reported`, `cost_estimated`, `cost_source`, token input/cache read/cache write/output/reasoning, TTFT, latenza (A.8); test contro i doppi conteggi.
+- [ ] **Protocollo v1.1** (A.9–A.10): `persist`, `user.cancel` idempotente con `spokenThroughIndex`, snapshot + replay con `resumeFromSeq`, controllo `Origin` sull'upgrade, nessuna connessione verso URL da deep link; schemi `avatar.emotion/gesture/gaze` con vocabolario chiuso e test.
+- [ ] Richieste non autenticate → 401; dati filtrati per `user_id`; **RLS `FORCE`** sulle tabelle proprie con ruolo applicativo non owner (A.12), verifica su `mastra_*`.
+- [ ] Limiti hard: step, token non in cache, costo per turno; `AbortSignal` propagato (A.7).
 
 ## M3 — JEV Router ⏳
 
-Ambito: `packages/jev-router` (client Decisions API, `MockJevClient`, schema Zod, cache Redis, timeout, fallback), router deterministico in `agent-core`, Policy Engine, tabella `router_decisions`.
+Ambito: `packages/jev-router` (client Decisions API, `MockJevClient`, schema Zod con 7 domande, cache esatta Redis, timeout, fallback), router deterministico, **Policy Engine** in `agent-core`, tabella `router_decisions`.
 
-Criteri: 
-- [ ] Richieste con comando riconosciuto o risposta in cache non chiamano né Jev né LLM (test con contatore di chiamate).
-- [ ] Decisione Jev valida in una sola chiamata con le sei domande; timeout → fallback deterministico tracciato (`source = fallback`).
-- [ ] Policy Engine degrada decisioni non autorizzate (test: tool non consentito → eseguito senza tool).
-- [ ] Metriche: costo Jev per richiesta, confidenza, tasso di fallback, hit rate cache.
+Criteri:
+- [ ] Richieste con comando riconosciuto o in cache esatta non chiamano né Jev né LLM (contatore di chiamate).
+- [ ] Decisione Jev valida in una sola chiamata; timeout → fallback deterministico tracciato (`source = fallback`); **soglie per domanda** tarate su un set etichettato iniziale (≥ 50 esempi), mai 0,5 di default (A.11).
+- [ ] **Policy Engine deny → ask → allow** fuori dall'LLM, fail-closed per tool sconosciuti; approvazioni legate a (tool, hash argomenti, utente, scadenza), monouso e consumate atomicamente; audit append-only (A.1). Test: approvazione riusata → deny; tool sconosciuto → deny.
+- [ ] **Taint di run** (A.2): tool etichettati `readsPrivate`/`ingestsUntrusted`/`externalEffect`; dopo contenuto non fidato ogni tool `write|external` passa in `ask`. Test con un risultato web che "ordina" un'azione.
+- [ ] **Classe con isteresi di sessione** (A.5): sale, non scende; `light` mai per turni conversazionali.
+- [ ] **Stuck detector** su hash(tool, argomenti, esito) con soglie per tool di polling (A.7).
+- [ ] Metriche: costo Jev per richiesta, confidenza, tasso di fallback, hit rate cache, latenza (per ritarare il timeout).
 - [ ] Test offline con mock; test online opzionale con `OPENROUTER_API_KEY`.
 
 ## M4 — Memoria ⏳
 
-Ambito: `packages/memory`: tabella `memories` (kind, content, embedding `vector(1536)`, `tsvector`, provenance, scope, confidence, status, validità), ricerca ibrida con RRF, deduplica, supersessione dei fatti, cancellazione; job del worker per estrazione in batch e consolidamento con modello `light`; riassunti progressivi; scelta embeddings (OpenAI vs fastembed) con misura.
+Ambito: `packages/memory`: tabella `memories` (kind, content, embedding `vector(1536)`, `tsvector`, `provenance` con `trust`, scope, confidence, status, **`valid_from/valid_to/created_at/expired_at`**, FK all'episodio), ricerca ibrida **top-20 + top-20 con RRF k = 60**, HNSW `m = 16`/`ef_construction = 64`, chunk con prefisso contestuale da `light`; deduplica; supersessione dei fatti; cancellazione, export e retention; **snapshot congelato per sessione** (1–3k caratteri) + tool `memory_search` (A.6); **compressione a gradini** (clearing/masking → riassunto) allineata ai confini di cache (B.10); job del worker per estrazione e consolidamento; scelta embeddings con misura.
 
-Criteri: recupero pertinente in test con corpus etichettato; nessuna chiamata LLM sincrona per operazione di memoria; contraddizioni gestite con versioning; isolamento per utente testato.
+Criteri: recall@k su corpus italiano etichettato per OpenAI 1536 vs fastembed 384; valutazione su **LongMemEval S/M** e golden set (non LoCoMo); nessuna chiamata LLM sincrona per operazione di memoria; contraddizioni gestite con bi-temporalità; memorie da contenuto non fidato contano come gamba [A] del taint; isolamento per utente testato con RLS; Observational Memory di Mastra in A/B interno (B.4).
 
 ## M5 — Tool e skill ⏳
 
-Ambito: `packages/tools` (registry, categorie, permessi, timeout/retry, audit, selezione dinamica, tool `web_search`/`web_fetch` su Firecrawl, adapter MCP opzionale), `packages/skills` (skill deterministiche, skill guidate, pipeline di apprendimento con sandbox e approvazione), conferme per azioni sensibili (protocollo v1.1).
+Ambito: `packages/tools` (registry con JSON Schema 2020-12 strict, `response_format`, paginazione, tetto di token con handle, errori `isError`, idempotency key, etichette di rischio, **set stabile per sessione + `tool_search`/`call_tool`** (A.4), tool `web_search`/`web_fetch` su **Firecrawl**, adapter MCP 2026-07-28 solo Streamable HTTP, conferme via `requireApproval` con storage) (B.5); `packages/skills` (formato agentskills.io, stati `draft→proposed→tested→approved→active→deprecated`, versioni immutabili per hash, scansione alla scrittura e al recupero, eval con/senza skill, pipeline di apprendimento con approvazione) (B.2); **sandbox** come servizio Compose dedicato con gVisor o microVM, senza rete né segreti, limiti di risorse, egress con allowlist (B.1).
 
-Criteri: il modello riceve solo i tool pertinenti (test sul payload); una skill deterministica completa senza chiamate LLM; test di sicurezza: prompt injection da risultato web non attiva tool con side effect; codice generato non eseguibile fuori sandbox.
+Criteri: il modello riceve solo il nucleo stabile + definizioni caricate via meta-tool (test sul payload e sulla stabilità del prefisso); una skill deterministica completa senza chiamate LLM; **test di sicurezza**: injection da pagina Firecrawl reale non attiva tool con side effect (taint → `ask`); codice generato non eseguibile fuori sandbox (test negativo); skill con codice mai attivata automaticamente; suite di regressione delle skill ripetuta su due modelli.
 
 ## M6 — Automazioni ⏳
 
-Ambito: `packages/automations` + worker: definizioni versionate, cron/one-shot/webhook/eventi, idempotenza, retry/backoff, dead-letter, `automation_runs`, notifiche.
+Ambito (B.6): `automations` (versionate, allowlist tool, `budgetUsd` per run, timezone IANA, `catchUp: none|latest`), `automation_runs` con stati `scheduled/claimed/running/succeeded/failed/skipped/budget_exceeded/awaiting_approval` ed esito strutturato; `jobId = automation_id:scheduled_at`; retry con backoff + jitter solo su errori transitori e in un solo livello; dead-letter con alert deduplicato; anti-ricorsione; payload esterni non fidati (run tainted); jitter sugli orari; sessione nuova e prompt autosufficiente per run; notifiche; risultati letti all'apertura dell'app.
 
-Criteri: un'automazione gira e produce un risultato con **nessun client connesso**; retry e storico verificabili; automazione deterministica senza LLM; automazione con ragionamento passa dal router con budget.
+Criteri: un'automazione gira e produce un risultato con **nessun client connesso**; retry, dead-letter e storico verificabili; automazione deterministica senza LLM; automazione con ragionamento passa dal router e dal Policy Engine con budget; azione sensibile → `awaiting_approval`; due scheduler concorrenti non duplicano le run (idempotenza testata).
 
 ## M7 — App iOS ⏳
 
-Ambito: progetto Xcode SwiftUI in `apps/ios`; autenticazione (Keychain); chat testuale; WebSocket con protocollo v1 (porting deduplica/sequenze); push-to-talk con `SpeechTranscriber` (fallback `SFSpeechRecognizer`); TTS con `AVSpeechSynthesizer`; streaming; cronologia e sessioni; APNs.
+Ambito: progetto Xcode SwiftUI in `apps/ios`; autenticazione (Keychain); chat testuale; WebSocket con protocollo v1.1 (porting deduplica/sequenze, snapshot + replay); push-to-talk con `SpeechTranscriber` (controllo `supportedLocales`/`installedLocales`, download asset) e fallback `SFSpeechRecognizer` con **rotazione entro il limite di 1 minuto**; TTS con `AVSpeechSynthesizer`; `.playAndRecord` + **`setVoiceProcessingEnabled(true)`** (A.13); streaming; cronologia e sessioni; APNs; nessuna immagine markdown da URL esterni; step-up Face ID per azioni critiche; kill switch (B.7). **Spike S1** (marker di `speak()`/`write()` con voci italiane) e **S6** (App Thinning Size Report) avviati qui perché toccano il TTS (B.11).
 
-Criteri: l'utente parla, il testo arriva al backend, la risposta viene letta a voce; funziona su device con iOS 26; controllo runtime di `supportedLocales`.
+Criteri: l'utente parla, il testo arriva al backend, la risposta viene letta a voce; funziona su device con iOS 26; latenza udibile strumentata per stadio con obiettivo **p50 < 1,5 s** (A.14); esito di S1 documentato.
 
 ## M8 — Conversazione vocale avanzata ⏳
 
-Modalità continua in primo piano con turni; sintesi incrementale per frasi; barge-in; gestione eco (`.voiceChat`, mute logico del riconoscitore durante la sintesi); gestione errori audio.
+Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S2** (RealityKit: blendshape durante animazione scheletrica) e **S3** (WKWebView + TalkingHead: FPS, CPU, batteria, termica, latenza) eseguiti qui.
+
+Criteri: nessuna trascrizione della voce sintetica come input utente in un test registrato; barge-in interrompe entro 300 ms; esiti di S2–S3 documentati con misure su dispositivo.
 
 ## M9 — Ottimizzazione e hardening ⏳
 
-Benchmark routing vs modello fisso (token, costo, latenza, qualità) su corpus rappresentativo; cache risposte; profilazione; latenza primo token; test e2e; TLS (Caddy), backup Postgres, retention e cifratura, rate limiting, OpenTelemetry opzionale; valutazione TypeScript 7.
+**Valutazione** (B.8): test deterministici in CI (router, policy, skill, idempotenza); 20–50 scenari da fallimenti reali valutati sullo stato finale; giudice LLM di famiglia diversa calibrato su ~100 esempi; **pass^k (k = 3–5)** per automazioni e azioni sensibili; **benchmark appaiato** router completo vs miglior modello singolo vs economico fisso vs router casuale, con costo reale, cache hit rate e intervalli di confidenza; valore di Jev misurato separatamente su memoria/tool/skill; gate di regressione a ogni cambio. **Hardening** (B.9): TLS (Caddy), backup Postgres, retention e cifratura, rate limiting, Docker secrets, OTel opzionale con semconv fissate; profilazione e latenza TTFT; valutazione TypeScript 7.
+
+Criteri: numeri del benchmark pubblicati nel repo con metodo riproducibile; nessuna affermazione di risparmio non supportata; ripristino da backup provato.
 
 ## M10 — Avatar 3D ⏳
 
-Valutazione comparativa (Unreal Engine 5 su iOS/MetaHuman, Unity as a Library, Godot, RealityKit nativo, web) su integrazione SwiftUI, peso, licenza, lip-sync con TTS on-device; spike con due candidati; eventi `avatar.*` nel protocollo; integrazione nell'app. Dipende dagli esiti di `docs/research/04-avatar-3d-ios.md`.
+Esito della ricerca (04) e della revisione (03 A.15, B.11–B.12, C.13–C.21): **Unreal Engine/MetaHuman embedded respinti** per un'app SwiftUI on-device (nessun embedding iOS documentato, MetaHuman mobile senza blendshape, lip-sync da audio non a runtime, licenze non verificabili); Pixel Streaming respinto; Unity as a Library e Godot in attesa. Candidati: **a1 RealityKit** (primario) e **a2 three.js + TalkingHead in WKWebView**; asset di proprietà con 52 blendshape ARKit + 15 visemi Oculus (Blender → USDZ/GLB).
 
-## R — Ricerca bibliografica 🔧
+Passi: decisione a1/a2 **dopo S1–S3** (M7–M8); **S4** G2P italiano a regole in Swift valutato contro un lessico fonetico; pipeline di lip-sync a livelli (parola + G2P → marker fonemici se disponibili → ampiezza RMS), audio non più di ~45 ms in anticipo; macchina a stati Swift (idle/listening/thinking/speaking) di cui l'avatar è consumatore; eventi `avatar.*` dal backend con vocabolario chiuso; modalità ridotta (Reduce Motion, termica, basso consumo); primo download < 200 MB.
 
-Tre ricercatori (Opus): architettura degli agenti (`docs/research/01`), buone prassi operative (`02`), avatar 3D su iOS (`04`); un revisore (Fable) valuta i report (`03`) e produce le implicazioni per l'architettura, integrate in ARCHITECTURE.md v0.2 e in questo piano.
+Criteri: lip-sync intelligibile su frasi italiane di test; barge-in chiude la bocca entro un frame; FPS e consumo misurati su dispositivo; dimensione dell'app verificata con App Thinning Size Report.
+
+## R — Ricerca bibliografica ✅
+
+Tre ricercatori (Opus): `docs/research/01-architettura-agenti.md` (133 fonti), `02-buone-prassi-agenti.md` (137 fonti), `04-avatar-3d-ios.md` (64 fonti). Revisore (Fable): `03-revisione.md`, 53 verifiche su fonti primarie (45 confermate, 6 imprecise, 2 non verificabili, 0 false), voti 4–5/5, implicazioni A/B/C integrate in ARCHITECTURE.md v0.2 (§20) e in questo piano. Lacune residue da colmare con spike (03 §4): passthrough OpenRouter, costruzione del payload Mastra, embeddings in italiano, injection via Firecrawl, turn detection on-device, marker fonemici, prestazioni su iPhone, G2P italiano.
 
 ## Blocchi e dipendenze esterne
 
@@ -111,6 +125,8 @@ Tre ricercatori (Opus): architettura degli agenti (`docs/research/01`), buone pr
 - Chiave Firecrawl non ancora disponibile: necessaria dalla M5.
 - Account Apple Developer e dispositivo con iOS 26 necessari dalla M7 (APNs richiede account a pagamento).
 - Decisions API di Jev in alpha: monitorare i cambiamenti di contratto.
+- Pagine Epic su licenze (403) e fee Unity "Industry" non pubblicate: le eventuali riaperture di Unreal/Unity richiedono conferme scritte.
+- Sandbox gVisor/microVM: verificare il supporto del provider VPS (virtualizzazione annidata o kernel compatibile) prima della M5.
 
 ## Verbale di verifica M1
 
