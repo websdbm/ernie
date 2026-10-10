@@ -17,7 +17,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ⏳ |
 | M8 | Voce avanzata: modalità continua, sintesi incrementale, interruzione, errori audio | ⏳ |
 | M9 | Ottimizzazione: benchmark token, cache, profilazione, latenza, e2e, hardening | ⏳ |
-| M10 | Avatar 3D: spike S1–S6, scelta RealityKit vs WKWebView/TalkingHead, lip-sync on-device, integrazione | ⏳ |
+| M10 | Avatar 3D: three.js + TalkingHead in WKWebView, modulo italiano, lip-sync on-device, integrazione | ⏳ |
 | R | Ricerca bibliografica (3 ricercatori + revisore) e integrazione nei documenti | ✅ |
 
 ## M1 — Fondamenta ✅
@@ -97,9 +97,9 @@ Criteri: l'utente parla, il testo arriva al backend, la risposta viene letta a v
 
 ## M8 — Conversazione vocale avanzata ⏳
 
-Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S2** (RealityKit: blendshape durante animazione scheletrica) e **S3** (WKWebView + TalkingHead: FPS, CPU, batteria, termica, latenza) eseguiti qui.
+Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S3** (WKWebView + TalkingHead su iPhone: FPS, CPU, batteria, termica per 10 minuti, latenza marker→visema, AEC con audio dal WKWebView) eseguito qui; S2 (RealityKit) decaduto con la scelta di TalkingHead.
 
-Criteri: nessuna trascrizione della voce sintetica come input utente in un test registrato; barge-in interrompe entro 300 ms; esiti di S2–S3 documentati con misure su dispositivo.
+Criteri: nessuna trascrizione della voce sintetica come input utente in un test registrato; barge-in interrompe entro 300 ms; esito di S3 documentato con misure su dispositivo.
 
 ## M9 — Ottimizzazione e hardening ⏳
 
@@ -109,11 +109,16 @@ Criteri: numeri del benchmark pubblicati nel repo con metodo riproducibile; ness
 
 ## M10 — Avatar 3D ⏳
 
-Esito della ricerca (04) e della revisione (03 A.15, B.11–B.12, C.13–C.21): **Unreal Engine/MetaHuman embedded respinti** per un'app SwiftUI on-device (nessun embedding iOS documentato, MetaHuman mobile senza blendshape, lip-sync da audio non a runtime, licenze non verificabili); Pixel Streaming respinto; Unity as a Library e Godot in attesa. Candidati: **a1 RealityKit** (primario) e **a2 three.js + TalkingHead in WKWebView**; asset di proprietà con 52 blendshape ARKit + 15 visemi Oculus (Blender → USDZ/GLB).
+Decisione dell'utente (10 ott 2026): **three.js + TalkingHead (MIT) in WKWebView**. Unreal/MetaHuman esclusi (nessun embedding iOS documentato, MetaHuman mobile senza blendshape, lip-sync da audio non a runtime, app "UE-first" rifiutata); RealityKit, Unity, Godot scartati o in attesa (ARCHITECTURE.md §2, §13).
 
-Passi: decisione a1/a2 **dopo S1–S3** (M7–M8); **S4** G2P italiano a regole in Swift valutato contro un lessico fonetico; pipeline di lip-sync a livelli (parola + G2P → marker fonemici se disponibili → ampiezza RMS), audio non più di ~45 ms in anticipo; macchina a stati Swift (idle/listening/thinking/speaking) di cui l'avatar è consumatore; eventi `avatar.*` dal backend con vocabolario chiuso; modalità ridotta (Reduce Motion, termica, basso consumo); primo download < 200 MB.
+Ambito:
+- **Hosting**: `WKWebView` in `UIViewRepresentable`; three.js 0.180, TalkingHead (`@met4citizen/talkinghead`), moduli lingua e avatar GLB nel bundle; ponte `callAsyncJavaScript` / `WKScriptMessageHandler`.
+- **Modulo italiano `lipsync-it.mjs`** (classe `LipsyncIt` con `preProcessText` e `wordsToVisemes` → `{ visemes, times, durations }`): G2P a regole in JavaScript (riferimento kokorog2p, Apache-2.0; niente eSpeak NG), normalizzazione di numeri, date e simboli in italiano (spike S4, valutazione contro lessico fonetico).
+- **Lip-sync**: `AVSpeechSynthesizer.write()` → PCM + marker di parola → `streamStart({ lipsyncLang: 'it', lipsyncType: 'words' })` + `streamAudio({ audio, words, wtimes, wdurations })`; marker fonemici → `visemes/vtimes/vdurations` se S1 li conferma; variante (A) audio riprodotto dal WKWebView o (B) audio nativo e solo tempi, scelta in S3.
+- **Stato ed espressività**: macchina a stati Swift (idle/listening/thinking/speaking) di cui l'avatar è consumatore; barge-in = `stopSpeaking` + `streamInterrupt()`; `avatar.emotion` → `setMood`, `avatar.gesture` → `playGesture`, `avatar.gaze` → `lookAt`, con vocabolario chiuso nel protocollo v1.1.
+- **Asset**: GLB di proprietà con rig Mixamo, 52 blendshape ARKit, 15 visemi Oculus (Blender/MPFB o modello custom; Avaturn solo con licenza commerciale); compressione Meshopt; `modelFPS` 30; modalità ridotta (Reduce Motion, termica, basso consumo); primo download < 200 MB.
 
-Criteri: lip-sync intelligibile su frasi italiane di test; barge-in chiude la bocca entro un frame; FPS e consumo misurati su dispositivo; dimensione dell'app verificata con App Thinning Size Report.
+Criteri: lip-sync intelligibile su un set di frasi italiane di test, giudicato da almeno due persone; sincronia audio–labbra entro ~45 ms; barge-in chiude la bocca entro un frame; FPS ≥ 30 e consumo misurati su iPhone per 10 minuti con stato termico nominale; dimensione dell'app verificata con App Thinning Size Report; nessun codice JavaScript scaricato a runtime.
 
 ## R — Ricerca bibliografica ✅
 
@@ -125,7 +130,7 @@ Tre ricercatori (Opus): `docs/research/01-architettura-agenti.md` (133 fonti), `
 - Chiave Firecrawl non ancora disponibile: necessaria dalla M5.
 - Account Apple Developer e dispositivo con iOS 26 necessari dalla M7 (APNs richiede account a pagamento).
 - Decisions API di Jev in alpha: monitorare i cambiamenti di contratto.
-- Pagine Epic su licenze (403) e fee Unity "Industry" non pubblicate: le eventuali riaperture di Unreal/Unity richiedono conferme scritte.
+- Avatar: serve un asset GLB con licenza compatibile con un'app commerciale (Avaturn è gratuito solo per uso non commerciale); la produzione in Blender è lavoro da pianificare in M10.
 - Sandbox gVisor/microVM: verificare il supporto del provider VPS (virtualizzazione annidata o kernel compatibile) prima della M5.
 
 ## Verbale di verifica M1

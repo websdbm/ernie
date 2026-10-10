@@ -37,6 +37,11 @@ Verifiche effettuate direttamente sulla documentazione ufficiale durante l'anali
 - pnpm 11 impostazioni: https://pnpm.io/settings — `allowBuilds` in `pnpm-workspace.yaml`.
 - Hermes Agent (riferimento funzionale): https://hermes-agent.nousresearch.com/docs
 
+## Avatar: TalkingHead (verifica del 10 ott 2026)
+
+- Repository: https://github.com/met4citizen/TalkingHead — licenza MIT; npm `@met4citizen/talkinghead`; import map con `three@0.180.0`; avatar GLB full-body con rig Mixamo (root "Armature"), 52 blendshape ARKit e 15 visemi Oculus (`sil, PP, FF, TH, DD, kk, CH, SS, nn, RR, aa, E, I, O, U`); `speakAudio(audio, opt)` con `words/wtimes/wdurations` o `visemes/vtimes/vdurations`; streaming `streamStart`/`streamAudio`/`streamNotifyEnd`/`streamInterrupt`/`streamStop` (AudioWorklet, PCM 16-bit LE, `lipsyncType: words|visemes|blendshapes`); moduli lingua `modules/lipsync-xx.mjs` (classe `LipsyncXx`, `preProcessText`, `wordsToVisemes`) per en, fi, lt, de, fr, pt-br — italiano assente; `setMood` (neutral, happy, angry, sad, fear, disgust, love, sleep), `playGesture` (handup, index, ok, thumbup, thumbdown, side, shrug), `lookAt`, `makeEyeContact`, `playAnimation` (FBX Mixamo); `modelFPS` 30 di default; testato su desktop e iPad, non documentato su iPhone. Fonti di avatar citate dal README: Avaturn (gratuito solo non commerciale), VRoid Studio, Avatar SDK, MPFB (Blender), Microsoft RocketBox (MIT, da ri-riggare).
+- Model3DView (frzi/swiftui-model3dview): https://swiftpackageindex.com/frzi/swiftui-model3dview — viewer SwiftUI su SceneKit (glTF/OBJ, orbit controls, IBL), MIT, ultima release 0.1.1 circa quattro anni fa; nessuna API per blendshape o animazioni scheletriche: inadatto come motore dell'avatar.
+
 ## Versioni verificate (npm, 10 ott 2026)
 
 fastify 5.12.5 · zod 4.6.5 · typescript 5.9.3 (7.0.2 disponibile) · vitest 5.0.3 · pg 8.23.1 · bullmq 6.3.12 · ioredis 5.11.1 · pino 10.4.0 · @biomejs/biome 2.5.15 · @openrouter/sdk 1.4.25 · @anthropic-ai/sdk 0.133.0 · ai 7.0.137 · @ai-sdk/anthropic 4.0.78 · @ai-sdk/openai 4.0.91
