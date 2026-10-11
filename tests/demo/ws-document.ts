@@ -44,7 +44,9 @@ const doc = (await res.json()) as { id: string; title: string; pages: number; ch
 console.error(`[documento ${doc.id}: «${doc.title}», ${doc.pages} pagine, ${doc.chars} caratteri]`);
 
 const seq = new SequenceSource();
-const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } } as unknown as string[]);
+const ws = new WebSocket(url, {
+  headers: { Authorization: `Bearer ${apiKey}` },
+} as unknown as string[]);
 const t0 = Date.now();
 ws.addEventListener('open', () => {
   ws.send(
@@ -73,7 +75,9 @@ ws.addEventListener('message', (m) => {
   }
   if (e.type === 'assistant.text.delta') return;
   const payload = JSON.stringify(e.payload);
-  console.log(`${((Date.now() - t0) / 1000).toFixed(1)}s ${e.type} ${payload.length > 1200 ? `${payload.slice(0, 1200)}…` : payload}`);
+  console.log(
+    `${((Date.now() - t0) / 1000).toFixed(1)}s ${e.type} ${payload.length > 1200 ? `${payload.slice(0, 1200)}…` : payload}`,
+  );
   if (e.type === 'assistant.completed' || e.type === 'error') {
     ws.close();
     process.exit(e.type === 'error' ? 1 : 0);
