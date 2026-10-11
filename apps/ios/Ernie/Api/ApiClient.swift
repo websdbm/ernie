@@ -89,7 +89,12 @@ struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var kind: String
     var tools: [String]
     var examples: [String]
+    /// Scelta nelle impostazioni: compare nel pannello ✦ della chat.
+    var available: Bool
+    /// Interruttore del pannello ✦: attiva adesso (vale solo se disponibile).
     var enabled: Bool
+    /// Lavora davvero: disponibile e accesa.
+    var active: Bool
 }
 
 struct ApprovalResult: Codable, Sendable, Equatable {
@@ -136,10 +141,11 @@ struct ApiClient: Sendable {
         return out.skills
     }
 
-    func setSkill(id: String, enabled: Bool) async throws -> [SkillInfo] {
-        struct Body: Encodable { var enabled: Bool }
+    /// `available`: compare nel pannello ✦ (impostazioni); `enabled`: attiva adesso (pannello ✦).
+    func setSkill(id: String, enabled: Bool? = nil, available: Bool? = nil) async throws -> [SkillInfo] {
+        struct Body: Encodable { var enabled: Bool?; var available: Bool? }
         struct Out: Decodable { var skills: [SkillInfo] }
-        let out: Out = try await request("PATCH", "/v1/skills/\(id)", body: Body(enabled: enabled))
+        let out: Out = try await request("PATCH", "/v1/skills/\(id)", body: Body(enabled: enabled, available: available))
         return out.skills
     }
 

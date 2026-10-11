@@ -14,6 +14,9 @@ export interface SkillCatalogEntry {
   /** Tool di uso generale tra quelli in `tools` (es. `web_search`): restano disponibili anche a skill spenta. */
   readonly sharedTools?: readonly string[];
   readonly examples: readonly string[];
+  /** Compare nel pannello ✦ della chat finché l'utente non decide altrimenti nelle impostazioni. */
+  readonly defaultAvailable: boolean;
+  /** Attiva appena disponibile, finché l'utente non la spegne dal pannello ✦. */
   readonly defaultEnabled: boolean;
 }
 
@@ -31,6 +34,7 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
       'shopping_list_clear',
     ],
     examples: ['aggiungi due litri di latte', 'togli il pane', 'cosa c’è nella lista?'],
+    defaultAvailable: true,
     defaultEnabled: true,
   },
   {
@@ -54,6 +58,7 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
       'mostrami le mie ricette',
       'affina la carbonara con meno pepe',
     ],
+    defaultAvailable: true,
     defaultEnabled: true,
   },
 ];
@@ -83,12 +88,32 @@ export function createRecipesSkill(): GuidedSkill {
 }
 
 /** Stato per utente: `settings.skills = { id: boolean }`; assente → valore predefinito della skill. */
+/**
+ * Due livelli, decisione dell'utente (11 ott 2026): nelle impostazioni si scelgono le skill *disponibili*
+ * (`users.settings.skillsAvailable`, quelle che compaiono nel pannello ✦ della chat); nel pannello ✦ si
+ * accendono e spengono le skill *attive* (`users.settings.skills`). Una skill lavora solo se è entrambe.
+ */
+export function availableSkillIds(
+  settings: Readonly<Record<string, unknown>> | undefined,
+): Set<string> {
+  const map = (settings?.skillsAvailable ?? {}) as Record<string, unknown>;
+  const out = new Set<string>();
+  for (const s of SKILL_CATALOG) {
+    const v = map[s.id];
+    if (typeof v === 'boolean' ? v : s.defaultAvailable) out.add(s.id);
+  }
+  return out;
+}
+
+/** Skill attive nella chat: disponibili (impostazioni) e accese (pannello ✦). */
 export function enabledSkillIds(
   settings: Readonly<Record<string, unknown>> | undefined,
 ): Set<string> {
+  const available = availableSkillIds(settings);
   const map = (settings?.skills ?? {}) as Record<string, unknown>;
   const out = new Set<string>();
   for (const s of SKILL_CATALOG) {
+    if (!available.has(s.id)) continue;
     const v = map[s.id];
     if (typeof v === 'boolean' ? v : s.defaultEnabled) out.add(s.id);
   }

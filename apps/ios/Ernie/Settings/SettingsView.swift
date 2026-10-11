@@ -39,7 +39,7 @@ struct SettingsView: View {
                     Text("Con l'interruttore attivo le automazioni non vengono eseguite finché non lo disattivi. La modifica richiede Face ID o il codice.")
                 }
                 Section("Skill") {
-                    NavigationLink("Accendi e spegni le skill") { SkillsView() }
+                    NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
                 }
                 Section("Diagnostica") {
                     NavigationLink("Latenza, voce e spike") { DiagnosticsView() }

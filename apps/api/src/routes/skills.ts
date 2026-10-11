@@ -1,5 +1,5 @@
 import { type Pool, withUser } from '@ernie/db';
-import { enabledSkillIds, SKILL_CATALOG } from '@ernie/skills';
+import { availableSkillIds, enabledSkillIds, SKILL_CATALOG } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
@@ -13,7 +13,12 @@ export interface SkillsRoutesOptions {
   readonly onChanged?: (userId: string) => void;
 }
 
-const PatchBody = z.object({ enabled: z.boolean() });
+/** `available`: compare nel pannello ✦ (impostazioni); `enabled`: attiva adesso (pannello ✦). */
+const PatchBody = z
+  .object({ enabled: z.boolean().optional(), available: z.boolean().optional() })
+  .refine((b) => b.enabled !== undefined || b.available !== undefined, {
+    message: 'atteso { enabled?: boolean, available?: boolean }',
+  });
 
 function requireAuth(req: FastifyRequest): AuthContext {
   const a = req.auth;
@@ -39,16 +44,26 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
         ).rows[0]?.settings ?? {},
     );
   const present = (settings: Record<string, unknown>) => {
-    const enabled = enabledSkillIds(settings);
-    return SKILL_CATALOG.map((s) => ({
-      id: s.id,
-      title: s.title,
-      description: s.description,
-      kind: s.kind,
-      tools: s.tools,
-      examples: s.examples,
-      enabled: enabled.has(s.id),
-    }));
+    const available = availableSkillIds(settings);
+    const enabledMap = (settings.skills ?? {}) as Record<string, unknown>;
+    const active = enabledSkillIds(settings);
+    return SKILL_CATALOG.map((s) => {
+      const v = enabledMap[s.id];
+      return {
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        kind: s.kind,
+        tools: s.tools,
+        examples: s.examples,
+        /** Scelta nelle impostazioni: compare nel pannello ✦ della chat. */
+        available: available.has(s.id),
+        /** Interruttore del pannello ✦ (conservato anche se la skill non è disponibile). */
+        enabled: typeof v === 'boolean' ? v : s.defaultEnabled,
+        /** Lavora davvero: disponibile e accesa. */
+        active: active.has(s.id),
+      };
+    });
   };
 
   await app.register(async (api) => {
@@ -65,18 +80,23 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
         return reply.code(404).send({ error: 'not_found', message: 'Skill inesistente' });
       const b = PatchBody.safeParse(req.body);
       if (!b.success)
-        return reply
-          .code(400)
-          .send({ error: 'invalid_body', message: 'atteso { enabled: boolean }' });
+        return reply.code(400).send({
+          error: 'invalid_body',
+          message: 'atteso { enabled?: boolean, available?: boolean }',
+        });
+      const enabledPatch = b.data.enabled === undefined ? {} : { [id]: b.data.enabled };
+      const availablePatch = b.data.available === undefined ? {} : { [id]: b.data.available };
       const settings = await withUser(
         opts.pool,
         auth.userId,
         async (c) =>
           (
             await c.query<{ settings: Record<string, unknown> }>(
-              `UPDATE users SET settings = jsonb_set(settings, '{skills}', COALESCE(settings->'skills', '{}'::jsonb) || $2::jsonb, true)
+              `UPDATE users SET settings = jsonb_set(
+                 jsonb_set(settings, '{skills}', COALESCE(settings->'skills', '{}'::jsonb) || $2::jsonb, true),
+                 '{skillsAvailable}', COALESCE(settings->'skillsAvailable', '{}'::jsonb) || $3::jsonb, true)
               WHERE id = $1 RETURNING settings`,
-              [auth.userId, JSON.stringify({ [id]: b.data.enabled })],
+              [auth.userId, JSON.stringify(enabledPatch), JSON.stringify(availablePatch)],
             )
           ).rows[0]?.settings ?? {},
       );
