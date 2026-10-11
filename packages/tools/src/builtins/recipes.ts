@@ -31,6 +31,8 @@ export const RecipeInput = z.object({
   tags: z.array(z.string().min(1).max(30)).max(10).default([]),
 });
 export type RecipeInput = z.infer<typeof RecipeInput>;
+/** Dati in ingresso prima dei default (`steps` e `tags` facoltativi): `save` li valida e normalizza. */
+export type RecipeInputData = z.input<typeof RecipeInput>;
 
 export function normalizeTitle(title: string): string {
   return title
@@ -75,7 +77,7 @@ export interface RecipeRepository {
   /** Crea la ricetta o, se il titolo esiste già (a meno di maiuscole e accenti), la aggiorna creando una nuova versione; il titolo originale resta. */
   save(
     userId: string,
-    input: RecipeInput,
+    input: RecipeInputData,
     reason?: string,
   ): Promise<{ recipe: Recipe; created: boolean }>;
   search(userId: string, query: string | undefined, limit?: number): Promise<Recipe[]>;
