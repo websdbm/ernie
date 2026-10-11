@@ -99,6 +99,14 @@ struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var active: Bool
 }
 
+struct DocumentRef: Codable, Sendable, Equatable {
+    var id: String
+    var title: String
+    var pages: Int
+    var chars: Int
+    var source: String
+}
+
 struct ApprovalResult: Codable, Sendable, Equatable {
     var outcome: String
     var executed: Bool
@@ -149,6 +157,12 @@ struct ApiClient: Sendable {
         struct Out: Decodable { var skills: [SkillInfo] }
         let out: Out = try await request("PATCH", "/v1/skills/\(id)", body: Body(enabled: enabled, available: available))
         return out.skills
+    }
+
+    /// Carica il testo estratto sul telefono (mai il file): il server restituisce l'id da allegare al messaggio.
+    func createDocument(_ doc: ImportedDocument, language: String = "it") async throws -> DocumentRef {
+        struct Body: Encodable { var title: String?; var source: String; var language: String; var pages: [String] }
+        return try await request("POST", "/v1/documents", body: Body(title: doc.title, source: doc.source, language: language, pages: doc.pages))
     }
 
     func registerDevice(token: String, environment: String) async throws {

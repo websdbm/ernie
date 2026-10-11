@@ -330,10 +330,11 @@ export class ClientConnection {
         return;
       }
       attachmentNotes.push(
-        `[Allegato: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}]`,
+        `[Allegato a questo messaggio: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}. Usa document_summarize con questo id.]`,
       );
     }
-    const modelText = attachmentNotes.length ? `${text}\n\n${attachmentNotes.join('\n')}` : text;
+    // La riga dell'allegato precede il testo: il modello la vede subito e non la scambia per un riferimento a documenti passati.
+    const modelText = attachmentNotes.length ? `${attachmentNotes.join('\n')}\n\n${text}` : text;
     const budget =
       typeof this.auth.settings.dailyBudgetUsd === 'number'
         ? this.auth.settings.dailyBudgetUsd

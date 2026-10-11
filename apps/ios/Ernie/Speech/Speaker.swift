@@ -8,6 +8,8 @@ import Observation
 final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var isSpeaking = false
     private(set) var voiceDescription = "—"
+    /// Bocca dell'avatar: si alterna a ogni parola pronunciata (callback di parola del sintetizzatore, spike S1).
+    private(set) var mouthOpen = false
     var onSpeakingChanged: ((Bool) -> Void)?
 
     private let synthesizer = AVSpeechSynthesizer()
@@ -98,6 +100,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private func setSpeaking(_ value: Bool) {
         guard isSpeaking != value else { return }
         isSpeaking = value
+        if !value { mouthOpen = false }
         Log.speech.info("sintesi \(value ? "avviata" : "terminata", privacy: .public), pronunciati \(self.spokenThrough) caratteri")
         onSpeakingChanged?(value)
     }
@@ -114,6 +117,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         Task { @MainActor in
             let base = self.offsets[key] ?? 0
             self.spokenThrough = max(self.spokenThrough, base + end)
+            self.mouthOpen.toggle()
         }
     }
 

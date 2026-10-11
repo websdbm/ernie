@@ -38,6 +38,7 @@ targets:
         NSMicrophoneUsageDescription: "Ernie ascolta la tua voce mentre tieni premuto il pulsante per parlare."
         NSSpeechRecognitionUsageDescription: "La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo."
         NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
+        NSCameraUsageDescription: "Per scansionare documenti con la fotocamera: il testo viene letto sul telefono, l'immagine non viene conservata."
         UIBackgroundModes: [remote-notification]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

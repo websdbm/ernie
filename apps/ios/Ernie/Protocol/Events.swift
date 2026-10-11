@@ -19,10 +19,17 @@ struct SessionStartPayload: Codable, Sendable, Equatable {
     var resumeFromSeq: Int?
 }
 
+struct DocumentAttachment: Codable, Sendable, Equatable {
+    var kind = "document"
+    var id: String
+}
+
 struct UserMessagePayload: Codable, Sendable, Equatable {
     var text: String
     var inputMode: String
     var locale: String?
+    /// v1.3: documenti già caricati con `POST /v1/documents`.
+    var attachments: [DocumentAttachment]?
 }
 
 struct UserCancelPayload: Codable, Sendable, Equatable {
@@ -162,11 +169,109 @@ struct RecipeItem: Codable, Sendable, Equatable, Identifiable {
     var steps: [String]?
 }
 
+// MARK: - Documenti (v1.3)
+
+struct GlossaryEntry: Codable, Sendable, Equatable, Identifiable {
+    var id: String { term }
+    var term: String
+    var definition: String
+}
+
+struct QuizQuestion: Codable, Sendable, Equatable, Identifiable {
+    var id: String { question }
+    var question: String
+    var answer: String
+}
+
+/// Scheda di un documento letto: prodotti da studio (il testo intero resta sul server).
+struct DocumentBlock: Codable, Sendable, Equatable {
+    var documentId: String
+    var title: String
+    var pages: Int
+    var source: String
+    var abstract: String
+    var keyPoints: [String]
+    var glossary: [GlossaryEntry]?
+    var questions: [QuizQuestion]?
+}
+
+/// Nodo della mappa (ricorsivo).
+struct MindNode: Codable, Sendable, Equatable {
+    var label: String
+    var note: String?
+    var children: [MindNode]?
+}
+
+struct FlowStep: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var label: String
+    var note: String?
+}
+
+struct FlowLink: Codable, Sendable, Equatable {
+    var from: String
+    var to: String
+    var label: String?
+}
+
+struct TimelineEvent: Codable, Sendable, Equatable {
+    var when: String
+    var label: String
+    var note: String?
+}
+
+/// Schema grafico di un testo: dati chiusi, disegnati nativamente (mai immagini).
+enum SchemaDiagram: Sendable, Equatable, Codable {
+    case mindmap(root: MindNode)
+    case flow(steps: [FlowStep], links: [FlowLink])
+    case timeline(events: [TimelineEvent])
+
+    var typeName: String {
+        switch self {
+        case .mindmap: "mindmap"
+        case .flow: "flow"
+        case .timeline: "timeline"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case type, root, steps, links, events }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        switch try c.decode(String.self, forKey: .type) {
+        case "mindmap": self = .mindmap(root: try c.decode(MindNode.self, forKey: .root))
+        case "flow": self = .flow(steps: try c.decode([FlowStep].self, forKey: .steps), links: try c.decodeIfPresent([FlowLink].self, forKey: .links) ?? [])
+        case "timeline": self = .timeline(events: try c.decode([TimelineEvent].self, forKey: .events))
+        case let other: throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "schema sconosciuto: \(other)")
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(typeName, forKey: .type)
+        switch self {
+        case .mindmap(let root): try c.encode(root, forKey: .root)
+        case .flow(let steps, let links):
+            try c.encode(steps, forKey: .steps)
+            try c.encode(links, forKey: .links)
+        case .timeline(let events): try c.encode(events, forKey: .events)
+        }
+    }
+}
+
+struct SchemaBlock: Codable, Sendable, Equatable {
+    var documentId: String
+    var title: String
+    var diagram: SchemaDiagram
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
     case list(title: String, items: [ListBlockItem])
     case recipes([RecipeItem])
+    case document(DocumentBlock)
+    case schema(SchemaBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -181,6 +286,10 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .list(title: try c.decode(String.self, forKey: .title), items: try c.decode([ListBlockItem].self, forKey: .items))
         case "recipes":
             self = .recipes(try c.decode([RecipeItem].self, forKey: .recipes))
+        case "document":
+            self = .document(try DocumentBlock(from: decoder))
+        case "schema":
+            self = .schema(try SchemaBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -200,6 +309,12 @@ enum ContentBlock: Sendable, Equatable, Codable {
         case .recipes(let recipes):
             try c.encode("recipes", forKey: .kind)
             try c.encode(recipes, forKey: .recipes)
+        case .document(let block):
+            try c.encode("document", forKey: .kind)
+            try block.encode(to: encoder)
+        case .schema(let block):
+            try c.encode("schema", forKey: .kind)
+            try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)
         }

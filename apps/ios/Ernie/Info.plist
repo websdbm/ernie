@@ -31,6 +31,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Per scansionare documenti con la fotocamera: il testo viene letto sul telefono, l'immagine non viene conservata.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conferma delle azioni sensibili: approvazioni e interruttore di emergenza.</string>
 	<key>NSMicrophoneUsageDescription</key>

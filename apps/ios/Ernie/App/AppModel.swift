@@ -14,6 +14,8 @@ final class AppModel {
     private(set) var voice: VoiceController?
     let inbox = InboxStore()
     let speaker = Speaker()
+    /// Allegato in preparazione (skill «Documenti»): lettura sul telefono e caricamento del testo.
+    let documents = DocumentComposer()
     var settings = LocalSettings.load()
 
     var api: ApiClient? { credentials.map { ApiClient(credentials: $0) } }
@@ -115,6 +117,7 @@ final class AppModel {
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
+        documents.configure(api: api)
         // Modello vocale italiano scaricato in anticipo: il primo tocco sul microfono non deve aspettare.
         Task { await self.voice?.prewarm() }
         store.connect()
@@ -127,6 +130,22 @@ final class AppModel {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             store.send(text, inputMode: "text")
+        }
+        // Test della skill «Documenti» nel simulatore: legge un PDF o un .txt dal percorso dato e lo invia.
+        if let path = ProcessInfo.processInfo.environment["ERNIE_DEBUG_DOC"], !path.isEmpty {
+            for _ in 0..<50 where store.connection != .connected {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            documents.importPDF(URL(fileURLWithPath: path))
+            for _ in 0..<600 {
+                if case .ready = documents.phase { break }
+                if case .failed = documents.phase { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if let ref = documents.ready {
+                documents.clear()
+                store.send(ProcessInfo.processInfo.environment["ERNIE_DEBUG_DOC_TEXT"] ?? "", inputMode: "text", attachments: [ref])
+            }
         }
         #endif
     }

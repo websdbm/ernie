@@ -89,12 +89,14 @@ final class ConversationStore {
 
     // MARK: - azioni dell'utente
 
-    func send(_ raw: String, inputMode: String) {
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = []) {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty, !attachments.isEmpty { text = "Riassumi questo documento per studiarlo e fammi lo schema." }
         guard !text.isEmpty else { return }
         if speaker.isSpeaking { bargeIn() }
         let correlationId = Ids.new()
-        items.append(.message(ChatMessage(id: Ids.new(), correlationId: correlationId, role: .user, text: text, inputMode: inputMode, createdAt: .now)))
+        let info = attachments.map { AttachmentInfo(id: $0.id, title: $0.title, pages: $0.pages) }
+        items.append(.message(ChatMessage(id: Ids.new(), correlationId: correlationId, role: .user, text: text, inputMode: inputMode, createdAt: .now, attachments: info.isEmpty ? nil : info)))
         activeCorrelationId = correlationId
         activeInputMode = inputMode
         agentState = .thinking
@@ -104,7 +106,11 @@ final class ConversationStore {
         persist()
         Task {
             do {
-                try await client.send(.userMessage(UserMessagePayload(text: text, inputMode: inputMode, locale: "it-IT")), correlationId: correlationId)
+                let payload = UserMessagePayload(
+                    text: text, inputMode: inputMode, locale: "it-IT",
+                    attachments: attachments.isEmpty ? nil : attachments.map { DocumentAttachment(id: $0.id) }
+                )
+                try await client.send(.userMessage(payload), correlationId: correlationId)
             } catch {
                 self.fail("Invio non riuscito: \(error.localizedDescription)")
             }

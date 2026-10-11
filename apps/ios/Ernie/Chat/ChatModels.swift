@@ -27,6 +27,14 @@ struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     var inputMode: String?
     var cancelled = false
     var createdAt: Date
+    /// Documenti allegati al messaggio (titolo e pagine), per il fumetto dell'utente.
+    var attachments: [AttachmentInfo]?
+}
+
+struct AttachmentInfo: Codable, Sendable, Equatable {
+    var id: String
+    var title: String
+    var pages: Int
 }
 
 /// Richiesta di conferma di un tool durante un turno (Policy Engine: `ask`).

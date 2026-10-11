@@ -18,12 +18,11 @@ struct ChatView: View {
                             name: model.companionName,
                             connection: conversation.connection,
                             emotion: conversation.lastAvatarEmotion,
-                            compact: composing
+                            compact: composing,
+                            mouthOpen: model.speaker.mouthOpen
                         )
                         MessageList(conversation: conversation)
-                        InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice) {
-                            showSkills = true
-                        }
+                        InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
                     }
                 } else {
                     ProgressView()
@@ -115,10 +114,20 @@ struct MessageRow: View {
         case .user:
             HStack {
                 Spacer(minLength: 48)
-                Text(message.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 18))
+                VStack(alignment: .trailing, spacing: 6) {
+                    if let attachments = message.attachments, !attachments.isEmpty {
+                        ForEach(attachments, id: \.id) { a in
+                            Label("\(a.title) · \(a.pages) \(a.pages == 1 ? "pagina" : "pagine")", systemImage: "doc.text.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Text(message.text)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 18))
             }
         case .assistant:
             VStack(alignment: .leading, spacing: 6) {
