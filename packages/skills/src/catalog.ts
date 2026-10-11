@@ -9,8 +9,10 @@ export interface SkillCatalogEntry {
   readonly title: string;
   readonly description: string;
   readonly kind: 'deterministic' | 'guided';
-  /** Tool che la skill porta con sé: spenta la skill, spariscono dal set del modello. */
+  /** Tool che la skill usa (allowlist della skill guidata e scheda nell'app). */
   readonly tools: readonly string[];
+  /** Tool di uso generale tra quelli in `tools` (es. `web_search`): restano disponibili anche a skill spenta. */
+  readonly sharedTools?: readonly string[];
   readonly examples: readonly string[];
   readonly defaultEnabled: boolean;
 }
@@ -45,6 +47,7 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
       'present_recipes',
       'web_search',
     ],
+    sharedTools: ['web_search'],
     examples: [
       'cosa cucino stasera?',
       'salva questa ricetta',
@@ -92,14 +95,18 @@ export function enabledSkillIds(
   return out;
 }
 
-/** Tool appartenenti a skill spente: da togliere dal set del modello. */
+/** Tool propri di skill spente: da togliere dal set del modello. I tool di uso generale (`sharedTools`) restano. */
 export function disabledToolIds(
   settings: Readonly<Record<string, unknown>> | undefined,
 ): Set<string> {
   const enabled = enabledSkillIds(settings);
   const out = new Set<string>();
-  for (const s of SKILL_CATALOG) if (!enabled.has(s.id)) for (const t of s.tools) out.add(t);
-  // Un tool condiviso da una skill accesa resta disponibile.
+  for (const s of SKILL_CATALOG) {
+    if (enabled.has(s.id)) continue;
+    const shared = new Set(s.sharedTools ?? []);
+    for (const t of s.tools) if (!shared.has(t)) out.add(t);
+  }
+  // Un tool usato anche da una skill accesa resta disponibile.
   for (const s of SKILL_CATALOG) if (enabled.has(s.id)) for (const t of s.tools) out.delete(t);
   return out;
 }

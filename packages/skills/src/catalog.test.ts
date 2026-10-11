@@ -12,6 +12,8 @@ describe('catalogo delle skill', () => {
     const off = disabledToolIds({ skills: { ricette: false } });
     expect(off.has('recipe_save')).toBe(true);
     expect(off.has('present_recipes')).toBe(true);
+    // web_search è di uso generale: la skill lo usa ma non lo possiede.
+    expect(off.has('web_search')).toBe(false);
     expect(off.has('shopping_list_add')).toBe(false);
     expect(disabledToolIds({ skills: { shopping_list: false } }).has('shopping_list_add')).toBe(
       true,
