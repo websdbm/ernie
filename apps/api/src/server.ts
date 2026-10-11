@@ -4,6 +4,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
+import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
@@ -17,6 +18,8 @@ export interface BuildServerOptions {
   readonly automations?: AutomationRoutesOptions;
   /** Profilo, impostazioni e dispositivi push (M7). */
   readonly me?: MeRoutesOptions;
+  /** Catalogo delle skill con interruttori per utente. */
+  readonly skills?: SkillsRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -78,6 +81,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.ws) await registerWs(app, opts.ws);
   if (opts.automations) await app.register(automationRoutes, opts.automations);
   if (opts.me) await app.register(meRoutes, opts.me);
+  if (opts.skills) await app.register(skillsRoutes, opts.skills);
 
   return app;
 }

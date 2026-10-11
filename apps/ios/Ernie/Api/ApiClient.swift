@@ -82,6 +82,16 @@ struct NotificationItem: Codable, Sendable, Equatable, Identifiable {
     var createdAt: String
 }
 
+struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var description: String
+    var kind: String
+    var tools: [String]
+    var examples: [String]
+    var enabled: Bool
+}
+
 struct ApprovalResult: Codable, Sendable, Equatable {
     var outcome: String
     var executed: Bool
@@ -118,6 +128,19 @@ struct ApiClient: Sendable {
     func approve(approvalId: String, decision: String) async throws -> ApprovalResult {
         struct Body: Encodable { var decision: String }
         return try await request("POST", "/v1/approvals/\(approvalId)", body: Body(decision: decision))
+    }
+
+    func skills() async throws -> [SkillInfo] {
+        struct Out: Decodable { var skills: [SkillInfo] }
+        let out: Out = try await request("GET", "/v1/skills")
+        return out.skills
+    }
+
+    func setSkill(id: String, enabled: Bool) async throws -> [SkillInfo] {
+        struct Body: Encodable { var enabled: Bool }
+        struct Out: Decodable { var skills: [SkillInfo] }
+        let out: Out = try await request("PATCH", "/v1/skills/\(id)", body: Body(enabled: enabled))
+        return out.skills
     }
 
     func registerDevice(token: String, environment: String) async throws {

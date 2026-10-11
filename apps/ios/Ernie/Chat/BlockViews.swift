@@ -124,20 +124,9 @@ struct RecipesCard: View {
                         }
                         .font(.caption)
                     }
-                    HStack {
-                        if let conversation {
-                            Button {
-                                conversation.send("aggiungi alla lista \(recipe.ingredients.joined(separator: ", "))", inputMode: "text")
-                            } label: {
-                                Label("Aggiungi gli ingredienti", systemImage: "cart.badge.plus")
-                            }
-                            .buttonStyle(.bordered)
-                            .font(.caption)
-                        }
-                        if let raw = recipe.url, let url = URL(string: raw) {
-                            Link(destination: url) { Label(recipe.source ?? "Fonte", systemImage: "safari") }
-                                .font(.caption)
-                        }
+                    ViewThatFits(in: .horizontal) {
+                        actions(for: recipe)
+                        VStack(alignment: .leading, spacing: 6) { actions(for: recipe) }
                     }
                 }
                 .padding(12)
@@ -146,5 +135,27 @@ struct RecipesCard: View {
             }
         }
         .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func actions(for recipe: RecipeItem) -> some View {
+        HStack(spacing: 8) {
+            if let conversation {
+                Button {
+                    conversation.send("Salva la ricetta «\(recipe.title)» tra le mie ricette, con gli ingredienti e i passaggi mostrati.", inputMode: "text")
+                } label: { Label("Salva", systemImage: "bookmark") }
+                Button {
+                    conversation.composerSuggestion = "Affina la ricetta «\(recipe.title)»: "
+                } label: { Label("Affina", systemImage: "slider.horizontal.3") }
+                Button {
+                    conversation.send("aggiungi alla lista \(recipe.ingredients.joined(separator: ", "))", inputMode: "text")
+                } label: { Label("Ingredienti", systemImage: "cart.badge.plus") }
+            }
+            if let raw = recipe.url, let url = URL(string: raw) {
+                Link(destination: url) { Label(recipe.source ?? "Fonte", systemImage: "safari") }
+            }
+        }
+        .buttonStyle(.bordered)
+        .font(.caption)
     }
 }

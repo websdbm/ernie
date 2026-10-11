@@ -39,6 +39,8 @@ import { createSoulRepository } from '@ernie/soul';
 import {
   createFirecrawlClient,
   createMemorySearchSpec,
+  createRecipeRepository,
+  createRecipeTools,
   createShoppingListRepository,
   createShoppingTools,
   createToolCallRecorder,
@@ -91,6 +93,7 @@ export async function startAutomations(
     .register(presentRecipesTool)
     .register(createMemorySearchSpec(ctx.memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
+  for (const t of createRecipeTools(createRecipeRepository(pool))) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),

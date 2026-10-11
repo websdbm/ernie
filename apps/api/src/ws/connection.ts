@@ -74,7 +74,9 @@ export interface ConnectionDeps {
     readonly taintTtlSeconds?: number;
   };
   readonly skills?: {
-    readonly registryFor: (userId: string) => Promise<SkillRegistry>;
+    readonly registryFor: (
+      auth: Pick<AuthContext, 'userId' | 'settings'>,
+    ) => Promise<SkillRegistry>;
   };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
@@ -345,7 +347,7 @@ export class ClientConnection {
     }
 
     // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
-    const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth.userId) : null;
+    const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
     const match = skills?.match(text) ?? null;
     if (match) {
       const reply = await match.skill.run(match.plan, {

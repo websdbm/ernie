@@ -14,6 +14,8 @@ final class ConversationStore {
     private(set) var lastAvatarEmotion = "neutral"
     var currentTrace: LatencyTrace?
     var settings: LocalSettings
+    /// Testo da proporre nel campo di scrittura (es. «Affina la ricetta …»): letto e azzerato dalla barra di input.
+    var composerSuggestion: String?
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?

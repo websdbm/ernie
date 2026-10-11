@@ -7,7 +7,13 @@ import {
 import { buildMemorySnapshot, type MemoryRepository } from '@ernie/memory';
 import type { ModelGateway } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
-import { type LearnedSkillRepository, type Skill, SkillRegistry } from '@ernie/skills';
+import {
+  disabledToolIds,
+  enabledSkillIds,
+  type LearnedSkillRepository,
+  type Skill,
+  SkillRegistry,
+} from '@ernie/skills';
 import { assembleSoul, type SoulRepository } from '@ernie/soul';
 import {
   buildSessionTools,
@@ -59,15 +65,29 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       cache.delete(sessionId);
       toolContexts.delete(sessionId);
     },
-    /** Registry delle skill per utente: integrate + apprese attive (cache 5 minuti). */
-    async skillsFor(userId: string): Promise<SkillRegistry> {
-      const hit = skillCache.get(userId);
+    /** Invalida le cache dell'utente (dopo un cambio di skill): registry e agenti delle sue sessioni. */
+    invalidateUser(userId: string): void {
+      skillCache.delete(userId);
+    },
+    /** Registry delle skill per utente: integrate + apprese attive, filtrate dagli interruttori (cache 5 minuti). */
+    async skillsFor(auth: Pick<AuthContext, 'userId' | 'settings'>): Promise<SkillRegistry> {
+      const hit = skillCache.get(auth.userId);
       if (hit && Date.now() - hit.at < 5 * 60_000) return hit.registry;
-      const registry = new SkillRegistry();
-      for (const s of deps.skills?.builtin ?? []) registry.register(s);
+      const all = new SkillRegistry();
+      for (const s of deps.skills?.builtin ?? []) all.register(s);
       if (deps.skills)
-        for (const s of await deps.skills.learned.loadActiveGuided(userId)) registry.register(s);
-      skillCache.set(userId, { registry, at: Date.now() });
+        for (const s of await deps.skills.learned.loadActiveGuided(auth.userId)) all.register(s);
+      const enabled = enabledSkillIds(auth.settings);
+      // Le skill apprese non stanno nel catalogo: restano attive.
+      const keep = new Set([
+        ...enabled,
+        ...all
+          .list()
+          .filter((s) => !isCatalogSkill(s.id))
+          .map((s) => s.id),
+      ]);
+      const registry = all.only(keep);
+      skillCache.set(auth.userId, { registry, at: Date.now() });
       return registry;
     },
     async getCompanion(auth: AuthContext, session: SessionRecord): Promise<CompanionAgent | null> {
@@ -93,11 +113,14 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];
       if (deps.tools) {
         const ctxRef: ToolContextRef = { current: null };
-        const specs = deps.tools.registry.select({
-          categories: deps.tools.categories,
-          scopes: auth.scopes,
-          core: deps.tools.core,
-        });
+        const off = disabledToolIds(auth.settings);
+        const specs = deps.tools.registry
+          .select({
+            categories: deps.tools.categories,
+            scopes: auth.scopes,
+            core: deps.tools.core,
+          })
+          .filter((t) => !off.has(t.id));
         tools = buildSessionTools(specs, deps.tools.executor, ctxRef);
         toolContexts.set(session.id, ctxRef);
       }
@@ -129,3 +152,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     },
   };
 }
+
+import { SKILL_CATALOG } from '@ernie/skills';
+
+const isCatalogSkill = (id: string): boolean => SKILL_CATALOG.some((s) => s.id === id);

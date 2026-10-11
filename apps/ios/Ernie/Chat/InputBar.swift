@@ -45,6 +45,12 @@ struct InputBar: View {
         .padding(.vertical, 8)
         .background(.bar)
         .animation(.easeInOut(duration: 0.15), value: voice.isListening)
+        .onChange(of: conversation.composerSuggestion) { _, suggestion in
+            guard let suggestion else { return }
+            draft = suggestion
+            conversation.composerSuggestion = nil
+            composing.wrappedValue = true
+        }
     }
 
     @ViewBuilder

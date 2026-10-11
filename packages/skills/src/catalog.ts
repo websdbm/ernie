@@ -19,9 +19,15 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
     id: 'shopping_list',
     title: 'Lista della spesa',
-    description: 'Aggiunge, toglie e legge la lista della spesa, senza passare dal modello quando la frase è chiara.',
+    description:
+      'Aggiunge, toglie e legge la lista della spesa, senza passare dal modello quando la frase è chiara.',
     kind: 'deterministic',
-    tools: ['shopping_list_add', 'shopping_list_remove', 'shopping_list_get', 'shopping_list_clear'],
+    tools: [
+      'shopping_list_add',
+      'shopping_list_remove',
+      'shopping_list_get',
+      'shopping_list_clear',
+    ],
     examples: ['aggiungi due litri di latte', 'togli il pane', 'cosa c’è nella lista?'],
     defaultEnabled: true,
   },
@@ -31,8 +37,20 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     description:
       'Propone ricette come schede, le salva tra le tue, le ritrova e le affina con versioni successive.',
     kind: 'guided',
-    tools: ['recipe_search', 'recipe_get', 'recipe_save', 'recipe_delete', 'present_recipes', 'web_search'],
-    examples: ['cosa cucino stasera?', 'salva questa ricetta', 'mostrami le mie ricette', 'affina la carbonara con meno pepe'],
+    tools: [
+      'recipe_search',
+      'recipe_get',
+      'recipe_save',
+      'recipe_delete',
+      'present_recipes',
+      'web_search',
+    ],
+    examples: [
+      'cosa cucino stasera?',
+      'salva questa ricetta',
+      'mostrami le mie ricette',
+      'affina la carbonara con meno pepe',
+    ],
     defaultEnabled: true,
   },
 ];
@@ -62,7 +80,9 @@ export function createRecipesSkill(): GuidedSkill {
 }
 
 /** Stato per utente: `settings.skills = { id: boolean }`; assente → valore predefinito della skill. */
-export function enabledSkillIds(settings: Readonly<Record<string, unknown>> | undefined): Set<string> {
+export function enabledSkillIds(
+  settings: Readonly<Record<string, unknown>> | undefined,
+): Set<string> {
   const map = (settings?.skills ?? {}) as Record<string, unknown>;
   const out = new Set<string>();
   for (const s of SKILL_CATALOG) {
@@ -73,7 +93,9 @@ export function enabledSkillIds(settings: Readonly<Record<string, unknown>> | un
 }
 
 /** Tool appartenenti a skill spente: da togliere dal set del modello. */
-export function disabledToolIds(settings: Readonly<Record<string, unknown>> | undefined): Set<string> {
+export function disabledToolIds(
+  settings: Readonly<Record<string, unknown>> | undefined,
+): Set<string> {
   const enabled = enabledSkillIds(settings);
   const out = new Set<string>();
   for (const s of SKILL_CATALOG) if (!enabled.has(s.id)) for (const t of s.tools) out.add(t);

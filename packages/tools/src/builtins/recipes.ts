@@ -72,8 +72,12 @@ const toRecipe = (r: Row): Recipe => ({
 });
 
 export interface RecipeRepository {
-  /** Crea la ricetta o, se il titolo esiste già, la aggiorna creando una nuova versione. */
-  save(userId: string, input: RecipeInput, reason?: string): Promise<{ recipe: Recipe; created: boolean }>;
+  /** Crea la ricetta o, se il titolo esiste già (a meno di maiuscole e accenti), la aggiorna creando una nuova versione; il titolo originale resta. */
+  save(
+    userId: string,
+    input: RecipeInput,
+    reason?: string,
+  ): Promise<{ recipe: Recipe; created: boolean }>;
   search(userId: string, query: string | undefined, limit?: number): Promise<Recipe[]>;
   get(userId: string, idOrTitle: string): Promise<Recipe | null>;
   remove(userId: string, idOrTitle: string): Promise<boolean>;
@@ -123,9 +127,9 @@ export function createRecipeRepository(pool: Pool): RecipeRepository {
             [prev.id, userId, prev.version, JSON.stringify(toRecipe(prev)), reason],
           );
           const upd = await client.query<Row>(
-            `UPDATE recipes SET title = $2, ingredients = $4::jsonb, steps = $5::jsonb, time = $6, servings = $7, source = $8, url = $9,
+            `UPDATE recipes SET ingredients = $4::jsonb, steps = $5::jsonb, time = $6, servings = $7, source = $8, url = $9,
                     notes = $10, tags = $11, version = version + 1, status = 'active', updated_at = now()
-              WHERE user_id = $1 AND title_norm = $3 RETURNING ${COLS}`,
+              WHERE user_id = $1 AND title_norm = $3 AND $2::text IS NOT NULL RETURNING ${COLS}`,
             params,
           );
           row = upd.rows[0];
@@ -169,7 +173,10 @@ export function createRecipeRepository(pool: Pool): RecipeRepository {
       return withUser(pool, userId, async (client) => {
         const row = await lookup(client, userId, idOrTitle);
         if (!row) return false;
-        await client.query(`UPDATE recipes SET status = 'deleted', updated_at = now() WHERE id = $1`, [row.id]);
+        await client.query(
+          `UPDATE recipes SET status = 'deleted', updated_at = now() WHERE id = $1`,
+          [row.id],
+        );
         return true;
       });
     },
@@ -222,7 +229,12 @@ const outOf = (r: Recipe) => ({
 /** Tool della skill «Ricette»: dati privati dell'utente, scritture con `write: true`. */
 export function createRecipeTools(repo: RecipeRepository): ToolSpec[] {
   const base = { version: '1', category: 'recipes', timeoutMs: 5_000 } as const;
-  const read = { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false } as const;
+  const read = {
+    readsPrivate: true,
+    ingestsUntrusted: false,
+    externalEffect: false,
+    write: false,
+  } as const;
   const write = { ...read, write: true } as const;
   return [
     defineTool({
@@ -231,7 +243,10 @@ export function createRecipeTools(repo: RecipeRepository): ToolSpec[] {
       description:
         "Cerca tra le ricette salvate dall'utente (per parole del titolo o degli ingredienti); senza query restituisce le più recenti. Usalo prima di proporre ricette nuove.",
       risk: read,
-      inputSchema: z.object({ query: z.string().max(120).optional(), limit: z.number().int().min(1).max(12).optional() }),
+      inputSchema: z.object({
+        query: z.string().max(120).optional(),
+        limit: z.number().int().min(1).max(12).optional(),
+      }),
       outputSchema: z.object({ recipes: z.array(RecipeOut), count: z.number().int() }),
       execute: async ({ query, limit }, ctx) => {
         const recipes = await repo.search(ctx.userId, query, limit ?? 6);
@@ -250,7 +265,8 @@ export function createRecipeTools(repo: RecipeRepository): ToolSpec[] {
         const r = await repo.get(ctx.userId, recipe);
         return { found: r !== null, recipe: r ? outOf(r) : null };
       },
-      present: (_i, out) => (out.recipe ? toBlock([{ ...out.recipe, updatedAt: new Date() }]) : null),
+      present: (_i, out) =>
+        out.recipe ? toBlock([{ ...out.recipe, updatedAt: new Date() }]) : null,
     }),
     defineTool({
       ...base,
@@ -269,7 +285,8 @@ export function createRecipeTools(repo: RecipeRepository): ToolSpec[] {
     defineTool({
       ...base,
       id: 'recipe_delete',
-      description: "Elimina una ricetta salvata dell'utente (per id o titolo). Solo su richiesta esplicita.",
+      description:
+        "Elimina una ricetta salvata dell'utente (per id o titolo). Solo su richiesta esplicita.",
       risk: write,
       inputSchema: z.object({ recipe: z.string().min(1).max(120) }),
       outputSchema: z.object({ deleted: z.boolean() }),

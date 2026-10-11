@@ -34,11 +34,17 @@ import {
   createModelGateway,
 } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
-import { createLearnedSkillRepository, createShoppingListSkill } from '@ernie/skills';
+import {
+  createLearnedSkillRepository,
+  createRecipesSkill,
+  createShoppingListSkill,
+} from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
   createFirecrawlClient,
   createMemorySearchSpec,
+  createRecipeRepository,
+  createRecipeTools,
   createShoppingListRepository,
   createShoppingTools,
   createToolCallRecorder,
@@ -123,6 +129,7 @@ async function main(): Promise<void> {
     .register(presentRecipesTool)
     .register(createMemorySearchSpec(memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
+  for (const t of createRecipeTools(createRecipeRepository(postgres.pool))) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
@@ -162,7 +169,10 @@ async function main(): Promise<void> {
       categories: config.tools.categories,
       core: ['memory_search', 'get_time', 'present_recipes'],
     },
-    skills: { builtin: [createShoppingListSkill(shopping)], learned: learnedSkills },
+    skills: {
+      builtin: [createShoppingListSkill(shopping), createRecipesSkill()],
+      learned: learnedSkills,
+    },
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
   logger.info(
@@ -228,6 +238,12 @@ async function main(): Promise<void> {
       allowedOrigins: config.ws.allowedOrigins,
       pool: postgres.pool,
       version: config.service.version,
+    },
+    skills: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      pool: postgres.pool,
+      onChanged: (userId) => companions.invalidateUser(userId),
     },
     ws: {
       authenticator,
