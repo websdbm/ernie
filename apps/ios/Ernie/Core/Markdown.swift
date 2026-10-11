@@ -14,7 +14,7 @@ enum Markdown {
     enum Block: Equatable, Identifiable {
         case paragraph(String)
         case bullets([String])
-        case numbered([String])
+        case numbered(start: Int, [String])
         case heading(String)
         case quote(String)
         case code(String)
@@ -23,7 +23,7 @@ enum Markdown {
             switch self {
             case .paragraph(let s): "p:\(s)"
             case .bullets(let l): "ul:\(l.joined(separator: "\u{1F}"))"
-            case .numbered(let l): "ol:\(l.joined(separator: "\u{1F}"))"
+            case .numbered(let start, let l): "ol:\(start):\(l.joined(separator: "\u{1F}"))"
             case .heading(let s): "h:\(s)"
             case .quote(let s): "q:\(s)"
             case .code(let s): "c:\(s)"
@@ -36,6 +36,7 @@ enum Markdown {
         var paragraph: [String] = []
         var bullets: [String] = []
         var numbered: [String] = []
+        var numberedStart = 1
         var code: [String]?
 
         func flushParagraph() {
@@ -43,7 +44,7 @@ enum Markdown {
         }
         func flushLists() {
             if !bullets.isEmpty { out.append(.bullets(bullets)); bullets = [] }
-            if !numbered.isEmpty { out.append(.numbered(numbered)); numbered = [] }
+            if !numbered.isEmpty { out.append(.numbered(start: numberedStart, numbered)); numbered = [] }
         }
 
         for rawLine in text.components(separatedBy: "\n") {
@@ -56,14 +57,16 @@ enum Markdown {
             if line.isEmpty { flushParagraph(); flushLists(); continue }
             if let m = line.firstMatch(of: /^[-*•]\s+(.+)$/) {
                 flushParagraph()
-                if !numbered.isEmpty { out.append(.numbered(numbered)); numbered = [] }
+                if !numbered.isEmpty { out.append(.numbered(start: numberedStart, numbered)); numbered = [] }
                 bullets.append(String(m.1))
                 continue
             }
-            if let m = line.firstMatch(of: /^\d+[.)]\s+(.+)$/) {
+            if let m = line.firstMatch(of: /^(\d+)[.)]\s+(.+)$/) {
                 flushParagraph()
                 if !bullets.isEmpty { out.append(.bullets(bullets)); bullets = [] }
-                numbered.append(String(m.1))
+                // Il numero di partenza è quello scritto nel testo: un elenco interrotto da un paragrafo non riparte da 1.
+                if numbered.isEmpty { numberedStart = Int(m.1) ?? 1 }
+                numbered.append(String(m.2))
                 continue
             }
             if let m = line.firstMatch(of: /^#{1,6}\s+(.+)$/) {
@@ -119,11 +122,11 @@ struct MarkdownText: View {
                             }
                         }
                     }
-                case .numbered(let items):
+                case .numbered(let start, let items):
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text("\(index + 1).").font(font).monospacedDigit()
+                                Text("\(start + index).").font(font).monospacedDigit()
                                 Text(Markdown.render(item)).font(font)
                             }
                         }

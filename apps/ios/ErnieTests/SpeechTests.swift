@@ -30,8 +30,19 @@ struct SpeechTests {
             .paragraph("In lista ci sono 3 voci:"),
             .bullets(["latte", "pane"]),
             .heading("Ricette"),
-            .numbered(["Zuppa", "Pollo"]),
+            .numbered(start: 1, ["Zuppa", "Pollo"]),
             .quote("nota"),
+        ])
+    }
+
+    @Test func elencoNumeratoInterrottoNonRiparteDaUno() {
+        let blocks = Markdown.blocks("1. Apple\nhttps://a.it\n2. Reddit\nhttps://b.it\n3. Blog")
+        #expect(blocks == [
+            .numbered(start: 1, ["Apple"]),
+            .paragraph("https://a.it"),
+            .numbered(start: 2, ["Reddit"]),
+            .paragraph("https://b.it"),
+            .numbered(start: 3, ["Blog"]),
         ])
     }
 
