@@ -37,27 +37,38 @@ struct AvatarStage: View {
 
     private var size: CGFloat { compact ? 56 : 150 }
 
+    /// Respiro lento da fermo, pulsazione rapida in ascolto, oscillazione quando pensa, battito quando parla.
+    private var pulse: Animation {
+        let duration: Double = switch state {
+        case .listening: 0.45
+        case .speaking: 0.3
+        case .thinking: 0.6
+        case .idle: 1.8
+        }
+        return .easeInOut(duration: duration).repeatForever(autoreverses: true)
+    }
+
     var body: some View {
         VStack(spacing: compact ? 4 : 8) {
+            // L'animazione è scoperta solo su scala e rotazione: mai sul layout (altrimenti anima anche la posizione iniziale).
             ZStack {
                 Circle()
                     .stroke(ringColor.opacity(0.55), lineWidth: compact ? 3 : 5)
-                    .scaleEffect(breathe ? 1.06 : 0.98)
                     .opacity(state == .idle ? 0 : 1)
+                    .scaleEffect(breathe ? 1.06 : 0.98)
+                    .animation(pulse, value: breathe)
                 Image("Mascot")
                     .resizable()
                     .scaledToFill()
                     .frame(width: size, height: size)
                     .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.12), radius: compact ? 4 : 10, y: compact ? 2 : 6)
                     .scaleEffect(breathe ? 1.02 : 0.99)
                     .rotationEffect(.degrees(state == .thinking ? (breathe ? 2 : -2) : 0))
-                    .shadow(color: .black.opacity(0.12), radius: compact ? 4 : 10, y: compact ? 2 : 6)
+                    .animation(pulse, value: breathe)
             }
             .frame(width: size + 16, height: size + 16)
-            .animation(
-                .easeInOut(duration: state == .listening ? 0.45 : (state == .speaking ? 0.3 : 1.8)).repeatForever(autoreverses: true),
-                value: breathe
-            )
+            .id(state)
             .onAppear { breathe = true }
             if !compact {
                 Text(caption)
@@ -69,7 +80,6 @@ struct AvatarStage: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, compact ? 6 : 12)
         .background(Color(.secondarySystemBackground))
-        .animation(.easeInOut(duration: 0.2), value: compact)
         .accessibilityLabel("\(name), \(caption)")
         // M10: sostituire il contenuto con AvatarWebView(state:, emotion:) mantenendo questa API; `emotion` è già disponibile.
     }
