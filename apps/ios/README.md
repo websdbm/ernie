@@ -6,7 +6,7 @@ Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con lo spazio i
 
 - Xcode 27 (SDK iOS 27), un simulatore o un iPhone con iOS 26.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) per rigenerare il progetto da `project.yml`; il progetto generato è comunque versionato.
-- Backend raggiungibile: in simulatore `http://localhost:3000`; su iPhone l'IP del Mac nella stessa rete (es. `http://192.168.1.10:3000`) oppure l'URL della VPS in HTTPS.
+- Backend raggiungibile: in simulatore `http://localhost:3000`; su iPhone serve **HTTPS** (App Transport Security blocca l'HTTP verso indirizzi non locali). Il modo più semplice senza VPS è Tailscale Serve sul Mac: `tailscale serve --bg 3000` espone l'API su `https://<nome-mac>.<tailnet>.ts.net/` con certificato valido, raggiungibile dal telefono con Tailscale attivo (anche su rete cellulare). In alternativa l'URL della VPS in HTTPS.
 
 ## Avvio
 
