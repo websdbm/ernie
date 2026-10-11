@@ -52,6 +52,7 @@ COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/automations/package.json packages/automations/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
+COPY packages/documents/package.json packages/documents/
 COPY packages/jev-router/package.json packages/jev-router/
 COPY packages/memory/package.json packages/memory/
 COPY packages/model-gateway/package.json packages/model-gateway/
