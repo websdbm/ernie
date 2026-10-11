@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const PROTOCOL_VERSION = 1 as const;
 /** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 4 as const;
+export const PROTOCOL_MINOR = 5 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -368,6 +368,24 @@ export const ShoppingListsBlock = z.object({
     .max(50),
   pendingText: z.string().max(500).optional(),
 });
+/** Documenti letti (v1.5): scelta toccabile; l'app rimanda `pendingText` con il titolo al posto di `{documento}`. */
+export const DocumentsBlock = z.object({
+  kind: z.literal('documents'),
+  title: z.string().max(100),
+  documents: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        title: z.string().min(1).max(160),
+        pages: z.number().int().min(1),
+        source: z.enum(['scan', 'photo', 'pdf']),
+        summarized: z.boolean(),
+        createdAt: z.string().max(40),
+      }),
+    )
+    .max(50),
+  pendingText: z.string().max(500).optional(),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -376,6 +394,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   SchemaBlock,
   ShoppingListBlock,
   ShoppingListsBlock,
+  DocumentsBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

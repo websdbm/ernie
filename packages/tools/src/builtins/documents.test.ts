@@ -133,7 +133,10 @@ describe('tool documenti', () => {
     expect(page2.text).not.toContain('Pagina uno');
     const docs = (await must(list).execute({}, ctx())) as { documents: Array<{ title: string }> };
     expect(docs.documents[0]?.title).toBe('Fotosintesi');
-    expect(must(list).present?.({}, docs)).toMatchObject({ kind: 'list' });
+    expect(must(list).present?.({}, docs)).toMatchObject({
+      kind: 'documents',
+      pendingText: 'riapri il documento «{documento}»',
+    });
     expect(must(list).present?.({ query: 'nulla' }, { documents: [] })).toBeNull();
   });
 

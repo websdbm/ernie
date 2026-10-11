@@ -262,12 +262,17 @@ export function createDocumentTools(deps: DocumentToolDeps): ToolSpec[] {
     present: ({ query }, out): ContentBlock | null =>
       out.documents.length
         ? {
-            kind: 'list',
-            title: query ? `📄 Documenti: «${query.slice(0, 80)}»` : '📄 I tuoi documenti',
-            items: out.documents.slice(0, 50).map((d) => ({
-              name: d.title.slice(0, 120),
-              quantity: `${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}`,
+            kind: 'documents',
+            title: query ? `Documenti: «${query.slice(0, 80)}»` : 'I tuoi documenti',
+            documents: out.documents.slice(0, 50).map((d) => ({
+              id: d.id,
+              title: d.title.slice(0, 160),
+              pages: d.pages,
+              source: d.source,
+              summarized: d.summarized,
+              createdAt: d.createdAt,
             })),
+            pendingText: 'riapri il documento «{documento}»',
           }
         : null,
   });

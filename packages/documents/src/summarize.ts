@@ -93,43 +93,43 @@ export function chunkPages(
 // ---- forma piatta dello schema (structured output) → albero del protocollo ----
 
 const FlatNode = z.object({
-  id: z.string().min(1).max(40),
-  parent: z.string().max(40).nullable(),
-  label: z.string().min(1).max(120),
-  note: z.string().max(300).optional(),
+  id: z.string().min(1).max(60),
+  parent: z.string().max(60).nullable(),
+  label: z.string().min(1).max(400),
+  note: z.string().max(1000).optional(),
 });
 const FlatSchema = z.object({
   type: SchemaType,
-  nodes: z.array(FlatNode).max(60).default([]),
+  nodes: z.array(FlatNode).max(400).default([]),
   steps: z
     .array(
       z.object({
-        id: z.string().min(1).max(40),
-        label: z.string().min(1).max(160),
-        note: z.string().max(300).optional(),
+        id: z.string().min(1).max(60),
+        label: z.string().min(1).max(400),
+        note: z.string().max(1000).optional(),
       }),
     )
-    .max(30)
+    .max(200)
     .default([]),
   links: z
     .array(
       z.object({
-        from: z.string().min(1).max(40),
-        to: z.string().min(1).max(40),
-        label: z.string().max(60).optional(),
+        from: z.string().min(1).max(60),
+        to: z.string().min(1).max(60),
+        label: z.string().max(200).optional(),
       }),
     )
-    .max(60)
+    .max(400)
     .default([]),
   events: z
     .array(
       z.object({
-        when: z.string().min(1).max(60),
-        label: z.string().min(1).max(160),
-        note: z.string().max(300).optional(),
+        when: z.string().min(1).max(200),
+        label: z.string().min(1).max(400),
+        note: z.string().max(1000).optional(),
       }),
     )
-    .max(40)
+    .max(200)
     .default([]),
 });
 type FlatSchema = z.infer<typeof FlatSchema>;
@@ -148,8 +148,8 @@ export function toDiagram(flat: FlatSchema, fallbackTitle: string): SchemaDiagra
         n === rootNode ? roots.filter((r) => r !== rootNode).slice(0, 12 - kids.length) : [];
       const children = [...kids, ...extra].map((c) => build(c.id, depth + 1));
       return {
-        label: n.label,
-        ...(n.note ? { note: n.note } : {}),
+        label: cut(n.label, 120),
+        ...(n.note ? { note: cut(n.note, 300) } : {}),
         ...(children.length ? { children } : {}),
       };
     };
@@ -157,10 +157,20 @@ export function toDiagram(flat: FlatSchema, fallbackTitle: string): SchemaDiagra
     return SchemaDiagram.parse({ type: 'mindmap', root });
   }
   if (flat.type === 'flow') {
-    const ids = new Set(flat.steps.map((s) => s.id));
-    const links = flat.links.filter((l) => ids.has(l.from) && ids.has(l.to));
-    const steps =
-      flat.steps.length >= 2 ? flat.steps : [...flat.steps, { id: 'fine', label: 'Fine' }];
+    const ids = new Set(flat.steps.map((s) => cut(s.id, 40)));
+    const links = flat.links
+      .map((l) => ({
+        from: cut(l.from, 40),
+        to: cut(l.to, 40),
+        ...(l.label ? { label: cut(l.label, 60) } : {}),
+      }))
+      .filter((l) => ids.has(l.from) && ids.has(l.to));
+    const stepsIn = flat.steps.map((st) => ({
+      id: cut(st.id, 40),
+      label: cut(st.label, 160),
+      ...(st.note ? { note: cut(st.note, 300) } : {}),
+    }));
+    const steps = stepsIn.length >= 2 ? stepsIn : [...stepsIn, { id: 'fine', label: 'Fine' }];
     const sequential =
       links.length === 0
         ? steps.slice(1).map((s, i) => ({ from: steps[i]?.id ?? s.id, to: s.id }))
@@ -171,8 +181,12 @@ export function toDiagram(flat: FlatSchema, fallbackTitle: string): SchemaDiagra
       links: sequential.slice(0, 60),
     });
   }
-  const events =
-    flat.events.length >= 2 ? flat.events : [...flat.events, { when: '—', label: 'Fine' }];
+  const eventsIn = flat.events.map((e) => ({
+    when: cut(e.when, 60),
+    label: cut(e.label, 160),
+    ...(e.note ? { note: cut(e.note, 300) } : {}),
+  }));
+  const events = eventsIn.length >= 2 ? eventsIn : [...eventsIn, { when: '—', label: 'Fine' }];
   return SchemaDiagram.parse({ type: 'timeline', events: events.slice(0, 40) });
 }
 
@@ -186,14 +200,46 @@ const SYSTEM = [
 ].join('\n');
 
 const ChunkNotes = z.object({
-  summary: z.string().max(1200),
-  keyPoints: z.array(z.string().max(200)).max(8),
-  entities: z.array(z.string().max(80)).max(15).default([]),
+  summary: z.string().max(8000),
+  keyPoints: z.array(z.string().max(1000)).max(200),
+  entities: z.array(z.string().max(400)).max(400).default([]),
 });
 
+/** Prodotti come li scrive il modello (tolleranti); `clampProducts` li riporta nei limiti del protocollo. */
+const LooseProducts = z.object({
+  abstract: z.string().max(6000),
+  keyPoints: z.array(z.string().min(1).max(2000)).max(200),
+  glossary: z
+    .array(z.object({ term: z.string().min(1).max(200), definition: z.string().min(1).max(1000) }))
+    .max(200)
+    .default([]),
+  questions: z
+    .array(z.object({ question: z.string().min(1).max(1000), answer: z.string().min(1).max(1500) }))
+    .max(15)
+    .default([]),
+  suggestedSchema: SchemaType,
+});
+
+const cut = (s: string, max: number) =>
+  s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+
+export function clampProducts(p: z.infer<typeof LooseProducts>): Products {
+  return Products.parse({
+    abstract: cut(p.abstract, 1500),
+    keyPoints: p.keyPoints.slice(0, 12).map((k) => cut(k, 300)),
+    glossary: p.glossary
+      .slice(0, 12)
+      .map((g) => ({ term: cut(g.term, 60), definition: cut(g.definition, 300) })),
+    questions: p.questions
+      .slice(0, 10)
+      .map((q) => ({ question: cut(q.question, 300), answer: cut(q.answer, 400) })),
+    suggestedSchema: p.suggestedSchema,
+  });
+}
+
 const FullOutput = z.object({
-  title: z.string().min(1).max(160),
-  products: Products,
+  title: z.string().min(1).max(400),
+  products: LooseProducts,
   schema: FlatSchema,
 });
 
@@ -204,7 +250,7 @@ const studyPrompt = (title: string, body: string, focus?: string, fromNotes = fa
     fromNotes
       ? 'Qui sotto gli appunti per parte di un documento lungo: fondili in un unico quadro coerente.'
       : 'Qui sotto il testo del documento.',
-    'Produci: titolo breve; abstract (3–6 frasi); 5–10 punti chiave; glossario dei termini essenziali (max 10); 5 domande di verifica con risposta breve; suggestedSchema; lo schema del tipo scelto.',
+    'Produci: titolo breve (max 12 parole); abstract di 3–6 frasi (max 900 caratteri); 5–10 punti chiave (max 200 caratteri ciascuno); glossario dei termini essenziali (max 10 voci, definizioni di una riga); 5 domande di verifica con risposta breve (max 2 frasi); suggestedSchema; lo schema del tipo scelto con etichette brevi (max 8 parole).',
     '',
     '<<<DOCUMENTO',
     body,
@@ -217,6 +263,30 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
   const chunkChars = deps.chunkChars ?? 24_000;
 
   async function call<T extends z.ZodTypeAny>(
+    modelClass: ModelClass,
+    scope: SummarizeScope,
+    stepIndex: number,
+    prompt: string,
+    schema: T,
+    maxOutputTokens: number,
+  ): Promise<z.infer<T>> {
+    try {
+      return await callOnce(modelClass, scope, stepIndex, prompt, schema, maxOutputTokens);
+    } catch (err) {
+      // Uscita troncata (finishReason = length): un secondo tentativo con budget doppio, poi si rinuncia.
+      const text = err instanceof Error ? err.message : JSON.stringify(err);
+      const details = (err as { details?: { finishReason?: string } }).details;
+      const truncated = details?.finishReason === 'length' || /finishReason.{0,4}length/.test(text);
+      if (!truncated) throw err;
+      deps.logger.warn(
+        { modelClass, maxOutputTokens },
+        'uscita troncata: riprovo con budget doppio',
+      );
+      return callOnce(modelClass, scope, stepIndex, prompt, schema, maxOutputTokens * 2);
+    }
+  }
+
+  async function callOnce<T extends z.ZodTypeAny>(
     modelClass: ModelClass,
     scope: SummarizeScope,
     stepIndex: number,
@@ -245,6 +315,8 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
       providerMetadata?: unknown;
       response?: { id?: string };
       finishReason?: string;
+      error?: unknown;
+      text?: string;
     };
     await deps.recorder.record({
       userId: scope.userId,
@@ -261,6 +333,20 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
       latencyMs: Date.now() - t0,
       finishReason: result.finishReason ?? 'stop',
     });
+    if (result.object === undefined || result.object === null) {
+      // Mastra non lancia: l'errore sta in `error`; il caso tipico è l'output troncato (finishReason = length).
+      const why =
+        result.error instanceof Error
+          ? result.error.message
+          : result.error
+            ? String(result.error)
+            : `nessun oggetto (finishReason: ${result.finishReason ?? '?'})`;
+      deps.logger.warn(
+        { modelClass, finishReason: result.finishReason, text: (result.text ?? '').slice(0, 200) },
+        'structured output mancante',
+      );
+      throw new Error(`risposta del modello non valida: ${why.slice(0, 300)}`);
+    }
     return schema.parse(result.object);
   }
 
@@ -277,7 +363,7 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
           step++,
           studyPrompt(doc.title, doc.pageTexts.join('\n\n'), focus),
           FullOutput,
-          4_096,
+          8_192,
         );
       } else {
         const chunks = chunkPages(doc.pageTexts, chunkChars);
@@ -293,10 +379,10 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
             step++,
             `Documento «${doc.title}», pagine ${c.from}–${c.to}. Prendi appunti fedeli: riassunto (max 10 frasi), punti chiave, nomi/date/termini importanti.\n\n<<<TESTO\n${c.text}\nTESTO>>>`,
             ChunkNotes,
-            1_024,
+            4_096,
           );
           notes.push(
-            `Pagine ${c.from}–${c.to}\n${n.summary}\nPunti: ${n.keyPoints.join('; ')}\nTermini: ${n.entities.join(', ')}`,
+            `Pagine ${c.from}–${c.to}\n${n.summary.slice(0, 4000)}\nPunti: ${n.keyPoints.slice(0, 20).join('; ')}\nTermini: ${n.entities.slice(0, 40).join(', ')}`,
           );
         }
         out = await call(
@@ -305,13 +391,13 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
           step++,
           studyPrompt(doc.title, notes.join('\n\n'), focus, true),
           FullOutput,
-          4_096,
+          8_192,
         );
       }
-      const diagram = toDiagram(out.schema, out.title);
+      const diagram = toDiagram(out.schema, cut(out.title, 160));
       return {
-        title: out.title,
-        products: { ...out.products, suggestedSchema: diagram.type },
+        title: cut(out.title, 160),
+        products: clampProducts({ ...out.products, suggestedSchema: diagram.type }),
         schema: { type: diagram.type, diagram },
       };
     },
@@ -338,7 +424,7 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
           'DOCUMENTO>>>',
         ].join('\n'),
         FlatSchema,
-        3_072,
+        6_144,
       );
       return toDiagram({ ...flat, type }, doc.title);
     },
