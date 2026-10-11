@@ -25,7 +25,7 @@ pnpm dev:api                    # http://localhost:3000/health · /ready · ws:/
 pnpm dev:worker                 # in un altro terminale
 ```
 
-Comandi deterministici in chat (nessuna chiamata a modelli): `/aiuto`, `/stato`, `/classe heavy`, `/contesto cucina`.
+Comandi deterministici in chat (nessuna chiamata a modelli): `/aiuto`, `/stato`, `/classe heavy`, `/contesto cucina`. La memoria si consolida da sola nel worker dopo ogni turno: Ernie ricorda preferenze, abitudini, relazioni e progetti anche nelle sessioni successive.
 
 Prova da terminale (protocollo WebSocket v1):
 

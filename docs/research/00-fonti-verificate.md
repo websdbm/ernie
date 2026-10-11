@@ -50,6 +50,12 @@ Verifiche effettuate direttamente sulla documentazione ufficiale durante l'anali
 - Spike M2.1 (misure reali): `docs/research/05-spike-openrouter-passthrough.md`.
 - Decisions API di Jev, chiamata reale dell'11 ott 2026: risposta `{ model: 'typesafe/jev-1.13-20260917', provider: 'TypeSafe', answers, usage: { input_tokens: 898, output_tokens: 194, cost: 0.0000377 }, id }`, latenza 836 ms sulla prima chiamata, poi p50 256 ms su 60 chiamate; `choice` restituisce `choice`, `probabilities`, `confidence`; `noul` restituisce `noul`. Calibrazione in `06-calibrazione-jev.md`.
 
+## Embeddings e memoria (11 ott 2026)
+
+- AI SDK `embedMany` (https://ai-sdk.dev/docs/ai-sdk-core/embeddings): `embedMany({ model: openai.embedding('text-embedding-3-small'), values, maxParallelCalls })` → `embeddings`, `usage.tokens`; `cosineSimilarity` esportata da `ai`.
+- Mastra `memory.recall({ threadId, resourceId, perPage: false, orderBy })` → `messages` in formato DB (`role`, `content` stringa o `{ parts: [{ type: 'text', text }] }`, `createdAt`).
+- Misure proprie: `docs/research/07-valutazione-memoria.md` (recall@k), spike M2.1 per la cache: con il prefisso oltre 512 token la lettura dalla cache è confermata nei turni reali (760 token).
+
 ## Versioni verificate (npm, 10 ott 2026)
 
 fastify 5.12.5 · zod 4.6.5 · typescript 5.9.3 (7.0.2 disponibile) · vitest 5.0.3 · pg 8.23.1 · bullmq 6.3.12 · ioredis 5.11.1 · pino 10.4.0 · @biomejs/biome 2.5.15 · @openrouter/sdk 1.4.25 · @anthropic-ai/sdk 0.133.0 · ai 7.0.137 · @ai-sdk/anthropic 4.0.78 · @ai-sdk/openai 4.0.91

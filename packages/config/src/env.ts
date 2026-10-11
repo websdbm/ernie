@@ -45,6 +45,11 @@ export const envSchema = z.object({
   ROUTER_CACHE_TTL_S: z.coerce.number().int().min(0).default(600),
   /** File JSON con le soglie del router (vedi infrastructure/router/thresholds.json). */
   ROUTER_THRESHOLDS_FILE: z.string().min(1).default('infrastructure/router/thresholds.json'),
+  EMBEDDING_MODEL: z.string().min(1).default('text-embedding-3-small'),
+  MEMORY_SNAPSHOT_MAX_CHARS: z.coerce.number().int().min(200).max(8000).default(2000),
+  MEMORY_RETRIEVAL_LIMIT: z.coerce.number().int().min(0).max(10).default(4),
+  MEMORY_CONSOLIDATION_DELAY_S: z.coerce.number().int().min(0).default(20),
+  MEMORY_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -65,6 +70,13 @@ export interface AppConfig {
   readonly llm: {
     readonly dailyBudgetUsd: number;
     readonly models: { readonly light: string; readonly standard: string; readonly heavy: string };
+  };
+  readonly memory: {
+    readonly embeddingModel: string;
+    readonly snapshotMaxChars: number;
+    readonly retrievalLimit: number;
+    readonly consolidationDelaySeconds: number;
+    readonly retentionDays: number;
   };
   readonly router: {
     readonly jevModel: string;
@@ -134,6 +146,13 @@ export function toAppConfig(env: Env): AppConfig {
       models: { light: env.MODEL_LIGHT, standard: env.MODEL_STANDARD, heavy: env.MODEL_HEAVY },
     },
     redis: { url: env.REDIS_URL },
+    memory: {
+      embeddingModel: env.EMBEDDING_MODEL,
+      snapshotMaxChars: env.MEMORY_SNAPSHOT_MAX_CHARS,
+      retrievalLimit: env.MEMORY_RETRIEVAL_LIMIT,
+      consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
+      retentionDays: env.MEMORY_RETENTION_DAYS,
+    },
     router: {
       jevModel: env.JEV_MODEL,
       timeoutMs: env.JEV_TIMEOUT_MS,
@@ -183,6 +202,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     ws: config.ws,
     llm: config.llm,
     router: config.router,
+    memory: config.memory,
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),

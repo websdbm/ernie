@@ -25,6 +25,8 @@ export interface TurnInput {
   readonly companion: CompanionAgent;
   /** Decisione del router (metriche nell'evento finale); assente nei test minimi. */
   readonly decision?: TurnDecision;
+  /** Memorie recuperate per questo turno: entrano nel messaggio utente, mai nel prefisso. */
+  readonly memoryContext?: string;
   readonly abortSignal: AbortSignal;
   readonly recorder: LlmCallRecorder;
   readonly logger: Logger;
@@ -42,9 +44,14 @@ export interface TurnResult {
   readonly loopDetected: boolean;
 }
 
-/** Il turno utente porta le parti variabili (modalità) fuori dal prefisso stabile. */
-export function formatUserTurn(text: string, inputMode: 'text' | 'voice'): string {
-  return inputMode === 'voice' ? `[voce] ${text}` : text;
+/** Il turno utente porta le parti variabili (modalità, memorie recuperate) fuori dal prefisso stabile. */
+export function formatUserTurn(
+  text: string,
+  inputMode: 'text' | 'voice',
+  memoryContext?: string,
+): string {
+  const body = inputMode === 'voice' ? `[voce] ${text}` : text;
+  return memoryContext ? `${memoryContext}\n\n${body}` : body;
 }
 
 /**
@@ -94,12 +101,15 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
   });
 
   try {
-    const stream = await companion.agent.stream(formatUserTurn(input.text, input.inputMode), {
-      memory: { thread: input.sessionId, resource: input.userId },
-      maxSteps: companion.profile.maxSteps,
-      modelSettings: { maxOutputTokens: companion.profile.maxOutputTokens },
-      abortSignal: internal.signal,
-    });
+    const stream = await companion.agent.stream(
+      formatUserTurn(input.text, input.inputMode, input.memoryContext),
+      {
+        memory: { thread: input.sessionId, resource: input.userId },
+        maxSteps: companion.profile.maxSteps,
+        modelSettings: { maxOutputTokens: companion.profile.maxOutputTokens },
+        abortSignal: internal.signal,
+      },
+    );
 
     for await (const chunk of stream.fullStream) {
       if (internal.signal.aborted) break;

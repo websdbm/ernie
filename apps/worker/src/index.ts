@@ -1,4 +1,15 @@
+import { createConversationMemory, createMastraStorage } from '@ernie/agent-core';
 import { loadConfig, redactConfig } from '@ernie/config';
+import { createPool } from '@ernie/db';
+import {
+  consolidateThread,
+  createFakeEmbedder,
+  createMemoryRepository,
+  createOpenAIEmbedder,
+  ensurePurgeSchedule,
+  MEMORY_QUEUE,
+} from '@ernie/memory';
+import { buildProfiles, createLlmCallRecorder, createModelGateway } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
@@ -29,6 +40,61 @@ async function main(): Promise<void> {
     connection,
     concurrency: 4,
   });
+
+  // ---- Coda `memory`: consolidamento asincrono (modello light) e purge giornaliero ----
+  const pool = createPool({
+    connectionString: config.db.url,
+    max: 3,
+    applicationName: 'ernie-worker',
+  });
+  const ownerPool = createPool({
+    connectionString: config.db.migrationsUrl,
+    max: 1,
+    applicationName: 'ernie-worker-owner',
+  });
+  const embedder = config.providers.openaiApiKey
+    ? createOpenAIEmbedder(config.providers.openaiApiKey, config.memory.embeddingModel)
+    : createFakeEmbedder();
+  const repo = createMemoryRepository(pool, embedder, { logger });
+  const gateway = config.providers.openrouterApiKey
+    ? createModelGateway({
+        openrouterApiKey: config.providers.openrouterApiKey,
+        profiles: buildProfiles(config.llm.models),
+      })
+    : null;
+  const threads = createConversationMemory(
+    createMastraStorage({ connectionString: config.db.url, disableInit: true, max: 2 }),
+  );
+  const recorder = createLlmCallRecorder(pool, logger);
+  const memoryQueue = new Queue(MEMORY_QUEUE, { connection });
+  await ensurePurgeSchedule(memoryQueue, config.memory.retentionDays);
+  const memoryWorker = new Worker(
+    MEMORY_QUEUE,
+    async (job) => {
+      if (job.name === 'purge') {
+        const n = await repo.purge(
+          ownerPool,
+          (job.data as { retentionDays: number }).retentionDays,
+        );
+        logger.info({ purged: n }, 'purge memorie');
+        return { purged: n };
+      }
+      if (job.name === 'consolidate') {
+        if (!gateway) {
+          logger.warn('consolidamento saltato: nessun provider LLM');
+          return { skipped: true };
+        }
+        const data = job.data as { userId: string; threadId: string; sessionId: string };
+        return consolidateThread({ pool, repo, threads, gateway, recorder, logger }, data);
+      }
+      throw new Error(`job sconosciuto sulla coda ${MEMORY_QUEUE}: ${job.name}`);
+    },
+    { connection, concurrency: 2 },
+  );
+  memoryWorker.on('failed', (job, err) =>
+    logger.error({ jobId: job?.id, name: job?.name, err }, 'job memoria fallito'),
+  );
+  memoryWorker.on('ready', () => logger.info({ queue: MEMORY_QUEUE }, 'worker memoria pronto'));
   worker.on('ready', () => logger.info({ queue: SYSTEM_QUEUE }, 'worker pronto'));
   worker.on('completed', (job) =>
     logger.debug({ jobId: job.id, name: job.name }, 'job completato'),
@@ -45,8 +111,13 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'arresto worker in corso');
     const timer = setTimeout(() => process.exit(1), 15_000);
     try {
-      await worker.close();
-      await queue.close();
+      await Promise.allSettled([
+        worker.close(),
+        memoryWorker.close(),
+        queue.close(),
+        memoryQueue.close(),
+      ]);
+      await Promise.allSettled([pool.end(), ownerPool.end()]);
       await connection.quit();
       clearTimeout(timer);
       process.exit(0);

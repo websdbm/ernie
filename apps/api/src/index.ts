@@ -14,6 +14,14 @@ import {
   Thresholds,
 } from '@ernie/jev-router';
 import {
+  createFakeEmbedder,
+  createMemoryQueue,
+  createMemoryRepository,
+  createOpenAIEmbedder,
+  enqueueConsolidation,
+  recordTurnEpisode,
+} from '@ernie/memory';
+import {
   buildProfiles,
   createBudgetGuard,
   createLlmCallRecorder,
@@ -55,11 +63,21 @@ async function main(): Promise<void> {
 
   const storage = createMastraStorage({ connectionString: config.db.url, disableInit: true });
   const memory = createConversationMemory(storage);
+  // Memory Engine: embeddings OpenAI (o finti senza chiave, solo full-text), coda di consolidamento sul worker.
+  const embedder = config.providers.openaiApiKey
+    ? createOpenAIEmbedder(config.providers.openaiApiKey, config.memory.embeddingModel)
+    : createFakeEmbedder();
+  if (!config.providers.openaiApiKey)
+    logger.warn('OPENAI_API_KEY assente: memoria con embedder finto (solo full-text)');
+  const memories = createMemoryRepository(postgres.pool, embedder, { logger });
+  const memoryQueue = createMemoryQueue(redis.client);
   const companions = createCompanionFactory({
     gateway,
     memory,
     souls: createSoulRepository(postgres.pool),
     logger,
+    memories,
+    snapshotMaxChars: config.memory.snapshotMaxChars,
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
 
@@ -107,6 +125,27 @@ async function main(): Promise<void> {
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
         approvals: { store: createPgApprovalStore(postgres.pool), pending: new PendingApprovals() },
+        memories: {
+          repo: memories,
+          retrievalLimit: config.memory.retrievalLimit,
+          afterTurn: async (info) => {
+            try {
+              await recordTurnEpisode(memories, info);
+              if (info.outcome === 'completed' && info.llmCalls > 0) {
+                await enqueueConsolidation(
+                  memoryQueue,
+                  { userId: info.userId, threadId: info.sessionId, sessionId: info.sessionId },
+                  config.memory.consolidationDelaySeconds * 1000,
+                );
+              }
+            } catch (err) {
+              logger.warn(
+                { err: err instanceof Error ? err.message : String(err) },
+                'post-turno memoria fallito',
+              );
+            }
+          },
+        },
       },
     },
   });
@@ -123,7 +162,7 @@ async function main(): Promise<void> {
     }, 10_000);
     try {
       await app.close();
-      await Promise.allSettled([postgres.close(), redis.close()]);
+      await Promise.allSettled([memoryQueue.close(), postgres.close(), redis.close()]);
       clearTimeout(timer);
       logger.info('arresto completato');
       process.exit(0);

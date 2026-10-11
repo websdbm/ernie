@@ -13,7 +13,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M1 | Fondamenta: monorepo, TypeScript, Fastify, PostgreSQL, Docker Compose, health check, test, CI | ✅ |
 | M2 | Agente minimo: Mastra, Soul per utente, sessioni, OpenRouter, streaming WS, persistenza, costi, RLS | ✅ |
 | M3 | JEV Router: adapter, soglie calibrate, comandi deterministici, Policy Engine con taint e approvazioni, isteresi di classe, loop detector | ✅ |
-| M4 | Memoria: semantica, episodica, ricerca ibrida, consolidamento asincrono | ⏳ |
+| M4 | Memoria: semantica ed episodica, ricerca ibrida RRF, snapshot + memory_search, consolidamento asincrono, export/oblio | ✅ |
 | M5 | Tool e skill: registry, executor, permessi, Firecrawl, skill deterministiche, test di sicurezza | ⏳ |
 | M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ⏳ |
 | M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ⏳ |
@@ -89,11 +89,25 @@ Criteri:
 - End-to-end con API reale in una sessione: `/stato` e `/contesto cucina` → `route: deterministic`, 0 chiamate, 20–200 ms; "cosa cucino con pasta, uova e guanciale" → Jev (754 token, 0,00003 $, rischio 0,03) → Sonnet 5.5 con il contesto cucina (risposta con tempo di preparazione e ingredienti mancanti, 0,0024 $); "pianifica i pasti della settimana con 60 euro" → `deep_reasoning` sopra soglia → sessione portata a `heavy` → Opus 5.5 (667 token di ragionamento, 0,021 $); `/stato` conferma classe `heavy` e contesto `cucina`; 5 righe coerenti in `router_decisions`.
 - Osservazione per M9: un turno `heavy` costa circa 9 volte uno `standard`; l'isteresi tiene la sessione su `heavy` fino alla chiusura. Va misurato se conviene una discesa controllata dopo N turni semplici.
 
-## M4 — Memoria ⏳
+## M4 — Memoria ✅
 
-Ambito: `packages/memory`: tabella `memories` (kind, content, embedding `vector(1536)`, `tsvector`, `provenance` con `trust`, scope, confidence, status, **`valid_from/valid_to/created_at/expired_at`**, FK all'episodio), ricerca ibrida **top-20 + top-20 con RRF k = 60**, HNSW `m = 16`/`ef_construction = 64`, chunk con prefisso contestuale da `light`; deduplica; supersessione dei fatti; cancellazione, export e retention; **snapshot congelato per sessione** (1–3k caratteri) + tool `memory_search` (A.6); **compressione a gradini** (clearing/masking → riassunto) allineata ai confini di cache (B.10); job del worker per estrazione e consolidamento; scelta embeddings con misura.
+Realizzato (`packages/memory`, migrazione 0007, worker): tabella `memories` (kind, category, content, tags, `provenance` con `trust`, confidence, status, **`valid_from/valid_to/expired_at`**, `episode_id`, `supersedes_id`, hash, `vector(1536)` HNSW m=16/ef_construction=64, `tsvector` italiano, RLS); ricerca ibrida **top-20 + top-20 con RRF k = 60**; deduplica esatta e semantica (coseno ≥ 0,92); supersessione delle contraddizioni; **snapshot congelato per sessione** (≤ 2.000 caratteri) + tool `memory_search` (A.6); memorie recuperate nel turno utente quando `needs_memory`; episodi deterministici per turno; **consolidamento asincrono** nel worker (coda `memory`, debounce per thread, estrazione strutturata con modello light, cursori); export, oblio, purge con retention; valutazione del recupero (`docs/research/07-valutazione-memoria.md`).
 
-Criteri: recall@k su corpus italiano etichettato per OpenAI 1536 vs fastembed 384; valutazione su **LongMemEval S/M** e golden set (non LoCoMo); nessuna chiamata LLM sincrona per operazione di memoria; contraddizioni gestite con bi-temporalità; memorie da contenuto non fidato contano come gamba [A] del taint; isolamento per utente testato con RLS; Observational Memory di Mastra in A/B interno (B.4).
+Criteri:
+- [x] recall@k su corpus italiano etichettato (30 fatti, 24 domande) con `text-embedding-3-small`: vettoriale 85,4 / 93,7 / 95,8%, ibrido RRF pesato (testo 0,3) 81,2 / 89,6 / 93,7%, full-text in OR 41,7 / 66,7 / 72,9% (in AND era 12,5%); con l'embedder finto l'ibrido a peso 1 fa 60,4 / 68,7 / 77,1% contro 41,7 / 56,3 / 60,4% del solo vettoriale. Scelta: OpenAI + ibrido con peso testo 0,3 (configurabile); fastembed non valutato (download di un modello ONNX: rinviato a M9).
+- [x] nessuna chiamata LLM sincrona per operazione di memoria: scrittura, ricerca, episodi e deduplica sono deterministici; l'unica chiamata è l'estrazione asincrona per batch (0,00056 $ misurati).
+- [x] contraddizioni gestite con bi-temporalità (`supersedes_id` → `superseded`, `valid_to`), testato anche nel consolidamento.
+- [x] memorie da contenuto non fidato: `provenance.trust` e marcatura "(fonte non verificata)" nel contesto; il taint di run per i tool arriva con Firecrawl (M5).
+- [x] isolamento per utente con RLS (test: i ricordi di B non compaiono per A).
+- [ ] Observational Memory di Mastra in A/B interno (B.4) → rinviato a M9 insieme ai riassunti progressivi (B.10).
+- [ ] valutazione su LongMemEval → M9 (serve harness dedicato).
+
+### Verbale di verifica M4 (11 ott 2026)
+
+- `pnpm lint` 0 errori; `pnpm build` ok; `pnpm test`: 20 file, 104 test (più 1 online opzionale), inclusa l'integrazione su Postgres con ruolo `ernie_app`.
+- End-to-end con API e worker reali: due turni con fatti personali → il worker consolida dopo 3 s: 4 fatti semantici corretti ("Preferisce essere chiamato Ale" 0,9; "Ha un figlio di nome Leo, che ha dodici anni" 0,9; "Non vuole mai ricette con i funghi" 0,9; "Il sabato mattina fa la spesa e compra sempre il latte intero" 0,6 dedotto) e 2 episodi, tutti con embedding; nuova sessione: "Tuo figlio si chiama Leo, e nelle ricette niente funghi" e "Di solito compri il latte intero, Ale, il sabato mattina"; `needs_memory` vero in tutte le decisioni.
+- Cache dei prompt attiva: con Soul + snapshot + tool il prefisso supera i 512 token; secondo turno della nuova sessione con 760 token letti dalla cache, costo 0,0014 $ contro 0,0022 $.
+- Spesa cumulativa di sviluppo (spike, calibrazione, prove, valutazioni): circa 0,05 $ (tetto autorizzato: 3 €).
 
 ## M5 — Tool e skill ⏳
 

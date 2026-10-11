@@ -1,0 +1,129 @@
+{
+  "description": "Corpus italiano per misurare il recupero della memoria (recall@k): fatti personali e domande con i fatti attesi.",
+  "facts": [
+    { "id": "f1", "category": "habit", "content": "Compra il latte intero due volte a settimana" },
+    {
+      "id": "f2",
+      "category": "habit",
+      "content": "Fa la spesa il sabato mattina al supermercato vicino casa"
+    },
+    { "id": "f3", "category": "preference", "content": "Non vuole ricette con i funghi" },
+    {
+      "id": "f4",
+      "category": "preference",
+      "content": "Preferisce piatti veloci, pronti in meno di trenta minuti"
+    },
+    { "id": "f5", "category": "fact", "content": "È allergico alle noci e alle nocciole" },
+    {
+      "id": "f6",
+      "category": "relationship",
+      "content": "Suo figlio si chiama Leo e ha dodici anni"
+    },
+    {
+      "id": "f7",
+      "category": "relationship",
+      "content": "Sua madre si chiama Anna e vive a Treviso"
+    },
+    {
+      "id": "f8",
+      "category": "project",
+      "content": "Sta ristrutturando il bagno di casa, lavori previsti a novembre"
+    },
+    {
+      "id": "f9",
+      "category": "project",
+      "content": "Sta imparando il tedesco con lezioni il martedì sera"
+    },
+    {
+      "id": "f10",
+      "category": "fact",
+      "content": "Vive a Mestre dal 2026, prima abitava a Padova"
+    },
+    {
+      "id": "f11",
+      "category": "fact",
+      "content": "Lavora come insegnante in una scuola salesiana"
+    },
+    { "id": "f12", "category": "habit", "content": "Beve il caffè senza zucchero" },
+    {
+      "id": "f13",
+      "category": "preference",
+      "content": "Ama la cucina giapponese, soprattutto il ramen"
+    },
+    { "id": "f14", "category": "fact", "content": "Guida una Fiat Panda del 2019" },
+    {
+      "id": "f15",
+      "category": "habit",
+      "content": "Corre tre volte a settimana la mattina presto"
+    },
+    { "id": "f16", "category": "fact", "content": "Ha il dentista giovedì 16 ottobre alle 15" },
+    {
+      "id": "f17",
+      "category": "preference",
+      "content": "Vuole essere chiamato Ale, non Alessandro"
+    },
+    {
+      "id": "f18",
+      "category": "project",
+      "content": "Sta costruendo Ernie, un assistente personale con app iOS"
+    },
+    { "id": "f19", "category": "fact", "content": "Il wifi di casa si chiama CasaGrassi" },
+    {
+      "id": "f20",
+      "category": "habit",
+      "content": "La domenica cucina il ragù per tutta la settimana"
+    },
+    { "id": "f21", "category": "preference", "content": "Odia il coriandolo" },
+    { "id": "f22", "category": "fact", "content": "Il compleanno di Leo è il 3 marzo" },
+    {
+      "id": "f23",
+      "category": "habit",
+      "content": "Legge le notizie sul telefono prima di colazione"
+    },
+    { "id": "f24", "category": "fact", "content": "Ha un gatto che si chiama Romeo" },
+    {
+      "id": "f25",
+      "category": "project",
+      "content": "Vuole organizzare un viaggio in Giappone nel 2027"
+    },
+    {
+      "id": "f26",
+      "category": "preference",
+      "content": "Preferisce le notifiche solo tra le 8 e le 21"
+    },
+    {
+      "id": "f27",
+      "category": "fact",
+      "content": "Soffre di pressione alta e prende una pastiglia al mattino"
+    },
+    { "id": "f28", "category": "habit", "content": "Il venerdì sera ordina la pizza" },
+    { "id": "f29", "category": "fact", "content": "Il commercialista si chiama Bianchi" },
+    { "id": "f30", "category": "preference", "content": "Vuole risposte brevi quando parla a voce" }
+  ],
+  "queries": [
+    { "q": "cosa cucino stasera senza funghi?", "expected": ["f3", "f4"] },
+    { "q": "come si chiama mio figlio?", "expected": ["f6"] },
+    { "q": "quando faccio la spesa di solito?", "expected": ["f2"] },
+    { "q": "a cosa sono allergico?", "expected": ["f5"] },
+    { "q": "quando ho il dentista?", "expected": ["f16"] },
+    { "q": "dove abito adesso?", "expected": ["f10"] },
+    { "q": "quanto latte compro?", "expected": ["f1"] },
+    { "q": "che lingua sto studiando?", "expected": ["f9"] },
+    { "q": "come prendo il caffè?", "expected": ["f12"] },
+    { "q": "quale cucina mi piace di più?", "expected": ["f13"] },
+    { "q": "quando corro?", "expected": ["f15"] },
+    { "q": "come vuoi che ti chiami?", "expected": ["f17"] },
+    { "q": "lavori del bagno quando iniziano?", "expected": ["f8"] },
+    { "q": "quando è il compleanno di Leo?", "expected": ["f22"] },
+    { "q": "che animale ho in casa?", "expected": ["f24"] },
+    { "q": "orari in cui non disturbarmi", "expected": ["f26"] },
+    { "q": "medicine che prendo", "expected": ["f27"] },
+    { "q": "cosa mangio il venerdì?", "expected": ["f28"] },
+    { "q": "chi è il mio commercialista?", "expected": ["f29"] },
+    { "q": "che macchina ho?", "expected": ["f14"] },
+    { "q": "dove vive la nonna di Leo?", "expected": ["f7"] },
+    { "q": "spezie che non sopporto", "expected": ["f21"] },
+    { "q": "progetti per il prossimo anno", "expected": ["f25", "f18"] },
+    { "q": "cosa cucino la domenica?", "expected": ["f20"] }
+  ]
+}

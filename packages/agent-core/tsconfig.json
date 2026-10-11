@@ -27,6 +27,9 @@
     },
     {
       "path": "../jev-router"
+    },
+    {
+      "path": "../memory"
     }
   ]
 }

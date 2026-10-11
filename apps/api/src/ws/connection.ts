@@ -1,6 +1,7 @@
 import type { ApprovalStore, CompanionAgent, PendingApprovals, TurnInput } from '@ernie/agent-core';
 import { runTurn as defaultRunTurn, routeCommand } from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
+import { formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
@@ -40,6 +41,25 @@ export interface ConnectionDeps {
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
   readonly approvals?: { store: ApprovalStore; pending: PendingApprovals };
+  readonly memories?: {
+    readonly repo: MemoryRepository;
+    readonly retrievalLimit: number;
+    /** Chiamato a fine turno: episodio deterministico e consolidamento asincrono. */
+    readonly afterTurn: (info: {
+      userId: string;
+      sessionId: string;
+      requestId: string;
+      userText: string;
+      route: string;
+      modelClass: string;
+      model?: string;
+      outcome: 'completed' | 'cancelled' | 'error' | 'loop';
+      costUsd: number;
+      llmCalls: number;
+      toolCalls: number;
+      latencyMs: number;
+    }) => Promise<void>;
+  };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
 
@@ -362,6 +382,24 @@ export class ClientConnection {
       return;
     }
 
+    // Memorie recuperate per il turno (fuori dal prefisso), solo se il router le ritiene necessarie.
+    let memoryContext: string | undefined;
+    if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {
+      try {
+        const hits = await this.deps.memories.repo.search({
+          userId: this.auth.userId,
+          query: event.payload.text,
+          limit: this.deps.memories.retrievalLimit,
+        });
+        memoryContext = formatRetrievedMemories(hits) || undefined;
+      } catch (err) {
+        this.deps.logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'recupero memorie fallito',
+        );
+      }
+    }
+    const turnStartedAt = Date.now();
     const ac = new AbortController();
     this.activeTurns.set(correlationId, ac);
     const run = this.deps.runTurn ?? defaultRunTurn;
@@ -374,6 +412,7 @@ export class ClientConnection {
       text: event.payload.text,
       inputMode: event.payload.inputMode,
       companion,
+      ...(memoryContext ? { memoryContext } : {}),
       decision: {
         route: decision.route,
         modelClass: companion.profile.modelClass,
@@ -390,6 +429,34 @@ export class ClientConnection {
         return this.send(type, payload, correlationId);
       },
     })
+      .then(async (res) => {
+        const r = res as
+          | {
+              cancelled?: boolean;
+              loopDetected?: boolean;
+              costUsd?: number;
+              llmCalls?: number;
+              toolCalls?: number;
+              latencyMs?: number;
+            }
+          | undefined;
+        if (!this.deps.memories) return;
+        const outcome = r?.loopDetected ? 'loop' : r?.cancelled ? 'cancelled' : 'completed';
+        await this.deps.memories.afterTurn({
+          userId: this.auth.userId,
+          sessionId,
+          requestId: correlationId,
+          userText: event.payload.text,
+          route: decision.route,
+          modelClass: companion.profile.modelClass,
+          model: companion.profile.modelId,
+          outcome,
+          costUsd: r?.costUsd ?? 0,
+          llmCalls: r?.llmCalls ?? 0,
+          toolCalls: r?.toolCalls ?? 0,
+          latencyMs: r?.latencyMs ?? Date.now() - turnStartedAt,
+        });
+      })
       .catch(async (err) => {
         this.deps.logger.error({ err, correlationId }, 'runTurn ha rigettato');
         await this.sendError('turn_failed', 'Il turno non è stato completato', true, correlationId);

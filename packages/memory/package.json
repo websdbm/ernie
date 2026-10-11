@@ -1,0 +1,27 @@
+{
+  "name": "@ernie/memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Memory Engine: memoria semantica, episodica e procedurale con ricerca ibrida, deduplica, snapshot e consolidamento asincrono",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.91",
+    "@ernie/db": "workspace:*",
+    "@ernie/model-gateway": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@mastra/core": "^1.75.0",
+    "ai": "^7.0.137",
+    "bullmq": "^6.3.12",
+    "zod": "^4.6.5"
+  }
+}

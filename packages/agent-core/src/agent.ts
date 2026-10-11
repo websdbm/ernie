@@ -3,6 +3,8 @@ import type { AssembledSoul } from '@ernie/soul';
 import { Agent } from '@mastra/core/agent';
 import type { Memory } from '@mastra/memory';
 
+type AgentTools = NonNullable<ConstructorParameters<typeof Agent>[0]['tools']>;
+
 export interface CompanionAgentInput {
   readonly sessionId: string;
   readonly userId: string;
@@ -11,6 +13,10 @@ export interface CompanionAgentInput {
   readonly modelClass: ClassProfile['modelClass'];
   readonly gateway: ModelGateway;
   readonly memory: Memory;
+  /** Snapshot congelato della memoria (entra nel prefisso stabile, dopo il Soul). */
+  readonly memorySnapshot?: string;
+  /** Set di tool fisso per la sessione (il prefisso resta stabile). */
+  readonly tools?: AgentTools;
 }
 
 export interface CompanionAgent {
@@ -27,18 +33,26 @@ export interface CompanionAgent {
  */
 export function createCompanionAgent(input: CompanionAgentInput): CompanionAgent {
   const resolved = input.gateway.resolve(input.modelClass, input.sessionId);
+  const instructions = input.memorySnapshot
+    ? `${input.soul.instructions}\n\n${input.memorySnapshot}`
+    : input.soul.instructions;
   const agent = new Agent({
     id: `companion-${input.sessionId}`,
     name: input.companionName,
-    instructions: input.soul.instructions,
+    instructions,
     model: resolved.model,
     memory: input.memory,
+    ...(input.tools ? { tools: input.tools } : {}),
   });
   return {
     agent,
     profile: resolved.profile,
     provider: resolved.provider,
-    prefixFingerprint: `${input.soul.fingerprint}:${resolved.profile.modelId}:${resolved.profile.reasoning}`,
+    prefixFingerprint: `${input.soul.fingerprint}:${resolved.profile.modelId}:${resolved.profile.reasoning}:${Object.keys(
+      input.tools ?? {},
+    )
+      .sort()
+      .join(',')}:${input.memorySnapshot?.length ?? 0}`,
   };
 }
 

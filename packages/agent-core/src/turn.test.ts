@@ -147,6 +147,7 @@ describe('runTurn', () => {
   it('formatUserTurn marca la modalità vocale fuori dal prefisso', () => {
     expect(formatUserTurn('ciao', 'voice')).toBe('[voce] ciao');
     expect(formatUserTurn('ciao', 'text')).toBe('ciao');
+    expect(formatUserTurn('ciao', 'text', 'Memorie:\n- x')).toBe('Memorie:\n- x\n\nciao');
   });
 });
 

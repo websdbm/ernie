@@ -23,6 +23,9 @@
       "path": "packages/jev-router"
     },
     {
+      "path": "packages/memory"
+    },
+    {
       "path": "packages/agent-core"
     },
     {

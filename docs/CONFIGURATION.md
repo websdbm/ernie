@@ -25,6 +25,11 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `JEV_TIMEOUT_MS` | no | `1500` | Oltre questo tempo il router usa il fallback deterministico. Latenza misurata: p50 256 ms, p95 336 ms. |
 | `ROUTER_CACHE_TTL_S` | no | `600` | TTL della cache esatta delle decisioni (Redis). `0` disabilita di fatto la cache. |
 | `ROUTER_THRESHOLDS_FILE` | no | `infrastructure/router/thresholds.json` | Soglie per domanda, prodotte da `pnpm --filter @ernie/tests calibrate:jev --write`. |
+| `EMBEDDING_MODEL` | no | `text-embedding-3-small` | Modello OpenAI per gli embeddings (1536 dimensioni, come la colonna `memories.embedding`). Senza `OPENAI_API_KEY` la memoria usa un embedder finto: solo full-text. |
+| `MEMORY_SNAPSHOT_MAX_CHARS` | no | `2000` | Lunghezza massima dello snapshot di memoria nel prefisso di sessione. |
+| `MEMORY_RETRIEVAL_LIMIT` | no | `4` | Memorie recuperate per turno quando il router indica `needs_memory`; `0` disabilita. |
+| `MEMORY_CONSOLIDATION_DELAY_S` | no | `20` | Ritardo del job di consolidamento dopo un turno (un job per thread al minuto). |
+| `MEMORY_RETENTION_DAYS` | no | `30` | Dopo quanti giorni i ricordi cancellati vengono eliminati fisicamente (purge notturno del worker). |
 
 ## Variabili solo per Docker Compose
 
@@ -43,6 +48,7 @@ pnpm migrate up            # migrazioni SQL + LOGIN/password del ruolo ernie_app
 pnpm bootstrap:storage     # tabelle mastra_* create dal proprietario
 pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner
 pnpm --filter @ernie/tests calibrate:jev --write   # ricalibra le soglie del router (≈ 0,002 USD)
+pnpm --filter @ernie/tests eval:memory --write     # misura recall@k del recupero (OpenAI, < 0,001 USD)
 ```
 
 `admin:create-user` stampa una sola volta `API_KEY=ernie_…`: va conservata dal client (Keychain su iOS). Ogni utente ottiene una copia personale dei Soul globali, modificabile in seguito.

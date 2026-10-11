@@ -38,6 +38,9 @@ importers:
       '@ernie/jev-router':
         specifier: workspace:*
         version: link:../../packages/jev-router
+      '@ernie/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@ernie/model-gateway':
         specifier: workspace:*
         version: link:../../packages/model-gateway
@@ -65,9 +68,21 @@ importers:
 
   apps/worker:
     dependencies:
+      '@ernie/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/agent-core
       '@ernie/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@ernie/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@ernie/model-gateway':
+        specifier: workspace:*
+        version: link:../../packages/model-gateway
       '@ernie/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -89,6 +104,9 @@ importers:
       '@ernie/jev-router':
         specifier: workspace:*
         version: link:../jev-router
+      '@ernie/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@ernie/model-gateway':
         specifier: workspace:*
         version: link:../model-gateway
@@ -145,6 +163,33 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/memory:
+    dependencies:
+      '@ai-sdk/openai':
+        specifier: ^4.0.91
+        version: 4.0.91(zod@4.6.5)
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../db
+      '@ernie/model-gateway':
+        specifier: workspace:*
+        version: link:../model-gateway
+      '@ernie/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@mastra/core':
+        specifier: ^1.75.0
+        version: 1.75.0(ai@7.0.137(zod@4.6.5))(zod@4.6.5)
+      ai:
+        specifier: ^7.0.137
+        version: 7.0.137(zod@4.6.5)
+      bullmq:
+        specifier: ^6.3.12
+        version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   packages/model-gateway:
     dependencies:
       '@ernie/config':
@@ -195,9 +240,18 @@ importers:
       '@ernie/config':
         specifier: workspace:*
         version: link:../packages/config
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../packages/db
       '@ernie/jev-router':
         specifier: workspace:*
         version: link:../packages/jev-router
+      '@ernie/memory':
+        specifier: workspace:*
+        version: link:../packages/memory
+      '@ernie/observability':
+        specifier: workspace:*
+        version: link:../packages/observability
       '@ernie/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -248,6 +302,12 @@ packages:
 
   '@ai-sdk/gateway@4.0.110':
     resolution: {integrity: sha512-5IwnOR6v7KC+D9eddUqsCobXl/FbLUVb2LaQc/uyuQdpP3/n9s0YLc9zl4/W3IS/R2pjHrqUfCzEAeOu7bFLoQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@4.0.91':
+    resolution: {integrity: sha512-Nk382R6us0GNxI1cGJUXMryz1XHpyrmC3K/Rmqdx9tIsqAlc7UtuO/hC9dd31F41w8uzoS362HJSDXgAI7zKbA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1962,6 +2022,12 @@ snapshots:
       '@ai-sdk/provider': 4.0.26
       '@ai-sdk/provider-utils': 5.0.58(zod@4.6.5)
       '@vercel/oidc': 3.2.0
+      zod: 4.6.5
+
+  '@ai-sdk/openai@4.0.91(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.26
+      '@ai-sdk/provider-utils': 5.0.58(zod@4.6.5)
       zod: 4.6.5
 
   '@ai-sdk/provider-utils@4.0.40(zod@4.6.5)':

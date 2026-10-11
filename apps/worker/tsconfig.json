@@ -6,5 +6,24 @@
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/config" }, { "path": "../../packages/observability" }]
+  "references": [
+    {
+      "path": "../../packages/config"
+    },
+    {
+      "path": "../../packages/observability"
+    },
+    {
+      "path": "../../packages/memory"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/model-gateway"
+    },
+    {
+      "path": "../../packages/agent-core"
+    }
+  ]
 }

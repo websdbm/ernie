@@ -4,6 +4,7 @@ import {
   type Memory,
   SessionAgentCache,
 } from '@ernie/agent-core';
+import { buildMemorySnapshot, createMemorySearchTool, type MemoryRepository } from '@ernie/memory';
 import type { ModelGateway } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import { assembleSoul, type SoulRepository } from '@ernie/soul';
@@ -16,6 +17,8 @@ export interface CompanionFactoryDeps {
   readonly souls: SoulRepository;
   readonly logger: Logger;
   readonly cache?: SessionAgentCache;
+  readonly memories?: MemoryRepository;
+  readonly snapshotMaxChars?: number;
 }
 
 /**
