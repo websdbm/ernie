@@ -78,6 +78,13 @@ export interface ConnectionDeps {
       auth: Pick<AuthContext, 'userId' | 'settings'>,
     ) => Promise<SkillRegistry>;
   };
+  /** Allegati (v1.3): descrizione di un documento già caricato, per annotare il messaggio al modello. */
+  readonly documents?: {
+    readonly describe: (
+      userId: string,
+      id: string,
+    ) => Promise<{ id: string; title: string; pages: number; source: string } | null>;
+  };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
 
@@ -308,6 +315,25 @@ export class ClientConnection {
     const correlationId = event.correlationId;
     const sessionId = this.sessionId;
     const text = event.payload.text;
+    // Allegati (v1.3): il modello riceve il testo annotato con titolo e id dei documenti; la skill «Documenti» guida il turno.
+    const attachments = event.payload.attachments ?? [];
+    const attachmentNotes: string[] = [];
+    for (const a of attachments) {
+      const d = await this.deps.documents?.describe(this.auth.userId, a.id);
+      if (!d) {
+        await this.sendError(
+          'document_not_found',
+          'Documento allegato inesistente',
+          false,
+          correlationId,
+        );
+        return;
+      }
+      attachmentNotes.push(
+        `[Allegato: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}]`,
+      );
+    }
+    const modelText = attachmentNotes.length ? `${text}\n\n${attachmentNotes.join('\n')}` : text;
     const budget =
       typeof this.auth.settings.dailyBudgetUsd === 'number'
         ? this.auth.settings.dailyBudgetUsd
@@ -322,7 +348,7 @@ export class ClientConnection {
       budgetUsd: budget,
       role: this.auth.role,
     });
-    if (command.kind !== 'none') {
+    if (command.kind !== 'none' && attachments.length === 0) {
       if (command.kind === 'set_class') {
         const effective = await this.deps.store.raiseModelClass(
           this.auth.userId,
@@ -348,7 +374,7 @@ export class ClientConnection {
 
     // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
     const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
-    const match = skills?.match(text) ?? null;
+    const match = attachments.length === 0 ? (skills?.match(text) ?? null) : null;
     if (match) {
       const reply = await match.skill.run(match.plan, {
         userId: this.auth.userId,
@@ -394,7 +420,7 @@ export class ClientConnection {
       throw err;
     }
     const decision = await this.deps.router.decide({
-      text,
+      text: modelText,
       inputMode: event.payload.inputMode,
       recentTurns: this.recentTurns,
       toolCategories: this.deps.tools?.categories ?? [],
@@ -437,7 +463,9 @@ export class ClientConnection {
         );
       }
     }
-    const guided = decision.skillId ? skills?.guided(decision.skillId) : undefined;
+    const guided =
+      (attachments.length ? skills?.guided('documenti') : undefined) ??
+      (decision.skillId ? skills?.guided(decision.skillId) : undefined);
     if (guided)
       contextBlocks.push(
         `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,

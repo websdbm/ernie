@@ -7,10 +7,23 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../agent-core" },
-    { "path": "../db" },
-    { "path": "../memory" },
-    { "path": "../observability" },
-    { "path": "../protocol" }
+    {
+      "path": "../agent-core"
+    },
+    {
+      "path": "../db"
+    },
+    {
+      "path": "../memory"
+    },
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../documents"
+    }
   ]
 }

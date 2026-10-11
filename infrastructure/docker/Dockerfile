@@ -21,6 +21,7 @@ COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/automations/package.json packages/automations/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
+COPY packages/documents/package.json packages/documents/
 COPY packages/jev-router/package.json packages/jev-router/
 COPY packages/memory/package.json packages/memory/
 COPY packages/model-gateway/package.json packages/model-gateway/
@@ -74,6 +75,7 @@ COPY --from=build /app/packages/agent-core/dist ./packages/agent-core/dist
 COPY --from=build /app/packages/automations/dist ./packages/automations/dist
 COPY --from=build /app/packages/config/dist ./packages/config/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
+COPY --from=build /app/packages/documents/dist ./packages/documents/dist
 COPY --from=build /app/packages/jev-router/dist ./packages/jev-router/dist
 COPY --from=build /app/packages/memory/dist ./packages/memory/dist
 COPY --from=build /app/packages/model-gateway/dist ./packages/model-gateway/dist

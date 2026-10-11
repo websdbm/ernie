@@ -47,7 +47,10 @@ export interface ToolSpec<
   /** Etichetta della sorgente non fidata introdotta dall'output (per il taint), se applicabile. */
   readonly untrustedSource?: (input: z.infer<I>, output: z.infer<O>) => string | null;
   /** Blocco strutturato da mostrare al client come scheda (protocollo v1.2), derivato dall'esito. */
-  readonly present?: (input: z.infer<I>, output: z.infer<O>) => ContentBlock | null;
+  readonly present?: (
+    input: z.infer<I>,
+    output: z.infer<O>,
+  ) => ContentBlock | readonly ContentBlock[] | null;
 }
 
 export class ToolError extends Error {

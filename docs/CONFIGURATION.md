@@ -30,7 +30,7 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `MEMORY_RETRIEVAL_LIMIT` | no | `4` | Memorie recuperate per turno quando il router indica `needs_memory`; `0` disabilita. |
 | `MEMORY_CONSOLIDATION_DELAY_S` | no | `20` | Ritardo del job di consolidamento dopo un turno (un job per thread al minuto). |
 | `MEMORY_RETENTION_DAYS` | no | `30` | Dopo quanti giorni i ricordi cancellati vengono eliminati fisicamente (purge notturno del worker). |
-| `TOOL_CATEGORIES` | no | `utility,memory,shopping_list,web,presentation,recipes` | Categorie di tool abilitate nelle sessioni (set stabile per sessione; `memory_search`, `get_time` e `present_recipes` sono sempre presenti). |
+| `TOOL_CATEGORIES` | no | `utility,memory,shopping_list,web,presentation,recipes,documents` | Categorie di tool abilitate nelle sessioni (set stabile per sessione; `memory_search`, `get_time` e `present_recipes` sono sempre presenti). |
 | `TOOL_APPROVAL_TTL_S` | no | `120` | Validità di una richiesta di conferma di un tool; scaduta, l'azione è negata. |
 | `POLICY_RISK_ASK_THRESHOLD` | no | `0.75` | Con segnale di rischio del router oltre questa soglia, i tool con effetti esterni richiedono conferma. |
 | `WEB_ALLOWED_DOMAINS` / `WEB_BLOCKED_DOMAINS` | no | vuoto | Allow/deny list di domini (CSV) per `web_search` e `web_fetch`. |

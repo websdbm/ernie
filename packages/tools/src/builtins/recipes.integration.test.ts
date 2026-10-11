@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createPool, type Pool } from '@ernie/db';
+import type { ContentBlock } from '@ernie/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRecipeRepository, createRecipeTools, normalizeTitle } from './recipes.js';
 
@@ -92,7 +93,11 @@ describe.skipIf(!ready)('ricette dell’utente (Postgres, RLS)', () => {
         run: { tainted: false } as never,
       },
     );
-    const block = search?.present?.({ query: 'carbonara' }, out);
+    const presented = search?.present?.({ query: 'carbonara' }, out);
+    const block = (Array.isArray(presented) ? presented[0] : presented) as
+      | ContentBlock
+      | null
+      | undefined;
     expect(block?.kind).toBe('recipes');
     if (block?.kind === 'recipes') expect(block.recipes[0]?.title).toBe('Carbonara');
   });

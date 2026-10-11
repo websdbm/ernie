@@ -23,6 +23,7 @@ import {
 } from '@ernie/automations';
 import type { AppConfig } from '@ernie/config';
 import type { Pool } from '@ernie/db';
+import { createDocumentRepository } from '@ernie/documents';
 import {
   createDecisionRouter,
   createHttpJevClient,
@@ -37,6 +38,7 @@ import type { Logger } from '@ernie/observability';
 import { createShoppingListSkill, SkillRegistry } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
+  createDocumentTools,
   createFirecrawlClient,
   createMemorySearchSpec,
   createRecipeRepository,
@@ -94,6 +96,9 @@ export async function startAutomations(
     .register(createMemorySearchSpec(ctx.memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
   for (const t of createRecipeTools(createRecipeRepository(pool))) registry.register(t);
+  // Documenti: nel worker solo rilettura ed elenco (nessun riassuntore: i riassunti nascono nei turni dell'app).
+  for (const t of createDocumentTools({ repo: createDocumentRepository(pool), summarizer: null }))
+    registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),

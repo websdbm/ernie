@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const PROTOCOL_VERSION = 1 as const;
 /** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 2 as const;
+export const PROTOCOL_MINOR = 3 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -70,6 +70,11 @@ export const UserMessage = event(
     text: z.string().min(1).max(32_000),
     inputMode: z.enum(['text', 'voice']).default('text'),
     locale: z.string().max(16).optional(),
+    /** v1.3: documenti allegati, già caricati con `POST /v1/documents` (solo testo estratto sul telefono). */
+    attachments: z
+      .array(z.object({ kind: z.literal('document'), id: z.uuid() }))
+      .max(3)
+      .optional(),
   }),
 );
 
@@ -267,10 +272,77 @@ export const RecipesBlock = z.object({
   kind: z.literal('recipes'),
   recipes: z.array(RecipeItem).min(1).max(6),
 });
+/** Mappa (v1.3): nodo ricorsivo, profondità contenuta (il riassuntore la limita a 3 livelli sotto la radice). */
+export interface MindNode {
+  readonly label: string;
+  readonly note?: string | undefined;
+  readonly children?: MindNode[] | undefined;
+}
+export const MindNode: z.ZodType<MindNode> = z.lazy(() =>
+  z.object({
+    label: z.string().min(1).max(120),
+    note: z.string().max(300).optional(),
+    children: z.array(MindNode).max(12).optional(),
+  }),
+);
+export const FlowStep = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().min(1).max(160),
+  note: z.string().max(300).optional(),
+});
+export const FlowLink = z.object({
+  from: z.string().min(1).max(40),
+  to: z.string().min(1).max(40),
+  label: z.string().max(60).optional(),
+});
+export const TimelineEvent = z.object({
+  when: z.string().min(1).max(60),
+  label: z.string().min(1).max(160),
+  note: z.string().max(300).optional(),
+});
+/** Schema grafico di un testo (v1.3): dati chiusi, disegnati nativamente dal client (mai immagini generate). */
+export const SchemaDiagram = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('mindmap'), root: MindNode }),
+  z.object({
+    type: z.literal('flow'),
+    steps: z.array(FlowStep).min(2).max(30),
+    links: z.array(FlowLink).max(60),
+  }),
+  z.object({ type: z.literal('timeline'), events: z.array(TimelineEvent).min(2).max(40) }),
+]);
+export type SchemaDiagram = z.infer<typeof SchemaDiagram>;
+export const SchemaType = z.enum(['mindmap', 'flow', 'timeline']);
+export type SchemaType = z.infer<typeof SchemaType>;
+/** Scheda di un documento letto (v1.3): prodotti da studio; il testo intero resta sul server. */
+export const DocumentBlock = z.object({
+  kind: z.literal('document'),
+  documentId: z.uuid(),
+  title: z.string().min(1).max(160),
+  pages: z.number().int().min(1).max(500),
+  source: z.enum(['scan', 'photo', 'pdf']),
+  abstract: z.string().max(1500),
+  keyPoints: z.array(z.string().min(1).max(300)).max(12),
+  glossary: z
+    .array(z.object({ term: z.string().min(1).max(60), definition: z.string().min(1).max(300) }))
+    .max(12)
+    .optional(),
+  questions: z
+    .array(z.object({ question: z.string().min(1).max(300), answer: z.string().min(1).max(400) }))
+    .max(10)
+    .optional(),
+});
+export const SchemaBlock = z.object({
+  kind: z.literal('schema'),
+  documentId: z.uuid(),
+  title: z.string().min(1).max(160),
+  diagram: SchemaDiagram,
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
   RecipesBlock,
+  DocumentBlock,
+  SchemaBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

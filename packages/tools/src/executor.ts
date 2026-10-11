@@ -259,10 +259,14 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
             ctx.onTainted?.(source);
           }
           // Scheda per il client: schema chiuso, derivata dall'esito del tool (mai dal testo del modello).
-          const block = spec.present?.(input, parsed.data) ?? null;
-          if (block) {
+          const presented = spec.present?.(input, parsed.data) ?? null;
+          const blocks = presented ? (Array.isArray(presented) ? presented : [presented]) : [];
+          for (const [i, block] of blocks.entries()) {
             try {
-              await ctx.emit?.('assistant.block', { blockId: toolCallId, block });
+              await ctx.emit?.('assistant.block', {
+                blockId: i === 0 ? toolCallId : `${toolCallId}-${i}`,
+                block,
+              });
             } catch (err) {
               deps.logger.warn({ toolId: spec.id, err }, 'blocco non inviato');
             }

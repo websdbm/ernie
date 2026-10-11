@@ -1,0 +1,30 @@
+{
+  "name": "@ernie/documents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ernie/db": "workspace:*",
+    "@ernie/model-gateway": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
+    "@mastra/core": "^1.75.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.1"
+  }
+}

@@ -9,6 +9,7 @@ export type LlmCallPurpose =
   | 'router'
   | 'skill'
   | 'automation'
+  | 'document'
   | 'other';
 
 export interface LlmCallRecord {

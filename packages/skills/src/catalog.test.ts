@@ -9,23 +9,41 @@ import {
 
 describe('catalogo delle skill', () => {
   it('senza impostazioni valgono i predefiniti; gli interruttori per utente li sovrascrivono', () => {
-    expect([...enabledSkillIds(undefined)].sort()).toEqual(['ricette', 'shopping_list']);
-    expect([...enabledSkillIds({ skills: { ricette: false } })]).toEqual(['shopping_list']);
-    expect([...enabledSkillIds({ skills: { shopping_list: false, ricette: false } })]).toEqual([]);
-  });
-
-  it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
-    expect([...availableSkillIds(undefined)].sort()).toEqual(['ricette', 'shopping_list']);
-    expect([...availableSkillIds({ skillsAvailable: { ricette: false } })]).toEqual([
+    expect([...enabledSkillIds(undefined)].sort()).toEqual([
+      'documenti',
+      'ricette',
+      'shopping_list',
+    ]);
+    expect([...enabledSkillIds({ skills: { ricette: false, documenti: false } })]).toEqual([
       'shopping_list',
     ]);
     expect([
-      ...enabledSkillIds({ skillsAvailable: { ricette: false }, skills: { ricette: true } }),
+      ...enabledSkillIds({ skills: { shopping_list: false, ricette: false, documenti: false } }),
+    ]).toEqual([]);
+  });
+
+  it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
+    expect([...availableSkillIds(undefined)].sort()).toEqual([
+      'documenti',
+      'ricette',
+      'shopping_list',
+    ]);
+    expect([
+      ...availableSkillIds({ skillsAvailable: { ricette: false, documenti: false } }),
+    ]).toEqual(['shopping_list']);
+    expect([
+      ...enabledSkillIds({
+        skillsAvailable: { ricette: false, documenti: false },
+        skills: { ricette: true },
+      }),
     ]).toEqual(['shopping_list']);
     // Resa disponibile di nuovo, torna attiva con l'interruttore che aveva.
     expect(
       [
-        ...enabledSkillIds({ skillsAvailable: { ricette: true }, skills: { ricette: true } }),
+        ...enabledSkillIds({
+          skillsAvailable: { ricette: true, documenti: false },
+          skills: { ricette: true },
+        }),
       ].sort(),
     ).toEqual(['ricette', 'shopping_list']);
     expect(disabledToolIds({ skillsAvailable: { ricette: false } }).has('recipe_save')).toBe(true);
@@ -51,5 +69,23 @@ describe('catalogo delle skill', () => {
     expect(s.instructions).toMatch(/recipe_search/);
     expect(s.instructions).toMatch(/present_recipes/);
     expect(s.riskClass).toBe('low');
+  });
+});
+
+describe('skill «Documenti»', () => {
+  it('ha icona, micro-descrizione e tool coerenti con il catalogo', async () => {
+    const { createDocumentsSkill } = await import('./catalog.js');
+    const s = createDocumentsSkill();
+    const entry = SKILL_CATALOG.find((x) => x.id === 'documenti');
+    expect(entry?.icon).toBe('doc.text.viewfinder');
+    expect(entry?.summary.length).toBeLessThan(80);
+    expect(s.allowedTools).toEqual([
+      'document_summarize',
+      'document_schema',
+      'document_get',
+      'document_list',
+    ]);
+    expect(s.instructions).toContain('document_summarize');
+    for (const e of SKILL_CATALOG) expect(e.icon.length).toBeGreaterThan(0);
   });
 });

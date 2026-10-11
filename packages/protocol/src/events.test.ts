@@ -158,3 +158,89 @@ describe('assistant.block (v1.2)', () => {
     ).toThrow();
   });
 });
+
+describe('documenti (v1.3)', () => {
+  it('user.message accetta allegati documento e rifiuta altri tipi', () => {
+    const e = createEvent(
+      'user.message',
+      {
+        text: 'riassumi',
+        attachments: [{ kind: 'document', id: '3d8f1b1e-7c3a-4c7e-9c2b-2a1f0e9d8c7d' }],
+      },
+      ctx,
+    );
+    expect(e.payload.attachments?.[0]?.kind).toBe('document');
+    expect(() =>
+      createEvent(
+        'user.message',
+        // @ts-expect-error: tipo di allegato non previsto
+        { text: 'x', attachments: [{ kind: 'image', id: 'nope' }] },
+        ctx,
+      ),
+    ).toThrow();
+  });
+
+  it('i blocchi document e schema (mappa ricorsiva, flusso, linea del tempo) rispettano lo schema chiuso', async () => {
+    const { ContentBlock } = await import('./events.js');
+    const documentId = '3d8f1b1e-7c3a-4c7e-9c2b-2a1f0e9d8c7d';
+    const doc = ContentBlock.safeParse({
+      kind: 'document',
+      documentId,
+      title: 'La fotosintesi',
+      pages: 3,
+      source: 'scan',
+      abstract: 'Le piante trasformano luce, acqua e anidride carbonica in zuccheri e ossigeno.',
+      keyPoints: ['Avviene nei cloroplasti', 'Serve la clorofilla'],
+      glossary: [{ term: 'clorofilla', definition: 'pigmento verde che cattura la luce' }],
+      questions: [{ question: 'Dove avviene?', answer: 'Nei cloroplasti.' }],
+    });
+    expect(doc.success).toBe(true);
+    const mind = ContentBlock.safeParse({
+      kind: 'schema',
+      documentId,
+      title: 'La fotosintesi',
+      diagram: {
+        type: 'mindmap',
+        root: {
+          label: 'Fotosintesi',
+          children: [
+            { label: 'Fase luminosa', children: [{ label: 'Fotolisi' }] },
+            { label: 'Ciclo di Calvin' },
+          ],
+        },
+      },
+    });
+    expect(mind.success).toBe(true);
+    const flow = ContentBlock.safeParse({
+      kind: 'schema',
+      documentId,
+      title: 'Procedura',
+      diagram: {
+        type: 'flow',
+        steps: [
+          { id: 'a', label: 'Luce' },
+          { id: 'b', label: 'Zuccheri' },
+        ],
+        links: [{ from: 'a', to: 'b' }],
+      },
+    });
+    expect(flow.success).toBe(true);
+    const timeline = ContentBlock.safeParse({
+      kind: 'schema',
+      documentId,
+      title: 'Storia',
+      diagram: {
+        type: 'timeline',
+        events: [
+          { when: '1779', label: 'Ingenhousz' },
+          { when: '1950', label: 'Calvin' },
+        ],
+      },
+    });
+    expect(timeline.success).toBe(true);
+    expect(
+      ContentBlock.safeParse({ kind: 'schema', documentId, title: 'x', diagram: { type: 'pie' } })
+        .success,
+    ).toBe(false);
+  });
+});

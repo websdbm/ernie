@@ -13,6 +13,7 @@ import {
 } from '@ernie/automations';
 import { loadConfig, redactConfig } from '@ernie/config';
 import { withUser } from '@ernie/db';
+import { createDocumentRepository, createSummarizer } from '@ernie/documents';
 import {
   createDecisionRouter,
   createHttpJevClient,
@@ -36,12 +37,14 @@ import {
 } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
 import {
+  createDocumentsSkill,
   createLearnedSkillRepository,
   createRecipesSkill,
   createShoppingListSkill,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
+  createDocumentTools,
   createFirecrawlClient,
   createMemorySearchSpec,
   createRecipeRepository,
@@ -131,6 +134,12 @@ async function main(): Promise<void> {
     .register(createMemorySearchSpec(memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
   for (const t of createRecipeTools(createRecipeRepository(postgres.pool))) registry.register(t);
+  // Documenti (M7b): testo estratto sul telefono; riassunto e schemi con il modello (classe standard/light), con registrazione dei costi.
+  const documentsRepo = createDocumentRepository(postgres.pool);
+  const summarizer = gateway
+    ? createSummarizer({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger), logger })
+    : null;
+  for (const t of createDocumentTools({ repo: documentsRepo, summarizer })) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
@@ -171,7 +180,7 @@ async function main(): Promise<void> {
       core: ['memory_search', 'get_time', 'present_recipes'],
     },
     skills: {
-      builtin: [createShoppingListSkill(shopping), createRecipesSkill()],
+      builtin: [createShoppingListSkill(shopping), createRecipesSkill(), createDocumentsSkill()],
       learned: learnedSkills,
     },
     // Interruttori delle skill letti dal database a ogni invalidazione: valgono nella conversazione in corso.
@@ -259,6 +268,11 @@ async function main(): Promise<void> {
       pool: postgres.pool,
       onChanged: (userId) => companions.invalidateUser(userId),
     },
+    documents: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      repo: documentsRepo,
+    },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -301,6 +315,7 @@ async function main(): Promise<void> {
           taintTtlSeconds: 1800,
         },
         skills: { registryFor: companions.skillsFor },
+        documents: { describe: (userId, id) => documentsRepo.describe(userId, id) },
       },
     },
   });

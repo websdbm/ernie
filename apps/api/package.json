@@ -13,6 +13,7 @@
     "@ernie/automations": "workspace:*",
     "@ernie/config": "workspace:*",
     "@ernie/db": "workspace:*",
+    "@ernie/documents": "workspace:*",
     "@ernie/jev-router": "workspace:*",
     "@ernie/memory": "workspace:*",
     "@ernie/model-gateway": "workspace:*",

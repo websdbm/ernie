@@ -17,6 +17,7 @@
   "dependencies": {
     "@ernie/agent-core": "workspace:*",
     "@ernie/db": "workspace:*",
+    "@ernie/documents": "workspace:*",
     "@ernie/memory": "workspace:*",
     "@ernie/observability": "workspace:*",
     "@ernie/protocol": "workspace:*",

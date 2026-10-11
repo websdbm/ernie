@@ -52,6 +52,8 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
       return {
         id: s.id,
         title: s.title,
+        icon: s.icon,
+        tint: s.tint,
         summary: s.summary,
         description: s.description,
         kind: s.kind,
