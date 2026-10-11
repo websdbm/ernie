@@ -18,6 +18,8 @@ final class AppModel {
     let documents = DocumentComposer()
     /// Liste della spesa mostrate nelle schede (spunta, aggiungi, togli via REST).
     let shopping = ShoppingStore()
+    /// Promemoria («Ricordami»): copia dei prossimi, notifiche locali, istantanea per il widget.
+    let reminders = ReminderStore()
     var settings = LocalSettings.load()
 
     var api: ApiClient? { credentials.map { ApiClient(credentials: $0) } }
@@ -78,6 +80,11 @@ final class AppModel {
         if !on { conversation?.muteSpeech() }
     }
 
+    /// Impostazioni aggiornate dal server (PATCH /v1/me/settings).
+    func applySettings(_ settings: [String: JSONValue]) {
+        profile = profile?.with(settings: settings)
+    }
+
     func refreshProfile() async {
         guard let api else { return }
         if let me = try? await api.me() { profile = me }
@@ -121,7 +128,12 @@ final class AppModel {
         voice = VoiceController(conversation: store, speaker: speaker)
         documents.configure(api: api)
         shopping.configure(api: api)
-        store.onBlock = { [shopping] block in shopping.apply(block) }
+        reminders.configure(api: api)
+        store.onBlock = { [shopping, reminders] block in
+            shopping.apply(block)
+            reminders.apply(block)
+        }
+        Task { await self.reminders.refresh() }
         // Modello vocale italiano scaricato in anticipo: il primo tocco sul microfono non deve aspettare.
         Task { await self.voice?.prewarm() }
         store.connect()

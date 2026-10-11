@@ -18,6 +18,8 @@ const SettingsPatch = z
     killSwitch: z.boolean().optional(),
     dailyBudgetUsd: z.number().min(0).max(50).optional(),
     speakReplies: z.boolean().optional(),
+    email: z.string().trim().email().max(120).or(z.literal('')).optional(),
+    emailNotifications: z.boolean().optional(),
   })
   .strict();
 
@@ -68,7 +70,10 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
       const auth = requireAuth(req);
       const b = SettingsPatch.safeParse(req.body);
       if (!b.success)
-        return badRequest(reply, 'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies');
+        return badRequest(
+          reply,
+          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, emailNotifications',
+        );
       const row = await withUser(
         opts.pool,
         auth.userId,

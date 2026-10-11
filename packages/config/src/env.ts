@@ -75,6 +75,9 @@ export const envSchema = z.object({
   APNS_KEY_ID: z.string().min(1).optional(),
   APNS_PRIVATE_KEY: z.string().min(1).optional(),
   APNS_BUNDLE_ID: z.string().min(1).default('com.websdbm.ernie'),
+  BREVO_API_KEY: z.string().min(1).optional(),
+  BREVO_SENDER_EMAIL: z.string().email().optional(),
+  BREVO_SENDER_NAME: z.string().min(1).default('Ernie'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -123,6 +126,12 @@ export interface AppConfig {
       readonly keyId: string;
       readonly privateKey: string;
       readonly bundleId: string;
+    } | null;
+    /** Email transazionali (Brevo) per le notifiche agli utenti che le attivano; null se non configurate. */
+    readonly email: {
+      readonly apiKey: string;
+      readonly senderEmail: string;
+      readonly senderName: string;
     } | null;
   };
   readonly router: {
@@ -228,6 +237,14 @@ export function toAppConfig(env: Env): AppConfig {
               keyId: env.APNS_KEY_ID,
               privateKey: env.APNS_PRIVATE_KEY,
               bundleId: env.APNS_BUNDLE_ID,
+            }
+          : null,
+      email:
+        env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL
+          ? {
+              apiKey: env.BREVO_API_KEY,
+              senderEmail: env.BREVO_SENDER_EMAIL,
+              senderName: env.BREVO_SENDER_NAME,
             }
           : null,
     },

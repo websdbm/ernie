@@ -103,6 +103,24 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultAvailable: true,
     defaultEnabled: true,
   },
+  {
+    id: 'ricordami',
+    title: 'Ricordami',
+    icon: 'bell.fill',
+    tint: 'purple',
+    summary: 'Promemoria a giorno e ora, con notifica sul telefono.',
+    description:
+      'Dimmi «ricordami di … alle 17», «domani alle 9», «tra 20 minuti» o «lunedì alle 8»: all’ora stabilita Ernie si sveglia e ti manda una notifica (e un’email, se la attivi nelle impostazioni). Giorno omesso = oggi. «Che promemoria ho?» e «annulla il promemoria …» per gestirli.',
+    kind: 'deterministic',
+    tools: [],
+    examples: [
+      'ricordami di uscire alle 17',
+      'ricordami domani alle 9 di chiamare il dentista',
+      'che promemoria ho?',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
 ];
 
 export const DOCUMENTS_SKILL_INSTRUCTIONS = [

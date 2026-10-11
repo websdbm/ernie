@@ -313,6 +313,19 @@ struct DocumentsBlock: Codable, Sendable, Equatable {
     var pendingText: String?
 }
 
+/// Promemoria (v1.6): elenco con annullamento dalla scheda; l'app programma anche una notifica locale.
+struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var text: String
+    var at: String
+    var status: String
+}
+
+struct RemindersBlock: Codable, Sendable, Equatable {
+    var title: String
+    var reminders: [ReminderItem]
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -323,6 +336,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case shoppingList(ShoppingListBlock)
     case shoppingLists(ShoppingListsBlock)
     case documents(DocumentsBlock)
+    case reminders(RemindersBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -347,6 +361,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .shoppingLists(try ShoppingListsBlock(from: decoder))
         case "documents":
             self = .documents(try DocumentsBlock(from: decoder))
+        case "reminders":
+            self = .reminders(try RemindersBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -380,6 +396,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .documents(let block):
             try c.encode("documents", forKey: .kind)
+            try block.encode(to: encoder)
+        case .reminders(let block):
+            try c.encode("reminders", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

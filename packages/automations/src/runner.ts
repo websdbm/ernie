@@ -28,6 +28,7 @@ import {
   type ToolRegistry,
 } from '@ernie/tools';
 import type { Redis } from 'ioredis';
+import { emailRecipient, type Mailer } from './email.js';
 import { publishUserEvent } from './notify.js';
 import type { PushSender } from './push.js';
 import { RUN_ATTEMPTS } from './queue.js';
@@ -92,6 +93,8 @@ export interface RunnerDeps {
   readonly repo: AutomationRepository;
   /** Notifiche push (APNs); assente se non configurate. */
   readonly push?: PushSender;
+  /** Email (Brevo) per gli utenti che le hanno attivate; assente se non configurato. */
+  readonly email?: Mailer;
   readonly logger: Logger;
   readonly redis: Pick<Redis, 'publish' | 'set'>;
   /** Registry delle skill deterministiche dell'utente (nessun modello). */
@@ -243,6 +246,19 @@ async function finish(
       });
     } catch (err) {
       deps.logger.warn({ err, runId: run.id }, 'notifica non salvata o non inviata');
+    }
+    // Email, se l'utente l'ha chiesta nelle impostazioni (es. promemoria quando il telefono non è a portata).
+    if (deps.email) {
+      try {
+        const settings = await deps.repo.getUserSettings(run.userId);
+        const to = emailRecipient(settings);
+        if (to) {
+          const n = notificationFor(automation, updated);
+          await deps.email.send({ to, subject: n.title, text: n.body });
+        }
+      } catch (err) {
+        deps.logger.warn({ err, runId: run.id }, 'email non inviata');
+      }
     }
   }
   const summary = updated.outcome?.summary ?? updated.error ?? undefined;

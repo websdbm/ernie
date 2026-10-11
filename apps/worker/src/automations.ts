@@ -6,6 +6,7 @@ import {
   createApnsClient,
   createAutomationQueue,
   createAutomationRepository,
+  createBrevoMailer,
   createDeviceRepository,
   createPushSender,
   dedupeKeys,
@@ -35,7 +36,7 @@ import {
 import type { MemoryRepository } from '@ernie/memory';
 import { createBudgetGuard, type LlmCallRecorder, type ModelGateway } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
-import { createShoppingListSkill, SkillRegistry } from '@ernie/skills';
+import { createReminderSkill, createShoppingListSkill, SkillRegistry } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
   createDocumentTools,
@@ -111,7 +112,9 @@ export async function startAutomations(
     );
     for (const t of web) registry.register(t);
   }
-  const skills = new SkillRegistry().register(createShoppingListSkill(shopping));
+  const skills = new SkillRegistry()
+    .register(createShoppingListSkill(shopping))
+    .register(createReminderSkill(null));
 
   let guided: GuidedDeps | null = null;
   if (ctx.gateway) {
@@ -169,6 +172,9 @@ export async function startAutomations(
       })
     : undefined;
   if (!push) logger.warn('APNs non configurato: nessuna notifica push, solo notifiche in-app');
+  // Email (Brevo): solo con BREVO_API_KEY e BREVO_SENDER_EMAIL; l'utente la attiva nelle impostazioni.
+  const email = config.push.email ? createBrevoMailer({ ...config.push.email, logger }) : undefined;
+  if (!email) logger.warn('Brevo non configurato: nessuna notifica via email');
 
   const runner: RunnerDeps = {
     pool,
@@ -176,6 +182,7 @@ export async function startAutomations(
     logger,
     redis: connection,
     ...(push ? { push } : {}),
+    ...(email ? { email } : {}),
     skillsFor: async () => skills,
     guided,
     catchUpToleranceSeconds: config.automations.catchUpToleranceSeconds,

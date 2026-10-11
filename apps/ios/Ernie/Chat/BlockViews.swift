@@ -23,9 +23,75 @@ struct BlockView: View {
             ShoppingListsCard(block: block, conversation: conversation)
         case .documents(let block):
             DocumentsCard(block: block, conversation: conversation)
+        case .reminders(let block):
+            RemindersCard(block: block)
         case .unknown:
             EmptyView()
         }
+    }
+}
+
+/// Promemoria: prossimi scatti con orario parlante e annullamento; lo stato arriva dallo store (server + notifiche locali).
+struct RemindersCard: View {
+    let block: RemindersBlock
+    @Environment(AppModel.self) private var model
+
+    private var rows: [ReminderItem] {
+        block.reminders.map { r in
+            var x = r
+            if r.status == "scheduled", !model.reminders.isScheduled(r.id), model.reminders.items.isEmpty == false || true {
+                // Annullato o già scattato dopo la creazione della scheda: lo store non lo ha più.
+                if !model.reminders.isScheduled(r.id) { x.status = isPast(r) ? "done" : "cancelled" }
+            }
+            return x
+        }
+    }
+
+    private func isPast(_ r: ReminderItem) -> Bool {
+        guard let at = ReminderStore.date(r.at) else { return false }
+        return at <= .now
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(block.title, systemImage: "bell.fill").font(.subheadline.weight(.semibold))
+            ForEach(rows) { r in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: r.status == "scheduled" ? "alarm" : r.status == "done" ? "checkmark.circle" : "xmark.circle")
+                        .foregroundStyle(r.status == "scheduled" ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(r.text)
+                            .font(.callout)
+                            .strikethrough(r.status == "cancelled", color: .secondary)
+                            .foregroundStyle(r.status == "scheduled" ? .primary : .secondary)
+                        Text(Self.when(r))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if r.status == "scheduled" {
+                        Button("Annulla") { Task { await model.reminders.cancel(r) } }
+                            .font(.caption).buttonStyle(.bordered).controlSize(.mini)
+                    }
+                }
+            }
+            if let err = model.reminders.lastError {
+                Text(err).font(.caption2).foregroundStyle(.red)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .task { await model.reminders.refresh() }
+    }
+
+    static func when(_ r: ReminderItem) -> String {
+        guard let at = ReminderStore.date(r.at) else { return r.at }
+        let cal = Calendar.current
+        let time = at.formatted(date: .omitted, time: .shortened)
+        if r.status == "cancelled" { return "annullato" }
+        if cal.isDateInToday(at) { return (at <= .now ? "oggi alle " : "oggi alle ") + time + (at <= .now ? " · scattato" : "") }
+        if cal.isDateInTomorrow(at) { return "domani alle \(time)" }
+        return at.formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute())
     }
 }
 

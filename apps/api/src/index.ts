@@ -40,6 +40,7 @@ import {
   createDocumentsSkill,
   createLearnedSkillRepository,
   createRecipesSkill,
+  createReminderSkill,
   createShoppingListSkill,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
@@ -61,6 +62,7 @@ import { createAuthenticator } from './auth.js';
 import { createCompanionFactory } from './companion.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
+import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
@@ -111,6 +113,13 @@ async function main(): Promise<void> {
   const automationQueue = createAutomationQueue(redis.client);
   const automations = createAutomationRepository(postgres.pool);
   const events = createEventPublisher({ repo: automations, queue: automationQueue, logger });
+  // Promemoria («Ricordami»): automazioni una tantum accodate subito.
+  const reminders = createReminderStore({
+    automations,
+    queue: automationQueue,
+    knownTools: [],
+    maxBudgetUsd: config.automations.maxRunBudgetUsd,
+  });
 
   // Tool Registry: nucleo (orario, memoria) + lista della spesa + web (solo con chiave Firecrawl).
   // La chiusura della spesa pubblica `shopping_list.cleared` (solo dall'API: il worker non pubblica eventi).
@@ -180,7 +189,12 @@ async function main(): Promise<void> {
       core: ['memory_search', 'get_time', 'present_recipes'],
     },
     skills: {
-      builtin: [createShoppingListSkill(shopping), createRecipesSkill(), createDocumentsSkill()],
+      builtin: [
+        createShoppingListSkill(shopping),
+        createRecipesSkill(),
+        createDocumentsSkill(),
+        createReminderSkill(reminders),
+      ],
       learned: learnedSkills,
     },
     // Interruttori delle skill letti dal database a ogni invalidazione: valgono nella conversazione in corso.
@@ -274,6 +288,7 @@ async function main(): Promise<void> {
       repo: documentsRepo,
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
+    reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

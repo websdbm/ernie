@@ -7,6 +7,28 @@ struct SettingsView: View {
     @State private var busy = false
     @State private var message: String?
 
+    @State private var email = ""
+    @State private var emailNotifications = false
+    @State private var emailError: String?
+
+    private func loadEmail() {
+        let s = model.profile?.settings
+        email = s?["email"]?.stringValue ?? ""
+        emailNotifications = s?["emailNotifications"]?.boolValue ?? false
+    }
+
+    private func saveEmail() async {
+        guard let api = model.api else { return }
+        let clean = email.trimmingCharacters(in: .whitespaces)
+        do {
+            let settings = try await api.updateSettings(["email": .string(clean), "emailNotifications": .bool(emailNotifications && !clean.isEmpty)])
+            model.applySettings(settings)
+            emailError = nil
+        } catch {
+            emailError = AppModel.describe(error)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -38,6 +60,22 @@ struct SettingsView: View {
                 } footer: {
                     Text("Con l'interruttore attivo le automazioni non vengono eseguite finché non lo disattivi. La modifica richiede Face ID o il codice.")
                 }
+                Section("Notifiche") {
+                    TextField("Email per i promemoria", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onSubmit { Task { await saveEmail() } }
+                    Toggle("Promemoria e notifiche anche via email", isOn: Binding(
+                        get: { emailNotifications },
+                        set: { value in emailNotifications = value; Task { await saveEmail() } }
+                    ))
+                    .disabled(email.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if let emailError { Text(emailError).font(.caption).foregroundStyle(.red) }
+                    Text("Le notifiche arrivano sempre sul telefono (schermata di blocco e widget); l'email è un'aggiunta per quando il telefono non è a portata.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Skill") {
                     NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
                 }
@@ -63,6 +101,7 @@ struct SettingsView: View {
             .task {
                 await model.refreshProfile()
                 killSwitch = model.profile?.killSwitch ?? false
+                loadEmail()
             }
         }
     }

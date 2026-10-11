@@ -24,6 +24,10 @@ targets:
     platform: iOS
     sources:
       - path: Ernie
+      - path: Shared
+    dependencies:
+      - target: ErnieWidgets
+        embed: true
     info:
       path: Ernie/Info.plist
       properties:
@@ -47,6 +51,8 @@ targets:
       path: Ernie/Ernie.entitlements
       properties:
         aps-environment: development
+        # Gruppo app condiviso con il widget dei promemoria (istantanea JSON).
+        com.apple.security.application-groups: [group.com.websdbm.ernie]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie
@@ -58,6 +64,33 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+  ErnieWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ErnieWidgets
+      - path: Shared
+    info:
+      path: ErnieWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Promemoria di Ernie
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: ErnieWidgets/ErnieWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.websdbm.ernie]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.widgets
+        PRODUCT_NAME: ErnieWidgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
   ErnieTests:
     type: bundle.unit-test
     platform: iOS
@@ -74,6 +107,7 @@ schemes:
     build:
       targets:
         Ernie: all
+        ErnieWidgets: all
         ErnieTests: [test]
     run:
       config: Debug

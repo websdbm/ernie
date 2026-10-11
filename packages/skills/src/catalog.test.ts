@@ -12,13 +12,16 @@ describe('catalogo delle skill', () => {
     expect([...enabledSkillIds(undefined)].sort()).toEqual([
       'documenti',
       'ricette',
-      'shopping_list',
-    ]);
-    expect([...enabledSkillIds({ skills: { ricette: false, documenti: false } })]).toEqual([
+      'ricordami',
       'shopping_list',
     ]);
     expect([
-      ...enabledSkillIds({ skills: { shopping_list: false, ricette: false, documenti: false } }),
+      ...enabledSkillIds({ skills: { ricette: false, documenti: false, ricordami: false } }),
+    ]).toEqual(['shopping_list']);
+    expect([
+      ...enabledSkillIds({
+        skills: { shopping_list: false, ricette: false, documenti: false, ricordami: false },
+      }),
     ]).toEqual([]);
   });
 
@@ -26,14 +29,17 @@ describe('catalogo delle skill', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
       'documenti',
       'ricette',
+      'ricordami',
       'shopping_list',
     ]);
     expect([
-      ...availableSkillIds({ skillsAvailable: { ricette: false, documenti: false } }),
+      ...availableSkillIds({
+        skillsAvailable: { ricette: false, documenti: false, ricordami: false },
+      }),
     ]).toEqual(['shopping_list']);
     expect([
       ...enabledSkillIds({
-        skillsAvailable: { ricette: false, documenti: false },
+        skillsAvailable: { ricette: false, documenti: false, ricordami: false },
         skills: { ricette: true },
       }),
     ]).toEqual(['shopping_list']);
@@ -41,7 +47,7 @@ describe('catalogo delle skill', () => {
     expect(
       [
         ...enabledSkillIds({
-          skillsAvailable: { ricette: true, documenti: false },
+          skillsAvailable: { ricette: true, documenti: false, ricordami: false },
           skills: { ricette: true },
         }),
       ].sort(),

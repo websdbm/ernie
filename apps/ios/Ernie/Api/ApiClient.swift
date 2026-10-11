@@ -206,6 +206,18 @@ struct ApiClient: Sendable {
         try await requestNoContent("DELETE", "/v1/shopping/lists/\(listId)")
     }
 
+    // MARK: promemoria
+
+    func reminders() async throws -> [ReminderItem] {
+        struct Out: Decodable { var reminders: [ReminderItem] }
+        let out: Out = try await request("GET", "/v1/reminders")
+        return out.reminders
+    }
+
+    func deleteReminder(id: String) async throws {
+        try await requestNoContent("DELETE", "/v1/reminders/\(id)")
+    }
+
     func registerDevice(token: String, environment: String) async throws {
         struct Body: Encodable { var platform = "ios"; var token: String; var environment: String; var appVersion: String?; var locale: String? }
         struct Out: Decodable { var id: String }
