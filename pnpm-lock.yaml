@@ -29,6 +29,9 @@ importers:
       '@ernie/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@ernie/automations':
+        specifier: workspace:*
+        version: link:../../packages/automations
       '@ernie/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -77,12 +80,18 @@ importers:
       '@ernie/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@ernie/automations':
+        specifier: workspace:*
+        version: link:../../packages/automations
       '@ernie/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@ernie/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@ernie/jev-router':
+        specifier: workspace:*
+        version: link:../../packages/jev-router
       '@ernie/memory':
         specifier: workspace:*
         version: link:../../packages/memory
@@ -92,6 +101,18 @@ importers:
       '@ernie/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@ernie/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@ernie/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
+      '@ernie/soul':
+        specifier: workspace:*
+        version: link:../../packages/soul
+      '@ernie/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       bullmq:
         specifier: ^6.3.12
         version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
@@ -138,6 +159,51 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/automations:
+    dependencies:
+      '@ernie/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../db
+      '@ernie/jev-router':
+        specifier: workspace:*
+        version: link:../jev-router
+      '@ernie/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@ernie/model-gateway':
+        specifier: workspace:*
+        version: link:../model-gateway
+      '@ernie/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@ernie/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@ernie/skills':
+        specifier: workspace:*
+        version: link:../skills
+      '@ernie/soul':
+        specifier: workspace:*
+        version: link:../soul
+      '@ernie/tools':
+        specifier: workspace:*
+        version: link:../tools
+      bullmq:
+        specifier: ^6.3.12
+        version: 6.3.12(ioredis@5.11.1)(pg@8.23.1)
+      cron-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   packages/config:
     dependencies:
       zod:
@@ -162,6 +228,9 @@ importers:
 
   packages/jev-router:
     dependencies:
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../db
       '@ernie/observability':
         specifier: workspace:*
         version: link:../observability

@@ -24,6 +24,24 @@
     },
     {
       "path": "../../packages/agent-core"
+    },
+    {
+      "path": "../../packages/automations"
+    },
+    {
+      "path": "../../packages/skills"
+    },
+    {
+      "path": "../../packages/soul"
+    },
+    {
+      "path": "../../packages/tools"
+    },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/jev-router"
     }
   ]
 }

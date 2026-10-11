@@ -35,7 +35,9 @@ export function parseItem(raw: string): { name: string; quantity?: string } {
 
 /** Riconosce le richieste sulla lista della spesa in italiano; null se non è una richiesta di questo tipo. */
 export function parseShoppingCommand(input: string): ShoppingPlan | null {
+  // Le tastiere mobili scrivono l'apostrofo tipografico (’): normalizzato prima di qualunque regola.
   const text = input
+    .replace(/[\u2018\u2019\u00B4`]/gu, "'")
     .trim()
     .replace(/[.!?]+$/gu, '')
     .trim();

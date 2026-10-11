@@ -56,6 +56,18 @@ export const envSchema = z.object({
   POLICY_RISK_ASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
   WEB_ALLOWED_DOMAINS: z.string().default(''),
   WEB_BLOCKED_DOMAINS: z.string().default(''),
+  /** Tetto al budget per run che un utente può assegnare a un'automazione. */
+  AUTOMATION_MAX_RUN_BUDGET_USD: z.coerce.number().min(0).max(10).default(0.5),
+  /** Validità delle approvazioni differite create dalle automazioni (default 7 giorni). */
+  AUTOMATION_APPROVAL_TTL_S: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .default(7 * 24 * 3600),
+  /** Oltre questo ritardo una run cron con catchUp=none viene saltata. */
+  AUTOMATION_CATCHUP_TOLERANCE_S: z.coerce.number().int().min(0).default(900),
+  AUTOMATION_SYNC_EVERY_S: z.coerce.number().int().min(5).default(60),
+  AUTOMATION_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -90,6 +102,13 @@ export interface AppConfig {
     readonly riskAskThreshold: number;
     readonly webAllowedDomains: readonly string[];
     readonly webBlockedDomains: readonly string[];
+  };
+  readonly automations: {
+    readonly maxRunBudgetUsd: number;
+    readonly approvalTtlSeconds: number;
+    readonly catchUpToleranceSeconds: number;
+    readonly syncEverySeconds: number;
+    readonly concurrency: number;
   };
   readonly router: {
     readonly jevModel: string;
@@ -179,6 +198,13 @@ export function toAppConfig(env: Env): AppConfig {
       webAllowedDomains: csv(env.WEB_ALLOWED_DOMAINS),
       webBlockedDomains: csv(env.WEB_BLOCKED_DOMAINS),
     },
+    automations: {
+      maxRunBudgetUsd: env.AUTOMATION_MAX_RUN_BUDGET_USD,
+      approvalTtlSeconds: env.AUTOMATION_APPROVAL_TTL_S,
+      catchUpToleranceSeconds: env.AUTOMATION_CATCHUP_TOLERANCE_S,
+      syncEverySeconds: env.AUTOMATION_SYNC_EVERY_S,
+      concurrency: env.AUTOMATION_CONCURRENCY,
+    },
     router: {
       jevModel: env.JEV_MODEL,
       timeoutMs: env.JEV_TIMEOUT_MS,
@@ -230,6 +256,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     router: config.router,
     memory: config.memory,
     tools: config.tools,
+    automations: config.automations,
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),

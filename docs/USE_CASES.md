@@ -17,7 +17,7 @@ Scenari concreti forniti dall'utente. Servono a tre cose: guidare le scelte di p
 | "Ho fatto la spesa" / spunta degli acquisti dall'app | Episodi di acquisto registrati deterministicamente (`memories` kind=`episodic`, provenienza: utente) | Memory Engine | 0 | M4 |
 | Apprendimento delle abitudini | Job asincrono del worker: frequenze per prodotto e per settimana, stagionalità; fatti semantici con confidenza e validità ("compra latte ~2 volte a settimana"); supersessione quando l'abitudine cambia | Memory Engine (consolidamento), worker | 0 oppure 1 batch `light` per riassumere | M4 |
 | "Cosa cucino stasera?" | Jev: `needs_memory = sì`, `tool_category = web_search`; recupero ibrido dei fatti alimentari; Firecrawl cerca ricette coerenti con gli ingredienti abituali e quelli in dispensa; contenuti web **non fidati** → run tainted (solo lettura, nessuna azione esterna) | Jev, Memory, Tool `web_search`, Policy | 1 (standard) + ricerca | M4, M5 |
-| Proposta settimanale non richiesta | Automazione cron (es. sabato 10:00, jitter) con budget per run: ricette per la settimana in base alle abitudini + lista della spesa derivata, inviata come notifica; l'utente approva le aggiunte alla lista dall'app | Automation Engine, APNs, `awaiting_approval` | 1 (standard) per run | M6, M7 |
+| Proposta settimanale non richiesta | Automazione cron (sabato 10:00 Europe/Rome, jitter 5 min, budget 0,15 USD/run, preset `weekly-recipes`): ricette per la settimana in base alle abitudini + ingredienti mancanti proposti con `shopping_list_add` → run contaminata dal web → `awaiting_approval` + notifica; l'utente approva dall'app (`POST /v1/approvals/:id`) e la lista si aggiorna | Automation Engine ✅ (M6), APNs (M7) | 1 (standard, 5 step misurati) per run | M6 ✅, M7 |
 | "Non propormi più ricette con i funghi" | Fatto semantico di preferenza negativa con alta confidenza; influenza il retrieval e il prompt della skill | Memory Engine, Soul (policy alimentari dell'utente) | 0 | M4 |
 
 ### Cosa verifica questo scenario
@@ -35,7 +35,7 @@ Gli acquisti sono dati personali: `user_id` + RLS su `shopping_items` e `memorie
 
 ### Stato (11 ott 2026)
 
-Verificati end-to-end: 1 e 2 (skill deterministica, 0 LLM), 3 (modello con i tool della lista: 3 ingredienti con quantità), 6 (pagina web reale → scrittura con conferma, negata o approvata). Da fare: 4 (abitudini da acquisti simulati, M6/M9), 5 (ricette coerenti con le abitudini: dipende dalla memoria consolidata), 7 (automazione, M6).
+Verificati end-to-end: 1 e 2 (skill deterministica, 0 LLM), 3 (modello con i tool della lista: 3 ingredienti con quantità), 6 (pagina web reale → scrittura con conferma, negata o approvata), 7 (M6, 11 ott: automazione `weekly-recipes` eseguita dal worker senza client in 36 s, 5 step Sonnet con cache attiva, 3 ricerche web, 0,051 USD; esito `awaiting_approval` con 11 ingredienti proposti in una sola `shopping_list_add`; notifica `automation.approval` salvata; l'approvazione via `POST /v1/approvals/:id` esegue l'aggiunta, monouso). Parziale: 5 (le ricette arrivano con fonti citate, ma l'utente di prova non aveva abitudini in memoria: la coerenza con le abitudini resta da verificare dopo il punto 4). Da fare: 4 (abitudini da acquisti simulati, M9).
 
 ### Golden set iniziale (da ampliare con i fallimenti reali)
 

@@ -28,7 +28,8 @@ export async function enqueueConsolidation(
 ): Promise<void> {
   const bucket = Math.floor(Date.now() / 60_000);
   await queue.add('consolidate', data, {
-    jobId: `consolidate:${data.threadId}:${bucket}`,
+    // BullMQ 6 vieta i due punti negli id personalizzati.
+    jobId: `consolidate_${data.threadId}_${bucket}`,
     delay: delayMs,
     attempts: 2,
     backoff: { type: 'exponential', delay: 5_000 },

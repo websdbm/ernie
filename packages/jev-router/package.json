@@ -15,6 +15,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@ernie/db": "workspace:*",
     "@ernie/observability": "workspace:*",
     "zod": "^4.6.5"
   }

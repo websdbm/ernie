@@ -34,6 +34,11 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `TOOL_APPROVAL_TTL_S` | no | `120` | Validità di una richiesta di conferma di un tool; scaduta, l'azione è negata. |
 | `POLICY_RISK_ASK_THRESHOLD` | no | `0.75` | Con segnale di rischio del router oltre questa soglia, i tool con effetti esterni richiedono conferma. |
 | `WEB_ALLOWED_DOMAINS` / `WEB_BLOCKED_DOMAINS` | no | vuoto | Allow/deny list di domini (CSV) per `web_search` e `web_fetch`. |
+| `AUTOMATION_MAX_RUN_BUDGET_USD` | no | `0.5` | Tetto al `budgetUsd` per run che un utente può assegnare a un'automazione; oltre il budget la run guidata viene interrotta (`budget_exceeded`). |
+| `AUTOMATION_APPROVAL_TTL_S` | no | `604800` (7 giorni) | Validità delle approvazioni differite create dalle run headless (`awaiting_approval`). |
+| `AUTOMATION_CATCHUP_TOLERANCE_S` | no | `900` | Con `catchUp = none`, una run cron in ritardo oltre questa soglia (più il jitter) viene saltata. |
+| `AUTOMATION_SYNC_EVERY_S` | no | `60` | Ogni quanto il worker allinea i job scheduler BullMQ alle automazioni abilitate. |
+| `AUTOMATION_CONCURRENCY` | no | `2` | Run di automazione eseguite in parallelo da ciascun worker. |
 
 ## Variabili solo per Docker Compose
 
@@ -54,7 +59,11 @@ pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner
 pnpm --filter @ernie/tests calibrate:jev --write   # ricalibra le soglie del router (≈ 0,002 USD)
 pnpm --filter @ernie/tests eval:memory --write     # misura recall@k del recupero (OpenAI, < 0,001 USD)
 pnpm admin:skills -- detect --user <uuid>          # procedure ripetute; poi propose/test/approve/activate/reject --id <uuid>
+pnpm admin:automations -- create --user <uuid> --preset weekly-recipes|daily-list   # oppure --file def.json
+pnpm admin:automations -- list|runs|run-now|enable|disable|remove|notifications --user <uuid> [--id <uuid>]
 ```
+
+Le stesse operazioni sono esposte via REST con la chiave API dell'utente: `GET/POST /v1/automations`, `GET/PATCH/DELETE /v1/automations/:id`, `GET /v1/automations/:id/runs`, `POST /v1/automations/:id/run`, `GET /v1/runs`, `GET /v1/notifications?unread=true`, `POST /v1/notifications/read`, `POST /v1/approvals/:id` (`approve` | `deny`), `POST /v1/events`. I webhook (`POST /v1/webhooks/:id`) non usano la chiave API: firma HMAC-SHA256 del corpo grezzo nell'header `x-ernie-signature` (`sha256=<hex>`) con il segreto mostrato alla creazione, idempotenza con `x-idempotency-key`.
 
 `admin:create-user` stampa una sola volta `API_KEY=ernie_…`: va conservata dal client (Keychain su iOS). Ogni utente ottiene una copia personale dei Soul globali, modificabile in seguito.
 

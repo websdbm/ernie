@@ -19,6 +19,13 @@ export interface ExecutorDeps {
     readonly store: ApprovalStore;
     readonly pending: PendingApprovals;
     readonly ttlMs: number;
+    /**
+     * `interactive` (default): attende la risposta dell'utente connesso.
+     * `deferred` (run headless, es. automazioni): l'azione non viene eseguita, l'approvazione resta
+     * pendente e viene segnalata a `onDeferred`; il modello riceve `approval_pending`.
+     */
+    readonly mode?: 'interactive' | 'deferred';
+    readonly onDeferred?: (action: DeferredAction) => void;
   };
   readonly audit: ToolCallRecorder;
   readonly logger: Pick<Logger, 'info' | 'warn' | 'error' | 'debug'>;
@@ -29,6 +36,15 @@ export interface ExecutorDeps {
 /** Riferimento mutabile al contesto del turno: il set di tool resta fisso per sessione, il contesto cambia per turno. */
 export interface ToolContextRef {
   current: ToolContext | null;
+}
+
+/** Azione sensibile sospesa in una run headless: eseguita dopo l'approvazione dell'utente (stessi argomenti). */
+export interface DeferredAction {
+  readonly approvalId: string;
+  readonly toolId: string;
+  readonly args: unknown;
+  readonly reason: string;
+  readonly expiresAt: string;
 }
 
 export const ToolErrorResult = z.object({
@@ -172,6 +188,29 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           reason: verdict.reason.slice(0, 300),
           expiresAt: created.expiresAt.toISOString(),
         });
+        if (deps.approvals.mode === 'deferred') {
+          deps.approvals.onDeferred?.({
+            approvalId: created.id,
+            toolId: spec.id,
+            args: input,
+            reason: verdict.reason,
+            expiresAt: created.expiresAt.toISOString(),
+          });
+          await deps.audit.record({
+            ...base,
+            verdict: 'ask',
+            approvalId,
+            approved: null,
+            ok: false,
+            error: 'sospesa: in attesa di approvazione differita',
+            durationMs: Date.now() - t0,
+            taintedAfter: ctx.run.tainted,
+          });
+          return {
+            error: 'approval_pending',
+            reason: `azione sospesa in attesa dell'approvazione dell'utente (${verdict.reason}); non ripeterla e prosegui con il resto`,
+          } satisfies ToolErrorResult;
+        }
         const decision = await deps.approvals.pending.wait(
           created.id,
           deps.approvals.ttlMs,

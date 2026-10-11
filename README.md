@@ -44,6 +44,24 @@ tests/smoke.sh http://localhost:3000
 
 Il servizio `migrate` applica le migrazioni prima di `api`; `--profile litellm` aggiunge il gateway LiteLLM opzionale.
 
+## Prova rapida dal terminale
+
+Con lo stack Docker avviato (`docker compose up -d --wait api worker`) e `.env` con le chiavi dei provider e le quattro variabili locali (`DATABASE_URL`, `MIGRATIONS_DATABASE_URL`, `APP_DB_PASSWORD`, `REDIS_URL`, vedi docs/CONFIGURATION.md):
+
+```bash
+pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner   # stampa una volta API_KEY=ernie_…
+export ERNIE_API_KEY=ernie_…
+pnpm --filter @ernie/tests demo:chat "aggiungi due litri di latte alla lista"   # skill deterministica, 0 token
+pnpm --filter @ernie/tests demo:chat "cosa cucino stasera con quello che compro di solito?"
+pnpm admin:automations -- create --user <uuid> --preset daily-list              # promemoria della lista alle 18
+pnpm admin:automations -- run-now --user <uuid> --id <automazione>              # esecuzione subito, senza client
+pnpm admin:automations -- runs --user <uuid> --id <automazione>                 # storico ed esito
+pnpm --filter @ernie/tests demo:listen 120                                      # resta in ascolto degli eventi (es. automation.run.updated)
+curl -s localhost:3000/v1/notifications?unread=true -H "Authorization: Bearer $ERNIE_API_KEY"
+```
+
+L'app iOS (M7) userà le stesse API: WebSocket `/v1/ws` per la conversazione e REST `/v1/*` per automazioni, notifiche e approvazioni.
+
 ## Verifica
 
 ```bash

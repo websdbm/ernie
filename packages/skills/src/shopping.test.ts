@@ -95,3 +95,10 @@ describe('shopping skill + registry', () => {
     expect(registry.candidates('che tempo fa domani')).toEqual([]);
   });
 });
+
+describe('apostrofo tipografico', () => {
+  it('riconosce le frasi scritte con ’ (tastiere mobili) come quelle con l’apostrofo ASCII', () => {
+    expect(parseShoppingCommand('cosa c’è nella lista della spesa?')).toEqual({ op: 'list' });
+    expect(parseShoppingCommand("cosa c'è nella lista della spesa?")).toEqual({ op: 'list' });
+  });
+});

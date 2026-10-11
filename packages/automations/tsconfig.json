@@ -1,0 +1,41 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../agent-core"
+    },
+    {
+      "path": "../db"
+    },
+    {
+      "path": "../model-gateway"
+    },
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../skills"
+    },
+    {
+      "path": "../soul"
+    },
+    {
+      "path": "../tools"
+    },
+    {
+      "path": "../jev-router"
+    },
+    {
+      "path": "../memory"
+    }
+  ]
+}

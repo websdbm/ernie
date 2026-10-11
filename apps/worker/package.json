@@ -10,11 +10,17 @@
   },
   "dependencies": {
     "@ernie/agent-core": "workspace:*",
+    "@ernie/automations": "workspace:*",
     "@ernie/config": "workspace:*",
     "@ernie/db": "workspace:*",
+    "@ernie/jev-router": "workspace:*",
     "@ernie/memory": "workspace:*",
     "@ernie/model-gateway": "workspace:*",
     "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
+    "@ernie/skills": "workspace:*",
+    "@ernie/soul": "workspace:*",
+    "@ernie/tools": "workspace:*",
     "bullmq": "^6.3.12",
     "ioredis": "^5.6.0"
   }

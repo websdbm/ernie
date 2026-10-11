@@ -21,7 +21,8 @@
     "clean": "rm -rf apps/*/dist packages/*/dist apps/*/*.tsbuildinfo packages/*/*.tsbuildinfo reports coverage",
     "bootstrap:storage": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/init-storage.ts",
     "admin:create-user": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/create-user.ts",
-    "admin:skills": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/skills.ts"
+    "admin:skills": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/skills.ts",
+    "admin:automations": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/automations.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

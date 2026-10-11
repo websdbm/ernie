@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { ApprovalStore, CompanionAgent, PendingApprovals, TurnInput } from '@ernie/agent-core';
 import { runTurn as defaultRunTurn, RunContext, routeCommand } from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
@@ -146,6 +147,17 @@ export class ClientConnection {
     this.closed = true;
     for (const ac of this.activeTurns.values()) ac.abort();
     this.activeTurns.clear();
+  }
+
+  get userId(): string {
+    return this.auth.userId;
+  }
+
+  /** Evento server→client fuori turno (es. stato di un'automazione): solo con sessione avviata. */
+  async push<T extends EventType>(type: T, payload: PayloadInputOf<T>): Promise<boolean> {
+    if (!this.sessionId || this.closed) return false;
+    await this.send(type, payload, randomUUID());
+    return true;
   }
 
   // ---------- dispatch ----------

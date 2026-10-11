@@ -13,6 +13,7 @@ import { buildProfiles, createLlmCallRecorder, createModelGateway } from '@ernie
 import { createLogger } from '@ernie/observability';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
+import { startAutomations } from './automations.js';
 import { createSystemProcessor, HEARTBEAT_EVERY_MS, SYSTEM_QUEUE } from './processor.js';
 
 async function main(): Promise<void> {
@@ -95,6 +96,18 @@ async function main(): Promise<void> {
     logger.error({ jobId: job?.id, name: job?.name, err }, 'job memoria fallito'),
   );
   memoryWorker.on('ready', () => logger.info({ queue: MEMORY_QUEUE }, 'worker memoria pronto'));
+
+  // ---- Coda `automations` (M6): scheduler sincronizzati con il database, run idempotenti senza client ----
+  const automations = await startAutomations({
+    config,
+    logger,
+    connection,
+    pool,
+    memories: repo,
+    gateway,
+    threads,
+    recorder,
+  });
   worker.on('ready', () => logger.info({ queue: SYSTEM_QUEUE }, 'worker pronto'));
   worker.on('completed', (job) =>
     logger.debug({ jobId: job.id, name: job.name }, 'job completato'),
@@ -112,6 +125,7 @@ async function main(): Promise<void> {
     const timer = setTimeout(() => process.exit(1), 15_000);
     try {
       await Promise.allSettled([
+        automations.close(),
         worker.close(),
         memoryWorker.close(),
         queue.close(),

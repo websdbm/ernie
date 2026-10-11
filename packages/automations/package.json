@@ -1,0 +1,33 @@
+{
+  "name": "@ernie/automations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Automation Engine: definizioni con trigger cron/una tantum/webhook/evento, run idempotenti con storico, esecuzione nel worker, notifiche",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/agent-core": "workspace:*",
+    "@ernie/db": "workspace:*",
+    "@ernie/jev-router": "workspace:*",
+    "@ernie/memory": "workspace:*",
+    "@ernie/model-gateway": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
+    "@ernie/skills": "workspace:*",
+    "@ernie/soul": "workspace:*",
+    "@ernie/tools": "workspace:*",
+    "bullmq": "^6.3.12",
+    "cron-parser": "^5.10.1",
+    "ioredis": "^5.11.1",
+    "zod": "^4.6.5"
+  }
+}

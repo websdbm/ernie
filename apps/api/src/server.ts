@@ -1,6 +1,7 @@
 import type { AppConfig } from '@ernie/config';
 import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
@@ -11,6 +12,8 @@ export interface BuildServerOptions {
   readonly checks: Readonly<Record<string, HealthCheck>>;
   /** Endpoint WebSocket del protocollo v1 (assente nei test di sola salute). */
   readonly ws?: WsPluginOptions;
+  /** REST delle automazioni, notifiche, approvazioni differite, eventi e webhook (M6). */
+  readonly automations?: AutomationRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -70,6 +73,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   if (opts.ws) await registerWs(app, opts.ws);
+  if (opts.automations) await app.register(automationRoutes, opts.automations);
 
   return app;
 }

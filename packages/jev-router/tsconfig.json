@@ -6,5 +6,12 @@
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../observability" }]
+  "references": [
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../db"
+    }
+  ]
 }

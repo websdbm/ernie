@@ -5,6 +5,12 @@ import {
   createPgApprovalStore,
   PendingApprovals,
 } from '@ernie/agent-core';
+import {
+  createAutomationQueue,
+  createAutomationRepository,
+  createEventPublisher,
+  subscribeUserEvents,
+} from '@ernie/automations';
 import { loadConfig, redactConfig } from '@ernie/config';
 import {
   createDecisionRouter,
@@ -47,6 +53,7 @@ import { createRedis } from './infra/redis.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
+import { ConnectionRegistry } from './ws/plugin.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -89,8 +96,27 @@ async function main(): Promise<void> {
   const memories = createMemoryRepository(postgres.pool, embedder, { logger });
   const memoryQueue = createMemoryQueue(redis.client);
 
+  // Automation Engine (M6): definizioni e run nel database, coda BullMQ condivisa con il worker, eventi interni.
+  const automationQueue = createAutomationQueue(redis.client);
+  const automations = createAutomationRepository(postgres.pool);
+  const events = createEventPublisher({ repo: automations, queue: automationQueue, logger });
+
   // Tool Registry: nucleo (orario, memoria) + lista della spesa + web (solo con chiave Firecrawl).
-  const shopping = createShoppingListRepository(postgres.pool);
+  // La chiusura della spesa pubblica `shopping_list.cleared` (solo dall'API: il worker non pubblica eventi).
+  const shoppingBase = createShoppingListRepository(postgres.pool);
+  const shopping: typeof shoppingBase = {
+    ...shoppingBase,
+    markAllBought: async (userId) => {
+      const n = await shoppingBase.markAllBought(userId);
+      if (n > 0)
+        void events
+          .publish(userId, 'shopping_list.cleared', { items: n })
+          .catch((err: unknown) =>
+            logger.warn({ err }, 'evento shopping_list.cleared non pubblicato'),
+          );
+      return n;
+    },
+  };
   const registry = new ToolRegistry()
     .register(getTimeTool)
     .register(createMemorySearchSpec(memories));
@@ -168,13 +194,37 @@ async function main(): Promise<void> {
     logger,
   });
 
+  // Eventi per utente dal worker (stato delle automazioni) → sessioni connesse in questo processo.
+  const connections = new ConnectionRegistry();
+  const subscriber = redis.client.duplicate();
+  subscriber.on('error', (err) => logger.warn({ err: err.message }, 'errore subscriber redis'));
+  await subscribeUserEvents(subscriber, (msg) => {
+    void connections
+      .push(msg.userId, msg.type, msg.payload)
+      .catch((err: unknown) => logger.warn({ err }, 'recapito evento utente fallito'));
+  });
+
+  const authenticator = createAuthenticator(postgres.pool);
   const app = await buildServer({
     config,
     logger,
     checks: { postgres: () => postgres.check(), redis: () => redis.check() },
-    ws: {
-      authenticator: createAuthenticator(postgres.pool),
+    automations: {
+      authenticator,
       allowedOrigins: config.ws.allowedOrigins,
+      repo: automations,
+      queue: automationQueue,
+      events,
+      knownTools: registry.list().map((t) => t.id),
+      maxRunBudgetUsd: config.automations.maxRunBudgetUsd,
+      approvals: { store: approvals.store, registry, audit: executor.audit },
+      redis: redis.client,
+      logger,
+    },
+    ws: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      connections,
       connection: {
         logger,
         store: createSessionStore(postgres.pool, redis.client),
@@ -229,7 +279,13 @@ async function main(): Promise<void> {
     }, 10_000);
     try {
       await app.close();
-      await Promise.allSettled([memoryQueue.close(), postgres.close(), redis.close()]);
+      await Promise.allSettled([
+        memoryQueue.close(),
+        automationQueue.close(),
+        subscriber.quit(),
+        postgres.close(),
+        redis.close(),
+      ]);
       clearTimeout(timer);
       logger.info('arresto completato');
       process.exit(0);

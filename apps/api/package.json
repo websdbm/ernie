@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ernie/agent-core": "workspace:*",
+    "@ernie/automations": "workspace:*",
     "@ernie/config": "workspace:*",
     "@ernie/db": "workspace:*",
     "@ernie/jev-router": "workspace:*",

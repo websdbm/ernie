@@ -8,7 +8,8 @@
     "spike:openrouter": "node --env-file-if-exists=../.env --import tsx --conditions=development spikes/openrouter-passthrough.ts",
     "demo:chat": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-chat.ts",
     "calibrate:jev": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/jev-calibrate.ts",
-    "eval:memory": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/memory-recall.ts"
+    "eval:memory": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/memory-recall.ts",
+    "demo:listen": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-listen.ts"
   },
   "dependencies": {
     "@ernie/config": "workspace:*",

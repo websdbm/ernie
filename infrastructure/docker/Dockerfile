@@ -18,6 +18,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
+COPY packages/automations/package.json packages/automations/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/jev-router/package.json packages/jev-router/
@@ -47,6 +48,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
+COPY packages/automations/package.json packages/automations/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/jev-router/package.json packages/jev-router/
@@ -69,6 +71,7 @@ ENV APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY --from=prod-deps /app ./
 COPY --from=build /app/packages/agent-core/dist ./packages/agent-core/dist
+COPY --from=build /app/packages/automations/dist ./packages/automations/dist
 COPY --from=build /app/packages/config/dist ./packages/config/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/packages/jev-router/dist ./packages/jev-router/dist
