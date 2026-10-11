@@ -32,6 +32,10 @@ Al primo avvio l'app chiede l'indirizzo del server e la chiave API (`pnpm admin:
 2. Le notifiche push richiedono la capability Push Notifications nel profilo e, lato server, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY` (chiave `.p8`) in `.env`; senza, le notifiche restano in-app e l'app le legge all'apertura e a ogni evento `automation.run.updated`.
 3. La trascrizione usa `SpeechTranscriber` (iOS 26, on-device) se l'italiano è supportato; il modello viene scaricato dal sistema al primo uso. Altrimenti usa `SFSpeechRecognizer` con rotazione delle richieste entro il limite di un minuto. In simulatore `SpeechTranscriber` non ha lingue: si usa il ripiego.
 
+## TestFlight
+
+`scripts/testflight.sh` archivia la build Release e la carica su App Store Connect. Servono: una scheda dell'app su [App Store Connect](https://appstoreconnect.apple.com/apps) con bundle id `com.websdbm.ernie`; l'autenticazione tramite chiave API (`ASC_KEY_ID`, `ASC_ISSUER_ID`, file `.p8` in `~/.appstoreconnect/private_keys/`, ruolo App Manager) oppure l'account Apple configurato in Xcode (Impostazioni → Account); la capability Push Notifications (aggiunta automaticamente al profilo dalla firma automatica). Dopo il caricamento la build va elaborata (5–15 minuti) e poi assegnata a un gruppo di tester interni in TestFlight; sul telefono serve l'app TestFlight. Le build di release non contengono gli hook `ERNIE_DEBUG_*` e si collegano solo al server indicato al primo avvio (per una VPS usa HTTPS).
+
 ## Struttura
 
 ```
