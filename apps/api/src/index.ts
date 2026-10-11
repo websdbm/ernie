@@ -12,6 +12,7 @@ import {
   subscribeUserEvents,
 } from '@ernie/automations';
 import { loadConfig, redactConfig } from '@ernie/config';
+import { withUser } from '@ernie/db';
 import {
   createDecisionRouter,
   createHttpJevClient,
@@ -173,6 +174,19 @@ async function main(): Promise<void> {
       builtin: [createShoppingListSkill(shopping), createRecipesSkill()],
       learned: learnedSkills,
     },
+    // Interruttori delle skill letti dal database a ogni invalidazione: valgono nella conversazione in corso.
+    loadSettings: (userId) =>
+      withUser(
+        postgres.pool,
+        userId,
+        async (c) =>
+          (
+            await c.query<{ settings: Record<string, unknown> }>(
+              `SELECT settings FROM users WHERE id = $1`,
+              [userId],
+            )
+          ).rows[0]?.settings ?? {},
+      ),
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
   logger.info(

@@ -42,6 +42,12 @@ export interface CompanionFactoryDeps {
     readonly builtin: readonly Skill[];
     readonly learned: LearnedSkillRepository;
   };
+  /**
+   * Impostazioni correnti dell'utente (users.settings). L'`AuthContext` di una connessione WS porta la foto
+   * delle impostazioni al momento dell'accesso: gli interruttori delle skill cambiano a metà conversazione,
+   * quindi registry e tool si basano su questo caricamento (cache 5 minuti, azzerata da `invalidateUser`).
+   */
+  readonly loadSettings?: (userId: string) => Promise<Readonly<Record<string, unknown>>>;
 }
 
 /**
@@ -53,6 +59,32 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
   const cache = deps.cache ?? new SessionAgentCache();
   const toolContexts = new Map<string, ToolContextRef>();
   const skillCache = new Map<string, { registry: SkillRegistry; at: number }>();
+  const settingsCache = new Map<
+    string,
+    { settings: Readonly<Record<string, unknown>>; at: number }
+  >();
+  const sessionsByUser = new Map<string, Set<string>>();
+  const TTL_MS = 5 * 60_000;
+
+  /** Impostazioni correnti: dal caricatore (se c'è) con cache, altrimenti la foto dell'AuthContext. */
+  const currentSettings = async (
+    auth: Pick<AuthContext, 'userId' | 'settings'>,
+  ): Promise<Readonly<Record<string, unknown>>> => {
+    if (!deps.loadSettings) return auth.settings;
+    const hit = settingsCache.get(auth.userId);
+    if (hit && Date.now() - hit.at < TTL_MS) return hit.settings;
+    try {
+      const settings = await deps.loadSettings(auth.userId);
+      settingsCache.set(auth.userId, { settings, at: Date.now() });
+      return settings;
+    } catch (err) {
+      deps.logger.warn(
+        { err, userId: auth.userId },
+        'impostazioni non caricate: uso quelle della sessione',
+      );
+      return auth.settings;
+    }
+  };
 
   return {
     cache,
@@ -65,19 +97,29 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       cache.delete(sessionId);
       toolContexts.delete(sessionId);
     },
-    /** Invalida le cache dell'utente (dopo un cambio di skill): registry e agenti delle sue sessioni. */
+    /**
+     * Dopo un cambio di skill: via registry e impostazioni in cache e gli agenti delle sessioni dell'utente,
+     * che al turno successivo vengono ricostruiti con i tool aggiornati. La conversazione resta: la memoria
+     * è legata alla sessione, non all'istanza dell'agente.
+     */
     invalidateUser(userId: string): void {
       skillCache.delete(userId);
+      settingsCache.delete(userId);
+      for (const sessionId of sessionsByUser.get(userId) ?? []) {
+        cache.delete(sessionId);
+        toolContexts.delete(sessionId);
+      }
+      sessionsByUser.delete(userId);
     },
     /** Registry delle skill per utente: integrate + apprese attive, filtrate dagli interruttori (cache 5 minuti). */
     async skillsFor(auth: Pick<AuthContext, 'userId' | 'settings'>): Promise<SkillRegistry> {
       const hit = skillCache.get(auth.userId);
-      if (hit && Date.now() - hit.at < 5 * 60_000) return hit.registry;
+      if (hit && Date.now() - hit.at < TTL_MS) return hit.registry;
       const all = new SkillRegistry();
       for (const s of deps.skills?.builtin ?? []) all.register(s);
       if (deps.skills)
         for (const s of await deps.skills.learned.loadActiveGuided(auth.userId)) all.register(s);
-      const enabled = enabledSkillIds(auth.settings);
+      const enabled = enabledSkillIds(await currentSettings(auth));
       // Le skill apprese non stanno nel catalogo: restano attive.
       const keep = new Set([
         ...enabled,
@@ -113,7 +155,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];
       if (deps.tools) {
         const ctxRef: ToolContextRef = { current: null };
-        const off = disabledToolIds(auth.settings);
+        const off = disabledToolIds(await currentSettings(auth));
         const specs = deps.tools.registry
           .select({
             categories: deps.tools.categories,
@@ -148,6 +190,9 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         'agente di sessione creato',
       );
       cache.set(session.id, companion);
+      let sessions = sessionsByUser.get(auth.userId);
+      if (!sessions) sessionsByUser.set(auth.userId, (sessions = new Set()));
+      sessions.add(session.id);
       return companion;
     },
   };

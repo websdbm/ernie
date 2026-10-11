@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
+    @State private var showSkills = false
     @State private var draft = ""
     @FocusState private var composing: Bool
 
@@ -29,9 +30,13 @@ struct ChatView: View {
             .navigationTitle(model.companionName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Skill a portata di mano: pannello a scomparsa, senza lasciare la conversazione.
+                    Button { showSkills = true } label: { Image(systemName: "sparkles") }
+                        .accessibilityLabel("Skill")
                     Menu {
                         Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
+                        Button("Skill", systemImage: "sparkles") { showSkills = true }
                         Button("Impostazioni", systemImage: "gearshape") { showSettings = true }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -40,6 +45,7 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showSkills) { SkillsSheet() }
         }
     }
 }

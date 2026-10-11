@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Sezione Skill: ogni skill si accende e spegne per utente; i suoi tool seguono l'interruttore.
+/// Pannello Skill, raggiungibile dalla schermata principale (pulsante ✦) e dalle impostazioni: ogni skill si accende
+/// e spegne per utente, i suoi tool seguono l'interruttore e la modifica vale dal messaggio successivo nella
+/// conversazione in corso (il server ricostruisce l'agente della sessione, la memoria resta).
 struct SkillsView: View {
     @Environment(AppModel.self) private var model
     @State private var skills: [SkillInfo] = []
@@ -37,7 +39,7 @@ struct SkillsView: View {
                 Section { Text(error).foregroundStyle(.red) }
             }
             Section {
-                Text("Spegnendo o accendendo una skill si apre una nuova conversazione con i tool aggiornati.")
+                Text("Le modifiche valgono dal prossimo messaggio, anche nella conversazione in corso.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -61,9 +63,25 @@ struct SkillsView: View {
         defer { busy.remove(skill.id) }
         do {
             skills = try await api.setSkill(id: skill.id, enabled: value)
-            model.newConversation()
+            error = nil
         } catch {
             self.error = AppModel.describe(error)
         }
+    }
+}
+
+/// Il pannello a scomparsa della schermata principale: mezza altezza, trascinabile, chiusura con «Fine».
+struct SkillsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SkillsView()
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) { Button("Fine") { dismiss() } }
+                }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
