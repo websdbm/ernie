@@ -8,6 +8,8 @@ import Observation
 @Observable
 final class ShoppingStore {
     private(set) var lists: [String: ShoppingListBlock] = [:]
+    /// Liste eliminate (dal menu della scheda o scomparse dal server): le schede in chat lo mostrano.
+    private(set) var deleted: Set<String> = []
     private(set) var busy: Set<String> = []
     private(set) var lastError: String?
     private var api: ApiClient?
@@ -15,8 +17,13 @@ final class ShoppingStore {
     func configure(api: ApiClient?) { self.api = api }
 
     func apply(_ block: ContentBlock) {
-        if case .shoppingList(let list) = block { lists[list.listId] = list }
+        if case .shoppingList(let list) = block {
+            lists[list.listId] = list
+            deleted.remove(list.listId)
+        }
     }
+
+    func isDeleted(_ listId: String) -> Bool { deleted.contains(listId) }
 
     func current(_ fallback: ShoppingListBlock) -> ShoppingListBlock {
         lists[fallback.listId] ?? fallback
@@ -24,8 +31,16 @@ final class ShoppingStore {
 
     /// Rilegge la lista dal server (all'apertura di una scheda vecchia).
     func refresh(_ listId: String) async {
-        guard let api else { return }
-        if let block = try? await api.shoppingList(id: listId) { apply(block) }
+        guard let api, !deleted.contains(listId) else { return }
+        do {
+            apply(try await api.shoppingList(id: listId))
+        } catch let error as ApiError where error.status == 404 {
+            // Eliminata altrove (o da un'altra scheda): la scheda in chat lo dice invece di restare viva.
+            deleted.insert(listId)
+            lists[listId] = nil
+        } catch {
+            // Rete assente: si resta sull'ultima copia nota.
+        }
     }
 
     func toggle(listId: String, item: ShoppingListItem) async {
@@ -57,8 +72,16 @@ final class ShoppingStore {
 
     func delete(listId: String) async {
         guard let api else { return }
-        try? await api.shoppingDelete(listId: listId)
-        lists[listId] = nil
+        busy.insert(listId)
+        defer { busy.remove(listId) }
+        do {
+            try await api.shoppingDelete(listId: listId)
+            deleted.insert(listId)
+            lists[listId] = nil
+            lastError = nil
+        } catch {
+            lastError = AppModel.describe(error)
+        }
     }
 
     private func perform(_ listId: String, _ action: (ApiClient) async throws -> ContentBlock) async {

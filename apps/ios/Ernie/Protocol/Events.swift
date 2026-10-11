@@ -297,6 +297,22 @@ struct ShoppingListsBlock: Codable, Sendable, Equatable {
     var pendingText: String?
 }
 
+/// Documenti letti (v1.5): scelta toccabile; si rimanda `pendingText` con il titolo al posto di `{documento}`.
+struct DocumentSummaryItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var pages: Int
+    var source: String
+    var summarized: Bool
+    var createdAt: String
+}
+
+struct DocumentsBlock: Codable, Sendable, Equatable {
+    var title: String
+    var documents: [DocumentSummaryItem]
+    var pendingText: String?
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -306,6 +322,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case schema(SchemaBlock)
     case shoppingList(ShoppingListBlock)
     case shoppingLists(ShoppingListsBlock)
+    case documents(DocumentsBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -328,6 +345,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .shoppingList(try ShoppingListBlock(from: decoder))
         case "shopping_lists":
             self = .shoppingLists(try ShoppingListsBlock(from: decoder))
+        case "documents":
+            self = .documents(try DocumentsBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -358,6 +377,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .shoppingLists(let block):
             try c.encode("shopping_lists", forKey: .kind)
+            try block.encode(to: encoder)
+        case .documents(let block):
+            try c.encode("documents", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

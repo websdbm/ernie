@@ -65,3 +65,49 @@ struct DocumentsTests {
         #expect(doc.chars > 100)
     }
 }
+
+struct DocumentOCRTests {
+    /// Immagine con testo stampato, come una foto nitida di una pagina.
+    static func pageImage(_ lines: [String], size: CGSize = CGSize(width: 1200, height: 800)) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = 14
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 40, weight: .regular),
+                .foregroundColor: UIColor.black,
+                .paragraphStyle: style,
+            ]
+            lines.joined(separator: "\n").draw(in: CGRect(x: 60, y: 60, width: size.width - 120, height: size.height - 120), withAttributes: attrs)
+        }
+    }
+
+    @Test func ocrSuImmagineDiTestoStampato() async throws {
+        let image = Self.pageImage([
+            "La fotosintesi clorofilliana",
+            "Le piante trasformano la luce in energia chimica.",
+            "Avviene nei cloroplasti grazie alla clorofilla.",
+        ])
+        let doc = try await DocumentReader.read(images: [image], source: "photo") { _, _ in }
+        #expect(doc.pages.count == 1)
+        let text = doc.pages[0].lowercased()
+        #expect(text.contains("fotosintesi"))
+        #expect(text.contains("cloroplasti"))
+    }
+
+    @Test func pdfScansionatoPassaDallOCR() async throws {
+        // Una pagina PDF che contiene solo un'immagine (nessun testo nativo): deve essere letta con l'OCR.
+        let image = Self.pageImage(["Rivoluzione francese", "Presa della Bastiglia, 14 luglio 1789."])
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-scan-\(UUID().uuidString).pdf")
+        let bounds = CGRect(x: 0, y: 0, width: 600, height: 400)
+        try UIGraphicsPDFRenderer(bounds: bounds).writePDF(to: url) { ctx in
+            ctx.beginPage()
+            image.draw(in: bounds)
+        }
+        let doc = try await DocumentReader.read(pdf: url) { _, _ in }
+        #expect(doc.pages.count == 1)
+        #expect(doc.pages[0].lowercased().contains("bastiglia"))
+    }
+}

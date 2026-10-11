@@ -21,9 +21,101 @@ struct BlockView: View {
             ShoppingListCard(block: block, conversation: conversation)
         case .shoppingLists(let block):
             ShoppingListsCard(block: block, conversation: conversation)
+        case .documents(let block):
+            DocumentsCard(block: block, conversation: conversation)
         case .unknown:
             EmptyView()
         }
+    }
+}
+
+/// Scelta tra i documenti letti: tocca per riaprirne riassunto e schema (dai prodotti salvati, senza costo).
+struct DocumentsCard: View {
+    let block: DocumentsBlock
+    var conversation: ConversationStore?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(block.title, systemImage: "doc.text.magnifyingglass").font(.subheadline.weight(.semibold))
+            ForEach(block.documents) { doc in
+                Button {
+                    let template = block.pendingText ?? "riapri il documento «{documento}»"
+                    conversation?.send(template.replacingOccurrences(of: "{documento}", with: doc.title), inputMode: "text")
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: doc.source == "pdf" ? "doc.richtext" : "doc.viewfinder")
+                            .foregroundStyle(Color.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(doc.title).font(.callout.weight(.medium)).foregroundStyle(.primary).lineLimit(2)
+                            Text("\(doc.pages) \(doc.pages == 1 ? "pagina" : "pagine") · \(doc.summarized ? "riassunto pronto" : "da riassumere") · \(Self.day(doc.createdAt))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    static func day(_ iso: String) -> String {
+        let plain = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fractional.date(from: iso) ?? plain.date(from: iso) else { return "" }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+}
+
+/// Versioni stampabili delle schede (per PDF e immagine): stesso contenuto, sfondo bianco, senza pulsanti.
+struct DocumentPrintView: View {
+    let block: DocumentBlock
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(block.title).font(.title2.weight(.bold))
+            Text("\(block.pages) \(block.pages == 1 ? "pagina" : "pagine") · riassunto da studio di Ernie").font(.footnote).foregroundStyle(.secondary)
+            Text(block.abstract).font(.body)
+            if !block.keyPoints.isEmpty {
+                Text("Punti chiave").font(.headline)
+                ForEach(Array(block.keyPoints.enumerated()), id: \.offset) { _, p in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { Text("•"); Text(p) }.font(.body)
+                }
+            }
+            if let glossary = block.glossary, !glossary.isEmpty {
+                Text("Glossario").font(.headline)
+                ForEach(glossary) { g in (Text(g.term).bold() + Text(": \(g.definition)")).font(.callout) }
+            }
+            if let questions = block.questions, !questions.isEmpty {
+                Text("Domande di verifica").font(.headline)
+                ForEach(Array(questions.enumerated()), id: \.offset) { i, q in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(i + 1). \(q.question)").font(.callout.weight(.medium))
+                        Text(q.answer).font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .foregroundStyle(.black)
+    }
+}
+
+struct SchemaPrintView: View {
+    let block: SchemaBlock
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(block.title).font(.title2.weight(.bold))
+            switch block.diagram {
+            case .mindmap(let root): MindMapView(root: root)
+            case .flow(let steps, let links): FlowView(steps: steps, links: links)
+            case .timeline(let events): TimelineSchemaView(events: events)
+            }
+        }
+        .foregroundStyle(.black)
     }
 }
 
@@ -35,6 +127,7 @@ struct ShoppingListCard: View {
     var conversation: ConversationStore?
     @Environment(AppModel.self) private var model
     @State private var newItem = ""
+    @State private var confirmDelete = false
     @FocusState private var adding: Bool
 
     private var list: ShoppingListBlock { model.shopping.current(block) }
@@ -43,6 +136,22 @@ struct ShoppingListCard: View {
     private var isBusy: Bool { model.shopping.busy.contains(list.listId) }
 
     var body: some View {
+        if model.shopping.isDeleted(block.listId) {
+            // Eliminata: la scheda resta in chat come traccia, ma non è più una lista viva.
+            HStack(spacing: 8) {
+                Image(systemName: "trash").foregroundStyle(.secondary)
+                Text("Lista «\(block.name)» eliminata").font(.footnote).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+        } else {
+            liveCard
+        }
+    }
+
+    private var liveCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Label(list.name, systemImage: "cart.fill").font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -60,7 +169,7 @@ struct ShoppingListCard: View {
                     } else {
                         Button("Archivia", systemImage: "archivebox") { Task { await model.shopping.setArchived(listId: list.listId, true) } }
                     }
-                    Button("Elimina la lista", systemImage: "trash", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
+                    Button("Elimina la lista", systemImage: "trash", role: .destructive) { confirmDelete = true }
                 } label: {
                     Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
                 }
@@ -91,6 +200,10 @@ struct ShoppingListCard: View {
         .animation(.easeInOut(duration: 0.2), value: list)
         .opacity(isBusy ? 0.85 : 1)
         .task(id: block.listId) { await model.shopping.refresh(block.listId) }
+        .confirmationDialog("Eliminare la lista «\(list.name)» con tutte le voci?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Elimina", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
+            Button("Annulla", role: .cancel) {}
+        }
     }
 
     private var counter: String {
@@ -249,6 +362,7 @@ struct DocumentCard: View {
         Button("Mappa", systemImage: "point.3.connected.trianglepath.dotted") { ask("mindmap") }
         Button("Flusso", systemImage: "arrow.down.right.and.arrow.up.left") { ask("flow") }
         Button("Linea del tempo", systemImage: "calendar.day.timeline.left") { ask("timeline") }
+        ExportMenu(name: "Riassunto \(block.title)") { DocumentPrintView(block: block) }
     }
 
     private func ask(_ type: String) {
@@ -272,9 +386,10 @@ struct SchemaCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Label("\(kindLabel) · \(block.title)", systemImage: "square.3.layers.3d").font(.subheadline.weight(.semibold)).lineLimit(2)
-                Spacer(minLength: 0)
+                Spacer(minLength: 4)
+                ExportMenu(name: "\(kindLabel) \(block.title)") { SchemaPrintView(block: block) }
             }
             switch block.diagram {
             case .mindmap(let root): MindMapView(root: root)

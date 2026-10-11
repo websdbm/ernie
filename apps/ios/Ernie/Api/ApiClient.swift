@@ -203,8 +203,7 @@ struct ApiClient: Sendable {
     }
 
     func shoppingDelete(listId: String) async throws {
-        struct Empty: Decodable {}
-        let _: Empty? = try? await request("DELETE", "/v1/shopping/lists/\(listId)")
+        try await requestNoContent("DELETE", "/v1/shopping/lists/\(listId)")
     }
 
     func registerDevice(token: String, environment: String) async throws {
@@ -215,6 +214,21 @@ struct ApiClient: Sendable {
     }
 
     // MARK: - privato
+
+    /// Richiesta che non restituisce un corpo (204): errore se lo stato non è 2xx.
+    private func requestNoContent(_ method: String, _ path: String) async throws {
+        guard let url = URL(string: path, relativeTo: credentials.serverURL) else { throw ApiError(status: 0, code: "bad_url", message: "URL non valido") }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("Bearer \(credentials.apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            struct Failure: Decodable { var error: String?; var message: String? }
+            let f = try? JSONDecoder().decode(Failure.self, from: data)
+            throw ApiError(status: status, code: f?.error ?? "http_\(status)", message: f?.message ?? "Errore del server (\(status))")
+        }
+    }
 
     private func request<T: Decodable>(_ method: String, _ path: String, body: (some Encodable & Sendable)? = nil as String?) async throws -> T {
         guard let url = URL(string: path, relativeTo: credentials.serverURL) else { throw ApiError(status: 0, code: "bad_url", message: "URL non valido") }
