@@ -38,20 +38,34 @@ const t0 = Date.now();
 process.on('unhandledRejection', (err) => {
   const e = err as { message?: string; details?: Record<string, unknown>; cause?: unknown };
   console.log('ERRORE:', String(e.message).slice(0, 400));
-  console.log('details:', Object.keys(e.details ?? {}).join(','), 'finishReason:', e.details?.finishReason, 'value chars:', String(e.details?.value ?? '').length);
+  console.log(
+    'details:',
+    Object.keys(e.details ?? {}).join(','),
+    'finishReason:',
+    e.details?.finishReason,
+    'value chars:',
+    String(e.details?.value ?? '').length,
+  );
   console.log('value tail:', String(e.details?.value ?? '').slice(-200));
   process.exit(1);
 });
 let r: Awaited<ReturnType<typeof summarizer.summarize>>;
 try {
   r = await summarizer.summarize(
-  { id: 'probe', title: 'Storia romana', pageTexts: pages },
-  { userId: 'probe', sessionId: null, requestId: 'probe' },
+    { id: 'probe', title: 'Storia romana', pageTexts: pages },
+    { userId: 'probe', sessionId: null, requestId: 'probe' },
   );
 } catch (err) {
   const e = err as { message?: string; details?: Record<string, unknown> };
   console.log('ERRORE:', String(e.message).slice(0, 500));
-  console.log('details:', Object.keys(e.details ?? {}).join(','), 'finishReason:', e.details?.finishReason, 'value chars:', String(e.details?.value ?? '').length);
+  console.log(
+    'details:',
+    Object.keys(e.details ?? {}).join(','),
+    'finishReason:',
+    e.details?.finishReason,
+    'value chars:',
+    String(e.details?.value ?? '').length,
+  );
   process.exit(1);
 }
 console.log(
