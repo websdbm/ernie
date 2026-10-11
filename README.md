@@ -4,6 +4,7 @@ Agente AI personale persistente: backend TypeScript (Fastify + Mastra + PostgreS
 
 - Architettura e decisioni: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Piano per milestone e stato: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+- Casi d'uso guida: [docs/USE_CASES.md](docs/USE_CASES.md)
 - Variabili d'ambiente: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 - Fonti e ricerca bibliografica: [docs/research/](docs/research/)
 

@@ -4,6 +4,7 @@ dist/
 *.tsbuildinfo
 coverage/
 reports/
+tests/out/
 
 # segreti e configurazione locale
 .env

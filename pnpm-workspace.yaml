@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - tests
 
 # Dipendenze autorizzate a eseguire script di build (binari nativi/opzionali).
 allowBuilds:

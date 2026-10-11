@@ -1,11 +1,26 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/config" },
-    { "path": "packages/observability" },
-    { "path": "packages/protocol" },
-    { "path": "packages/db" },
-    { "path": "apps/api" },
-    { "path": "apps/worker" }
+    {
+      "path": "packages/config"
+    },
+    {
+      "path": "packages/observability"
+    },
+    {
+      "path": "packages/protocol"
+    },
+    {
+      "path": "packages/db"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/worker"
+    },
+    {
+      "path": "tests"
+    }
   ]
 }

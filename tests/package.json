@@ -1,0 +1,17 @@
+{
+  "name": "@ernie/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike riproducibili, smoke test e (M9) benchmark. Non è codice di produzione.",
+  "scripts": {
+    "spike:openrouter": "node --env-file-if-exists=../.env --import tsx --conditions=development spikes/openrouter-passthrough.ts"
+  },
+  "dependencies": {
+    "@ernie/config": "workspace:*",
+    "@mastra/core": "^1.75.0",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "ai": "^7.0.137",
+    "zod": "^4.6.5"
+  }
+}

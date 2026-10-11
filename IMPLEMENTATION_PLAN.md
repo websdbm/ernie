@@ -2,6 +2,8 @@
 
 > Stato aggiornato al 10 ottobre 2026 (allineato ad ARCHITECTURE.md v0.2: le voci A.x/B.x/C.x rimandano a `docs/research/03-revisione.md` §5). Ogni milestone ha criteri di accettazione verificabili; non si passa alla successiva finché la corrente non è verificata (lint, typecheck, test, e dove previsto Docker e smoke test).
 
+Scenario guida e golden set: `docs/USE_CASES.md` (UC-1, lista della spesa → abitudini → ricette).
+
 Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/da chiarire
 
 ## Riepilogo
@@ -49,9 +51,9 @@ Ambito: `packages/agent-core`, `packages/soul`, `packages/model-gateway`; `apps/
 Criteri di accettazione:
 - [ ] `session.start` + `user.message` producono `assistant.started`, `assistant.text.delta`*, `assistant.text.completed`, `assistant.completed` con `usage` reale del provider.
 - [ ] **Prefisso stabile** (A.3): ordine fisso tool → Core Soul → snapshot → riassunto → turni → messaggio; parti variabili in coda; JSON deterministico; `cache_control` sul blocco stabile; test che due turni consecutivi producano lo stesso prefisso byte-per-byte.
-- [ ] **Spike passthrough OpenRouter** (03 §4): richieste reali con lettura di `cached_tokens`/`cache_write_tokens`; verifica di quali feature native sopravvivono; log del payload costruito da Mastra (ordine tool, posizione `instructions`); esito documentato in `docs/research/00-fonti-verificate.md`. Se l'ordine non è controllabile: assemblaggio proprio, Mastra per storage/memoria/tool.
+- [x] **Spike passthrough OpenRouter** eseguito l'11 ott 2026 (`docs/research/05-spike-openrouter-passthrough.md`): la stringa nativa di Mastra non ottiene cache; con `@openrouter/ai-sdk-provider` cache hit (−92% sulla seconda chiamata), costo reale nella risposta, `session_id` e `reasoning.effort` passano; payload Mastra stabile tra turni (assemblaggio lasciato a Mastra); `max_tokens` va sempre impostato; cambiare `reasoning` per richiesta azzera la cache; `usage` di Mastra aggregato per step. ID modelli 5.5 verificati su `/api/v1/models`.
 - [ ] Core Soul ≤ 400 token verificato da test; Context Soul scelto a livello di sessione (A.6).
-- [ ] Mappa classi → modelli risolta da `GET https://openrouter.ai/api/v1/models` e salvata in configurazione; `session_id` OpenRouter = sessione Ernie.
+- [ ] Mappa classi → modelli (`anthropic/claude-haiku-5.5`, `-sonnet-5.5`, `-opus-5.5`, verificati) in configurazione con `maxOutputTokens` e `reasoning` per classe; `session_id` OpenRouter = sessione Ernie; tetto di spesa giornaliero in configurazione.
 - [ ] **`llm_calls`** con `cost_reported`, `cost_estimated`, `cost_source`, token input/cache read/cache write/output/reasoning, TTFT, latenza (A.8); test contro i doppi conteggi.
 - [ ] **Protocollo v1.1** (A.9–A.10): `persist`, `user.cancel` idempotente con `spokenThroughIndex`, snapshot + replay con `resumeFromSeq`, controllo `Origin` sull'upgrade, nessuna connessione verso URL da deep link; schemi `avatar.emotion/gesture/gaze` con vocabolario chiuso e test.
 - [ ] Richieste non autenticate → 401; dati filtrati per `user_id`; **RLS `FORCE`** sulle tabelle proprie con ruolo applicativo non owner (A.12), verifica su `mastra_*`.
@@ -126,7 +128,8 @@ Tre ricercatori (Opus): `docs/research/01-architettura-agenti.md` (133 fonti), `
 
 ## Blocchi e dipendenze esterne
 
-- Chiave Anthropic non disponibile: i modelli Anthropic passano da OpenRouter (chiave presente). Nessun blocco.
+- Chiave Anthropic non disponibile: i modelli Anthropic passano da OpenRouter (chiave presente).
+- **Saldo OpenRouter esaurito** (11 ott 2026: 48 $ accreditati, 48,09 $ usati). I test online della M2 richiedono una ricarica; i test offline con mock procedono.
 - Chiave Firecrawl non ancora disponibile: necessaria dalla M5.
 - Account Apple Developer e dispositivo con iOS 26 necessari dalla M7 (APNs richiede account a pagamento).
 - Decisions API di Jev in alpha: monitorare i cambiamenti di contratto.
