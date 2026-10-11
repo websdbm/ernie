@@ -11,7 +11,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | Milestone | Obiettivo | Stato |
 |---|---|---|
 | M1 | Fondamenta: monorepo, TypeScript, Fastify, PostgreSQL, Docker Compose, health check, test, CI | ✅ |
-| M2 | Agente minimo: Mastra, Soul, sessioni, un provider, streaming, persistenza | ⏳ |
+| M2 | Agente minimo: Mastra, Soul per utente, sessioni, OpenRouter, streaming WS, persistenza, costi, RLS | ✅ |
 | M3 | JEV Router: adapter, routing deterministico, schema decisione, fallback, metriche | ⏳ |
 | M4 | Memoria: semantica, episodica, ricerca ibrida, consolidamento asincrono | ⏳ |
 | M5 | Tool e skill: registry, executor, permessi, Firecrawl, skill deterministiche, test di sicurezza | ⏳ |
@@ -44,20 +44,28 @@ Criteri di accettazione e verifica (10 ott 2026, macOS, Node 26, Docker Desktop 
 
 Deviazioni dichiarate rispetto al prompt: `packages/protocol` anticipato alla M1 (pure tipi + test); LiteLLM reso opzionale (motivazione in ARCHITECTURE.md §2); TypeScript 5.9 invece di 7.0.
 
-## M2 — Agente minimo ⏳
+## M2 — Agente minimo ✅
 
 Ambito: `packages/agent-core`, `packages/soul`, `packages/model-gateway`; `apps/api` con WebSocket (`@fastify/websocket`), autenticazione con chiave API (hash in `api_keys`), sessioni (Mastra threads), streaming via eventi v1/v1.1; persistenza conversazioni (`PostgresStore`); tabelle `souls`/`soul_versions`, `llm_calls`; primo set di policy RLS.
 
 Criteri di accettazione:
-- [ ] `session.start` + `user.message` producono `assistant.started`, `assistant.text.delta`*, `assistant.text.completed`, `assistant.completed` con `usage` reale del provider.
-- [ ] **Prefisso stabile** (A.3): ordine fisso tool → Core Soul → snapshot → riassunto → turni → messaggio; parti variabili in coda; JSON deterministico; `cache_control` sul blocco stabile; test che due turni consecutivi producano lo stesso prefisso byte-per-byte.
+- [x] `session.start` + `user.message` producono `assistant.started`, `assistant.text.delta`*, `assistant.text.completed`, `assistant.completed` con `usage` reale del provider (verificato end-to-end, vedi verbale).
+- [x] **Prefisso stabile** (A.3): un agente per sessione con istruzioni/modello fissi (`SessionAgentCache`), modalità vocale marcata nel turno utente; `cache_control` automatico e `session_id` sempre inviati; test online opzionale (`ERNIE_ONLINE_TESTS=1`) che confronta byte per byte il messaggio di sistema di due turni reali. Nota: con il solo Soul (~400 token) il prefisso resta sotto il minimo di 512 token cacheabili dei modelli 5.5; la cache si attiva con tool e snapshot di memoria (M3–M5).
 - [x] **Spike passthrough OpenRouter** eseguito l'11 ott 2026 (`docs/research/05-spike-openrouter-passthrough.md`): la stringa nativa di Mastra non ottiene cache; con `@openrouter/ai-sdk-provider` cache hit (−92% sulla seconda chiamata), costo reale nella risposta, `session_id` e `reasoning.effort` passano; payload Mastra stabile tra turni (assemblaggio lasciato a Mastra); `max_tokens` va sempre impostato; cambiare `reasoning` per richiesta azzera la cache; `usage` di Mastra aggregato per step. ID modelli 5.5 verificati su `/api/v1/models`.
-- [ ] Core Soul ≤ 400 token verificato da test; Context Soul scelto a livello di sessione (A.6).
-- [ ] Mappa classi → modelli (`anthropic/claude-haiku-5.5`, `-sonnet-5.5`, `-opus-5.5`, verificati) in configurazione con `maxOutputTokens` e `reasoning` per classe; `session_id` OpenRouter = sessione Ernie; tetto di spesa giornaliero in configurazione.
-- [ ] **`llm_calls`** con `cost_reported`, `cost_estimated`, `cost_source`, token input/cache read/cache write/output/reasoning, TTFT, latenza (A.8); test contro i doppi conteggi.
-- [ ] **Protocollo v1.1** (A.9–A.10): `persist`, `user.cancel` idempotente con `spokenThroughIndex`, snapshot + replay con `resumeFromSeq`, controllo `Origin` sull'upgrade, nessuna connessione verso URL da deep link; schemi `avatar.emotion/gesture/gaze` con vocabolario chiuso e test.
-- [ ] Richieste non autenticate → 401; dati filtrati per `user_id`; **RLS `FORCE`** sulle tabelle proprie con ruolo applicativo non owner (A.12), verifica su `mastra_*`.
-- [ ] Limiti hard: step, token non in cache, costo per turno; `AbortSignal` propagato (A.7).
+- [x] Core Soul ≤ 400 token verificato da test sul seed; Context Soul per `sessions.context_tags` (A.6); Soul per utente clonati dai globali con versioni e `locked`.
+- [x] Mappa classi → modelli in configurazione (`MODEL_*`) con `maxOutputTokens`, `reasoning` e `maxSteps` per classe; `session_id` OpenRouter = sessione Ernie; tetto giornaliero per utente (`LLM_DAILY_BUDGET_USD` o `users.settings.dailyBudgetUsd`) con errore `budget_exceeded`.
+- [x] **`llm_calls`** per step con costo del provider, stima da listino (entro il 5% dei valori misurati), token in/cache read/cache write/out/reasoning, TTFT, latenza; una riga per step (test).
+- [x] **Protocollo v1.1**: `persist`, `user.cancel` idempotente con `spokenThroughIndex`, replay da log Redis con `resumeFromSeq` (test unitari e con Redis reale), controllo `Origin`, `session.pong`, schemi `tool.confirmation.*`, `avatar.*` (vocabolario TalkingHead), `automation.run.updated`.
+- [x] Richieste non autenticate → 401 (verificato); **RLS `FORCE`** su users/sessions/llm_calls/souls con ruolo `ernie_app` (test: B non vede né riusa la sessione di A; senza `app.user_id` nessuna riga); `mastra_*` senza RLS, isolamento per `resource` (limite documentato).
+- [x] Limiti hard: `maxSteps` e `maxOutputTokens` per classe, budget giornaliero; `AbortSignal` propagato (test di cancellazione). Token non in cache per turno e stuck detector → M3.
+
+### Verbale di verifica M2 (11 ott 2026)
+
+- `pnpm lint` 0 errori; `pnpm build` ok; `pnpm test` con Postgres (ruolo `ernie_app`) e Redis reali: 15 file, 74/74 test; test online opzionale sul prefisso: superato.
+- Migrazioni 0003–0005 applicate; ruolo `ernie_app` con LOGIN; `bootstrap:storage` crea le tabelle `mastra_*` con i grant ereditati.
+- End-to-end reale: `admin:create-user` → API locale → client demo WebSocket, due turni nella stessa sessione con `anthropic/claude-sonnet-5.5`: turno 1 "Ciao! Mi chiamo Ernie…" (407 token in, 73 out, 0,001544 $ riportati, TTFT 2,2 s); turno 2 ricorda la domanda precedente (511 in, 37 out, 0,001392 $); 4 messaggi nel thread Mastra; sessione ripresa dalla seconda connessione (seq 6); upgrade senza chiave → 401.
+- Docker: immagine ricostruita con i nuovi pacchetti; `migrate` esegue migrazioni + `init-storage`; smoke test ok (vedi commit).
+- GitHub Actions: minuti del piano esauriti l'11 ott 2026; la CI non ha potuto girare sugli ultimi commit. Verifica locale completa; workflow ridotto (ignora modifiche ai soli documenti, avvio manuale disponibile).
 
 ## M3 — JEV Router ⏳
 

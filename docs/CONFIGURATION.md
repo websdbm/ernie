@@ -9,13 +9,18 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `APP_VERSION` | no | `0.0.0-dev` | Versione esposta da `/health`; in Docker impostata dall'argomento di build. |
 | `HOST` / `PORT` | no | `0.0.0.0` / `3000` | Bind dell'API. |
 | `LOG_LEVEL` | no | `info` | `fatal` … `trace`, `silent`. |
-| `DATABASE_URL` | **sì** | — | `postgres://user:pass@host:port/db`. In locale con Docker: `postgres://ernie:ernie@localhost:5433/ernie`. |
+| `DATABASE_URL` | **sì** | — | Connessione delle app con il **ruolo applicativo** `ernie_app` (RLS attiva). In locale con Docker: `postgres://ernie_app:ernie_app@localhost:5433/ernie`. |
+| `MIGRATIONS_DATABASE_URL` | no | = `DATABASE_URL` | Connessione del **proprietario**, usata da migrazioni, `bootstrap:storage` e `admin:create-user`. |
+| `APP_DB_PASSWORD` | consigliata | — | Password che la CLI di migrazione assegna al ruolo `ernie_app` (LOGIN). Senza, il ruolo resta senza accesso. |
 | `DATABASE_POOL_MAX` | no | `10` | Connessioni massime del pool. |
 | `REDIS_URL` | **sì** | — | `redis://host:port`. In locale con Docker: `redis://localhost:6380`. |
 | `OPENROUTER_API_KEY` | dalla M2 | — | Modelli di chat via OpenRouter e Decisions API di Jev. |
 | `OPENAI_API_KEY` | dalla M4 | — | Embeddings (`text-embedding-3-small`). |
 | `ANTHROPIC_API_KEY` | opzionale | — | Se presente, i modelli Anthropic possono essere chiamati direttamente. |
 | `FIRECRAWL_API_KEY` | dalla M5 | — | Ricerca ed estrazione web. |
+| `WS_ALLOWED_ORIGINS` | no | vuoto | Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin e passano sempre. |
+| `LLM_DAILY_BUDGET_USD` | no | `2` | Tetto di spesa giornaliero per utente (UTC) se `users.settings.dailyBudgetUsd` non è impostato. `0` disabilita il controllo. |
+| `MODEL_LIGHT` / `MODEL_STANDARD` / `MODEL_HEAVY` | no | `anthropic/claude-haiku-5.5` / `-sonnet-5.5` / `-opus-5.5` | ID OpenRouter per classe di modello. |
 
 ## Variabili solo per Docker Compose
 
@@ -26,6 +31,16 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `REDIS_PORT` | `6380` | Porta esposta su `127.0.0.1`. |
 | `API_PORT` | `3000` | Porta pubblica dell'API. |
 | `LITELLM_MASTER_KEY`, `LITELLM_PORT` | — / `4000` | Solo con `--profile litellm`. |
+
+## Comandi di amministrazione
+
+```bash
+pnpm migrate up            # migrazioni SQL + LOGIN/password del ruolo ernie_app (richiede APP_DB_PASSWORD)
+pnpm bootstrap:storage     # tabelle mastra_* create dal proprietario
+pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner
+```
+
+`admin:create-user` stampa una sola volta `API_KEY=ernie_…`: va conservata dal client (Keychain su iOS). Ogni utente ottiene una copia personale dei Soul globali, modificabile in seguito.
 
 ## Dove vivono i segreti
 

@@ -14,6 +14,15 @@
       "path": "packages/db"
     },
     {
+      "path": "packages/model-gateway"
+    },
+    {
+      "path": "packages/soul"
+    },
+    {
+      "path": "packages/agent-core"
+    },
+    {
       "path": "apps/api"
     },
     {

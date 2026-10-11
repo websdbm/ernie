@@ -18,7 +18,9 @@
     "dev:api": "node --env-file-if-exists=.env --import tsx --conditions=development --watch apps/api/src/index.ts",
     "dev:worker": "node --env-file-if-exists=.env --import tsx --conditions=development --watch apps/worker/src/index.ts",
     "migrate": "node --env-file-if-exists=.env --import tsx --conditions=development packages/db/src/cli.ts",
-    "clean": "rm -rf apps/*/dist packages/*/dist apps/*/*.tsbuildinfo packages/*/*.tsbuildinfo reports coverage"
+    "clean": "rm -rf apps/*/dist packages/*/dist apps/*/*.tsbuildinfo packages/*/*.tsbuildinfo reports coverage",
+    "bootstrap:storage": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/init-storage.ts",
+    "admin:create-user": "node --env-file-if-exists=.env --import tsx --conditions=development apps/api/src/cli/create-user.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

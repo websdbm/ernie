@@ -1,7 +1,7 @@
 import { loadConfig, redactConfig } from '@ernie/config';
 import { createLogger } from '@ernie/observability';
 import { migrationStatus, runMigrations } from './migrations.js';
-import { createPool } from './pool.js';
+import { createPool, ensureAppRole } from './pool.js';
 
 /**
  * CLI: `node packages/db/dist/cli.js [up|status]`
@@ -18,7 +18,7 @@ async function main(): Promise<number> {
   logger.debug({ config: redactConfig(config) }, 'configurazione caricata');
 
   const pool = createPool({
-    connectionString: config.db.url,
+    connectionString: config.db.migrationsUrl,
     max: 2,
     applicationName: 'ernie-migrate',
   });
@@ -35,6 +35,12 @@ async function main(): Promise<number> {
           { applied: result.applied.map((m) => m.file), alreadyApplied: result.alreadyApplied },
           'migrazioni completate',
         );
+        if (config.db.appPassword) {
+          await ensureAppRole(pool, config.db.appPassword);
+          logger.info('ruolo applicativo ernie_app aggiornato (LOGIN + password)');
+        } else {
+          logger.warn('APP_DB_PASSWORD non impostata: il ruolo ernie_app resta senza LOGIN');
+        }
         return 0;
       }
       case 'status': {

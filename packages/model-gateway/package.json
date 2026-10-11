@@ -1,0 +1,25 @@
+{
+  "name": "@ernie/model-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Classi di modello, provider OpenRouter (AI SDK), listino prezzi e registrazione delle chiamate LLM",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/config": "workspace:*",
+    "@ernie/db": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "ai": "^7.0.137",
+    "zod": "^4.6.5"
+  }
+}

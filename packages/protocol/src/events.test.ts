@@ -12,6 +12,7 @@ import {
   PROTOCOL_VERSION,
   parseClientEvent,
   safeParseEvent,
+  shouldPersist,
 } from './events.js';
 
 const ctx = { sessionId: randomUUID(), correlationId: randomUUID(), seq: 0 };
@@ -76,5 +77,55 @@ describe('schemi', () => {
     const e = createEvent('session.ping', {}, ctx);
     const res = safeParseEvent({ ...e, v: 2 });
     expect(res.success).toBe(false);
+  });
+});
+
+describe('v1.1', () => {
+  it("cancel accetta spokenThroughIndex e persist viaggia nell'envelope", () => {
+    const e = createEvent(
+      'user.cancel',
+      { targetCorrelationId: ctx.correlationId, spokenThroughIndex: 42 },
+      { ...ctx, persist: false },
+    );
+    expect(e.payload.spokenThroughIndex).toBe(42);
+    expect(e.persist).toBe(false);
+    expect(shouldPersist(e)).toBe(false);
+    expect(shouldPersist(createEvent('session.ping', {}, ctx))).toBe(false);
+    expect(shouldPersist(createEvent('assistant.text.delta', { delta: 'x' }, ctx))).toBe(true);
+  });
+
+  it('eventi avatar con vocabolario chiuso', () => {
+    const ok = createEvent('avatar.emotion', { name: 'happy', charOffset: 12 }, ctx);
+    expect(ok.payload.intensity).toBe(1);
+    expect(() =>
+      createEvent(
+        'avatar.emotion',
+        // @ts-expect-error: emozione fuori vocabolario
+        { name: 'ecstatic' },
+        ctx,
+      ),
+    ).toThrow();
+    expect(createEvent('avatar.gesture', { name: 'shrug' }, ctx).payload.name).toBe('shrug');
+    expect(createEvent('avatar.gaze', { target: 'camera' }, ctx).payload.target).toBe('camera');
+  });
+
+  it('conferme tool: richiesta server, risposta client', () => {
+    const req = createEvent(
+      'tool.confirmation.requested',
+      {
+        approvalId: ctx.correlationId,
+        toolCallId: 'c1',
+        toolId: 'shopping_list.add',
+        expiresAt: new Date().toISOString(),
+      },
+      ctx,
+    );
+    expect(EVENT_DIRECTION[req.type]).toBe('server→client');
+    const res = createEvent(
+      'tool.confirmation.respond',
+      { approvalId: ctx.correlationId, decision: 'approve' },
+      ctx,
+    );
+    expect(parseClientEvent(res).type).toBe('tool.confirmation.respond');
   });
 });

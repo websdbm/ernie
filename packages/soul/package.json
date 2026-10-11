@@ -1,0 +1,21 @@
+{
+  "name": "@ernie/soul",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Soul Engine: identità persistente e versionata (Core, Context, Policy), assemblaggio a budget",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/db": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

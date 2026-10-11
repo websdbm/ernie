@@ -59,6 +59,22 @@ describe('loadConfig / redactConfig', () => {
     expect(config.db.url).toBe(minimal.DATABASE_URL);
     expect(config.providers.openrouterApiKey).toBe('sk-or-123');
     expect(config.providers.openaiApiKey).toBeUndefined();
+    expect(config.db.migrationsUrl).toBe(minimal.DATABASE_URL);
+    expect(config.llm.models.light).toBe('anthropic/claude-haiku-5.5');
+    expect(config.llm.dailyBudgetUsd).toBe(2);
+    expect(config.ws.allowedOrigins).toEqual([]);
+  });
+
+  it('legge origin WS e URL delle migrazioni', () => {
+    const config = loadConfig({
+      ...minimal,
+      WS_ALLOWED_ORIGINS: 'https://app.example, https://b.example',
+      MIGRATIONS_DATABASE_URL: 'postgres://owner:pw@localhost:5433/ernie',
+      APP_DB_PASSWORD: 'x',
+    });
+    expect(config.ws.allowedOrigins).toEqual(['https://app.example', 'https://b.example']);
+    expect(config.db.migrationsUrl).toContain('owner');
+    expect(JSON.stringify(redactConfig(config))).not.toContain('"x"');
   });
 
   it('non espone segreti nella versione redatta', () => {

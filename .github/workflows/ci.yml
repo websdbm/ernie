@@ -3,7 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'apps/ios/**'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'apps/ios/**'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -37,6 +46,8 @@ jobs:
     env:
       CI: "true"
       DATABASE_URL: postgres://ernie:ernie@localhost:5432/ernie
+      MIGRATIONS_DATABASE_URL: postgres://ernie:ernie@localhost:5432/ernie
+      APP_DB_PASSWORD: ernie_app
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v7
@@ -49,6 +60,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm migrate up
+      - run: pnpm bootstrap:storage
       - run: pnpm test
       - uses: actions/upload-artifact@v7
         if: always()

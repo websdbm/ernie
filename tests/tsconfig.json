@@ -5,6 +5,13 @@
     "outDir": "dist",
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": ["spikes"],
-  "references": [{ "path": "../packages/config" }]
+  "include": ["spikes", "demo"],
+  "references": [
+    {
+      "path": "../packages/config"
+    },
+    {
+      "path": "../packages/protocol"
+    }
+  ]
 }

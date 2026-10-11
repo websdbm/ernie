@@ -9,11 +9,16 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@ernie/agent-core": "workspace:*",
     "@ernie/config": "workspace:*",
     "@ernie/db": "workspace:*",
+    "@ernie/model-gateway": "workspace:*",
     "@ernie/observability": "workspace:*",
     "@ernie/protocol": "workspace:*",
+    "@ernie/soul": "workspace:*",
+    "@fastify/websocket": "^11.3.4",
     "fastify": "^5.12.5",
-    "ioredis": "^5.6.0"
+    "ioredis": "^5.6.0",
+    "zod": "^4.6.5"
   }
 }

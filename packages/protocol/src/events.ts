@@ -9,6 +9,8 @@ import { z } from 'zod';
  * per direzione (permette riordino, deduplica e ripresa dopo riconnessione).
  */
 export const PROTOCOL_VERSION = 1 as const;
+/** Revisione minore compatibile (M2): persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong. */
+export const PROTOCOL_MINOR = 1 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -17,6 +19,8 @@ export const EnvelopeBase = z.object({
   correlationId: z.uuid(),
   seq: z.number().int().nonnegative(),
   ts: z.iso.datetime(),
+  /** Se false l'evento non viene conservato nel log di sessione né rinviato in replay (default: true). */
+  persist: z.boolean().optional(),
 });
 
 // ---------- payload ----------
@@ -69,7 +73,19 @@ export const UserMessage = event(
   }),
 );
 
-export const UserCancel = event('user.cancel', z.object({ targetCorrelationId: z.uuid() }));
+export const UserCancel = event(
+  'user.cancel',
+  z.object({
+    targetCorrelationId: z.uuid(),
+    /** Barge-in: numero di caratteri del testo effettivamente pronunciati dal TTS prima dell'interruzione. */
+    spokenThroughIndex: z.number().int().nonnegative().optional(),
+  }),
+);
+
+export const ToolConfirmationRespond = event(
+  'tool.confirmation.respond',
+  z.object({ approvalId: z.uuid(), decision: z.enum(['approve', 'deny']) }),
+);
 
 export const SessionPing = event('session.ping', z.object({}));
 
@@ -80,9 +96,14 @@ export const SessionStarted = event(
   z.object({
     serverTime: z.iso.datetime(),
     protocolVersion: z.literal(PROTOCOL_VERSION),
+    protocolMinor: z.number().int().nonnegative().optional(),
     resumedFromSeq: z.number().int().nonnegative().optional(),
+    /** Numero di eventi rinviati in replay dopo resumedFromSeq. */
+    replayed: z.number().int().nonnegative().optional(),
   }),
 );
+
+export const SessionPong = event('session.pong', z.object({ serverTime: z.iso.datetime() }));
 
 export const AssistantStarted = event(
   'assistant.started',
@@ -131,6 +152,77 @@ export const AssistantCancelled = event(
   z.object({ reason: z.enum(['user', 'timeout', 'server']) }),
 );
 
+export const ToolConfirmationRequested = event(
+  'tool.confirmation.requested',
+  z.object({
+    approvalId: z.uuid(),
+    toolCallId: z.string().min(1),
+    toolId: z.string().min(1),
+    displayName: z.string().max(120).optional(),
+    argsPreview: z.string().max(500).optional(),
+    reason: z.string().max(300).optional(),
+    expiresAt: z.iso.datetime(),
+  }),
+);
+
+export const ToolConfirmationResolved = event(
+  'tool.confirmation.resolved',
+  z.object({ approvalId: z.uuid(), decision: z.enum(['approved', 'denied', 'expired']) }),
+);
+
+/** Vocabolari chiusi allineati a TalkingHead (setMood, playGesture) — ARCHITECTURE.md §13–14. */
+export const AvatarEmotionName = z.enum([
+  'neutral',
+  'happy',
+  'angry',
+  'sad',
+  'fear',
+  'disgust',
+  'love',
+  'sleep',
+]);
+export const AvatarGestureName = z.enum([
+  'handup',
+  'index',
+  'ok',
+  'thumbup',
+  'thumbdown',
+  'side',
+  'shrug',
+]);
+export const AvatarGazeTarget = z.enum(['user', 'camera', 'away']);
+
+const charOffset = z.number().int().nonnegative().optional();
+
+export const AvatarEmotion = event(
+  'avatar.emotion',
+  z.object({ name: AvatarEmotionName, intensity: z.number().min(0).max(1).default(1), charOffset }),
+);
+export const AvatarGesture = event(
+  'avatar.gesture',
+  z.object({ name: AvatarGestureName, charOffset }),
+);
+export const AvatarGaze = event('avatar.gaze', z.object({ target: AvatarGazeTarget, charOffset }));
+
+export const AutomationRunUpdated = event(
+  'automation.run.updated',
+  z.object({
+    automationId: z.uuid(),
+    runId: z.uuid(),
+    status: z.enum([
+      'scheduled',
+      'claimed',
+      'running',
+      'succeeded',
+      'failed',
+      'skipped',
+      'budget_exceeded',
+      'awaiting_approval',
+    ]),
+    summary: z.string().max(500).optional(),
+  }),
+);
+
 export const ErrorEvent = event(
   'error',
   z.object({ code: z.string().min(1), message: z.string(), retryable: z.boolean() }),
@@ -143,6 +235,7 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   UserMessage,
   UserCancel,
   SessionPing,
+  ToolConfirmationRespond,
 ]);
 
 export const ServerEventSchema = z.discriminatedUnion('type', [
@@ -154,6 +247,13 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   ToolCompleted,
   AssistantCompleted,
   AssistantCancelled,
+  SessionPong,
+  ToolConfirmationRequested,
+  ToolConfirmationResolved,
+  AvatarEmotion,
+  AvatarGesture,
+  AvatarGaze,
+  AutomationRunUpdated,
   ErrorEvent,
 ]);
 
@@ -180,6 +280,7 @@ export const EVENT_DIRECTION = {
   'user.message': 'client→server',
   'user.cancel': 'client→server',
   'session.ping': 'client→server',
+  'tool.confirmation.respond': 'client→server',
   'session.started': 'server→client',
   'assistant.started': 'server→client',
   'assistant.text.delta': 'server→client',
@@ -188,6 +289,13 @@ export const EVENT_DIRECTION = {
   'tool.completed': 'server→client',
   'assistant.completed': 'server→client',
   'assistant.cancelled': 'server→client',
+  'session.pong': 'server→client',
+  'tool.confirmation.requested': 'server→client',
+  'tool.confirmation.resolved': 'server→client',
+  'avatar.emotion': 'server→client',
+  'avatar.gesture': 'server→client',
+  'avatar.gaze': 'server→client',
+  'automation.run.updated': 'server→client',
   error: 'server→client',
 } as const satisfies Record<EventType, EventDirection>;
 
@@ -201,6 +309,7 @@ export const EVENT_AUDIENCE = {
   'user.message': 'user',
   'user.cancel': 'runtime',
   'session.ping': 'runtime',
+  'tool.confirmation.respond': 'runtime',
   'session.started': 'runtime',
   'assistant.started': 'runtime',
   'assistant.text.delta': 'user',
@@ -209,6 +318,13 @@ export const EVENT_AUDIENCE = {
   'tool.completed': 'runtime',
   'assistant.completed': 'runtime',
   'assistant.cancelled': 'user',
+  'session.pong': 'runtime',
+  'tool.confirmation.requested': 'user',
+  'tool.confirmation.resolved': 'runtime',
+  'avatar.emotion': 'runtime',
+  'avatar.gesture': 'runtime',
+  'avatar.gaze': 'runtime',
+  'automation.run.updated': 'user',
   error: 'user',
 } as const satisfies Record<EventType, EventAudience>;
 
@@ -218,12 +334,19 @@ export function isUserVisible(e: Pick<AgentEvent, 'type'>): boolean {
   return EVENT_AUDIENCE[e.type] === 'user';
 }
 
+/** Eventi da conservare nel log di sessione per il replay: tutti, salvo `persist: false` e i ping/pong. */
+export function shouldPersist(e: Pick<AgentEvent, 'type' | 'persist'>): boolean {
+  if (e.persist === false) return false;
+  return e.type !== 'session.ping' && e.type !== 'session.pong';
+}
+
 export interface EventContext {
   readonly sessionId: string;
   readonly correlationId: string;
   readonly seq: number;
   readonly id?: string;
   readonly ts?: string;
+  readonly persist?: boolean;
 }
 
 /** Costruisce e valida un evento tipizzato. */
@@ -239,6 +362,7 @@ export function createEvent<T extends EventType>(
     correlationId: ctx.correlationId,
     seq: ctx.seq,
     ts: ctx.ts ?? new Date().toISOString(),
+    ...(ctx.persist === undefined ? {} : { persist: ctx.persist }),
     type,
     payload,
   };

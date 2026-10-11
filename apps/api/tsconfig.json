@@ -7,9 +7,26 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/config" },
-    { "path": "../../packages/observability" },
-    { "path": "../../packages/protocol" },
-    { "path": "../../packages/db" }
+    {
+      "path": "../../packages/config"
+    },
+    {
+      "path": "../../packages/observability"
+    },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/model-gateway"
+    },
+    {
+      "path": "../../packages/soul"
+    },
+    {
+      "path": "../../packages/agent-core"
+    }
   ]
 }

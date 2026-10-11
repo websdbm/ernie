@@ -1,0 +1,29 @@
+{
+  "name": "@ernie/agent-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Runtime su Mastra: sessioni, memoria conversazionale, esecuzione dei turni e mappatura sugli eventi del protocollo",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/config": "workspace:*",
+    "@ernie/db": "workspace:*",
+    "@ernie/model-gateway": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
+    "@ernie/soul": "workspace:*",
+    "@mastra/core": "^1.75.0",
+    "@mastra/memory": "^1.36.0",
+    "@mastra/pg": "^1.30.0",
+    "zod": "^4.6.5"
+  }
+}

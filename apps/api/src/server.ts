@@ -2,12 +2,15 @@ import type { AppConfig } from '@ernie/config';
 import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
+import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
   readonly config: AppConfig;
   readonly logger: Logger;
   /** Controlli di readiness per nome (es. postgres, redis). */
   readonly checks: Readonly<Record<string, HealthCheck>>;
+  /** Endpoint WebSocket del protocollo v1 (assente nei test di sola salute). */
+  readonly ws?: WsPluginOptions;
 }
 
 interface HttpErrorLike {
@@ -65,6 +68,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     env: opts.config.env,
     checks: opts.checks,
   });
+
+  if (opts.ws) await registerWs(app, opts.ws);
 
   return app;
 }

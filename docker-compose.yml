@@ -13,7 +13,10 @@ x-app: &app
   environment:
     NODE_ENV: production
     LOG_LEVEL: ${LOG_LEVEL:-info}
-    DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
+    # Le app usano il ruolo applicativo (RLS); le migrazioni il proprietario.
+    DATABASE_URL: postgres://ernie_app:${APP_DB_PASSWORD:-ernie_app}@postgres:5432/${POSTGRES_DB:-ernie}
+    MIGRATIONS_DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
+    APP_DB_PASSWORD: ${APP_DB_PASSWORD:-ernie_app}
     REDIS_URL: redis://redis:6379
 
 services:
@@ -50,7 +53,7 @@ services:
 
   migrate:
     <<: *app
-    command: ["node", "packages/db/dist/cli.js", "up"]
+    command: ["sh", "-c", "node packages/db/dist/cli.js up && node apps/api/dist/cli/init-storage.js"]
     restart: "no"
     depends_on:
       postgres:
@@ -65,8 +68,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       HOST: 0.0.0.0
       PORT: "3000"
-      DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
+      DATABASE_URL: postgres://ernie_app:${APP_DB_PASSWORD:-ernie_app}@postgres:5432/${POSTGRES_DB:-ernie}
+      MIGRATIONS_DATABASE_URL: postgres://${POSTGRES_USER:-ernie}:${POSTGRES_PASSWORD:-ernie}@postgres:5432/${POSTGRES_DB:-ernie}
       REDIS_URL: redis://redis:6379
+      WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-}
+      LLM_DAILY_BUDGET_USD: ${LLM_DAILY_BUDGET_USD:-2}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:

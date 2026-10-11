@@ -1,0 +1,152 @@
+import { randomUUID } from 'node:crypto';
+import { createPool, type Pool, withUser } from '@ernie/db';
+import { createBudgetGuard, createLlmCallRecorder } from '@ernie/model-gateway';
+import { createLogger } from '@ernie/observability';
+import { createEvent } from '@ernie/protocol';
+import { createSoulRepository } from '@ernie/soul';
+import { Redis } from 'ioredis';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createSessionStore, SessionForbiddenError } from './store.js';
+
+const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL;
+const APP_PASSWORD = process.env.APP_DB_PASSWORD;
+const REDIS_URL = process.env.REDIS_URL;
+const ready = Boolean(OWNER_URL && APP_PASSWORD && REDIS_URL);
+
+function appUrl(ownerUrl: string, password: string): string {
+  const u = new URL(ownerUrl);
+  u.username = 'ernie_app';
+  u.password = password;
+  return u.toString();
+}
+
+describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_app)', () => {
+  let owner: Pool;
+  let app: Pool;
+  let redis: Redis;
+  const userA = randomUUID();
+  const userB = randomUUID();
+  const logger = createLogger({ level: 'silent', name: 't' });
+
+  beforeAll(async () => {
+    owner = createPool({ connectionString: OWNER_URL as string, max: 2 });
+    app = createPool({
+      connectionString: appUrl(OWNER_URL as string, APP_PASSWORD as string),
+      max: 2,
+    });
+    redis = new Redis(REDIS_URL as string, { maxRetriesPerRequest: 1 });
+    await owner.query(
+      `INSERT INTO users (id, display_name, role, companion_name) VALUES ($1, 'A', 'owner', 'Ernie'), ($2, 'B', 'member', 'Max')`,
+      [userA, userB],
+    );
+  });
+
+  afterAll(async () => {
+    await owner.query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [[userA, userB]]);
+    await owner.end();
+    await app.end();
+    await redis.quit();
+  });
+
+  it('il ruolo applicativo non vede nulla senza app.user_id', async () => {
+    const res = await app.query(`SELECT count(*)::int AS n FROM users WHERE id = ANY($1::uuid[])`, [
+      [userA, userB],
+    ]);
+    expect(res.rows[0]?.n).toBe(0);
+  });
+
+  it('una sessione di A non è visibile né riutilizzabile da B', async () => {
+    const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
+    const sessionId = randomUUID();
+    const noKey = null as unknown as string; // api_key_id è opzionale
+    const a = await store.ensure(userA, noKey, sessionId, { platform: 'test' });
+    expect(a.resumed).toBe(false);
+    const again = await store.ensure(userA, noKey, sessionId, {});
+    expect(again.resumed).toBe(true);
+    await expect(store.ensure(userB, noKey, sessionId, {})).rejects.toThrowError(
+      SessionForbiddenError,
+    );
+    const seenByB = await withUser(app, userB, (c) =>
+      c.query(`SELECT count(*)::int AS n FROM sessions WHERE id = $1`, [sessionId]),
+    );
+    expect(seenByB.rows[0]?.n).toBe(0);
+    const seenByA = await withUser(app, userA, (c) =>
+      c.query(`SELECT count(*)::int AS n FROM sessions WHERE id = $1`, [sessionId]),
+    );
+    expect(seenByA.rows[0]?.n).toBe(1);
+  });
+
+  it('seq, log e replay su Redis', async () => {
+    const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
+    const sessionId = randomUUID();
+    expect(await store.nextSeq(sessionId)).toBe(0);
+    expect(await store.nextSeq(sessionId)).toBe(1);
+    const ctx = { sessionId, correlationId: randomUUID() };
+    await store.append(
+      sessionId,
+      createEvent('assistant.text.delta', { delta: 'a' }, { ...ctx, seq: 0 }),
+    );
+    await store.append(
+      sessionId,
+      createEvent('assistant.text.delta', { delta: 'b' }, { ...ctx, seq: 1 }),
+    );
+    await store.append(
+      sessionId,
+      createEvent('session.pong', { serverTime: new Date().toISOString() }, { ...ctx, seq: 2 }),
+    );
+    const replay = await store.replay(sessionId, 0);
+    expect(replay.map((e) => e.seq)).toEqual([1]);
+    expect(await store.currentSeq(sessionId)).toBe(1);
+  });
+
+  it('llm_calls per utente e budget giornaliero', async () => {
+    const recorder = createLlmCallRecorder(app, logger);
+    await recorder.record({
+      userId: userA,
+      sessionId: null,
+      requestId: 'r1',
+      stepIndex: 0,
+      purpose: 'turn',
+      provider: 'openrouter',
+      model: 'anthropic/claude-haiku-5.5',
+      modelClass: 'light',
+      generationId: 'gen-x',
+      usage: {
+        inputTokens: 1000,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        outputTokens: 10,
+        reasoningTokens: 0,
+        costReportedUsd: 0.5,
+      },
+      ttftMs: 100,
+      latencyMs: 200,
+      finishReason: 'stop',
+    });
+    const guard = createBudgetGuard(app);
+    const spentA = await guard.assertWithinBudget(userA, 1);
+    expect(spentA.spentUsd).toBeCloseTo(0.5);
+    await expect(guard.assertWithinBudget(userA, 0.4)).rejects.toThrow(/budget/);
+    const spentB = await guard.assertWithinBudget(userB, 1);
+    expect(spentB.spentUsd).toBe(0);
+  });
+
+  it('i Soul globali vengono clonati per utente e il clone sostituisce il globale', async () => {
+    const repo = createSoulRepository(app);
+    const cloned = await repo.cloneDefaultsForUser(userB, 'test');
+    expect(cloned).toBeGreaterThanOrEqual(3);
+    expect(await repo.cloneDefaultsForUser(userB, 'test')).toBe(0);
+    const souls = await repo.loadForUser(userB);
+    expect(souls.filter((s) => s.key === 'core')).toHaveLength(2);
+    const updated = await repo.updateContent(
+      userB,
+      'core',
+      'Sei Max, il compagno di B.',
+      'test',
+      'personalizzazione',
+    );
+    expect(updated.version).toBe(2);
+    const forA = await repo.loadForUser(userA);
+    expect(forA.some((s) => s.content.includes('compagno di B'))).toBe(false);
+  });
+});

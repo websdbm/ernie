@@ -1,6 +1,6 @@
 # Ernie — Architettura tecnica
 
-> Stato: **v0.4** (11 ottobre 2026). La v0.4 recepisce lo spike M2.1 sul passthrough OpenRouter (`docs/research/05-spike-openrouter-passthrough.md`). La v0.3 registra la decisione dell'utente sull'avatar (three.js + TalkingHead, Unreal escluso). La v0.2 integra la ricerca bibliografica (`docs/research/01`, `02`, `04`) filtrata dalla revisione indipendente (`docs/research/03-revisione.md`: 53 verifiche su fonti primarie, 0 affermazioni false). Le modifiche rispetto alla v0.1 sono elencate in §20. Documento vivo, aggiornato a ogni milestone.
+> Stato: **v0.5** (11 ottobre 2026). La v0.5 introduce il modello multi-utente "companion" (un agente personalizzato per utente: Soul, memoria, sessioni, budget separati) e registra la M2 realizzata. La v0.4 recepisce lo spike M2.1 sul passthrough OpenRouter (`docs/research/05-spike-openrouter-passthrough.md`). La v0.3 registra la decisione dell'utente sull'avatar (three.js + TalkingHead, Unreal escluso). La v0.2 integra la ricerca bibliografica (`docs/research/01`, `02`, `04`) filtrata dalla revisione indipendente (`docs/research/03-revisione.md`: 53 verifiche su fonti primarie, 0 affermazioni false). Le modifiche rispetto alla v0.1 sono elencate in §20. Documento vivo, aggiornato a ogni milestone.
 
 ## 1. Scopo e principi
 
@@ -13,7 +13,8 @@ Principi non negoziabili:
 3. **Budget di token come requisito architetturale.** Prefisso di cache **stabile a livello di sessione**, contesto assemblato con budget, retrieval selettivo, tool discovery dinamico, riassunti progressivi. La prompt cache è la leva di costo più forte misurata (−41–80% nei task agentici, 01 §2.2): ogni scelta che varia il prefisso per richiesta va giustificata.
 4. **La sicurezza non è delegata ai modelli.** Si parte dall'ipotesi che la prompt injection riesca (attacchi adattivi aggirano >90% delle difese pubblicate, 02 §2.1). I confini sono deterministici: Policy Engine deny → ask → allow fuori dall'LLM, Rule of Two come *taint* di run, sandbox a container per il codice generato, isolamento dei dati per utente con RLS. Nessuna decisione di Jev o di un LLM può aggirarli.
 5. **Monolite modulare.** Un'unica base di codice TypeScript con pacchetti a responsabilità singola; due processi (API e worker). Nessun microservizio finché non c'è una ragione misurabile. Mastra fornisce le primitive (storage, memoria, tool, HITL); l'assemblaggio del prompt e i limiti del loop restano nostri.
-6. **Nessuna affermazione senza misura.** Costi reali dal provider, benchmark con baseline (miglior modello singolo, economico fisso, router casuale), eval deterministiche in CI.
+6. **Un companion per utente.** Ogni utente (all'inizio Alessandro e suo figlio) ha il proprio agente: Soul personale clonato dai modelli globali e poi divergente, memoria e sessioni proprie, chiavi e budget propri. L'isolamento è deterministico (RLS in Postgres, `resource` Mastra = utente), non una preferenza del modello. L'owner gestisce gli account e può imporre policy bloccate (es. per un minore).
+7. **Nessuna affermazione senza misura.** Costi reali dal provider, benchmark con baseline (miglior modello singolo, economico fisso, router casuale), eval deterministiche in CI.
 
 ## 2. Vincoli verificati e decisioni chiave
 
@@ -72,20 +73,20 @@ Stato: ✅ realizzato · 🔧 in corso · ⏳ pianificato (milestone tra parente
 
 | # | Modulo | Pacchetto | Responsabilità | Stato |
 |---|---|---|---|---|
-| 1 | API Gateway & Session Manager | `apps/api` | HTTP/WS, autenticazione, sessioni, rate limit, dispatch eventi, controllo `Origin` | ✅ health/ready · ⏳ WS/auth (M2) |
+| 1 | API Gateway & Session Manager | `apps/api` | HTTP/WS, autenticazione per chiave (hash), sessioni con log eventi e replay (Redis), controllo `Origin`, dispatch eventi | ✅ M2 (rate limit ⏳ M9) |
 | 2 | Deterministic Context Router | `packages/agent-core` | Comandi, procedure note, cache esatta; decide se chiamare Jev | ⏳ M3 |
 | 3 | JEV Decision Router | `packages/jev-router` | Adapter Decisions API, schema Zod, cache, timeout, fallback, soglie tarate, metriche | ⏳ M3 |
 | 4 | Policy Engine | `packages/agent-core` | deny → ask → allow deterministico, taint di run, budget, approvazioni monouso, audit | ⏳ M3 |
-| 5 | Agent Runtime | `packages/agent-core` | Assemblaggio a prefisso stabile, esecuzione Mastra Agent, limiti hard, stuck detector, cancellazione | ⏳ M2 |
-| 6 | Soul Engine | `packages/soul` | Core/Context Soul e policy, versionamento, caricamento a livello di sessione | ⏳ M2 |
+| 5 | Agent Runtime | `packages/agent-core` | Agente per sessione (prefisso stabile), stream Mastra → eventi, memoria conversazionale Postgres, limiti hard, cancellazione | ✅ M2 (stuck detector ⏳ M3) |
+| 6 | Soul Engine | `packages/soul` | Soul per utente clonati dai modelli globali, versionamento, assemblaggio deterministico a budget | ✅ M2 |
 | 7 | Memory Engine | `packages/memory` | 4 livelli, snapshot congelato, `memory_search`, ricerca ibrida RRF, consolidamento asincrono, bi-temporalità | ⏳ M4 |
 | 8 | Tool Registry & Executor | `packages/tools` | Catalogo, set stabile per sessione + meta-tool di ricerca, etichette di rischio, timeout/retry, audit, MCP | ⏳ M5 |
 | 9 | Skill Registry & Executor | `packages/skills` | Skill agentskills.io, stati e versioni immutabili, pipeline con sandbox e approvazione, eval di regressione | ⏳ M5 |
 | 10 | Automation Engine | `packages/automations` + `apps/worker` | Cron, one-shot, webhook, eventi, idempotenza, storico, budget per run, notifiche | ⏳ M6 (skeleton ✅) |
-| 11 | Model Gateway | `packages/model-gateway` | Classi → provider/ID, isteresi di sessione, opzioni per provider, listino, embeddings | ⏳ M2 |
-| 12 | Observability & Cost Tracking | `packages/observability` | Logging con redazione, correlazione, `llm_calls` come fonte di verità, cache hit rate | ✅ logger · ⏳ (M2–M3) |
+| 11 | Model Gateway | `packages/model-gateway` | Classi → istanze OpenRouter (cache, costo, session_id, reasoning per classe), listino, `llm_calls` per step, tetto di spesa giornaliero | ✅ M2 (embeddings ⏳ M4) |
+| 12 | Observability & Cost Tracking | `packages/observability`, `model-gateway` | Logging con redazione, correlazione, `llm_calls` per step con costo del provider | ✅ M2 (metriche aggregate ⏳ M3) |
 | 13 | iOS Client | `apps/ios` | SwiftUI, voce, streaming, sessioni, notifiche, avatar | ⏳ M7–M8, M10 |
-| — | Protocollo | `packages/protocol` | Eventi v1, deduplica, sequenze; v1.1 (M2) | ✅ |
+| — | Protocollo | `packages/protocol` | Eventi v1 + v1.1 (persist, cancel con `spokenThroughIndex`, conferme tool, `avatar.*`, `automation.*`, pong), deduplica, sequenze | ✅ |
 | — | Configurazione / Database | `packages/config`, `packages/db` | Config tipizzata e redatta; pool, migrazioni, CLI | ✅ |
 
 ### Interfacce principali
@@ -175,7 +176,9 @@ Timeout e fallback deterministici; cache esatta (Redis, TTL ~10 min); metriche (
 - **Core Soul** (≤ 400 token, sempre nel prefisso): identità, tono, lingua, regole irrinunciabili.
 - **Context Soul** per tag, scelto **a livello di sessione** (o inserito dopo il breakpoint di cache), mai cambiato turno per turno: variarlo invalida il prefisso (03 A.6).
 - **Operational Policies** per situazione (conferme, privacy, formato vocale: frasi brevi, niente markdown se `inputMode = voice`).
-- Persistenza: `souls` e `soul_versions` (storico immutabile). Modifica solo via API autenticata o configurazione versionata; **nessun tool** può scrivere il Soul. Il Soul descrive *chi è* Ernie, la memoria *cosa sa*.
+- **Per utente** (v0.5): `souls(key, user_id)`; i Soul con `user_id IS NULL` sono i **modelli globali** (seminati dalla migrazione 0005: `core`, `ctx:cucina`, `policy:voce`). Alla creazione di un utente la CLI li **clona** come Soul personali, che da quel momento evolvono per conto proprio (`soul_versions`, autore e motivo per ogni versione). In assemblaggio il Soul dell'utente sostituisce il globale con la stessa chiave; il nome del companion (`users.companion_name`) sostituisce "Ernie" nel core. I Soul `locked` sono modificabili solo da un `owner`: è il meccanismo con cui un genitore impone policy al companion del figlio.
+- Persistenza: `souls` e `soul_versions` (storico immutabile) con RLS: i globali sono leggibili da tutti, i personali solo dal proprietario. Modifica solo via API autenticata o CLI; **nessun tool** può scrivere il Soul. Il Soul descrive *chi è* il companion, la memoria *cosa sa*.
+- Realizzato in M2: `packages/soul` (`assembleSoul` deterministico con fingerprint, budget di 400 token verificato da test sul seed, repository con clone e versioni).
 
 ## 8. Memory Engine
 
@@ -253,12 +256,12 @@ Architettura dell'integrazione:
 
 ## 15. Sicurezza
 
-- **Autenticazione**: chiavi API per dispositivo (hash SHA-256 in `api_keys`, scope, revoca), `Authorization: Bearer`; TLS dal reverse proxy (Caddy, M9) o dal provider.
+- **Autenticazione** (M2): chiavi API per dispositivo (`ernie_…`, hash SHA-256 in `api_keys`, scope, revoca), `Authorization: Bearer` sull'upgrade WebSocket (401 altrimenti), controllo `Origin` (403 se presente e non in allowlist); TLS dal reverse proxy (Caddy, M9) o dal provider.
 - **Policy Engine** (03 A.1): **deny → ask → allow** deterministico, fuori dall'LLM, **fail-closed** per tool sconosciuti; approvazione legata a **(tool, hash degli argomenti, utente, scadenza)**, **monouso** e consumata atomicamente; audit append-only con ID approvazione e versione della policy; nessun controllo in punti scavalcabili da una regola allow. Contro l'approval fatigue (~93% dei prompt approvati) i confini sono ambientali, non più finestre di conferma.
 - **Rule of Two come taint di run** (03 A.2): quando entra contenuto non fidato (web, webhook, MCP, memoria a `trust` basso) la run è *tainted* e ogni tool `externalEffect` o `write` passa in `ask`; le automazioni con payload esterno partono tainted.
 - **Prompt injection**: contenuti esterni delimitati e marcati; schemi Zod su tutti gli input; il taint rende deterministica la regola "mai eseguire azioni su sola istruzione di un tool result".
 - **Sandbox** (03 B.1): codice generato **mai nel processo Node**, né con `node:vm` né con `isolated-vm`; container dedicato con **gVisor o microVM**, nessuna rete per default, nessun segreto montato (un proxy esterno allega il token alle sole operazioni approvate), capability droppate, `no-new-privileges`, tmpfs `noexec`, limiti CPU/memoria/tempo/processi, egress con allowlist per dominio trattata come capability.
-- **Isolamento dati**: `user_id` su ogni tabella, **RLS `FORCE`** con ruolo applicativo non owner e senza `BYPASSRLS`; namespace per utente su Redis/BullMQ; validazione di ciò che si scrive in memoria.
+- **Isolamento dati** (M2): `user_id` su ogni tabella; **RLS `FORCE`** su `users`, `sessions`, `llm_calls`, `souls`, `soul_versions` con ruolo applicativo `ernie_app` (LOGIN impostato dalla CLI di migrazione, privilegi predefiniti sulle tabelle future); ogni unità di lavoro gira in una transazione con `SET LOCAL app.user_id` (`withUser`). Esenzione documentata: `api_keys` (solo hash e metadati, ricerca per hash prima di conoscere l'utente). Le tabelle `mastra_*` non hanno RLS: l'isolamento conversazionale è per `resource` = utente dentro Mastra (limite noto, da rivalutare in M4). Namespace per utente su Redis/BullMQ (M6); validazione di ciò che si scrive in memoria (M4).
 - **Segreti**: fuori dal codice (`.env` ignorato; Docker secrets in M9), redazione nei log, rate limiting per chiave, audit immutabile, cifratura dei campi sensibili e retention configurabile (M9).
 - Le decisioni di Jev e degli LLM non sostituiscono mai questi controlli.
 
@@ -313,3 +316,5 @@ Fonte: `docs/research/03-revisione.md` (§5). Adottato subito (A): Policy Engine
 **v0.2 → v0.3** (decisione utente, 10 ott 2026): avatar su **three.js + TalkingHead in WKWebView**; Unreal/MetaHuman esclusi (app "UE-first" rifiutata); RealityKit scartato come traccia primaria; spike S2 decaduto; aggiunti i fatti verificati su TalkingHead (API `speakAudio`/`stream*`, moduli lingua, requisiti dell'asset) e il modulo `lipsync-it.mjs` come lavoro da svolgere.
 
 **v0.3 → v0.4** (spike M2.1, 11 ott 2026): Model Gateway su istanze `@openrouter/ai-sdk-provider` anziché stringa nativa di Mastra (nessuna cache con la stringa; −92% sulla seconda chiamata con il provider); ID e prezzi dei modelli 5.5 verificati su `/api/v1/models`; `maxOutputTokens` esplicito; configurazione di ragionamento fissa per sessione (cambiarla azzera la cache); `llm_calls` per step HTTP con costo del provider e riconciliazione sui campi nativi di `/api/v1/generation`; assemblaggio del prompt lasciato a Mastra (prefisso verificato stabile); rischi aggiornati, incluso il saldo OpenRouter esaurito.
+
+**v0.4 → v0.5** (M2, 11 ott 2026): modello multi-utente "companion" (`users.role/companion_name/settings`, Soul per utente clonati dai globali, `locked` per policy imposte dall'owner); Soul Engine, Model Gateway, Agent Runtime, API WebSocket v1.1 e `llm_calls` realizzati; RLS attiva con ruolo applicativo; tetto di spesa giornaliero per utente; CLI `admin:create-user`, `bootstrap:storage`; protocollo v1.1 implementato. Verifica M2 nel piano.

@@ -15,12 +15,20 @@ Node ≥ 24, pnpm 11 (`packageManager` nel `package.json`), Docker con Compose v
 ## Avvio rapido (sviluppo)
 
 ```bash
-cp .env.example .env            # poi inserisci le chiavi che servono (nessuna per la M1)
+cp .env.example .env            # inserisci OPENROUTER_API_KEY per parlare con Ernie
 pnpm install
 docker compose up -d --wait postgres redis
-pnpm migrate up
-pnpm dev:api                    # http://localhost:3000/health · /ready
+pnpm migrate up                 # migrazioni + ruolo applicativo ernie_app
+pnpm bootstrap:storage          # tabelle Mastra (come proprietario)
+pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner   # stampa API_KEY una volta
+pnpm dev:api                    # http://localhost:3000/health · /ready · ws://localhost:3000/v1/ws
 pnpm dev:worker                 # in un altro terminale
+```
+
+Prova da terminale (protocollo WebSocket v1):
+
+```bash
+ERNIE_API_KEY=ernie_... pnpm --filter @ernie/tests demo:chat "Ciao, presentati in una frase"
 ```
 
 In locale Postgres è su `localhost:5433` e Redis su `localhost:6380` (vedi `.env.example`).

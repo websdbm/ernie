@@ -23,12 +23,23 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   DATABASE_URL: postgresUrl,
+  /** URL con il ruolo proprietario, usato solo dalle migrazioni (default: DATABASE_URL). */
+  MIGRATIONS_DATABASE_URL: postgresUrl.optional(),
+  /** Password del ruolo applicativo `ernie_app`, impostata dalla CLI di migrazione. */
+  APP_DB_PASSWORD: z.string().min(1).optional(),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   REDIS_URL: redisUrl,
   OPENROUTER_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   FIRECRAWL_API_KEY: z.string().min(1).optional(),
+  /** Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin. */
+  WS_ALLOWED_ORIGINS: z.string().default(''),
+  /** Tetto di spesa LLM giornaliero per utente, in USD, se non impostato in users.settings. */
+  LLM_DAILY_BUDGET_USD: z.coerce.number().min(0).default(2),
+  MODEL_LIGHT: z.string().min(1).default('anthropic/claude-haiku-5.5'),
+  MODEL_STANDARD: z.string().min(1).default('anthropic/claude-sonnet-5.5'),
+  MODEL_HEAVY: z.string().min(1).default('anthropic/claude-opus-5.5'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -38,8 +49,18 @@ export interface AppConfig {
   readonly service: { readonly name: string; readonly version: string };
   readonly http: { readonly host: string; readonly port: number };
   readonly log: { readonly level: LogLevel };
-  readonly db: { readonly url: string; readonly poolMax: number };
+  readonly db: {
+    readonly url: string;
+    readonly migrationsUrl: string;
+    readonly appPassword: string | undefined;
+    readonly poolMax: number;
+  };
   readonly redis: { readonly url: string };
+  readonly ws: { readonly allowedOrigins: readonly string[] };
+  readonly llm: {
+    readonly dailyBudgetUsd: number;
+    readonly models: { readonly light: string; readonly standard: string; readonly heavy: string };
+  };
   readonly providers: {
     readonly openrouterApiKey: string | undefined;
     readonly openaiApiKey: string | undefined;
@@ -86,7 +107,21 @@ export function toAppConfig(env: Env): AppConfig {
     service: { name: env.SERVICE_NAME, version: env.APP_VERSION },
     http: { host: env.HOST, port: env.PORT },
     log: { level: env.LOG_LEVEL },
-    db: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
+    db: {
+      url: env.DATABASE_URL,
+      migrationsUrl: env.MIGRATIONS_DATABASE_URL ?? env.DATABASE_URL,
+      appPassword: env.APP_DB_PASSWORD,
+      poolMax: env.DATABASE_POOL_MAX,
+    },
+    ws: {
+      allowedOrigins: env.WS_ALLOWED_ORIGINS.split(',')
+        .map((o) => o.trim())
+        .filter((o) => o !== ''),
+    },
+    llm: {
+      dailyBudgetUsd: env.LLM_DAILY_BUDGET_USD,
+      models: { light: env.MODEL_LIGHT, standard: env.MODEL_STANDARD, heavy: env.MODEL_HEAVY },
+    },
     redis: { url: env.REDIS_URL },
     providers: {
       openrouterApiKey: env.OPENROUTER_API_KEY,
@@ -122,7 +157,14 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     service: config.service,
     http: config.http,
     log: config.log,
-    db: { url: redactUrlCredentials(config.db.url), poolMax: config.db.poolMax },
+    db: {
+      url: redactUrlCredentials(config.db.url),
+      migrationsUrl: redactUrlCredentials(config.db.migrationsUrl),
+      appPassword: present(config.db.appPassword),
+      poolMax: config.db.poolMax,
+    },
+    ws: config.ws,
+    llm: config.llm,
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),
