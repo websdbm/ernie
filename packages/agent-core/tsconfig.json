@@ -7,11 +7,26 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../config" },
-    { "path": "../db" },
-    { "path": "../model-gateway" },
-    { "path": "../observability" },
-    { "path": "../protocol" },
-    { "path": "../soul" }
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../db"
+    },
+    {
+      "path": "../model-gateway"
+    },
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../soul"
+    },
+    {
+      "path": "../jev-router"
+    }
   ]
 }

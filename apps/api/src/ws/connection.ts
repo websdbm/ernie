@@ -1,5 +1,6 @@
-import type { CompanionAgent, TurnInput } from '@ernie/agent-core';
-import { runTurn as defaultRunTurn } from '@ernie/agent-core';
+import type { ApprovalStore, CompanionAgent, PendingApprovals, TurnInput } from '@ernie/agent-core';
+import { runTurn as defaultRunTurn, routeCommand } from '@ernie/agent-core';
+import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@ernie/protocol';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
+import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 
 export interface SocketLike {
@@ -33,8 +35,31 @@ export interface ConnectionDeps {
     auth: AuthContext,
     session: SessionRecord,
   ) => Promise<CompanionAgent | null>;
+  /** Invalida l'agente in cache (cambio di classe o di contesto). */
+  readonly invalidateCompanion: (sessionId: string) => void;
+  readonly router: DecisionRouter;
+  readonly decisions: RouterDecisionRecorder;
+  readonly approvals?: { store: ApprovalStore; pending: PendingApprovals };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
+
+const deterministicDecision = (
+  modelClass: RouteDecision['modelClass'],
+  latencyMs: number,
+): RouteDecision => ({
+  route: 'deterministic',
+  modelClass,
+  deepReasoning: false,
+  needsMemory: false,
+  toolCategories: [],
+  skillId: null,
+  riskSignal: 0,
+  confidence: 1,
+  source: 'deterministic',
+  costUsd: 0,
+  inputTokens: 0,
+  latencyMs,
+});
 
 const uuid = z.uuid();
 
@@ -44,6 +69,8 @@ export class ClientConnection {
   private session: SessionRecord | undefined;
   private readonly dedupe = new EventDeduper(2048);
   private readonly activeTurns = new Map<string, AbortController>();
+  /** Ultimi scambi (max 6 righe) per lo state del router: non persistiti. */
+  private readonly recentTurns: string[] = [];
   private sending: Promise<void> = Promise.resolve();
   private closed = false;
 
@@ -110,14 +137,39 @@ export class ClientConnection {
           false,
         );
         return;
-      case 'tool.confirmation.respond':
-        await this.sendError(
-          'not_implemented',
-          'Conferme dei tool disponibili dalla M3',
-          false,
+      case 'tool.confirmation.respond': {
+        if (!this.deps.approvals) {
+          await this.sendError(
+            'not_implemented',
+            'Conferme dei tool non attive',
+            false,
+            event.correlationId,
+          );
+          return;
+        }
+        const decision = event.payload.decision === 'approve' ? 'approved' : 'denied';
+        const outcome = await this.deps.approvals.store.resolve(
+          this.auth.userId,
+          event.payload.approvalId,
+          decision,
+        );
+        if (outcome === 'not_found') {
+          await this.sendError(
+            'approval_not_found',
+            'Approvazione inesistente o già decisa',
+            false,
+            event.correlationId,
+          );
+          return;
+        }
+        this.deps.approvals.pending.settle(event.payload.approvalId, outcome);
+        await this.send(
+          'tool.confirmation.resolved',
+          { approvalId: event.payload.approvalId, decision: outcome },
           event.correlationId,
         );
         return;
+      }
       default:
         return;
     }
@@ -205,21 +257,72 @@ export class ClientConnection {
       );
       return;
     }
-    const companion = await this.deps.getCompanion(this.auth, this.session);
-    if (!companion) {
-      await this.sendError(
-        'llm_unavailable',
-        'Nessun provider LLM configurato',
-        false,
-        event.correlationId,
+    const t0 = Date.now();
+    const correlationId = event.correlationId;
+    const sessionId = this.sessionId;
+    const budget =
+      typeof this.auth.settings.dailyBudgetUsd === 'number'
+        ? this.auth.settings.dailyBudgetUsd
+        : this.deps.dailyBudgetUsd;
+
+    // 1) Router deterministico: comandi riconosciuti → nessuna chiamata a Jev né a un modello.
+    const command = routeCommand(event.payload.text, {
+      companionName: this.auth.companionName,
+      modelClass: this.session.modelClass,
+      contextTags: this.session.contextTags,
+      spentTodayUsd: await this.spentToday(),
+      budgetUsd: budget,
+      role: this.auth.role,
+    });
+    if (command.kind !== 'none') {
+      if (command.kind === 'set_class') {
+        const effective = await this.deps.store.raiseModelClass(
+          this.auth.userId,
+          sessionId,
+          command.modelClass,
+        );
+        this.session = { ...this.session, modelClass: effective };
+        this.deps.invalidateCompanion(sessionId);
+      } else if (command.kind === 'set_context') {
+        await this.deps.store.setContextTags(this.auth.userId, sessionId, command.tags);
+        this.session = { ...this.session, contextTags: command.tags };
+        this.deps.invalidateCompanion(sessionId);
+      }
+      await this.deps.decisions.record(
+        this.auth.userId,
+        sessionId,
+        correlationId,
+        deterministicDecision(this.session.modelClass, Date.now() - t0),
       );
+      await this.send(
+        'assistant.started',
+        { route: 'deterministic', modelClass: this.session.modelClass },
+        correlationId,
+      );
+      await this.send('assistant.text.completed', { text: command.text }, correlationId);
+      await this.send(
+        'assistant.completed',
+        {
+          finishReason: 'stop',
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            llmCalls: 0,
+            toolCalls: 0,
+            latencyMs: Date.now() - t0,
+            costUsdActual: 0,
+            route: 'deterministic',
+          },
+        },
+        correlationId,
+      );
+      this.remember('utente', event.payload.text);
+      this.remember('assistente', command.text);
       return;
     }
+
+    // 2) Budget, poi decisione (cache → Jev → fallback); il Policy Engine può solo restringere.
     try {
-      const budget =
-        typeof this.auth.settings.dailyBudgetUsd === 'number'
-          ? this.auth.settings.dailyBudgetUsd
-          : this.deps.dailyBudgetUsd;
       await this.deps.budget.assertWithinBudget(this.auth.userId, budget);
     } catch (err) {
       if (err instanceof BudgetExceededError) {
@@ -227,18 +330,42 @@ export class ClientConnection {
           'budget_exceeded',
           'Budget giornaliero raggiunto',
           false,
-          event.correlationId,
+          correlationId,
         );
         return;
       }
       throw err;
     }
+    const decision = await this.deps.router.decide({
+      text: event.payload.text,
+      inputMode: event.payload.inputMode,
+      recentTurns: this.recentTurns,
+      toolCategories: [],
+      skillCandidates: [],
+      sessionModelClass: this.session.modelClass,
+    });
+    await this.deps.decisions.record(this.auth.userId, sessionId, correlationId, decision);
+    if (decision.modelClass === 'heavy' && this.session.modelClass !== 'heavy') {
+      const effective = await this.deps.store.raiseModelClass(this.auth.userId, sessionId, 'heavy');
+      this.session = { ...this.session, modelClass: effective };
+      this.deps.invalidateCompanion(sessionId);
+    }
+
+    const companion = await this.deps.getCompanion(this.auth, this.session);
+    if (!companion) {
+      await this.sendError(
+        'llm_unavailable',
+        'Nessun provider LLM configurato',
+        false,
+        correlationId,
+      );
+      return;
+    }
 
     const ac = new AbortController();
-    this.activeTurns.set(event.correlationId, ac);
-    const correlationId = event.correlationId;
-    const sessionId = this.sessionId;
+    this.activeTurns.set(correlationId, ac);
     const run = this.deps.runTurn ?? defaultRunTurn;
+    this.remember('utente', event.payload.text);
     // Il turno gira in background così `user.cancel` può essere gestito mentre lo stream è aperto.
     void run({
       userId: this.auth.userId,
@@ -247,10 +374,21 @@ export class ClientConnection {
       text: event.payload.text,
       inputMode: event.payload.inputMode,
       companion,
+      decision: {
+        route: decision.route,
+        modelClass: companion.profile.modelClass,
+        source: decision.source,
+        costUsd: decision.costUsd,
+        inputTokens: decision.inputTokens,
+      },
       abortSignal: ac.signal,
       recorder: this.deps.recorder,
       logger: this.deps.logger,
-      emit: (type, payload) => this.send(type, payload, correlationId),
+      emit: (type, payload) => {
+        if (type === 'assistant.text.completed')
+          this.remember('assistente', String((payload as { text: string }).text));
+        return this.send(type, payload, correlationId);
+      },
     })
       .catch(async (err) => {
         this.deps.logger.error({ err, correlationId }, 'runTurn ha rigettato');
@@ -260,6 +398,19 @@ export class ClientConnection {
         this.activeTurns.delete(correlationId);
         void this.deps.store.touch(this.auth.userId, sessionId).catch(() => {});
       });
+  }
+
+  private async spentToday(): Promise<number> {
+    try {
+      return (await this.deps.budget.assertWithinBudget(this.auth.userId, 0)).spentUsd;
+    } catch {
+      return 0;
+    }
+  }
+
+  private remember(role: 'utente' | 'assistente', text: string): void {
+    this.recentTurns.push(`${role}: ${text.slice(0, 200)}`);
+    if (this.recentTurns.length > 6) this.recentTurns.shift();
   }
 
   // ---------- invio ----------

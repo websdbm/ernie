@@ -48,6 +48,7 @@ Verifiche effettuate direttamente sulla documentazione ufficiale durante l'anali
 - Prompt caching: https://openrouter.ai/docs/features/prompt-caching — Anthropic: `cache_control` top-level automatico o breakpoint espliciti (max 4), min 512 token sui modelli 5.x, TTL 5 min (1 h con `ttl`), scrittura 1,25×, lettura 0,1×; report in `usage.prompt_tokens_details.cached_tokens` / `cache_write_tokens`, `cache_discount`; `session_id` per sticky routing (10 min).
 - Provider AI SDK: https://github.com/OpenRouterTeam/ai-sdk-provider — `@openrouter/ai-sdk-provider` 3.x per `ai@^7`; `usage: { include: true }`, `extraBody`, `headers`, `providerOptions.openrouter.{cacheControl, reasoning}`; costo in `providerMetadata.openrouter.usage.cost`.
 - Spike M2.1 (misure reali): `docs/research/05-spike-openrouter-passthrough.md`.
+- Decisions API di Jev, chiamata reale dell'11 ott 2026: risposta `{ model: 'typesafe/jev-1.13-20260917', provider: 'TypeSafe', answers, usage: { input_tokens: 898, output_tokens: 194, cost: 0.0000377 }, id }`, latenza 836 ms sulla prima chiamata, poi p50 256 ms su 60 chiamate; `choice` restituisce `choice`, `probabilities`, `confidence`; `noul` restituisce `noul`. Calibrazione in `06-calibrazione-jev.md`.
 
 ## Versioni verificate (npm, 10 ott 2026)
 

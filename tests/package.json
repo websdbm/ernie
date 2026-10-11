@@ -6,7 +6,8 @@
   "description": "Spike riproducibili, smoke test e (M9) benchmark. Non \u00e8 codice di produzione.",
   "scripts": {
     "spike:openrouter": "node --env-file-if-exists=../.env --import tsx --conditions=development spikes/openrouter-passthrough.ts",
-    "demo:chat": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-chat.ts"
+    "demo:chat": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-chat.ts",
+    "calibrate:jev": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/jev-calibrate.ts"
   },
   "dependencies": {
     "@ernie/config": "workspace:*",
@@ -14,6 +15,7 @@
     "@openrouter/ai-sdk-provider": "^3.1.0",
     "ai": "^7.0.137",
     "zod": "^4.6.5",
-    "@ernie/protocol": "workspace:*"
+    "@ernie/protocol": "workspace:*",
+    "@ernie/jev-router": "workspace:*"
   }
 }

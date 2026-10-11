@@ -12,7 +12,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 |---|---|---|
 | M1 | Fondamenta: monorepo, TypeScript, Fastify, PostgreSQL, Docker Compose, health check, test, CI | ✅ |
 | M2 | Agente minimo: Mastra, Soul per utente, sessioni, OpenRouter, streaming WS, persistenza, costi, RLS | ✅ |
-| M3 | JEV Router: adapter, routing deterministico, schema decisione, fallback, metriche | ⏳ |
+| M3 | JEV Router: adapter, soglie calibrate, comandi deterministici, Policy Engine con taint e approvazioni, isteresi di classe, loop detector | ✅ |
 | M4 | Memoria: semantica, episodica, ricerca ibrida, consolidamento asincrono | ⏳ |
 | M5 | Tool e skill: registry, executor, permessi, Firecrawl, skill deterministiche, test di sicurezza | ⏳ |
 | M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ⏳ |
@@ -67,19 +67,27 @@ Criteri di accettazione:
 - Docker: immagine ricostruita con i nuovi pacchetti; `migrate` esegue migrazioni + `init-storage`; smoke test ok (vedi commit).
 - GitHub Actions: minuti del piano esauriti l'11 ott 2026; la CI non ha potuto girare sugli ultimi commit. Verifica locale completa; workflow ridotto (ignora modifiche ai soli documenti, avvio manuale disponibile).
 
-## M3 — JEV Router ⏳
+## M3 — JEV Router ✅
 
 Ambito: `packages/jev-router` (client Decisions API, `MockJevClient`, schema Zod con 7 domande, cache esatta Redis, timeout, fallback), router deterministico, **Policy Engine** in `agent-core`, tabella `router_decisions`.
 
 Criteri:
-- [ ] Richieste con comando riconosciuto o in cache esatta non chiamano né Jev né LLM (contatore di chiamate).
-- [ ] Decisione Jev valida in una sola chiamata; timeout → fallback deterministico tracciato (`source = fallback`); **soglie per domanda** tarate su un set etichettato iniziale (≥ 50 esempi), mai 0,5 di default (A.11).
-- [ ] **Policy Engine deny → ask → allow** fuori dall'LLM, fail-closed per tool sconosciuti; approvazioni legate a (tool, hash argomenti, utente, scadenza), monouso e consumate atomicamente; audit append-only (A.1). Test: approvazione riusata → deny; tool sconosciuto → deny.
-- [ ] **Taint di run** (A.2): tool etichettati `readsPrivate`/`ingestsUntrusted`/`externalEffect`; dopo contenuto non fidato ogni tool `write|external` passa in `ask`. Test con un risultato web che "ordina" un'azione.
-- [ ] **Classe con isteresi di sessione** (A.5): sale, non scende; `light` mai per turni conversazionali.
-- [ ] **Stuck detector** su hash(tool, argomenti, esito) con soglie per tool di polling (A.7).
-- [ ] Metriche: costo Jev per richiesta, confidenza, tasso di fallback, hit rate cache, latenza (per ritarare il timeout).
-- [ ] Test offline con mock; test online opzionale con `OPENROUTER_API_KEY`.
+- [x] Comandi riconosciuti (`/aiuto`, `/stato`, `/classe`, `/contesto`) non chiamano né Jev né LLM (test con contatori; end-to-end ~20 ms, `llmCalls: 0`); decisioni identiche servite dalla cache esatta (test).
+- [x] Decisione Jev in una sola chiamata con le sette domande; timeout/errore → fallback tracciato (`source = fallback`, test); **soglie calibrate su 60 esempi etichettati** (`docs/research/06-calibrazione-jev.md`): deep 0,35, memoria 0,75, rischio 0,60; accuratezza bilanciata 91–94%.
+- [x] **Policy Engine deny → ask → allow** fail-closed (tool sconosciuto → deny, scope mancante → deny, `denyTools`/`alwaysAsk`), approvazioni in `tool_approvals` legate a (tool, hash argomenti, utente, scadenza) con consumo atomico monouso; eventi `tool.confirmation.*` gestiti dalla connessione. Collegamento ai tool reali in M5.
+- [x] **Taint di run** (A.2): `RunContext.markUntrusted` + etichette `readsPrivate`/`ingestsUntrusted`/`externalEffect`/`write`; dopo contenuto non fidato ogni tool `write|external` → `ask` (test). Il test con pagina web reale arriva con Firecrawl in M5.
+- [x] **Classe con isteresi di sessione**: `sessions.raiseModelClass` (SQL monotono), salita da Jev (`heavy`/`deep_reasoning`) o da `/classe heavy`, agente ricostruito; `light` rifiutato per la conversazione. End-to-end: richiesta complessa → sessione `heavy` → turno su Opus 5.5.
+- [x] **Stuck detector** su hash(tool, argomenti): 3 ripetizioni (8 per tool di polling) → `error.loop_detected` e chiusura del turno (test).
+- [x] Metriche in `router_decisions` (source, rotta, classe, flag, rischio, confidenza, token, costo, latenza, modello Jev, risposte grezze) e nell'evento `assistant.completed` (`routerTokens`, costo incluso). Latenza Jev misurata: p50 256 ms, p95 336 ms (timeout 1,5 s confermato).
+- [x] Test offline con `MockJevClient`; calibrazione online riproducibile (`calibrate:jev`).
+
+### Verbale di verifica M3 (11 ott 2026)
+
+- `pnpm lint` 0 errori; `pnpm build` ok; `pnpm test` con Postgres (ruolo `ernie_app`) e Redis reali: 18 file, 95 test più 1 online opzionale.
+- Migrazione 0006 (`router_decisions`, `tool_approvals`, RLS) applicata.
+- Chiamata reale alla Decisions API: forma conforme allo schema, 836 ms la prima, p50 256 ms sulle 60 successive; calibrazione totale 0,0023 $.
+- End-to-end con API reale in una sessione: `/stato` e `/contesto cucina` → `route: deterministic`, 0 chiamate, 20–200 ms; "cosa cucino con pasta, uova e guanciale" → Jev (754 token, 0,00003 $, rischio 0,03) → Sonnet 5.5 con il contesto cucina (risposta con tempo di preparazione e ingredienti mancanti, 0,0024 $); "pianifica i pasti della settimana con 60 euro" → `deep_reasoning` sopra soglia → sessione portata a `heavy` → Opus 5.5 (667 token di ragionamento, 0,021 $); `/stato` conferma classe `heavy` e contesto `cucina`; 5 righe coerenti in `router_decisions`.
+- Osservazione per M9: un turno `heavy` costa circa 9 volte uno `standard`; l'isteresi tiene la sessione su `heavy` fino alla chiusura. Va misurato se conviene una discesa controllata dopo N turni semplici.
 
 ## M4 — Memoria ⏳
 

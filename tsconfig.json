@@ -20,6 +20,9 @@
       "path": "packages/soul"
     },
     {
+      "path": "packages/jev-router"
+    },
+    {
       "path": "packages/agent-core"
     },
     {

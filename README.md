@@ -25,6 +25,8 @@ pnpm dev:api                    # http://localhost:3000/health · /ready · ws:/
 pnpm dev:worker                 # in un altro terminale
 ```
 
+Comandi deterministici in chat (nessuna chiamata a modelli): `/aiuto`, `/stato`, `/classe heavy`, `/contesto cucina`.
+
 Prova da terminale (protocollo WebSocket v1):
 
 ```bash

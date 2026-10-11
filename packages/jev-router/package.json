@@ -1,0 +1,21 @@
+{
+  "name": "@ernie/jev-router",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JEV Decision Router: adapter della Decisions API (Jev/TypeSafe su OpenRouter), schema di decisione, cache, timeout, fallback, soglie",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/observability": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,6 +1,6 @@
 # Ernie — Architettura tecnica
 
-> Stato: **v0.5** (11 ottobre 2026). La v0.5 introduce il modello multi-utente "companion" (un agente personalizzato per utente: Soul, memoria, sessioni, budget separati) e registra la M2 realizzata. La v0.4 recepisce lo spike M2.1 sul passthrough OpenRouter (`docs/research/05-spike-openrouter-passthrough.md`). La v0.3 registra la decisione dell'utente sull'avatar (three.js + TalkingHead, Unreal escluso). La v0.2 integra la ricerca bibliografica (`docs/research/01`, `02`, `04`) filtrata dalla revisione indipendente (`docs/research/03-revisione.md`: 53 verifiche su fonti primarie, 0 affermazioni false). Le modifiche rispetto alla v0.1 sono elencate in §20. Documento vivo, aggiornato a ogni milestone.
+> Stato: **v0.6** (11 ottobre 2026). La v0.6 registra la M3 realizzata: router JEV con soglie calibrate, router deterministico, Policy Engine con taint e approvazioni monouso, isteresi di classe, rilevatore di loop. La v0.5 introduce il modello multi-utente "companion" (un agente personalizzato per utente: Soul, memoria, sessioni, budget separati) e registra la M2 realizzata. La v0.4 recepisce lo spike M2.1 sul passthrough OpenRouter (`docs/research/05-spike-openrouter-passthrough.md`). La v0.3 registra la decisione dell'utente sull'avatar (three.js + TalkingHead, Unreal escluso). La v0.2 integra la ricerca bibliografica (`docs/research/01`, `02`, `04`) filtrata dalla revisione indipendente (`docs/research/03-revisione.md`: 53 verifiche su fonti primarie, 0 affermazioni false). Le modifiche rispetto alla v0.1 sono elencate in §20. Documento vivo, aggiornato a ogni milestone.
 
 ## 1. Scopo e principi
 
@@ -74,10 +74,10 @@ Stato: ✅ realizzato · 🔧 in corso · ⏳ pianificato (milestone tra parente
 | # | Modulo | Pacchetto | Responsabilità | Stato |
 |---|---|---|---|---|
 | 1 | API Gateway & Session Manager | `apps/api` | HTTP/WS, autenticazione per chiave (hash), sessioni con log eventi e replay (Redis), controllo `Origin`, dispatch eventi | ✅ M2 (rate limit ⏳ M9) |
-| 2 | Deterministic Context Router | `packages/agent-core` | Comandi, procedure note, cache esatta; decide se chiamare Jev | ⏳ M3 |
-| 3 | JEV Decision Router | `packages/jev-router` | Adapter Decisions API, schema Zod, cache, timeout, fallback, soglie tarate, metriche | ⏳ M3 |
-| 4 | Policy Engine | `packages/agent-core` | deny → ask → allow deterministico, taint di run, budget, approvazioni monouso, audit | ⏳ M3 |
-| 5 | Agent Runtime | `packages/agent-core` | Agente per sessione (prefisso stabile), stream Mastra → eventi, memoria conversazionale Postgres, limiti hard, cancellazione | ✅ M2 (stuck detector ⏳ M3) |
+| 2 | Deterministic Context Router | `packages/agent-core` | Comandi riconosciuti senza Jev né LLM; (M5) procedure consolidate | ✅ M3 |
+| 3 | JEV Decision Router | `packages/jev-router` | Adapter Decisions API, schema Zod, cache esatta Redis, timeout, fallback, soglie calibrate, `router_decisions` | ✅ M3 |
+| 4 | Policy Engine | `packages/agent-core` | deny → ask → allow deterministico, taint di run, approvazioni monouso (`tool_approvals`), budget | ✅ M3 (collegato ai tool in M5) |
+| 5 | Agent Runtime | `packages/agent-core` | Agente per sessione (prefisso stabile), stream Mastra → eventi, memoria conversazionale Postgres, limiti hard, rilevatore di loop, cancellazione | ✅ M2–M3 |
 | 6 | Soul Engine | `packages/soul` | Soul per utente clonati dai modelli globali, versionamento, assemblaggio deterministico a budget | ✅ M2 |
 | 7 | Memory Engine | `packages/memory` | 4 livelli, snapshot congelato, `memory_search`, ricerca ibrida RRF, consolidamento asincrono, bi-temporalità | ⏳ M4 |
 | 8 | Tool Registry & Executor | `packages/tools` | Catalogo, set stabile per sessione + meta-tool di ricerca, etichette di rischio, timeout/retry, audit, MCP | ⏳ M5 |
@@ -136,14 +136,14 @@ interface LlmCall {
 ## 5. Flusso di una richiesta e scala di escalation
 
 1. **Ingresso.** `user.message` via WS; autenticazione, `correlationId`, persistenza (Mastra thread); `assistant.started` appena decisa la rotta. La run vive indipendentemente dalla connessione.
-2. **Router deterministico.** Normalizzazione; comandi; procedure consolidate (match esatto/`pg_trgm`); cache **esatta** con TTL (niente cache semantica: falsi hit, 03 C.11). Se risolve: 0 token.
+2. **Router deterministico** (M3: `packages/agent-core/commands.ts`). Comandi riconosciuti (`/aiuto`, `/stato`, `/classe standard|heavy`, `/contesto …`) risolti senza Jev né modello e registrati in `router_decisions` con `source = deterministic`; in M5 si aggiungono le procedure consolidate (match esatto/`pg_trgm`). Niente cache semantica delle risposte (falsi hit, 03 C.11).
 3. **Jev.** Una sola chiamata con le domande tipizzate (§6), `state` compatto. Timeout iniziale 1,5 s (da ritarare con la telemetria: p50 ≈ 185 ms su benchmark terzi), cache delle decisioni per hash. Timeout/errore → fallback a regole (`standard`, memoria attiva, nessun tool), `source = fallback`.
-4. **Policy Engine** (deterministico, fail-closed): valuta deny → ask → allow su ogni tool richiesto; applica il **taint** (§15); applica budget (token non in cache, costo, step, profondità). Una decisione di Jev può solo essere **ristretta**.
-5. **Esecuzione.** `skill` → Skill Executor (deterministico quando possibile). `llm` → Agent Runtime con contesto a prefisso stabile (§4), `model` della classe di **sessione** (§11), tool del set stabile. Limiti hard; **stuck detector** su hash(tool, argomenti, esito) con soglie più alte per tool di polling; cancellazione via `AbortSignal`.
+4. **Policy Engine** (M3: `policy.ts`, `approvals.ts`; deterministico, fail-closed): deny → ask → allow su ogni tool, taint di run (§15), approvazioni monouso in `tool_approvals` legate a (tool, hash argomenti, utente, scadenza) e consumate atomicamente; `tool.confirmation.requested/respond/resolved` nel protocollo. Budget giornaliero per utente. Una decisione di Jev può solo essere **ristretta**. I tool arrivano in M5: il motore è testato con descrittori sintetici.
+5. **Esecuzione.** `skill` → Skill Executor (M5). `llm` → Agent Runtime con contesto a prefisso stabile (§4), `model` della classe di **sessione** (§11), tool del set stabile. Limiti hard; **stuck detector** (M3: `loop.ts`, stessa chiamata ripetuta 3 volte, 8 per tool di polling → `error.loop_detected`); cancellazione via `AbortSignal`.
 6. **Streaming.** `assistant.text.delta`, `tool.started/completed`, eventuali `avatar.*`, `assistant.completed` con `usage`.
 7. **Post-elaborazione asincrona (worker).** Estrazione fatti/episodi in batch con `light`, deduplica, consolidamento; nessuna chiamata LLM sincrona per la memoria.
 
-**Scala di escalation.** Deterministico → skill → `standard` (default conversazionale) → `heavy` (un turno con `deepReasoning`). La classe è decisa **a inizio sessione con isteresi**: cambia solo in salita, perché ogni cambio di modello invalida la cache (01 §2.5–2.6). `light` è riservato a chiamate ancillari fuori banda (riassunti, estrazione memoria, titoli). Il benchmark M9 (§17) valida questa scelta sui dati di cache.
+**Scala di escalation.** Deterministico → skill → `standard` (default conversazionale) → `heavy`. La classe ha **isteresi di sessione** (M3: `sessions.raiseModelClass`): sale quando Jev sceglie `heavy` o `deep_reasoning` supera la soglia, oppure con `/classe heavy`, e non scende più nella sessione, perché ogni cambio di modello invalida la cache (01 §2.5–2.6); al cambio l'agente di sessione viene ricostruito. `light` è riservato a chiamate ancillari fuori banda. Il benchmark M9 (§17) valida questa scelta sui dati di cache.
 
 ## 6. JEV Decision Router
 
@@ -167,9 +167,11 @@ interface LlmCall {
 | `skill_candidate` | choice | `none` + fino a 5 skill dal retrieval |
 | `risk` | noul | la richiesta implica azioni esterne o dati sensibili → segnale che può solo restringere la policy |
 
-### Garanzie
+### Garanzie (realizzate in M3, `packages/jev-router`)
 
-Timeout e fallback deterministici; cache esatta (Redis, TTL ~10 min); metriche (token, `usage.cost`, latenza, `source`, confidenza); **soglie per domanda tarate su dati etichettati, mai 0,5 di default**; `MockJevClient`; nessun bypass delle autorizzazioni; adapter come unico punto che conosce l'endpoint (API alpha).
+Timeout (1,5 s) e fallback deterministico tracciato (`source = fallback`: `llm`, classe della sessione, memoria attiva, rischio 1); cache esatta delle decisioni (Redis, TTL 10 min, chiave = hash del testo normalizzato + impronta del contesto); una riga in `router_decisions` per ogni richiesta (anche deterministica) con token, costo, latenza, confidenza e risposte grezze; `MockJevClient` per i test offline; adapter come unico punto che conosce l'endpoint (API alpha). Nessun bypass delle autorizzazioni: `risk` entra nel Policy Engine come segnale che può solo restringere.
+
+**Calibrazione** (11 ott 2026, `docs/research/06-calibrazione-jev.md`): 60 esempi etichettati in italiano, modello `typesafe/jev-1.13-20260917`, costo 0,0023 $, latenza p50 256 ms / p95 336 ms. Soglie scelte per accuratezza bilanciata: `deep_reasoning` 0,35 (94,1%), `needs_memory` 0,75 (91,0%), `risk` 0,60 (91,3%); a 0,5 sarebbero state 91,5 / 88,2 / 87,3%. `model_class` corretta al 96,7%; `route` all'88,3%, con errori concentrati su domande di memoria o agenda classificate `skill` quando l'unica skill disponibile è la lista della spesa: 5 dei 7 errori hanno confidenza sotto la soglia di rotta (0,5) e il mapping ricade su `llm` quando la skill scelta non è tra le candidate. Le soglie vivono in `infrastructure/router/thresholds.json` e vanno riviste con esempi reali raccolti da `router_decisions` (M9).
 
 ## 7. Soul Engine
 
@@ -318,3 +320,5 @@ Fonte: `docs/research/03-revisione.md` (§5). Adottato subito (A): Policy Engine
 **v0.3 → v0.4** (spike M2.1, 11 ott 2026): Model Gateway su istanze `@openrouter/ai-sdk-provider` anziché stringa nativa di Mastra (nessuna cache con la stringa; −92% sulla seconda chiamata con il provider); ID e prezzi dei modelli 5.5 verificati su `/api/v1/models`; `maxOutputTokens` esplicito; configurazione di ragionamento fissa per sessione (cambiarla azzera la cache); `llm_calls` per step HTTP con costo del provider e riconciliazione sui campi nativi di `/api/v1/generation`; assemblaggio del prompt lasciato a Mastra (prefisso verificato stabile); rischi aggiornati, incluso il saldo OpenRouter esaurito.
 
 **v0.4 → v0.5** (M2, 11 ott 2026): modello multi-utente "companion" (`users.role/companion_name/settings`, Soul per utente clonati dai globali, `locked` per policy imposte dall'owner); Soul Engine, Model Gateway, Agent Runtime, API WebSocket v1.1 e `llm_calls` realizzati; RLS attiva con ruolo applicativo; tetto di spesa giornaliero per utente; CLI `admin:create-user`, `bootstrap:storage`; protocollo v1.1 implementato. Verifica M2 nel piano.
+
+**v0.5 → v0.6** (M3, 11 ott 2026): router JEV realizzato (`packages/jev-router`: sette domande, soglie calibrate su 60 esempi, cache esatta, timeout e fallback, `router_decisions`); router deterministico dei comandi; Policy Engine deny → ask → allow con taint di run e approvazioni monouso in `tool_approvals`; isteresi di classe per sessione con ricostruzione dell'agente; rilevatore di loop nel turno; configurazione `JEV_*`/`ROUTER_*`; metriche del router nell'evento `assistant.completed` (`routerTokens`, costo incluso).

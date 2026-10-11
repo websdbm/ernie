@@ -17,6 +17,7 @@
   "dependencies": {
     "@ernie/config": "workspace:*",
     "@ernie/db": "workspace:*",
+    "@ernie/jev-router": "workspace:*",
     "@ernie/model-gateway": "workspace:*",
     "@ernie/observability": "workspace:*",
     "@ernie/protocol": "workspace:*",

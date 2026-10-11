@@ -40,6 +40,11 @@ export const envSchema = z.object({
   MODEL_LIGHT: z.string().min(1).default('anthropic/claude-haiku-5.5'),
   MODEL_STANDARD: z.string().min(1).default('anthropic/claude-sonnet-5.5'),
   MODEL_HEAVY: z.string().min(1).default('anthropic/claude-opus-5.5'),
+  JEV_MODEL: z.string().min(1).default('typesafe/jev-1.13'),
+  JEV_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(1500),
+  ROUTER_CACHE_TTL_S: z.coerce.number().int().min(0).default(600),
+  /** File JSON con le soglie del router (vedi infrastructure/router/thresholds.json). */
+  ROUTER_THRESHOLDS_FILE: z.string().min(1).default('infrastructure/router/thresholds.json'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -60,6 +65,12 @@ export interface AppConfig {
   readonly llm: {
     readonly dailyBudgetUsd: number;
     readonly models: { readonly light: string; readonly standard: string; readonly heavy: string };
+  };
+  readonly router: {
+    readonly jevModel: string;
+    readonly timeoutMs: number;
+    readonly cacheTtlSeconds: number;
+    readonly thresholdsFile: string;
   };
   readonly providers: {
     readonly openrouterApiKey: string | undefined;
@@ -123,6 +134,12 @@ export function toAppConfig(env: Env): AppConfig {
       models: { light: env.MODEL_LIGHT, standard: env.MODEL_STANDARD, heavy: env.MODEL_HEAVY },
     },
     redis: { url: env.REDIS_URL },
+    router: {
+      jevModel: env.JEV_MODEL,
+      timeoutMs: env.JEV_TIMEOUT_MS,
+      cacheTtlSeconds: env.ROUTER_CACHE_TTL_S,
+      thresholdsFile: env.ROUTER_THRESHOLDS_FILE,
+    },
     providers: {
       openrouterApiKey: env.OPENROUTER_API_KEY,
       openaiApiKey: env.OPENAI_API_KEY,
@@ -165,6 +182,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     },
     ws: config.ws,
     llm: config.llm,
+    router: config.router,
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),

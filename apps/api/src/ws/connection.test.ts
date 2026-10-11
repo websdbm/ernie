@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { TurnInput } from '@ernie/agent-core';
+import type { RouteDecision } from '@ernie/jev-router';
 import { createLogger } from '@ernie/observability';
 import {
   type AgentEvent,
@@ -27,6 +28,8 @@ function fakeStore(owner = auth.userId) {
   const seqs = new Map<string, number>();
   const logs = new Map<string, AgentEvent[]>();
   const sessions = new Map<string, string>(); // id → userId
+  const classes = new Map<string, 'standard' | 'heavy'>();
+  const tags_ = new Map<string, string[]>();
   const store: SessionStore = {
     async ensure(userId, _k, sessionId) {
       const existing = sessions.get(sessionId);
@@ -44,6 +47,13 @@ function fakeStore(owner = auth.userId) {
       return rec;
     },
     async touch() {},
+    async raiseModelClass(_u, id, modelClass) {
+      classes.set(id, modelClass);
+      return modelClass;
+    },
+    async setContextTags(_u, id, tags) {
+      tags_.set(id, [...tags]);
+    },
     async nextSeq(id) {
       const n = seqs.get(id) ?? 0;
       seqs.set(id, n + 1);
@@ -60,7 +70,7 @@ function fakeStore(owner = auth.userId) {
       return (logs.get(id) ?? []).filter((e) => e.seq > after);
     },
   };
-  return { store, logs, sessions, owner };
+  return { store, logs, sessions, owner, classes, tags: tags_ };
 }
 
 function fakeSocket() {
@@ -86,22 +96,58 @@ const companion = {
   },
 };
 
-function deps(overrides: Partial<ConnectionDeps> = {}, storeImpl = fakeStore()): ConnectionDeps {
-  return {
+const fakeRouter = (decision: Partial<RouteDecision> = {}) => ({
+  calls: 0,
+  async decide(): Promise<RouteDecision> {
+    this.calls++;
+    return {
+      route: 'llm',
+      modelClass: 'standard',
+      deepReasoning: false,
+      needsMemory: true,
+      toolCategories: [],
+      skillId: null,
+      riskSignal: 0.1,
+      confidence: 0.9,
+      source: 'jev',
+      costUsd: 0.00004,
+      inputTokens: 900,
+      latencyMs: 5,
+      ...decision,
+    };
+  },
+});
+
+function deps(
+  overrides: Partial<ConnectionDeps> = {},
+  storeImpl = fakeStore(),
+  router = fakeRouter(),
+): ConnectionDeps & {
+  router: ReturnType<typeof fakeRouter>;
+  decisions: { record: ReturnType<typeof vi.fn> };
+} {
+  const decisions = { record: vi.fn(async () => {}) };
+  const base: ConnectionDeps = {
     logger,
     store: storeImpl.store,
     recorder: { record: vi.fn(async () => {}) },
     budget: { assertWithinBudget: vi.fn(async () => ({ spentUsd: 0 })) },
     dailyBudgetUsd: 2,
     getCompanion: vi.fn(async () => companion as never),
+    invalidateCompanion: vi.fn(),
+    router,
+    decisions,
     runTurn: async (input: TurnInput) => {
       await input.emit('assistant.started', { route: 'llm' });
       await input.emit('assistant.text.delta', { delta: 'ciao ' });
       await input.emit('assistant.text.completed', { text: 'ciao ' });
       await input.emit('assistant.completed', { finishReason: 'stop' });
     },
-    ...overrides,
   };
+  const merged = { ...base } as ConnectionDeps;
+  for (const [k, v] of Object.entries(overrides))
+    if (v !== undefined) (merged as unknown as Record<string, unknown>)[k] = v;
+  return Object.assign(merged, { router, decisions });
 }
 
 const client = (sessionId: string) => {
@@ -288,5 +334,73 @@ describe('ClientConnection', () => {
     await conn.handleRaw(c.cancel(corr));
     await tick();
     expect(s.types().at(-1)).toBe('assistant.cancelled');
+  });
+});
+
+describe('ClientConnection: routing', () => {
+  it('un comando è risolto senza Jev né modello e viene registrato come deterministico', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const d = deps({}, st);
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('/aiuto'));
+    await tick();
+    expect(s.types()).toEqual([
+      'session.started',
+      'assistant.started',
+      'assistant.text.completed',
+      'assistant.completed',
+    ]);
+    expect(field<string>(s.sent[1], 'route')).toBe('deterministic');
+    expect((field<{ llmCalls: number }>(s.sent[3], 'usage') ?? { llmCalls: -1 }).llmCalls).toBe(0);
+    expect(d.router.calls).toBe(0);
+    expect(d.decisions.record).toHaveBeenCalledTimes(1);
+    expect((d.getCompanion as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it("/classe heavy alza la classe della sessione e invalida l'agente", async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const d = deps({}, st);
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('/classe heavy'));
+    await tick();
+    expect(st.classes.get(sessionId)).toBe('heavy');
+    expect(d.invalidateCompanion).toHaveBeenCalledWith(sessionId);
+    await conn.handleRaw(c.message('/contesto cucina'));
+    await tick();
+    expect(st.tags.get(sessionId)).toEqual(['cucina']);
+  });
+
+  it('una decisione Jev heavy alza la classe prima del turno e passa la decisione a runTurn', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const seen: TurnInput[] = [];
+    const d = deps(
+      {
+        runTurn: async (input: TurnInput) => {
+          seen.push(input);
+          await input.emit('assistant.completed', {});
+        },
+      },
+      st,
+      fakeRouter({ modelClass: 'heavy', deepReasoning: true }),
+    );
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('pianifica il trasloco'));
+    await tick();
+    expect(d.router.calls).toBe(1);
+    expect(st.classes.get(sessionId)).toBe('heavy');
+    expect(seen[0]?.decision?.source).toBe('jev');
+    expect(seen[0]?.decision?.inputTokens).toBe(900);
+    expect(d.decisions.record).toHaveBeenCalledTimes(1);
   });
 });

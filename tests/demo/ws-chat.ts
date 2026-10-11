@@ -15,6 +15,7 @@ const url = process.env.ERNIE_URL ?? 'ws://localhost:3000/v1/ws';
 const sessionId = process.env.ERNIE_SESSION_ID ?? randomUUID();
 const text = process.argv.slice(2).join(' ') || 'Ciao! Presentati in una frase.';
 const seq = new SequenceSource();
+let streamed = false;
 
 const ws = new WebSocket(url, {
   headers: { Authorization: `Bearer ${apiKey}` },
@@ -48,7 +49,11 @@ const done = new Promise<void>((resolve) => {
         );
         break;
       case 'assistant.text.delta':
+        streamed = true;
         process.stdout.write(e.payload.delta);
+        break;
+      case 'assistant.text.completed':
+        if (!streamed) process.stdout.write(e.payload.text);
         break;
       case 'assistant.completed':
         process.stdout.write('\n');

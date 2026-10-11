@@ -1,0 +1,487 @@
+{
+  "description": "Set etichettato iniziale per la calibrazione delle soglie del router (italiano, casi d'uso di Ernie). Etichette: route (deterministic|skill|llm), heavy (bool), deep (bool), memory (bool), risk (bool). Contesto: categorie di tool [shopping_list, web_search, calendar], skill [shopping_list].",
+  "toolCategories": ["shopping_list", "web_search", "calendar"],
+  "skillCandidates": ["shopping_list"],
+  "examples": [
+    {
+      "text": "ciao",
+      "route": "deterministic",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "grazie mille!",
+      "route": "deterministic",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "ok perfetto",
+      "route": "deterministic",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "buongiorno Ernie",
+      "route": "deterministic",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "a dopo",
+      "route": "deterministic",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "aggiungi il latte alla lista della spesa",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "togli il pane dalla lista",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "cosa c'è nella lista della spesa?",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "metti due litri di latte e lo yogurt",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "ho fatto la spesa, svuota la lista",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "segna che devo comprare le pile",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "mi servono le cose per la carbonara",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "leggimi la lista",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "cosa cucino stasera con quello che compro di solito?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "proponimi tre ricette veloci con le zucchine",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "quali sono le mie abitudini di spesa?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "cosa compro più spesso?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "ricordi cosa ti ho detto ieri sul lavoro?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "come si chiama mio figlio?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "quante calorie ha una mela?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "che tempo fa domani a Mestre?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "cerca le ultime notizie sul traffico in tangenziale",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "spiegami in due righe cos'è la fermentazione",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "traduci in inglese: la riunione è rimandata a lunedì",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "riassumi questo testo: ...",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "scrivi un messaggio di auguri per mia madre",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "pianifica i pasti della settimana tenendo conto di quello che mangio di solito e del budget di 60 euro",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "confronta pro e contro di cambiare fornitore di energia e dimmi cosa conviene nel mio caso",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "aiutami a organizzare il trasloco: fasi, tempi e cosa rischio di dimenticare",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "analizza questo contratto e dimmi le clausole rischiose",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "progetta un piano di studio di tre mesi per imparare il tedesco partendo da zero",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "dimmi perché il mio script python va in timeout e come risolverlo",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "quale mutuo conviene tra tasso fisso e variabile con questi numeri?",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "manda un messaggio a Marco per dirgli che arrivo tardi",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "prenota un tavolo per due stasera alle otto",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "fissa un appuntamento dal dentista giovedì alle 15",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "cancella tutti gli appuntamenti di domani",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "sposta la riunione di lunedì a martedì stessa ora",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "cosa ho in agenda domani?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "compra il biglietto del treno per Milano domattina",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "paga la bolletta della luce",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "invia una mail al commercialista con i documenti",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "elimina le mie memorie sulla dieta",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "ricordati che sono allergico alle noci",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "da oggi chiamami Ale",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "non propormi più ricette con i funghi",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "quanto ho speso in spesa questo mese?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "dammi una ricetta per la torta di mele",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "chi ha vinto il campionato nel 2006?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "raccontami una barzelletta",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "che ore sono?",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "imposta una sveglia alle 7",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "quali farmaci posso prendere per il mal di testa con la mia pressione alta?",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": true,
+      "risk": true
+    },
+    {
+      "text": "controlla se il mio volo di domani è in orario",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "scrivi un'email di reclamo al corriere per il pacco danneggiato, tono fermo",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "stima quanto costa ristrutturare un bagno di 6 metri quadri e come dividere i lavori in fasi",
+      "route": "llm",
+      "heavy": true,
+      "deep": true,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "dimmi la capitale della Mongolia",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": false
+    },
+    {
+      "text": "mi serve il farro per domani, lo aggiungi?",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": false,
+      "risk": true
+    },
+    {
+      "text": "la lista è aggiornata?",
+      "route": "skill",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": false
+    },
+    {
+      "text": "trasferisci 200 euro a mio fratello",
+      "route": "llm",
+      "heavy": false,
+      "deep": false,
+      "memory": true,
+      "risk": true
+    }
+  ]
+}

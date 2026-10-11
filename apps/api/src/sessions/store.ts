@@ -30,6 +30,13 @@ export interface SessionStore {
     info: ClientInfoInput,
   ): Promise<SessionRecord>;
   touch(userId: string, sessionId: string): Promise<void>;
+  /** Isteresi: la classe può solo salire. Restituisce la classe effettiva. */
+  raiseModelClass(
+    userId: string,
+    sessionId: string,
+    modelClass: 'standard' | 'heavy',
+  ): Promise<SessionRecord['modelClass']>;
+  setContextTags(userId: string, sessionId: string, tags: readonly string[]): Promise<void>;
   /** Prossimo numero di sequenza server→client (monotono per sessione). */
   nextSeq(sessionId: string): Promise<number>;
   currentSeq(sessionId: string): Promise<number>;
@@ -123,6 +130,26 @@ export function createSessionStore(
     async touch(userId, sessionId) {
       await withUser(pool, userId, (client) =>
         client.query(`UPDATE sessions SET last_seen_at = now() WHERE id = $1`, [sessionId]),
+      );
+    },
+
+    async raiseModelClass(userId, sessionId, modelClass) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<{ model_class: SessionRecord['modelClass'] }>(
+          `UPDATE sessions SET model_class = CASE
+              WHEN model_class = 'heavy' THEN 'heavy'
+              WHEN $2 = 'heavy' THEN 'heavy'
+              ELSE 'standard' END
+            WHERE id = $1 RETURNING model_class`,
+          [sessionId, modelClass],
+        );
+        return res.rows[0]?.model_class ?? modelClass;
+      });
+    },
+
+    async setContextTags(userId, sessionId, tags) {
+      await withUser(pool, userId, (client) =>
+        client.query(`UPDATE sessions SET context_tags = $2 WHERE id = $1`, [sessionId, [...tags]]),
       );
     },
 

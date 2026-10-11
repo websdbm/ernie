@@ -5,13 +5,16 @@
     "outDir": "dist",
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": ["spikes", "demo"],
+  "include": ["spikes", "demo", "eval"],
   "references": [
     {
       "path": "../packages/config"
     },
     {
       "path": "../packages/protocol"
+    },
+    {
+      "path": "../packages/jev-router"
     }
   ]
 }

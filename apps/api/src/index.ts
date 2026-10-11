@@ -1,5 +1,18 @@
-import { createConversationMemory, createMastraStorage } from '@ernie/agent-core';
+import { readFile } from 'node:fs/promises';
+import {
+  createConversationMemory,
+  createMastraStorage,
+  createPgApprovalStore,
+  PendingApprovals,
+} from '@ernie/agent-core';
 import { loadConfig, redactConfig } from '@ernie/config';
+import {
+  createDecisionRouter,
+  createHttpJevClient,
+  createRedisDecisionCache,
+  DEFAULT_THRESHOLDS,
+  Thresholds,
+} from '@ernie/jev-router';
 import {
   buildProfiles,
   createBudgetGuard,
@@ -12,6 +25,7 @@ import { createAuthenticator } from './auth.js';
 import { createCompanionFactory } from './companion.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
+import { createRouterDecisionRecorder } from './router/recorder.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
 
@@ -49,6 +63,32 @@ async function main(): Promise<void> {
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
 
+  // Router JEV: soglie da file (calibrate su dati etichettati), cache esatta su Redis, fallback deterministico.
+  let thresholds = DEFAULT_THRESHOLDS;
+  try {
+    thresholds = Thresholds.parse(JSON.parse(await readFile(config.router.thresholdsFile, 'utf8')));
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), file: config.router.thresholdsFile },
+      'soglie del router non caricate: uso i valori predefiniti',
+    );
+  }
+  const jevClient = config.providers.openrouterApiKey
+    ? createHttpJevClient({
+        apiKey: config.providers.openrouterApiKey,
+        model: config.router.jevModel,
+      })
+    : null;
+  if (!jevClient) logger.warn('router Jev non configurato: decisioni di fallback');
+  const router = createDecisionRouter({
+    client: jevClient,
+    cache: createRedisDecisionCache(redis.client),
+    thresholds,
+    timeoutMs: config.router.timeoutMs,
+    cacheTtlSeconds: config.router.cacheTtlSeconds,
+    logger,
+  });
+
   const app = await buildServer({
     config,
     logger,
@@ -63,6 +103,10 @@ async function main(): Promise<void> {
         budget: createBudgetGuard(postgres.pool),
         dailyBudgetUsd: config.llm.dailyBudgetUsd,
         getCompanion: companions.getCompanion,
+        invalidateCompanion: (sessionId) => companions.cache.delete(sessionId),
+        router,
+        decisions: createRouterDecisionRecorder(postgres.pool, logger),
+        approvals: { store: createPgApprovalStore(postgres.pool), pending: new PendingApprovals() },
       },
     },
   });

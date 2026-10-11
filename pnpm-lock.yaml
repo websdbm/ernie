@@ -35,6 +35,9 @@ importers:
       '@ernie/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@ernie/jev-router':
+        specifier: workspace:*
+        version: link:../../packages/jev-router
       '@ernie/model-gateway':
         specifier: workspace:*
         version: link:../../packages/model-gateway
@@ -83,6 +86,9 @@ importers:
       '@ernie/db':
         specifier: workspace:*
         version: link:../db
+      '@ernie/jev-router':
+        specifier: workspace:*
+        version: link:../jev-router
       '@ernie/model-gateway':
         specifier: workspace:*
         version: link:../model-gateway
@@ -129,6 +135,15 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+
+  packages/jev-router:
+    dependencies:
+      '@ernie/observability':
+        specifier: workspace:*
+        version: link:../observability
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/model-gateway:
     dependencies:
@@ -180,6 +195,9 @@ importers:
       '@ernie/config':
         specifier: workspace:*
         version: link:../packages/config
+      '@ernie/jev-router':
+        specifier: workspace:*
+        version: link:../packages/jev-router
       '@ernie/protocol':
         specifier: workspace:*
         version: link:../packages/protocol

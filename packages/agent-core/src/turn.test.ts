@@ -149,3 +149,73 @@ describe('runTurn', () => {
     expect(formatUserTurn('ciao', 'text')).toBe('ciao');
   });
 });
+
+describe('runTurn: loop e decisione', () => {
+  it('interrompe il turno quando la stessa chiamata tool si ripete', async () => {
+    const recorder = { record: vi.fn(async () => {}) };
+    const repeated = Array.from({ length: 6 }, () => ({
+      type: 'tool-call',
+      payload: { toolCallId: 'c', toolName: 'web_search', args: { q: 'x' } },
+    }));
+    const companion = fakeCompanion(repeated, { delayMs: 1 });
+    const { events, emit } = collector();
+    const res = await runTurn({
+      userId: 'u1',
+      sessionId: 's1',
+      correlationId: 'c4',
+      text: 'cerca',
+      inputMode: 'text',
+      companion,
+      abortSignal: new AbortController().signal,
+      recorder,
+      logger,
+      emit,
+    });
+    expect(res.loopDetected).toBe(true);
+    const err = events.find((e) => e.type === 'error')?.payload as { code: string };
+    expect(err.code).toBe('loop_detected');
+    expect(events.at(-1)?.type).toBe('assistant.completed');
+  });
+
+  it("riporta rotta, costo e token del router nell'evento finale", async () => {
+    const recorder = { record: vi.fn(async () => {}) };
+    const companion = fakeCompanion([
+      { type: 'text-delta', payload: { text: 'ok' } },
+      {
+        type: 'step-finish',
+        payload: {
+          output: { usage: { inputTokens: 10, outputTokens: 1 } },
+          response: { id: 'g' },
+          stepResult: { reason: 'stop' },
+          providerMetadata: { openrouter: { usage: { cost: 0.002 } } },
+        },
+      },
+      { type: 'finish', payload: { stepResult: { reason: 'stop' } } },
+    ]);
+    const { events, emit } = collector();
+    await runTurn({
+      userId: 'u1',
+      sessionId: 's1',
+      correlationId: 'c5',
+      text: 'x',
+      inputMode: 'text',
+      companion,
+      decision: {
+        route: 'llm',
+        modelClass: 'standard',
+        source: 'jev',
+        costUsd: 0.00004,
+        inputTokens: 900,
+      },
+      abortSignal: new AbortController().signal,
+      recorder,
+      logger,
+      emit,
+    });
+    const completed = events.at(-1)?.payload as {
+      usage: { routerTokens: number; costUsdActual: number };
+    };
+    expect(completed.usage.routerTokens).toBe(900);
+    expect(completed.usage.costUsdActual).toBeCloseTo(0.00204, 6);
+  });
+});

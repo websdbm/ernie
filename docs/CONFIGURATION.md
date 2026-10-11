@@ -21,6 +21,10 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `WS_ALLOWED_ORIGINS` | no | vuoto | Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin e passano sempre. |
 | `LLM_DAILY_BUDGET_USD` | no | `2` | Tetto di spesa giornaliero per utente (UTC) se `users.settings.dailyBudgetUsd` non è impostato. `0` disabilita il controllo. |
 | `MODEL_LIGHT` / `MODEL_STANDARD` / `MODEL_HEAVY` | no | `anthropic/claude-haiku-5.5` / `-sonnet-5.5` / `-opus-5.5` | ID OpenRouter per classe di modello. |
+| `JEV_MODEL` | no | `typesafe/jev-1.13` | Modello decisionale (Decisions API di OpenRouter). Pinnare la versione per soglie stabili. |
+| `JEV_TIMEOUT_MS` | no | `1500` | Oltre questo tempo il router usa il fallback deterministico. Latenza misurata: p50 256 ms, p95 336 ms. |
+| `ROUTER_CACHE_TTL_S` | no | `600` | TTL della cache esatta delle decisioni (Redis). `0` disabilita di fatto la cache. |
+| `ROUTER_THRESHOLDS_FILE` | no | `infrastructure/router/thresholds.json` | Soglie per domanda, prodotte da `pnpm --filter @ernie/tests calibrate:jev --write`. |
 
 ## Variabili solo per Docker Compose
 
@@ -38,6 +42,7 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 pnpm migrate up            # migrazioni SQL + LOGIN/password del ruolo ernie_app (richiede APP_DB_PASSWORD)
 pnpm bootstrap:storage     # tabelle mastra_* create dal proprietario
 pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner
+pnpm --filter @ernie/tests calibrate:jev --write   # ricalibra le soglie del router (≈ 0,002 USD)
 ```
 
 `admin:create-user` stampa una sola volta `API_KEY=ernie_…`: va conservata dal client (Keychain su iOS). Ogni utente ottiene una copia personale dei Soul globali, modificabile in seguito.

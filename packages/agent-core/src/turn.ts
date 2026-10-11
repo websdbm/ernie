@@ -4,8 +4,17 @@ import type { EventType, PayloadInputOf, RouteKind } from '@ernie/protocol';
 import type { z } from 'zod';
 import type { CompanionAgent } from './agent.js';
 import { interpretChunk, mapFinishReason } from './chunks.js';
+import { StuckDetector } from './loop.js';
 
 export type Route = z.infer<typeof RouteKind>;
+
+export interface TurnDecision {
+  readonly route: Route;
+  readonly modelClass: 'light' | 'standard' | 'heavy';
+  readonly source: 'deterministic' | 'jev' | 'cache' | 'fallback';
+  readonly costUsd: number;
+  readonly inputTokens: number;
+}
 
 export interface TurnInput {
   readonly userId: string;
@@ -14,6 +23,8 @@ export interface TurnInput {
   readonly text: string;
   readonly inputMode: 'text' | 'voice';
   readonly companion: CompanionAgent;
+  /** Decisione del router (metriche nell'evento finale); assente nei test minimi. */
+  readonly decision?: TurnDecision;
   readonly abortSignal: AbortSignal;
   readonly recorder: LlmCallRecorder;
   readonly logger: Logger;
@@ -28,6 +39,7 @@ export interface TurnResult {
   readonly latencyMs: number;
   readonly cancelled: boolean;
   readonly costUsd: number;
+  readonly loopDetected: boolean;
 }
 
 /** Il turno utente porta le parti variabili (modalità) fuori dal prefisso stabile. */
@@ -37,7 +49,7 @@ export function formatUserTurn(text: string, inputMode: 'text' | 'voice'): strin
 
 /**
  * Esegue un turno: stream Mastra → eventi del protocollo; una riga llm_calls per step;
- * limiti hard da profilo; cancellazione via AbortSignal.
+ * limiti hard da profilo; rilevamento di loop; cancellazione via AbortSignal.
  */
 export async function runTurn(input: TurnInput): Promise<TurnResult> {
   const { companion, emit, logger } = input;
@@ -47,12 +59,37 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
   let toolCalls = 0;
   let text = '';
   let costUsd = 0;
+  let loopDetected = false;
   const totals = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, reasoningTokens: 0 };
   let lastFinish: string | undefined;
   const toolStartedAt = new Map<string, number>();
+  const stuck = new StuckDetector();
+  // Abort interno (loop) unito a quello esterno (cancellazione dell'utente).
+  const internal = new AbortController();
+  const onExternalAbort = () => internal.abort();
+  input.abortSignal.addEventListener('abort', onExternalAbort, { once: true });
+
+  const result = (cancelled: boolean): TurnResult => ({
+    text,
+    llmCalls: stepIndex,
+    toolCalls,
+    latencyMs: Date.now() - t0,
+    cancelled,
+    costUsd,
+    loopDetected,
+  });
+  const finishWithLoop = async (): Promise<TurnResult> => {
+    await emit('error', {
+      code: 'loop_detected',
+      message: 'Interrotto: la stessa azione si ripeteva senza progressi',
+      retryable: false,
+    });
+    await emit('assistant.completed', { finishReason: 'error' });
+    return result(false);
+  };
 
   await emit('assistant.started', {
-    route: 'llm' as Route,
+    route: input.decision?.route ?? ('llm' as Route),
     modelClass: companion.profile.modelClass,
   });
 
@@ -61,12 +98,24 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       memory: { thread: input.sessionId, resource: input.userId },
       maxSteps: companion.profile.maxSteps,
       modelSettings: { maxOutputTokens: companion.profile.maxOutputTokens },
-      abortSignal: input.abortSignal,
+      abortSignal: internal.signal,
     });
 
     for await (const chunk of stream.fullStream) {
-      if (input.abortSignal.aborted) break;
+      if (internal.signal.aborted) break;
       const signal = interpretChunk(chunk as { type: string; payload?: unknown }, toolStartedAt);
+      if (
+        signal.kind === 'tool.started' &&
+        stuck.check(signal.payload.toolId, signal.payload.argsPreview) === 'stuck'
+      ) {
+        loopDetected = true;
+        internal.abort();
+        logger.warn(
+          { correlationId: input.correlationId, toolId: signal.payload.toolId },
+          'loop rilevato: turno interrotto',
+        );
+        break;
+      }
       switch (signal.kind) {
         case 'text':
           firstTokenAt ??= Date.now();
@@ -117,15 +166,9 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
   } catch (err) {
     if (input.abortSignal.aborted) {
       await emit('assistant.cancelled', { reason: 'user' });
-      return {
-        text,
-        llmCalls: stepIndex,
-        toolCalls,
-        latencyMs: Date.now() - t0,
-        cancelled: true,
-        costUsd,
-      };
+      return result(true);
     }
+    if (loopDetected) return finishWithLoop();
     logger.error({ err, correlationId: input.correlationId }, 'turno fallito');
     await emit('error', {
       code: 'turn_failed',
@@ -133,27 +176,16 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       retryable: true,
     });
     await emit('assistant.completed', { finishReason: 'error' });
-    return {
-      text,
-      llmCalls: stepIndex,
-      toolCalls,
-      latencyMs: Date.now() - t0,
-      cancelled: false,
-      costUsd,
-    };
+    return result(false);
+  } finally {
+    input.abortSignal.removeEventListener('abort', onExternalAbort);
   }
 
   if (input.abortSignal.aborted) {
     await emit('assistant.cancelled', { reason: 'user' });
-    return {
-      text,
-      llmCalls: stepIndex,
-      toolCalls,
-      latencyMs: Date.now() - t0,
-      cancelled: true,
-      costUsd,
-    };
+    return result(true);
   }
+  if (loopDetected) return finishWithLoop();
 
   const latencyMs = Date.now() - t0;
   await emit('assistant.text.completed', { text });
@@ -164,13 +196,14 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       outputTokens: totals.outputTokens,
       cachedInputTokens: totals.cachedInputTokens,
       reasoningTokens: totals.reasoningTokens,
+      routerTokens: input.decision?.inputTokens ?? 0,
       llmCalls: stepIndex,
       toolCalls,
       latencyMs,
-      costUsdActual: costUsd,
+      costUsdActual: costUsd + (input.decision?.costUsd ?? 0),
       model: companion.profile.modelId,
-      route: 'llm',
+      route: input.decision?.route ?? 'llm',
     },
   });
-  return { text, llmCalls: stepIndex, toolCalls, latencyMs, cancelled: false, costUsd };
+  return result(false);
 }

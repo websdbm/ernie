@@ -27,6 +27,9 @@
     },
     {
       "path": "../../packages/agent-core"
+    },
+    {
+      "path": "../../packages/jev-router"
     }
   ]
 }

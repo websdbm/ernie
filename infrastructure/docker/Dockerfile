@@ -20,6 +20,7 @@ COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
+COPY packages/jev-router/package.json packages/jev-router/
 COPY packages/model-gateway/package.json packages/model-gateway/
 COPY packages/observability/package.json packages/observability/
 COPY packages/protocol/package.json packages/protocol/
@@ -45,6 +46,7 @@ COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
+COPY packages/jev-router/package.json packages/jev-router/
 COPY packages/model-gateway/package.json packages/model-gateway/
 COPY packages/observability/package.json packages/observability/
 COPY packages/protocol/package.json packages/protocol/
@@ -63,6 +65,7 @@ COPY --from=prod-deps /app ./
 COPY --from=build /app/packages/agent-core/dist ./packages/agent-core/dist
 COPY --from=build /app/packages/config/dist ./packages/config/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
+COPY --from=build /app/packages/jev-router/dist ./packages/jev-router/dist
 COPY --from=build /app/packages/model-gateway/dist ./packages/model-gateway/dist
 COPY --from=build /app/packages/observability/dist ./packages/observability/dist
 COPY --from=build /app/packages/protocol/dist ./packages/protocol/dist
@@ -70,6 +73,7 @@ COPY --from=build /app/packages/soul/dist ./packages/soul/dist
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY infrastructure/migrations ./infrastructure/migrations
+COPY infrastructure/router ./infrastructure/router
 USER node
 EXPOSE 3000
 CMD ["node", "apps/api/dist/index.js"]
