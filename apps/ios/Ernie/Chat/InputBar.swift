@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Un campo e un solo pulsante: microfono (un tocco avvia l'ascolto), invio quando c'è testo, stop mentre Ernie parla.
-/// In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla, ↑ invia.
+/// Un campo, il pulsante ✦ delle skill e un solo pulsante d'azione: microfono (un tocco avvia l'ascolto), invio quando
+/// c'è testo, stop mentre Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione
+/// in tempo reale; ✕ annulla, ↑ invia.
 struct InputBar: View {
     @Binding var draft: String
     var composing: FocusState<Bool>.Binding
     let conversation: ConversationStore
     let voice: VoiceController
+    /// Apre il pannello delle skill (decisione dell'utente: accanto al microfono, non in alto).
+    var onSkills: () -> Void = {}
 
     private enum Mode { case mic, send, stop, voice }
 
@@ -40,6 +43,14 @@ struct InputBar: View {
                         .padding(.vertical, 10)
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
                         .onSubmit(sendDraft)
+                    Button(action: onSkills) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 44, height: 44)
+                            .background(.thinMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Skill")
                     actionButton
                 }
             }

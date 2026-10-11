@@ -7,6 +7,9 @@ import type { GuidedSkill } from './types.js';
 export interface SkillCatalogEntry {
   readonly id: string;
   readonly title: string;
+  /** Micro-descrizione per il pannello ✦ (una riga). */
+  readonly summary: string;
+  /** Descrizione estesa (pulsante ⓘ nel pannello, pagina di configurazione). */
   readonly description: string;
   readonly kind: 'deterministic' | 'guided';
   /** Tool che la skill usa (allowlist della skill guidata e scheda nell'app). */
@@ -24,6 +27,7 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
     id: 'shopping_list',
     title: 'Lista della spesa',
+    summary: 'Aggiungi, togli e rileggi la spesa, anche a voce.',
     description:
       'Aggiunge, toglie e legge la lista della spesa, senza passare dal modello quando la frase è chiara.',
     kind: 'deterministic',
@@ -40,6 +44,7 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
     id: 'ricette',
     title: 'Ricette',
+    summary: 'Ricette come schede, salvate e affinate nel tempo.',
     description:
       'Propone ricette come schede, le salva tra le tue, le ritrova e le affina con versioni successive.',
     kind: 'guided',

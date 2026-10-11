@@ -21,7 +21,9 @@ struct ChatView: View {
                             compact: composing
                         )
                         MessageList(conversation: conversation)
-                        InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice)
+                        InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice) {
+                            showSkills = true
+                        }
                     }
                 } else {
                     ProgressView()
@@ -37,12 +39,8 @@ struct ChatView: View {
                             .foregroundStyle(model.settings.voiceOutput ? Color.accentColor : Color.secondary)
                     }
                     .accessibilityLabel(model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla")
-                    // Skill a portata di mano: pannello a scomparsa, senza lasciare la conversazione.
-                    Button { showSkills = true } label: { Image(systemName: "sparkles") }
-                        .accessibilityLabel("Skill")
                     Menu {
                         Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
-                        Button("Skill", systemImage: "sparkles") { showSkills = true }
                         Button("Impostazioni", systemImage: "gearshape") { showSettings = true }
                     } label: {
                         Image(systemName: "ellipsis.circle")

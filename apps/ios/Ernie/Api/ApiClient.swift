@@ -85,6 +85,8 @@ struct NotificationItem: Codable, Sendable, Equatable, Identifiable {
 struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var id: String
     var title: String
+    /// Micro-descrizione per il pannello ✦ (una riga); assente sui server più vecchi.
+    var summary: String?
     var description: String
     var kind: String
     var tools: [String]
