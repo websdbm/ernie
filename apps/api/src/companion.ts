@@ -190,9 +190,9 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         'agente di sessione creato',
       );
       cache.set(session.id, companion);
-      let sessions = sessionsByUser.get(auth.userId);
-      if (!sessions) sessionsByUser.set(auth.userId, (sessions = new Set()));
+      const sessions = sessionsByUser.get(auth.userId) ?? new Set<string>();
       sessions.add(session.id);
+      sessionsByUser.set(auth.userId, sessions);
       return companion;
     },
   };
