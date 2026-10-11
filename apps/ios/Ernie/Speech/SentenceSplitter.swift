@@ -31,7 +31,8 @@ enum SentenceSplitter {
         var s = text
         for token in ["**", "__", "`", "#"] { s = s.replacingOccurrences(of: token, with: "") }
         s = s.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
-        s = s.replacingOccurrences(of: #"^\s*[-*•]\s+"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"(?m)^\s*(?:[-*•]|\d+[.)])\s+"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"(?m)^#{1,6}\s+"#, with: "", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

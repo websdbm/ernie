@@ -134,8 +134,14 @@ export function createShoppingListSkill(repo: ShoppingListRepository): Determini
           if (items.length === 0)
             return { text: 'La lista della spesa è vuota.', actions: ['list'] };
           const names = items.map((i) => (i.quantity ? `${i.quantity} ${i.name}` : i.name));
+          // Fino a quattro voci una frase; oltre, un elenco puntato (leggibile nell'app, letto riga per riga dal TTS).
+          if (items.length <= 4)
+            return {
+              text: `In lista ${items.length === 1 ? "c'è" : 'ci sono'} ${items.length} ${items.length === 1 ? 'voce' : 'voci'}: ${joinIt(names)}.`,
+              actions: ['list'],
+            };
           return {
-            text: `In lista ${items.length === 1 ? "c'è" : 'ci sono'} ${items.length} ${items.length === 1 ? 'voce' : 'voci'}: ${joinIt(names)}.`,
+            text: `In lista ci sono ${items.length} voci:\n${names.map((n) => `- ${n}`).join('\n')}`,
             actions: ['list'],
           };
         }

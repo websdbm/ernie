@@ -20,6 +20,18 @@ struct SpeechTests {
     @Test func rimuoveIlMarkdownPrimaDiParlare() {
         #expect(SentenceSplitter.plainForSpeech("**Pollo** al [limone](https://x.it) con `aglio`") == "Pollo al limone con aglio")
         #expect(SentenceSplitter.plainForSpeech("- latte") == "latte")
+        #expect(SentenceSplitter.plainForSpeech("In lista:\n- latte\n- 2 uova\n1. pane") == "In lista:\nlatte\n2 uova\npane")
+    }
+
+    @Test func blocchiMarkdown() {
+        let blocks = Markdown.blocks("In lista ci sono 3 voci:\n- latte\n- pane\n\n## Ricette\n1. Zuppa\n2. Pollo\n> nota")
+        #expect(blocks == [
+            .paragraph("In lista ci sono 3 voci:"),
+            .bullets(["latte", "pane"]),
+            .heading("Ricette"),
+            .numbered(["Zuppa", "Pollo"]),
+            .quote("nota"),
+        ])
     }
 
     @Test func latenzaPerStadio() {

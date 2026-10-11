@@ -124,8 +124,7 @@ struct MessageRow: View {
                 if message.text.isEmpty, message.isStreaming {
                     ThinkingDots()
                 } else {
-                    Text(Markdown.render(message.text))
-                        .textSelection(.enabled)
+                    MarkdownText(text: message.text)
                 }
                 if message.cancelled {
                     Text("Interrotto").font(.caption2).foregroundStyle(.secondary)
@@ -215,9 +214,7 @@ struct NotificationCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(card.title, systemImage: icon).font(.subheadline.weight(.semibold))
-            Text(Markdown.render(card.body))
-                .font(.callout)
-                .lineLimit(expanded ? nil : 6)
+            MarkdownText(text: expanded ? card.body : String(card.body.prefix(420)) + (card.body.count > 420 ? "…" : ""), font: .callout)
                 .onTapGesture { expanded.toggle() }
             ForEach(card.pendingActions) { action in
                 VStack(alignment: .leading, spacing: 6) {
