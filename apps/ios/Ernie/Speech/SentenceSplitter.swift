@@ -33,6 +33,9 @@ enum SentenceSplitter {
         s = s.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
         s = s.replacingOccurrences(of: #"(?m)^\s*(?:[-*•]|\d+[.)])\s+"#, with: "", options: .regularExpression)
         s = s.replacingOccurrences(of: #"(?m)^#{1,6}\s+"#, with: "", options: .regularExpression)
+        // Emoji e simboli pittografici non vanno letti ad alta voce.
+        s = s.replacingOccurrences(of: #"[\p{Extended_Pictographic}\x{FE0F}\x{200D}]"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

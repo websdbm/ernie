@@ -44,6 +44,7 @@ import {
   createToolCallRecorder,
   createWebTools,
   getTimeTool,
+  presentRecipesTool,
   ToolRegistry,
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
@@ -119,6 +120,7 @@ async function main(): Promise<void> {
   };
   const registry = new ToolRegistry()
     .register(getTimeTool)
+    .register(presentRecipesTool)
     .register(createMemorySearchSpec(memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
   if (config.providers.firecrawlApiKey) {
@@ -158,7 +160,7 @@ async function main(): Promise<void> {
       registry,
       executor,
       categories: config.tools.categories,
-      core: ['memory_search', 'get_time'],
+      core: ['memory_search', 'get_time', 'present_recipes'],
     },
     skills: { builtin: [createShoppingListSkill(shopping)], learned: learnedSkills },
   });

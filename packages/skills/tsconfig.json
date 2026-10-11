@@ -6,5 +6,18 @@
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../db" }, { "path": "../observability" }, { "path": "../tools" }]
+  "references": [
+    {
+      "path": "../db"
+    },
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../tools"
+    },
+    {
+      "path": "../protocol"
+    }
+  ]
 }

@@ -1,3 +1,5 @@
+import type { ContentBlock } from '@ernie/protocol';
+
 export interface SkillRunContext {
   readonly userId: string;
   readonly sessionId: string | null;
@@ -8,6 +10,8 @@ export interface SkillReply {
   readonly text: string;
   /** Operazioni eseguite (per l'episodio e l'audit). */
   readonly actions: readonly string[];
+  /** Blocchi strutturati da mostrare come schede (protocollo v1.2). */
+  readonly blocks?: readonly ContentBlock[];
 }
 
 /** Skill deterministica: riconosce la richiesta con regole e la esegue senza modelli. */

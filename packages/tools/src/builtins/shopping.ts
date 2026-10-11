@@ -136,6 +136,17 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
           alreadyPresent: r.alreadyPresent,
         };
       },
+      present: (_i, out) =>
+        out.added.length
+          ? {
+              kind: 'list',
+              title: 'Aggiunte alla lista',
+              items: out.added.map((i) => ({
+                name: i.name,
+                ...(i.quantity ? { quantity: i.quantity } : {}),
+              })),
+            }
+          : null,
     }),
     defineTool({
       ...base,
@@ -160,6 +171,14 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
           count: items.length,
         };
       },
+      present: (_i, out) => ({
+        kind: 'list',
+        title: 'Lista della spesa',
+        items: out.items.map((i) => ({
+          name: i.name,
+          ...(i.quantity ? { quantity: i.quantity } : {}),
+        })),
+      }),
     }),
     defineTool({
       ...base,

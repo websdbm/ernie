@@ -17,6 +17,7 @@
   "dependencies": {
     "@ernie/db": "workspace:*",
     "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
     "@ernie/tools": "workspace:*",
     "zod": "^4.6.5"
   }

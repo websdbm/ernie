@@ -207,6 +207,11 @@ final class ConversationStore {
             persist()
         case .toolConfirmationResolved(let p):
             update(confirmation: p.approvalId) { $0.decision = p.decision }
+        case .assistantBlock(let p):
+            if case .unknown = p.block { break }
+            upsertAssistant(for: e.correlationId) { m in
+                if !m.blocks.contains(p.block) { m.blocks.append(p.block) }
+            }
         case .avatarEmotion(let p):
             lastAvatarEmotion = p.name
         case .automationRunUpdated:

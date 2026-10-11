@@ -8,6 +8,7 @@ import type { Logger } from '@ernie/observability';
 import {
   type AgentEvent,
   type ClientEvent,
+  type ContentBlock,
   createEvent,
   EventDeduper,
   type EventType,
@@ -358,7 +359,7 @@ export class ClientConnection {
         correlationId,
         localDecision('skill', this.session.modelClass, Date.now() - t0, match.skill.id),
       );
-      await this.replyLocally('skill', reply.text, correlationId, t0, text);
+      await this.replyLocally('skill', reply.text, correlationId, t0, text, reply.blocks);
       await this.deps.memories?.afterTurn({
         userId: this.auth.userId,
         sessionId,
@@ -538,12 +539,20 @@ export class ClientConnection {
     correlationId: string,
     t0: number,
     userText: string,
+    blocks: readonly ContentBlock[] = [],
   ): Promise<void> {
     await this.send(
       'assistant.started',
       { route, modelClass: this.session?.modelClass ?? 'standard' },
       correlationId,
     );
+    let n = 0;
+    for (const block of blocks)
+      await this.send(
+        'assistant.block',
+        { blockId: `${correlationId}:${n++}`, block },
+        correlationId,
+      );
     await this.send('assistant.text.completed', { text: reply }, correlationId);
     await this.send(
       'assistant.completed',

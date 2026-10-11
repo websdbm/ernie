@@ -3,7 +3,7 @@ import Foundation
 /// Porting Swift del protocollo Ernie v1.1 (`packages/protocol`): envelope + payload per tipo.
 enum ErnieProtocol {
     static let version = 1
-    static let minor = 1
+    static let minor = 2
 }
 
 // MARK: - payload client → server
@@ -134,6 +134,83 @@ struct AutomationRunUpdatedPayload: Codable, Sendable, Equatable {
     var summary: String?
 }
 
+// MARK: - blocchi strutturati (v1.2)
+
+struct WebResultItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String { url }
+    var title: String
+    var url: String
+    var site: String?
+    var snippet: String?
+}
+
+struct ListBlockItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String { name }
+    var name: String
+    var quantity: String?
+    var checked: Bool?
+}
+
+struct RecipeItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String { title }
+    var title: String
+    var time: String?
+    var servings: String?
+    var source: String?
+    var url: String?
+    var ingredients: [String]
+    var steps: [String]?
+}
+
+/// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
+enum ContentBlock: Sendable, Equatable, Codable {
+    case webResults(query: String, results: [WebResultItem])
+    case list(title: String, items: [ListBlockItem])
+    case recipes([RecipeItem])
+    case unknown(kind: String)
+
+    private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try c.decode(String.self, forKey: .kind)
+        switch kind {
+        case "web_results":
+            self = .webResults(query: try c.decode(String.self, forKey: .query), results: try c.decode([WebResultItem].self, forKey: .results))
+        case "list":
+            self = .list(title: try c.decode(String.self, forKey: .title), items: try c.decode([ListBlockItem].self, forKey: .items))
+        case "recipes":
+            self = .recipes(try c.decode([RecipeItem].self, forKey: .recipes))
+        default:
+            self = .unknown(kind: kind)
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .webResults(let query, let results):
+            try c.encode("web_results", forKey: .kind)
+            try c.encode(query, forKey: .query)
+            try c.encode(results, forKey: .results)
+        case .list(let title, let items):
+            try c.encode("list", forKey: .kind)
+            try c.encode(title, forKey: .title)
+            try c.encode(items, forKey: .items)
+        case .recipes(let recipes):
+            try c.encode("recipes", forKey: .kind)
+            try c.encode(recipes, forKey: .recipes)
+        case .unknown(let kind):
+            try c.encode(kind, forKey: .kind)
+        }
+    }
+}
+
+struct AssistantBlockPayload: Codable, Sendable, Equatable {
+    var blockId: String
+    var block: ContentBlock
+}
+
 struct ErrorPayload: Codable, Sendable, Equatable {
     var code: String
     var message: String
@@ -164,6 +241,7 @@ enum EventPayload: Sendable, Equatable {
     case avatarGesture(AvatarGesturePayload)
     case avatarGaze(AvatarGazePayload)
     case automationRunUpdated(AutomationRunUpdatedPayload)
+    case assistantBlock(AssistantBlockPayload)
     case error(ErrorPayload)
     /// Tipo non conosciuto da questa versione del client: ignorato, non è un errore.
     case unknown(type: String)
@@ -190,6 +268,7 @@ enum EventPayload: Sendable, Equatable {
         case .avatarGesture: "avatar.gesture"
         case .avatarGaze: "avatar.gaze"
         case .automationRunUpdated: "automation.run.updated"
+        case .assistantBlock: "assistant.block"
         case .error: "error"
         case .unknown(let type): type
         }
@@ -261,6 +340,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case "avatar.gesture": payload = .avatarGesture(try c.decode(AvatarGesturePayload.self, forKey: .payload))
         case "avatar.gaze": payload = .avatarGaze(try c.decode(AvatarGazePayload.self, forKey: .payload))
         case "automation.run.updated": payload = .automationRunUpdated(try c.decode(AutomationRunUpdatedPayload.self, forKey: .payload))
+        case "assistant.block": payload = .assistantBlock(try c.decode(AssistantBlockPayload.self, forKey: .payload))
         case "error": payload = .error(try c.decode(ErrorPayload.self, forKey: .payload))
         default: payload = .unknown(type: type)
         }
@@ -297,6 +377,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case .avatarGesture(let p): try c.encode(p, forKey: .payload)
         case .avatarGaze(let p): try c.encode(p, forKey: .payload)
         case .automationRunUpdated(let p): try c.encode(p, forKey: .payload)
+        case .assistantBlock(let p): try c.encode(p, forKey: .payload)
         case .error(let p): try c.encode(p, forKey: .payload)
         }
     }

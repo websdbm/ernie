@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D938C458270FB5964436CBF8 /* BlockViews.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
 		0F23035C5EE3AF3D3E2F004F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */; };
 		0FA8703F7C5EA31F8BC1B551 /* LatencyTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */; };
@@ -88,6 +89,7 @@
 		C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D2589F13E371B721791902AA /* EventsCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsCodingTests.swift; sourceTree = "<group>"; };
+		D938C458270FB5964436CBF8 /* BlockViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockViews.swift; sourceTree = "<group>"; };
 		ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -174,6 +176,7 @@
 			isa = PBXGroup;
 			children = (
 				FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */,
+				D938C458270FB5964436CBF8 /* BlockViews.swift */,
 				1072AD1394544857B5BED36D /* ChatModels.swift */,
 				4361E7F7124014F0D94B4EA2 /* ChatView.swift */,
 				6DD07317404B3BEF77505FA3 /* ConversationStore.swift */,
@@ -325,6 +328,7 @@
 				0F23035C5EE3AF3D3E2F004F /* AppModel.swift in Sources */,
 				92F79B66DEE7B8A1C40E190E /* AudioSessionController.swift in Sources */,
 				2A75EAED43459370467478A9 /* AvatarStage.swift in Sources */,
+				021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */,
 				4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */,
 				C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */,
 				25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */,

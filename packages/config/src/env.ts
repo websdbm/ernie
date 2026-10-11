@@ -51,7 +51,7 @@ export const envSchema = z.object({
   MEMORY_CONSOLIDATION_DELAY_S: z.coerce.number().int().min(0).default(20),
   MEMORY_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
   /** Categorie di tool abilitate per le sessioni (CSV). */
-  TOOL_CATEGORIES: z.string().default('utility,memory,shopping_list,web'),
+  TOOL_CATEGORIES: z.string().default('utility,memory,shopping_list,web,presentation'),
   TOOL_APPROVAL_TTL_S: z.coerce.number().int().min(10).max(3600).default(120),
   POLICY_RISK_ASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
   WEB_ALLOWED_DOMAINS: z.string().default(''),

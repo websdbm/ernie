@@ -129,3 +129,32 @@ describe('v1.1', () => {
     expect(parseClientEvent(res).type).toBe('tool.confirmation.respond');
   });
 });
+
+describe('assistant.block (v1.2)', () => {
+  it('accetta solo blocchi con schema chiuso', () => {
+    const ctx = {
+      sessionId: '1caaa18b-0446-44a9-9faa-3da78e1e6aac',
+      correlationId: '9e2d0c4a-1111-4222-8333-444455556666',
+      seq: 1,
+    };
+    const e = createEvent(
+      'assistant.block',
+      {
+        blockId: 't1',
+        block: {
+          kind: 'recipes',
+          recipes: [{ title: 'Zuppa', ingredients: ['legumi', 'carote'], time: '30 min' }],
+        },
+      },
+      ctx,
+    );
+    expect(e.payload.block.kind).toBe('recipes');
+    expect(() =>
+      createEvent(
+        'assistant.block',
+        { blockId: 't2', block: { kind: 'html', html: '<b>x</b>' } as never },
+        ctx,
+      ),
+    ).toThrow();
+  });
+});

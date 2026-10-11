@@ -309,6 +309,9 @@ importers:
       '@ernie/observability':
         specifier: workspace:*
         version: link:../observability
+      '@ernie/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@ernie/tools':
         specifier: workspace:*
         version: link:../tools

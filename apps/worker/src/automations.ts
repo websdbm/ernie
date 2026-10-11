@@ -44,6 +44,7 @@ import {
   createToolCallRecorder,
   createWebTools,
   getTimeTool,
+  presentRecipesTool,
   ToolRegistry,
 } from '@ernie/tools';
 import { UnrecoverableError, Worker } from 'bullmq';
@@ -87,6 +88,7 @@ export async function startAutomations(
   const shopping = createShoppingListRepository(pool);
   const registry = new ToolRegistry()
     .register(getTimeTool)
+    .register(presentRecipesTool)
     .register(createMemorySearchSpec(ctx.memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
   if (config.providers.firecrawlApiKey) {

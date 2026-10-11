@@ -9,8 +9,8 @@ import { z } from 'zod';
  * per direzione (permette riordino, deduplica e ripresa dopo riconnessione).
  */
 export const PROTOCOL_VERSION = 1 as const;
-/** Revisione minore compatibile (M2): persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong. */
-export const PROTOCOL_MINOR = 1 as const;
+/** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
+export const PROTOCOL_MINOR = 2 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -223,6 +223,62 @@ export const AutomationRunUpdated = event(
   }),
 );
 
+/**
+ * Blocchi strutturati (v1.2): contenuti con schema chiuso che il client rende come schede native.
+ * Li emettono tool e skill (mai testo libero del modello): risultati web, elenchi, ricette.
+ */
+export const WebResultsBlock = z.object({
+  kind: z.literal('web_results'),
+  query: z.string().max(300),
+  results: z
+    .array(
+      z.object({
+        title: z.string().max(200),
+        url: z.url(),
+        site: z.string().max(120).optional(),
+        snippet: z.string().max(400).optional(),
+      }),
+    )
+    .max(10),
+});
+export const ListBlock = z.object({
+  kind: z.literal('list'),
+  title: z.string().max(100),
+  items: z
+    .array(
+      z.object({
+        name: z.string().max(120),
+        quantity: z.string().max(40).optional(),
+        checked: z.boolean().optional(),
+      }),
+    )
+    .max(100),
+});
+export const RecipeItem = z.object({
+  title: z.string().min(1).max(120),
+  time: z.string().max(40).optional(),
+  servings: z.string().max(40).optional(),
+  source: z.string().max(120).optional(),
+  url: z.url().optional(),
+  ingredients: z.array(z.string().min(1).max(120)).min(1).max(40),
+  steps: z.array(z.string().min(1).max(500)).max(20).optional(),
+});
+export const RecipesBlock = z.object({
+  kind: z.literal('recipes'),
+  recipes: z.array(RecipeItem).min(1).max(6),
+});
+export const ContentBlock = z.discriminatedUnion('kind', [
+  WebResultsBlock,
+  ListBlock,
+  RecipesBlock,
+]);
+export type ContentBlock = z.infer<typeof ContentBlock>;
+
+export const AssistantBlock = event(
+  'assistant.block',
+  z.object({ blockId: z.string().min(1), block: ContentBlock }),
+);
+
 export const ErrorEvent = event(
   'error',
   z.object({ code: z.string().min(1), message: z.string(), retryable: z.boolean() }),
@@ -254,6 +310,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   AvatarGesture,
   AvatarGaze,
   AutomationRunUpdated,
+  AssistantBlock,
   ErrorEvent,
 ]);
 
@@ -296,6 +353,7 @@ export const EVENT_DIRECTION = {
   'avatar.gesture': 'server→client',
   'avatar.gaze': 'server→client',
   'automation.run.updated': 'server→client',
+  'assistant.block': 'server→client',
   error: 'server→client',
 } as const satisfies Record<EventType, EventDirection>;
 
@@ -325,6 +383,7 @@ export const EVENT_AUDIENCE = {
   'avatar.gesture': 'runtime',
   'avatar.gaze': 'runtime',
   'automation.run.updated': 'user',
+  'assistant.block': 'user',
   error: 'user',
 } as const satisfies Record<EventType, EventAudience>;
 

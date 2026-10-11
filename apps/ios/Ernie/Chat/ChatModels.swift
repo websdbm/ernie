@@ -19,6 +19,8 @@ struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     var text: String
     var isStreaming = false
     var tools: [ToolActivity] = []
+    /// Schede strutturate ricevute durante il turno (risultati web, elenchi, ricette).
+    var blocks: [ContentBlock] = []
     var usage: UsagePayload?
     var route: String?
     var modelClass: String?

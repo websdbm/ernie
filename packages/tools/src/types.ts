@@ -1,5 +1,5 @@
 import type { RunContext, ToolRisk } from '@ernie/agent-core';
-import type { EventType, PayloadInputOf } from '@ernie/protocol';
+import type { ContentBlock, EventType, PayloadInputOf } from '@ernie/protocol';
 import type { z } from 'zod';
 
 export type { ToolRisk };
@@ -46,6 +46,8 @@ export interface ToolSpec<
   readonly execute: (input: z.infer<I>, ctx: ToolContext) => Promise<z.infer<O>>;
   /** Etichetta della sorgente non fidata introdotta dall'output (per il taint), se applicabile. */
   readonly untrustedSource?: (input: z.infer<I>, output: z.infer<O>) => string | null;
+  /** Blocco strutturato da mostrare al client come scheda (protocollo v1.2), derivato dall'esito. */
+  readonly present?: (input: z.infer<I>, output: z.infer<O>) => ContentBlock | null;
 }
 
 export class ToolError extends Error {

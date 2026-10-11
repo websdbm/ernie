@@ -67,4 +67,19 @@ struct EventsCodingTests {
         #expect(obj["persist"] as? Bool == false)
         #expect((obj["payload"] as? [String: Any])?.isEmpty == true)
     }
+
+    @Test func decodificaBlocchiStrutturati() throws {
+        let json = """
+        {"v":1,"id":"k","sessionId":"s","correlationId":"c","seq":2,"ts":"2026-10-11T09:00:00.000Z","type":"assistant.block","payload":{"blockId":"c:0","block":{"kind":"recipes","recipes":[{"title":"Zuppa di legumi","time":"30 min","ingredients":["legumi misti","carote"],"url":"https://esempio.it/zuppa","source":"esempio.it"}]}}}
+        """
+        guard case .assistantBlock(let p) = try AgentEvent.decode(json).payload,
+              case .recipes(let recipes) = p.block else { Issue.record("payload inatteso"); return }
+        #expect(recipes.first?.title == "Zuppa di legumi")
+        #expect(recipes.first?.ingredients.count == 2)
+        let unknown = """
+        {"v":1,"id":"k2","sessionId":"s","correlationId":"c","seq":3,"ts":"2026-10-11T09:00:00.000Z","type":"assistant.block","payload":{"blockId":"c:1","block":{"kind":"grafico","serie":[1,2]}}}
+        """
+        guard case .assistantBlock(let u) = try AgentEvent.decode(unknown).payload else { Issue.record("payload inatteso"); return }
+        #expect(u.block == .unknown(kind: "grafico"))
+    }
 }

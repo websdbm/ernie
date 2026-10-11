@@ -258,6 +258,15 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
             ctx.run.markUntrusted(source);
             ctx.onTainted?.(source);
           }
+          // Scheda per il client: schema chiuso, derivata dall'esito del tool (mai dal testo del modello).
+          const block = spec.present?.(input, parsed.data) ?? null;
+          if (block) {
+            try {
+              await ctx.emit?.('assistant.block', { blockId: toolCallId, block });
+            } catch (err) {
+              deps.logger.warn({ toolId: spec.id, err }, 'blocco non inviato');
+            }
+          }
           await deps.audit.record({
             ...base,
             verdict: verdict.kind,

@@ -63,7 +63,7 @@ struct MessageList: View {
                     }
                     ForEach(conversation.items) { item in
                         switch item {
-                        case .message(let m): MessageRow(message: m)
+                        case .message(let m): MessageRow(message: m, conversation: conversation)
                         case .confirmation(let c): ConfirmationCardView(card: c, conversation: conversation)
                         case .notification(let n): NotificationCardView(card: n, conversation: conversation)
                         }
@@ -98,6 +98,7 @@ private struct EmptyHint: View {
 
 struct MessageRow: View {
     let message: ChatMessage
+    var conversation: ConversationStore?
 
     var body: some View {
         switch message.role {
@@ -121,10 +122,13 @@ struct MessageRow: View {
                         .foregroundStyle(.secondary)
                     }
                 }
-                if message.text.isEmpty, message.isStreaming {
+                if message.text.isEmpty, message.isStreaming, message.blocks.isEmpty {
                     ThinkingDots()
-                } else {
+                } else if !message.text.isEmpty {
                     MarkdownText(text: message.text)
+                }
+                ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
+                    BlockView(block: block, conversation: conversation)
                 }
                 if message.cancelled {
                     Text("Interrotto").font(.caption2).foregroundStyle(.secondary)
