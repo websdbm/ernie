@@ -238,6 +238,24 @@ Realizzazione:
 - Da fare per il push vero: chiave APNs (.p8) dell'utente in `APNS_*`; per l'email: chiavi Brevo e mittente verificato.
 - Script `apps/ios/scripts/asc.mjs` (App Store Connect via API: gruppi, tester, inviti) per aggiungere tester interni.
 
+## M7e — Famiglia: agenti collegati (genitore/figlio) e promemoria «a Giorgio» ✅
+
+Richiesta dell'utente (11 ott 2026, sera): installare Ernie anche al figlio e mettere in relazione le due installazioni (agente genitore / agente figlio) con un'etichetta (il nome), così da poter dire «ricorda a Giorgio di chiamarmi alle 17 di domani» e far arrivare promemoria e notifica sul telefono di Giorgio; da estendere poi ad altre funzioni. Inoltre: scheda promemoria modificabile al volo senza passare dalla chat.
+
+Decisioni (del realizzatore, da confermare):
+- Il collegamento nasce con il **consenso di entrambi**: chi invita crea un codice (6 caratteri, 48 ore) scegliendo chi è l'altro per lui (figlio/a, genitore, partner, altro), come lo chiamerà («Giorgio») e come propone di farsi chiamare («papà»); l'altro inserisce il codice sul proprio telefono e può cambiare come chiamare chi l'ha invitato. Ognuno vede solo la propria riga (RLS); scollegamento da una delle due parti.
+- Il collegamento vale **in entrambe le direzioni** (anche il figlio può dire «ricorda a papà di…»): è una famiglia, non un controllo. Se servirà, una regola per direzione si aggiunge nel collegamento.
+- Il promemoria «a Giorgio» vive **nell'account di Giorgio** (è il suo telefono che suona: scheda, push, email, notifica locale, widget) con `meta.from` = chi l'ha messo; chi l'ha messo lo vede nel proprio elenco come «per Giorgio» e può cambiarlo o annullarlo; Giorgio lo vede come «da papà» (titolo «Promemoria da papà: …»). Il testo resta quello detto dal mittente («chiamarmi»): la riformulazione in seconda persona è un'estensione possibile (modello, non deterministica).
+- Giorgio viene avvisato subito (scheda «Promemoria da papà» nelle sessioni connesse + notifica salvata), così la sua app programma la notifica locale e aggiorna il widget anche se il server non lo raggiungesse all'ora stabilita.
+
+Realizzazione:
+- Migrazione 0015: `family_links` (una riga per lato: etichetta e parentela), `family_invites`, funzioni `family_accept_invite`/`family_unlink` (SECURITY DEFINER, limitate al codice o alla coppia), colonna `automations.meta`.
+- `apps/api/src/family.ts` (repository), rotte `GET /v1/family`, `POST /v1/family/invites`, `DELETE /v1/family/invites/:code`, `POST /v1/family/accept`, `DELETE /v1/family/links/:otherUserId`.
+- Skill «Ricordami»: «ricorda a <nome> di …», «promemoria per <nome>: …»; etichetta sconosciuta → risposta che spiega come collegare; allo scatto «⏰ Promemoria da papà: …». Store dei promemoria con destinatario, elenco a due viste, modifica/annullamento anche dei promemoria messi ad altri; `PATCH /v1/reminders/:id` (testo e/o ora: sostituzione dell'automazione una tantum). Protocollo v1.7: `for`/`from` nel blocco `reminders`.
+- Agente: le persone collegate entrano nel prefisso della sessione («Persone collegate (Famiglia): Giorgio (figlio)»).
+- iOS: Impostazioni → Famiglia (persone collegate, inviti con codice e condivisione, «Ho un codice d'invito», scollega); scheda promemoria con matita → testo, giorno e ora modificabili in linea («Salva»/«Lascia così»); «· per Giorgio» / «· da papà» nelle schede; notifica locale «Promemoria da papà»; widget con «da papà».
+- Test: parser e skill (Famiglia), store con account finti (automazione nell'account del destinatario, viste, modifica, annullamento, estraneo escluso), repository su Postgres con RLS (invito, accettazione, specularità, scollegamento).
+
 ## M8 — Conversazione vocale avanzata ⏳
 
 Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S3** (WKWebView + TalkingHead su iPhone: FPS, CPU, batteria, termica per 10 minuti, latenza marker→visema, AEC con audio dal WKWebView) eseguito qui; S2 (RealityKit) decaduto con la scelta di TalkingHead.

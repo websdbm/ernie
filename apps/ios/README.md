@@ -48,6 +48,10 @@ Ernie/Settings   onboarding, impostazioni (voce, interruttore di emergenza, diag
 ErnieTests       test unitari (Swift Testing): protocollo, deduplica, frasi per il TTS, latenza, schede
 ```
 
+## Famiglia e promemoria a un familiare
+
+Impostazioni → Famiglia: «Invita un familiare» crea un codice (6 caratteri, 48 ore) scegliendo chi è l'altro (figlio/a, genitore, partner, altro), come lo chiami e come ti chiamerà; l'altro lo inserisce in «Ho un codice d'invito» sul proprio telefono. Da quel momento «ricorda a Giorgio di chiamarmi alle 17» crea il promemoria nell'account di Giorgio: la sua app mostra la scheda «Promemoria da papà», programma la notifica locale e aggiorna il widget; chi l'ha messo lo vede «· per Giorgio» e può cambiarlo o annullarlo dalla scheda (matita → testo, giorno e ora).
+
 ## Diagnostica
 
 Impostazioni → Diagnostica mostra la latenza udibile per stadio dei turni vocali (rilascio del pulsante → trascrizione finale → primo token → prima parola sintetizzata; obiettivo p50 < 1,5 s), il motore di trascrizione in uso e il probe dello spike S1 (marker delle voci italiane, vedi `docs/research/08-spike-s1-marker-tts.md`).

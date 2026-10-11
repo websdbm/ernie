@@ -88,7 +88,8 @@ struct ReminderWidgetView: View {
                         Text(time(item.at)).font(.caption.weight(.bold)).monospacedDigit()
                         VStack(alignment: .leading, spacing: 0) {
                             Text(item.text).font(.caption).lineLimit(family == .systemSmall ? 1 : 2)
-                            if !Calendar.current.isDateInToday(item.at) { Text(day(item.at)).font(.caption2).foregroundStyle(.secondary) }
+                            let extra = [item.from.map { "da \($0)" }, Calendar.current.isDateInToday(item.at) ? nil : day(item.at)].compactMap { $0 }
+                            if !extra.isEmpty { Text(extra.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary) }
                         }
                     }
                 }

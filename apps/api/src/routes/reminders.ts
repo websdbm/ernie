@@ -1,4 +1,4 @@
-import type { ReminderStore } from '@ernie/skills';
+import type { Reminder, ReminderStore } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
@@ -17,7 +17,16 @@ function requireAuth(req: FastifyRequest): AuthContext {
   return a;
 }
 
-/** Promemoria per l'app (scheda e widget): elenco dei prossimi e annullamento. */
+const json = (r: Reminder) => ({
+  id: r.id,
+  text: r.text,
+  at: r.at.toISOString(),
+  status: r.status,
+  ...(r.for ? { for: r.for } : {}),
+  ...(r.from ? { from: r.from } : {}),
+});
+
+/** Promemoria per l'app (scheda e widget): elenco dei prossimi, modifica e annullamento. */
 export async function remindersRoutes(
   app: FastifyInstance,
   opts: RemindersRoutesOptions,
@@ -30,13 +39,30 @@ export async function remindersRoutes(
       const auth = requireAuth(req);
       const list = await opts.store.list(auth.userId);
       return {
-        reminders: list.map((r) => ({
-          id: r.id,
-          text: r.text,
-          at: r.at.toISOString(),
-          status: r.status,
-        })),
+        reminders: list.map(json),
       };
+    });
+
+    api.patch('/v1/reminders/:id', async (req, reply) => {
+      const auth = requireAuth(req);
+      const id = (req.params as { id: string }).id;
+      if (!z.uuid().safeParse(id).success)
+        return reply.code(400).send({ error: 'invalid_id', message: 'id non valido' });
+      const b = z
+        .object({ text: z.string().min(1).max(300).optional(), at: z.iso.datetime().optional() })
+        .refine((x) => x.text !== undefined || x.at !== undefined, { message: 'atteso text o at' })
+        .safeParse(req.body);
+      if (!b.success)
+        return reply.code(400).send({ error: 'invalid_body', message: 'atteso { text?, at? }' });
+      const r = await opts.store.update(auth.userId, id, {
+        ...(b.data.text !== undefined ? { text: b.data.text } : {}),
+        ...(b.data.at !== undefined ? { at: new Date(b.data.at) } : {}),
+      });
+      if (!r)
+        return reply
+          .code(404)
+          .send({ error: 'not_found', message: 'promemoria inesistente o ora già passata' });
+      return { reminder: json(r) };
     });
 
     api.delete('/v1/reminders/:id', async (req, reply) => {

@@ -43,8 +43,8 @@ final class ReminderStore {
     func cancel(_ r: ReminderItem) async {
         guard let api else { return }
         do {
-            try await api.deleteReminder(id: r.id)
-            items.removeAll { $0.id == r.id }
+            try await api.deleteReminder(id: resolve(r.id))
+            items.removeAll { $0.id == resolve(r.id) }
             lastError = nil
             sync()
         } catch {
@@ -52,7 +52,45 @@ final class ReminderStore {
         }
     }
 
-    func isScheduled(_ id: String) -> Bool { items.contains { $0.id == id } }
+    /// Id sostituiti dalle modifiche (un promemoria cambiato ha un id nuovo): le schede nella conversazione
+    /// seguono la catena anche dopo un riavvio (la mappa resta in UserDefaults, al massimo 200 voci).
+    private(set) var replaced: [String: String] = (UserDefaults.standard.dictionary(forKey: "reminders.replaced") as? [String: String]) ?? [:] {
+        didSet {
+            if replaced.count > 200 { replaced = Dictionary(uniqueKeysWithValues: Array(replaced.suffix(150))) }
+            UserDefaults.standard.set(replaced, forKey: "reminders.replaced")
+        }
+    }
+
+    func resolve(_ id: String) -> String {
+        var cur = id
+        var hops = 0
+        while let next = replaced[cur], hops < 20 { cur = next; hops += 1 }
+        return cur
+    }
+
+    func item(_ id: String) -> ReminderItem? {
+        let r = resolve(id)
+        return items.first { $0.id == r }
+    }
+
+    func isScheduled(_ id: String) -> Bool { item(id) != nil }
+
+    /// Modifica dalla scheda: testo e/o ora; il server sostituisce il promemoria (id nuovo).
+    func update(_ r: ReminderItem, text: String?, at: Date?) async -> Bool {
+        guard let api else { return false }
+        do {
+            let updated = try await api.updateReminder(id: r.id, text: text, at: at)
+            items.removeAll { $0.id == r.id }
+            items.append(updated)
+            if updated.id != r.id { replaced[r.id] = updated.id }
+            lastError = nil
+            sync()
+            return true
+        } catch {
+            lastError = AppModel.describe(error)
+            return false
+        }
+    }
 
     static func date(_ iso: String) -> Date? {
         let f = ISO8601DateFormatter()
@@ -65,7 +103,7 @@ final class ReminderStore {
     private func sync() {
         let future = items.compactMap { r -> ReminderSnapshot.Item? in
             guard let at = Self.date(r.at), at > .now else { return nil }
-            return ReminderSnapshot.Item(id: r.id, text: r.text, at: at)
+            return ReminderSnapshot.Item(id: r.id, text: r.text, at: at, from: r.fromLabel)
         }
         .sorted { $0.at < $1.at }
         ReminderSnapshot(items: future, updatedAt: .now).save()
@@ -81,7 +119,7 @@ final class ReminderStore {
         if !stale.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stale) }
         for item in items where !pending.contains("reminder-\(item.id)") {
             let content = UNMutableNotificationContent()
-            content.title = "Promemoria"
+            content.title = item.from.map { "Promemoria da \($0)" } ?? "Promemoria"
             content.body = item.text
             content.sound = .default
             content.threadIdentifier = "reminders"

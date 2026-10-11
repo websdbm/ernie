@@ -31,6 +31,7 @@ interface ARow {
   notify: boolean;
   enabled: boolean;
   version: number;
+  meta: Record<string, unknown> | null;
   webhook_secret: string | null;
   created_at: Date;
   updated_at: Date;
@@ -66,7 +67,7 @@ interface NRow {
   created_at: Date;
 }
 
-const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, version, webhook_secret, created_at, updated_at`;
+const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, version, meta, webhook_secret, created_at, updated_at`;
 const R_COLS = `id, automation_id, user_id, scheduled_at, dedupe_key, trigger_type, trigger_payload, status, outcome, error, cost_usd, llm_calls, tool_calls, attempt, session_id, started_at, finished_at, created_at`;
 const N_COLS = `id, user_id, kind, title, body, payload, read_at, created_at`;
 
@@ -85,6 +86,7 @@ const toAutomation = (r: ARow): Automation => ({
   notify: r.notify,
   enabled: r.enabled,
   version: r.version,
+  meta: r.meta ?? {},
   webhookSecret: r.webhook_secret,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -208,8 +210,8 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
       const secret = a.trigger.type === 'webhook' ? randomBytes(24).toString('base64url') : null;
       return withUser(pool, userId, async (client) => {
         const res = await client.query<ARow>(
-          `INSERT INTO automations (user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, webhook_secret)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING ${A_COLS}`,
+          `INSERT INTO automations (user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, webhook_secret, meta)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${A_COLS}`,
           [
             userId,
             a.key,
@@ -224,6 +226,7 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
             a.notify,
             a.enabled,
             secret,
+            JSON.stringify(a.meta),
           ],
         );
         const row = res.rows[0];

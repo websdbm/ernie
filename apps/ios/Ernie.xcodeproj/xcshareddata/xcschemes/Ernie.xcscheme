@@ -35,6 +35,20 @@
                ReferencedContainer = "container:Ernie.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F37FC99C560F390D372EBF73"
+               BuildableName = "ErnieWidgets.appex"
+               BlueprintName = "ErnieWidgets"
+               ReferencedContainer = "container:Ernie.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

@@ -7,6 +7,7 @@ import {
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderStore,
+  UnknownPersonError,
 } from './reminder.js';
 import { localParts, zonedToUtc } from './zoned.js';
 
@@ -101,6 +102,64 @@ describe('parseReminderCommand', () => {
   });
 });
 
+describe('promemoria a una persona collegata (Famiglia)', () => {
+  it('«ricorda a Giorgio di …» e «promemoria per Giorgio: …» portano il destinatario', () => {
+    const p = parseReminderCommand('ricorda a Giorgio di chiamarmi alle 17 di domani', NOW, TZ);
+    expect(p).toMatchObject({ op: 'create', who: 'Giorgio', text: 'chiamarmi' });
+    if (p?.op === 'create') expect(local(p.at)).toBe('2026-10-12 17:00');
+    const q = parseReminderCommand(
+      'promemoria per zio Mario: portare il dolce domenica alle 12',
+      NOW,
+      TZ,
+    );
+    expect(q).toMatchObject({ op: 'create', who: 'zio Mario', text: 'portare il dolce' });
+    const r = parseReminderCommand(
+      'ricorda a Giorgio che domani alle 8 deve prendere il libro',
+      NOW,
+      TZ,
+    );
+    expect(r).toMatchObject({ op: 'create', who: 'Giorgio', text: 'deve prendere il libro' });
+    // «ricordami di chiamare Giorgio» resta un promemoria mio.
+    const mine = parseReminderCommand('ricordami di chiamare Giorgio alle 18', NOW, TZ);
+    expect(mine).toMatchObject({ op: 'create', text: 'chiamare Giorgio' });
+    expect((mine as { who?: string }).who).toBeUndefined();
+    const fire = parseReminderCommand(`${REMINDER_FIRE_PREFIX}[da papà] chiamarmi`, NOW, TZ);
+    expect(fire).toEqual({ op: 'fire', text: 'chiamarmi', from: 'papà' });
+  });
+
+  it('lo store riceve forLabel; etichetta sconosciuta → risposta che spiega come collegarla', async () => {
+    const store: ReminderStore = {
+      create: vi.fn(async (_u, input) => {
+        if (input.forLabel && input.forLabel !== 'Giorgio')
+          throw new UnknownPersonError(input.forLabel);
+        return {
+          id: '00000000-0000-4000-8000-000000000009',
+          text: input.text,
+          at: input.at,
+          status: 'scheduled' as const,
+          ...(input.forLabel ? { for: input.forLabel } : {}),
+        };
+      }),
+      list: vi.fn(async () => []),
+      remove: vi.fn(async () => false),
+      update: vi.fn(async () => null),
+    };
+    const skill = createReminderSkill(store, TZ);
+    const ctx = { userId: 'u', sessionId: null, requestId: 'r' };
+    const ok = await skill.run(skill.match('ricorda a Giorgio di chiamarmi domani alle 17'), ctx);
+    expect(ok.text).toContain('ricordo a Giorgio di chiamarmi domani alle 17:00');
+    expect(ok.blocks?.[0]).toMatchObject({
+      kind: 'reminders',
+      title: 'Promemoria per Giorgio',
+      reminders: [{ for: 'Giorgio' }],
+    });
+    const ko = await skill.run(skill.match('ricorda a Marco di chiamarmi domani alle 17'), ctx);
+    expect(ko.text).toContain('Non conosco nessun «Marco»');
+    const fired = await skill.run(skill.match(`${REMINDER_FIRE_PREFIX}[da papà] chiamarmi`), ctx);
+    expect(fired.text).toBe('⏰ Promemoria da papà: chiamarmi');
+  });
+});
+
 describe('skill ricordami', () => {
   it('crea, elenca, annulla e scatta con lo store finto', async () => {
     const saved: Reminder[] = [];
@@ -122,6 +181,7 @@ describe('skill ricordami', () => {
         saved.splice(i, 1);
         return true;
       }),
+      update: vi.fn(async () => null),
     };
     const registry = new SkillRegistry().register(createReminderSkill(store, TZ));
     const ctx = { userId: 'u', sessionId: null, requestId: 'r' };

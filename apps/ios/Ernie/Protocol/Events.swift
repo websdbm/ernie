@@ -319,6 +319,15 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     var text: String
     var at: String
     var status: String
+    /// Famiglia (v1.7): messo da me a «Giorgio» / messo a me da «papà».
+    var forLabel: String? = nil
+    var fromLabel: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, text, at, status
+        case forLabel = "for"
+        case fromLabel = "from"
+    }
 }
 
 struct RemindersBlock: Codable, Sendable, Equatable {

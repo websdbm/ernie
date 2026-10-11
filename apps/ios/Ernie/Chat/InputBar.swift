@@ -55,8 +55,8 @@ struct InputBar: View {
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
                         .onSubmit(sendDraft)
                     Button(action: onSkills) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 44, height: 44)
                             .background(.thinMaterial, in: Circle())

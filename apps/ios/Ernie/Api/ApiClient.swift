@@ -53,6 +53,53 @@ enum JSONValue: Codable, Sendable, Equatable {
     }
 }
 
+/// Famiglia: una persona collegata (come la chiamo io e cosa è per me) e un invito in attesa.
+struct FamilyLink: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var otherUserId: String
+    var label: String
+    var relation: String
+    var createdAt: String
+}
+
+struct FamilyInvite: Codable, Sendable, Equatable, Identifiable {
+    var id: String { code }
+    var code: String
+    var label: String
+    var relation: String
+    var myLabel: String
+    var expiresAt: String
+}
+
+struct FamilyOverview: Codable, Sendable, Equatable {
+    var links: [FamilyLink]
+    var invites: [FamilyInvite]
+}
+
+/// Nomi delle parentele nell'interfaccia (valori del server: figlio, genitore, partner, altro).
+enum FamilyRelation: String, CaseIterable, Identifiable {
+    case figlio, genitore, partner, altro
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .figlio: "Figlio/a"
+        case .genitore: "Genitore"
+        case .partner: "Partner"
+        case .altro: "Altro"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .figlio: "figure.and.child.holdinghands"
+        case .genitore: "figure.2.and.child.holdinghands"
+        case .partner: "heart.fill"
+        case .altro: "person.fill"
+        }
+    }
+    static func title(for raw: String) -> String { FamilyRelation(rawValue: raw)?.title ?? raw }
+    static func symbol(for raw: String) -> String { FamilyRelation(rawValue: raw)?.symbol ?? "person.fill" }
+}
+
 struct Profile: Codable, Sendable, Equatable {
     var userId: String
     var displayName: String
@@ -212,6 +259,40 @@ struct ApiClient: Sendable {
         struct Out: Decodable { var reminders: [ReminderItem] }
         let out: Out = try await request("GET", "/v1/reminders")
         return out.reminders
+    }
+
+    func updateReminder(id: String, text: String?, at: Date?) async throws -> ReminderItem {
+        struct Body: Encodable { var text: String?; var at: String? }
+        struct Out: Decodable { var reminder: ReminderItem }
+        let iso = at.map { ISO8601DateFormatter().string(from: $0) }
+        let out: Out = try await request("PATCH", "/v1/reminders/\(id)", body: Body(text: text, at: iso))
+        return out.reminder
+    }
+
+    // MARK: Famiglia (M7e)
+
+    func family() async throws -> FamilyOverview { try await request("GET", "/v1/family") }
+
+    func createFamilyInvite(label: String, relation: String, myLabel: String) async throws -> FamilyInvite {
+        struct Body: Encodable { var label: String; var relation: String; var myLabel: String }
+        struct Out: Decodable { var invite: FamilyInvite }
+        let out: Out = try await request("POST", "/v1/family/invites", body: Body(label: label, relation: relation, myLabel: myLabel))
+        return out.invite
+    }
+
+    func deleteFamilyInvite(code: String) async throws {
+        try await requestNoContent("DELETE", "/v1/family/invites/\(code)")
+    }
+
+    func acceptFamilyInvite(code: String, label: String?) async throws -> FamilyLink {
+        struct Body: Encodable { var code: String; var label: String? }
+        struct Out: Decodable { var link: FamilyLink }
+        let out: Out = try await request("POST", "/v1/family/accept", body: Body(code: code, label: label))
+        return out.link
+    }
+
+    func unlinkFamily(otherUserId: String) async throws {
+        try await requestNoContent("DELETE", "/v1/family/links/\(otherUserId)")
     }
 
     func deleteReminder(id: String) async throws {

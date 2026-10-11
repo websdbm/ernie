@@ -3,6 +3,7 @@ import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
+import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders.js';
@@ -26,6 +27,8 @@ export interface BuildServerOptions {
   readonly documents?: DocumentsRoutesOptions;
   readonly shopping?: ShoppingRoutesOptions;
   readonly reminders?: RemindersRoutesOptions;
+  /** Famiglia (M7e): collegamenti fra installazioni. */
+  readonly family?: FamilyRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -91,6 +94,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
+  if (opts.family) await app.register(familyRoutes, opts.family);
 
   return app;
 }

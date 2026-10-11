@@ -7,6 +7,8 @@ struct ReminderSnapshot: Codable, Sendable, Equatable {
         var id: String
         var text: String
         var at: Date
+        /// Messo da un familiare («papà»): assente per i promemoria propri.
+        var from: String? = nil
     }
 
     var items: [Item]

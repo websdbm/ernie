@@ -76,6 +76,13 @@ struct SettingsView: View {
                     Text("Le notifiche arrivano sempre sul telefono (schermata di blocco e widget); l'email è un'aggiunta per quando il telefono non è a portata.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section {
+                    NavigationLink("Persone collegate e inviti") { FamilyView() }
+                } header: {
+                    Text("Famiglia")
+                } footer: {
+                    Text("Collega l'installazione di un familiare: potrai dire «ricorda a Giorgio di …» e il promemoria arriverà sul suo telefono.")
+                }
                 Section("Skill") {
                     NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
                 }

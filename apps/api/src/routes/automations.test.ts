@@ -59,6 +59,7 @@ function fakeRepo() {
         notify: a.notify,
         enabled: a.enabled,
         version: 1,
+        meta: {},
         webhookSecret: a.trigger.type === 'webhook' ? 'segreto' : null,
         createdAt: new Date(),
         updatedAt: new Date(),

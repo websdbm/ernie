@@ -5,6 +5,7 @@ struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var showSkills = false
+    @State private var debugIcons = false
     @State private var draft = ""
     @FocusState private var composing: Bool
 
@@ -49,6 +50,10 @@ struct ChatView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showSkills) { SkillsSheet() }
+            #if DEBUG
+            .sheet(isPresented: $debugIcons) { IconGalleryView() }
+            .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
+            #endif
         }
     }
 }

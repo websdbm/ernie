@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
   createConversationMemory,
@@ -9,6 +10,7 @@ import {
   createAutomationQueue,
   createAutomationRepository,
   createEventPublisher,
+  publishUserEvent,
   subscribeUserEvents,
 } from '@ernie/automations';
 import { loadConfig, redactConfig } from '@ernie/config';
@@ -60,6 +62,7 @@ import {
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createCompanionFactory } from './companion.js';
+import { createFamilyRepository } from './family.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createReminderStore } from './reminders.js';
@@ -113,12 +116,22 @@ async function main(): Promise<void> {
   const automationQueue = createAutomationQueue(redis.client);
   const automations = createAutomationRepository(postgres.pool);
   const events = createEventPublisher({ repo: automations, queue: automationQueue, logger });
-  // Promemoria («Ricordami»): automazioni una tantum accodate subito.
+  // Famiglia (M7e): collegamenti con etichetta fra installazioni; promemoria «a Giorgio».
+  const family = createFamilyRepository(postgres.pool);
+  // Promemoria («Ricordami»): automazioni una tantum accodate subito; a un familiare → nel suo account,
+  // con scheda immediata nelle sue sessioni connesse (da lì partono notifica locale e widget).
   const reminders = createReminderStore({
     automations,
     queue: automationQueue,
     knownTools: [],
     maxBudgetUsd: config.automations.maxRunBudgetUsd,
+    family,
+    notifyRecipient: (userId, block) =>
+      publishUserEvent(redis.client, {
+        userId,
+        type: 'assistant.block',
+        payload: { blockId: randomUUID(), block },
+      }),
   });
 
   // Tool Registry: nucleo (orario, memoria) + lista della spesa + web (solo con chiave Firecrawl).
@@ -197,6 +210,7 @@ async function main(): Promise<void> {
       ],
       learned: learnedSkills,
     },
+    family,
     // Interruttori delle skill letti dal database a ogni invalidazione: valgono nella conversazione in corso.
     loadSettings: (userId) =>
       withUser(
@@ -289,6 +303,12 @@ async function main(): Promise<void> {
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
+    family: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      repo: family,
+      onChanged: (userId) => companions.invalidateUser(userId),
+    },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

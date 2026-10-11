@@ -15,21 +15,39 @@ export interface Reminder {
   readonly text: string;
   readonly at: Date;
   readonly status: 'scheduled' | 'done' | 'cancelled';
+  /** Promemoria messo da me a una persona collegata (Famiglia): la sua etichetta («Giorgio»). */
+  readonly for?: string;
+  /** Promemoria messo a me da una persona collegata: la sua etichetta («papà»). */
+  readonly from?: string;
+}
+
+/** «Ricorda a Giorgio…» senza un collegamento con quell'etichetta. */
+export class UnknownPersonError extends Error {
+  constructor(readonly label: string) {
+    super(`persona sconosciuta: ${label}`);
+    this.name = 'UnknownPersonError';
+  }
 }
 
 export interface ReminderStore {
-  create(userId: string, input: { text: string; at: Date; timezone: string }): Promise<Reminder>;
+  /** Con `forLabel` il promemoria va a una persona collegata (Famiglia); se non esiste: UnknownPersonError. */
+  create(
+    userId: string,
+    input: { text: string; at: Date; timezone: string; forLabel?: string },
+  ): Promise<Reminder>;
   /** Promemoria futuri ancora attivi, dal più vicino. */
   list(userId: string): Promise<Reminder[]>;
   remove(userId: string, id: string): Promise<boolean>;
+  /** Cambia testo e/o ora (dalla scheda nell'app): restituisce il promemoria aggiornato (può avere un id nuovo). */
+  update(userId: string, id: string, patch: { text?: string; at?: Date }): Promise<Reminder | null>;
 }
 
 export type ReminderPlan =
-  | { op: 'create'; text: string; at: Date; assumed: string[] }
-  | { op: 'ask_time'; text: string }
+  | { op: 'create'; text: string; at: Date; assumed: string[]; who?: string }
+  | { op: 'ask_time'; text: string; who?: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
-  | { op: 'fire'; text: string };
+  | { op: 'fire'; text: string; from?: string };
 
 export const REMINDER_FIRE_PREFIX = '__promemoria__ ';
 
@@ -264,8 +282,13 @@ export function parseReminderCommand(
     .trim()
     .replace(/[.!?]+$/gu, '')
     .trim();
-  if (text.startsWith(REMINDER_FIRE_PREFIX))
-    return { op: 'fire', text: text.slice(REMINDER_FIRE_PREFIX.length).trim() };
+  if (text.startsWith(REMINDER_FIRE_PREFIX)) {
+    const body = text.slice(REMINDER_FIRE_PREFIX.length).trim();
+    const from = /^\[da (?<from>[^\]]{1,60})\]\s*(?<rest>.+)$/su.exec(body);
+    return from?.groups?.rest && from.groups.from
+      ? { op: 'fire', text: from.groups.rest.trim(), from: from.groups.from.trim() }
+      : { op: 'fire', text: body };
+  }
   const lower = text.toLowerCase();
   if (!/ricorda|promemoria/u.test(lower)) return null;
   if (
@@ -279,8 +302,15 @@ export function parseReminderCommand(
       text,
     );
   if (cancel) return { op: 'cancel', what: clean(cancel.groups?.what ?? 'tutti') };
+  // «ricorda a Giorgio di …», «promemoria per Giorgio: …»: a una persona collegata (Famiglia).
+  const toOther =
+    /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>\S+(?:\s+\S+)?)\s*(?::|,|\s+di\s|\s+che\s)\s*/iu.exec(
+      text,
+    );
+  const who = toOther?.groups?.who?.replace(/[,:]+$/u, '').trim() || undefined;
   // «ricordami …» anche non in testa: «tra 20 minuti ricordami di …», «domani ricordami di …».
   const anchor =
+    toOther ??
     /(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?|promemoria)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
       text,
     );
@@ -290,8 +320,15 @@ export function parseReminderCommand(
   if (!rest) return null;
   const parsed = parseWhen(rest, now, tz);
   if (parsed === null) return null;
-  if ('needTime' in parsed) return { op: 'ask_time', text: parsed.needTime };
-  return { op: 'create', text: parsed.text, at: parsed.at, assumed: parsed.assumed };
+  if ('needTime' in parsed)
+    return { op: 'ask_time', text: parsed.needTime, ...(who ? { who } : {}) };
+  return {
+    op: 'create',
+    text: parsed.text,
+    at: parsed.at,
+    assumed: parsed.assumed,
+    ...(who ? { who } : {}),
+  };
 }
 
 export function formatWhen(at: Date, tz: string, now = new Date()): string {
@@ -322,6 +359,8 @@ export function toRemindersBlock(
       text: r.text.slice(0, 300),
       at: r.at.toISOString(),
       status: r.status,
+      ...(r.for ? { for: r.for.slice(0, 60) } : {}),
+      ...(r.from ? { from: r.from.slice(0, 60) } : {}),
     })),
   };
 }
@@ -335,11 +374,12 @@ export function createReminderSkill(
     kind: 'deterministic',
     category: 'reminders',
     description:
-      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; elenco e annullamento.',
+      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
     examples: [
       'ricordami di uscire alle 17',
       'ricordami domani alle 9 di chiamare il dentista',
       'tra 20 minuti ricordami di spegnere il forno',
+      'ricorda a Giorgio di chiamarmi domani alle 17',
       'che promemoria ho?',
     ],
     match: (text) => parseReminderCommand(text, new Date(), timezone),
@@ -347,17 +387,41 @@ export function createReminderSkill(
       const p = plan as ReminderPlan;
       switch (p.op) {
         case 'fire':
-          return { text: `⏰ Promemoria: ${p.text}`, actions: ['fire'] };
+          return {
+            text: p.from ? `⏰ Promemoria da ${p.from}: ${p.text}` : `⏰ Promemoria: ${p.text}`,
+            actions: ['fire'],
+          };
         case 'ask_time':
           return {
-            text: `A che ora ti ricordo di ${p.text}? Dimmi per esempio «alle 17» o «tra 30 minuti».`,
+            text: `A che ora ${p.who ? `ricordo a ${p.who}` : 'ti ricordo'} di ${p.text}? Dimmi per esempio «alle 17» o «tra 30 minuti».`,
             actions: [],
           };
         case 'create': {
           if (!store)
             return { text: 'I promemoria non sono disponibili in questo contesto.', actions: [] };
-          const r = await store.create(ctx.userId, { text: p.text, at: p.at, timezone });
+          let r: Reminder;
+          try {
+            r = await store.create(ctx.userId, {
+              text: p.text,
+              at: p.at,
+              timezone,
+              ...(p.who ? { forLabel: p.who } : {}),
+            });
+          } catch (err) {
+            if (err instanceof UnknownPersonError)
+              return {
+                text: `Non conosco nessun «${err.label}». Collega la sua installazione da Impostazioni → Famiglia (con un codice d'invito) e riprova.`,
+                actions: [],
+              };
+            throw err;
+          }
           const note = p.assumed.length ? ` (ho inteso: ${p.assumed.join(', ')})` : '';
+          if (r.for)
+            return {
+              text: `⏰ Va bene: ricordo a ${r.for} di ${r.text} ${formatWhen(r.at, timezone)}${note}. Il promemoria arriva sul suo telefono.`,
+              actions: [`create:${r.id}`],
+              blocks: [toRemindersBlock([r], `Promemoria per ${r.for}`)],
+            };
           return {
             text: `⏰ Va bene: ti ricordo di ${r.text} ${formatWhen(r.at, timezone)}${note}.`,
             actions: [`create:${r.id}`],
@@ -370,7 +434,12 @@ export function createReminderSkill(
           const list = await store.list(ctx.userId);
           if (!list.length) return { text: 'Non hai promemoria in programma.', actions: ['list'] };
           return {
-            text: `Hai ${list.length} ${list.length === 1 ? 'promemoria' : 'promemoria'}: ${list.map((r) => `${r.text} (${formatWhen(r.at, timezone)})`).join('; ')}.`,
+            text: `Hai ${list.length} promemoria: ${list
+              .map(
+                (r) =>
+                  `${r.text}${r.for ? ` (per ${r.for})` : r.from ? ` (da ${r.from})` : ''} (${formatWhen(r.at, timezone)})`,
+              )
+              .join('; ')}.`,
             actions: ['list'],
             blocks: [toRemindersBlock(list)],
           };

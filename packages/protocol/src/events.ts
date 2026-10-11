@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const PROTOCOL_VERSION = 1 as const;
 /** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 6 as const;
+export const PROTOCOL_MINOR = 7 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -397,6 +397,9 @@ export const RemindersBlock = z.object({
         text: z.string().min(1).max(300),
         at: z.iso.datetime(),
         status: z.enum(['scheduled', 'done', 'cancelled']),
+        /** v1.7 (Famiglia): messo da me a «Giorgio» / messo a me da «papà». */
+        for: z.string().min(1).max(60).optional(),
+        from: z.string().min(1).max(60).optional(),
       }),
     )
     .max(50),

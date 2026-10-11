@@ -48,6 +48,10 @@ export interface CompanionFactoryDeps {
    * quindi registry e tool si basano su questo caricamento (cache 5 minuti, azzerata da `invalidateUser`).
    */
   readonly loadSettings?: (userId: string) => Promise<Readonly<Record<string, unknown>>>;
+  /** Famiglia: persone collegate con etichetta, così l'agente sa chi è «Giorgio» e come mandargli un promemoria. */
+  readonly family?: {
+    list(userId: string): Promise<readonly { label: string; relation: string }[]>;
+  };
 }
 
 /**
@@ -149,6 +153,13 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           maxChars: deps.snapshotMaxChars ?? 2000,
         });
         memorySnapshot = snap.text || undefined;
+      }
+      if (deps.family) {
+        const links = await deps.family.list(auth.userId);
+        if (links.length) {
+          const line = `Persone collegate (Famiglia): ${links.map((l) => `${l.label} (${l.relation})`).join(', ')}. Per un promemoria a una di loro l'utente dice «ricorda a <nome> di …» (skill Ricordami, senza modello).`;
+          memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${line}` : line;
+        }
       }
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.

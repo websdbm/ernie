@@ -31,18 +31,22 @@ struct BlockView: View {
     }
 }
 
-/// Promemoria: prossimi scatti con orario parlante e annullamento; lo stato arriva dallo store (server + notifiche locali).
+/// Promemoria: prossimi scatti con orario parlante; dalla scheda si annulla o si modifica al volo (testo, giorno e ora),
+/// senza passare dalla chat. Lo stato arriva dallo store (server + notifiche locali + widget).
 struct RemindersCard: View {
     let block: RemindersBlock
     @Environment(AppModel.self) private var model
+    @State private var editing: String?
+    @State private var draftText = ""
+    @State private var draftDate = Date.now
+    @State private var saving = false
 
+    /// Righe aggiornate: un promemoria modificato ha un id nuovo, la scheda lo segue.
     private var rows: [ReminderItem] {
         block.reminders.map { r in
+            if let live = model.reminders.item(r.id) { return live }
             var x = r
-            if r.status == "scheduled", !model.reminders.isScheduled(r.id), model.reminders.items.isEmpty == false || true {
-                // Annullato o già scattato dopo la creazione della scheda: lo store non lo ha più.
-                if !model.reminders.isScheduled(r.id) { x.status = isPast(r) ? "done" : "cancelled" }
-            }
+            if r.status == "scheduled" { x.status = isPast(r) ? "done" : "cancelled" }
             return x
         }
     }
@@ -56,21 +60,46 @@ struct RemindersCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Label(block.title, systemImage: "bell.fill").font(.subheadline.weight(.semibold))
             ForEach(rows) { r in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: r.status == "scheduled" ? "alarm" : r.status == "done" ? "checkmark.circle" : "xmark.circle")
-                        .foregroundStyle(r.status == "scheduled" ? Color.accentColor : Color.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(r.text)
-                            .font(.callout)
-                            .strikethrough(r.status == "cancelled", color: .secondary)
-                            .foregroundStyle(r.status == "scheduled" ? .primary : .secondary)
-                        Text(Self.when(r))
-                            .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: r.status == "scheduled" ? "alarm" : r.status == "done" ? "checkmark.circle" : "xmark.circle")
+                            .foregroundStyle(r.status == "scheduled" ? Color.accentColor : Color.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(r.text)
+                                .font(.callout)
+                                .strikethrough(r.status == "cancelled", color: .secondary)
+                                .foregroundStyle(r.status == "scheduled" ? .primary : .secondary)
+                            Text(Self.when(r) + Self.who(r)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        if r.status == "scheduled" {
+                            Button {
+                                if editing == r.id { editing = nil } else { startEditing(r) }
+                            } label: {
+                                Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle").foregroundStyle(Color.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Modifica")
+                            Button("Annulla") { Task { await model.reminders.cancel(r) } }
+                                .font(.caption).buttonStyle(.bordered).controlSize(.mini)
+                        }
                     }
-                    Spacer(minLength: 0)
-                    if r.status == "scheduled" {
-                        Button("Annulla") { Task { await model.reminders.cancel(r) } }
-                            .font(.caption).buttonStyle(.bordered).controlSize(.mini)
+                    if editing == r.id {
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Cosa ti ricordo", text: $draftText)
+                                .textFieldStyle(.roundedBorder)
+                            DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                                .datePickerStyle(.compact)
+                                .environment(\.locale, Locale(identifier: "it_IT"))
+                            HStack {
+                                Button("Salva") { Task { await save(r) } }
+                                    .buttonStyle(.borderedProminent).controlSize(.small)
+                                    .disabled(saving || draftText.trimmingCharacters(in: .whitespaces).isEmpty)
+                                Button("Lascia così") { editing = nil }.controlSize(.small)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
             }
@@ -81,7 +110,31 @@ struct RemindersCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .animation(.easeInOut(duration: 0.15), value: editing)
         .task { await model.reminders.refresh() }
+    }
+
+    private func startEditing(_ r: ReminderItem) {
+        draftText = r.text
+        draftDate = ReminderStore.date(r.at) ?? .now.addingTimeInterval(3600)
+        editing = r.id
+    }
+
+    private func save(_ r: ReminderItem) async {
+        saving = true
+        defer { saving = false }
+        let text = draftText.trimmingCharacters(in: .whitespaces)
+        let changedText = text != r.text ? text : nil
+        let changedDate = abs((ReminderStore.date(r.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
+        if changedText == nil && changedDate == nil { editing = nil; return }
+        if await model.reminders.update(r, text: changedText, at: changedDate) { editing = nil }
+    }
+
+    /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).
+    static func who(_ r: ReminderItem) -> String {
+        if let f = r.forLabel { return " · per \(f)" }
+        if let f = r.fromLabel { return " · da \(f)" }
+        return ""
     }
 
     static func when(_ r: ReminderItem) -> String {

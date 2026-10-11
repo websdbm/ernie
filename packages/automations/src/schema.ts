@@ -48,6 +48,8 @@ export const AutomationInput = z.object({
   jitterSeconds: z.number().int().min(0).max(900).default(0),
   notify: z.boolean().default(true),
   enabled: z.boolean().default(true),
+  /** Metadati liberi (es. promemoria da un familiare: chi lo ha messo e con quale etichetta). */
+  meta: z.record(z.string(), z.unknown()).default({}),
 });
 export type AutomationInput = z.infer<typeof AutomationInput>;
 
@@ -78,6 +80,7 @@ export interface Automation {
   readonly notify: boolean;
   readonly enabled: boolean;
   readonly version: number;
+  readonly meta: Readonly<Record<string, unknown>>;
   readonly webhookSecret: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;

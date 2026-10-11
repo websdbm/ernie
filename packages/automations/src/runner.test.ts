@@ -34,6 +34,7 @@ const automation = (over: Partial<Automation> = {}): Automation => ({
   notify: true,
   enabled: true,
   version: 1,
+  meta: {},
   webhookSecret: null,
   createdAt: new Date(),
   updatedAt: new Date(),
