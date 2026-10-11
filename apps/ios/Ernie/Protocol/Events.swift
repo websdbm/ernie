@@ -265,6 +265,38 @@ struct SchemaBlock: Codable, Sendable, Equatable {
     var diagram: SchemaDiagram
 }
 
+// MARK: - Liste della spesa (v1.4)
+
+struct ShoppingListItem: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var quantity: String?
+    var checked: Bool
+}
+
+/// Scheda interattiva: le voci si spuntano, aggiungono e tolgono via REST; il server restituisce il blocco aggiornato.
+struct ShoppingListBlock: Codable, Sendable, Equatable {
+    var listId: String
+    var name: String
+    var status: String
+    var items: [ShoppingListItem]
+}
+
+struct ShoppingListSummary: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var open: Int
+    var bought: Int
+    var archived: Bool
+}
+
+/// Scelta tra più liste: toccandone una si rimanda `pendingText` con il nome al posto di `{lista}`.
+struct ShoppingListsBlock: Codable, Sendable, Equatable {
+    var title: String
+    var lists: [ShoppingListSummary]
+    var pendingText: String?
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -272,6 +304,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case recipes([RecipeItem])
     case document(DocumentBlock)
     case schema(SchemaBlock)
+    case shoppingList(ShoppingListBlock)
+    case shoppingLists(ShoppingListsBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -290,6 +324,10 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .document(try DocumentBlock(from: decoder))
         case "schema":
             self = .schema(try SchemaBlock(from: decoder))
+        case "shopping_list":
+            self = .shoppingList(try ShoppingListBlock(from: decoder))
+        case "shopping_lists":
+            self = .shoppingLists(try ShoppingListsBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -314,6 +352,12 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .schema(let block):
             try c.encode("schema", forKey: .kind)
+            try block.encode(to: encoder)
+        case .shoppingList(let block):
+            try c.encode("shopping_list", forKey: .kind)
+            try block.encode(to: encoder)
+        case .shoppingLists(let block):
+            try c.encode("shopping_lists", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

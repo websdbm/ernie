@@ -7,7 +7,12 @@ import {
   createLearnedSkillRepository,
   detectRepeatedProcedures,
 } from '@ernie/skills';
-import { createShoppingTools, getTimeTool, ToolRegistry } from '@ernie/tools';
+import {
+  createShoppingTools,
+  createStubShoppingRepository,
+  getTimeTool,
+  ToolRegistry,
+} from '@ernie/tools';
 
 /**
  * Amministrazione delle skill apprese (ciclo proposta → test → approvazione → attivazione).
@@ -48,13 +53,7 @@ async function main(): Promise<number> {
   });
   // Il registry serve alla validazione dei tool consentiti: stesso catalogo dell'API (senza i tool web se manca la chiave).
   const tools = new ToolRegistry().register(getTimeTool);
-  for (const t of createShoppingTools({
-    add: async () => ({ added: [], alreadyPresent: [] }),
-    remove: async () => ({ removed: [], notFound: [] }),
-    list: async () => [],
-    markAllBought: async () => 0,
-  }))
-    tools.register(t);
+  for (const t of createShoppingTools(createStubShoppingRepository())) tools.register(t);
   const repo = createLearnedSkillRepository(pool, tools);
   const out = (v: unknown) => process.stdout.write(`${JSON.stringify(v, null, 2)}\n`);
   try {

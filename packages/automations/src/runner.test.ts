@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from '@ernie/db';
 import { createLogger } from '@ernie/observability';
 import { createShoppingListSkill, type DeterministicSkill, SkillRegistry } from '@ernie/skills';
-import type { ShoppingListRepository } from '@ernie/tools';
+import { createStubShoppingRepository, type ShoppingListRepository } from '@ernie/tools';
 import { describe, expect, it } from 'vitest';
 import type { AutomationRepository, ClaimInput, RunFinish } from './repository.js';
 import {
@@ -150,15 +150,26 @@ function fakeRepo(automations: Automation[]) {
   return { repo, runs, notifications };
 }
 
-const shoppingRepo: ShoppingListRepository = {
-  add: async () => ({ added: [], alreadyPresent: [] }),
-  remove: async () => ({ removed: [], notFound: [] }),
-  list: async () => [
-    { id: randomUUID(), name: 'latte', quantity: '2 l', status: 'active', addedAt: new Date() },
-    { id: randomUUID(), name: 'pane', quantity: null, status: 'active', addedAt: new Date() },
-  ],
-  markAllBought: async () => 0,
-};
+const shoppingRepo: ShoppingListRepository = createStubShoppingRepository([
+  {
+    id: randomUUID(),
+    listId: 'l',
+    name: 'latte',
+    quantity: '2 l',
+    status: 'active',
+    addedAt: new Date(),
+    boughtAt: null,
+  },
+  {
+    id: randomUUID(),
+    listId: 'l',
+    name: 'pane',
+    quantity: null,
+    status: 'active',
+    addedAt: new Date(),
+    boughtAt: null,
+  },
+]);
 
 function deps(automations: Automation[], skills: SkillRegistry, now = () => new Date()) {
   const { repo, runs, notifications } = fakeRepo(automations);

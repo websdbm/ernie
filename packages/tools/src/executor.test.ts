@@ -5,7 +5,11 @@ import type { EventType, PayloadInputOf } from '@ernie/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { memoryToolCallRecorder } from './audit.js';
-import { createShoppingTools, type ShoppingListRepository } from './builtins/shopping.js';
+import {
+  createShoppingTools,
+  createStubShoppingRepository,
+  type ShoppingListRepository,
+} from './builtins/shopping.js';
 import { createFirecrawlClient, createWebTools } from './builtins/web.js';
 import { buildSessionTools, createGuardedTool, type ToolContextRef } from './executor.js';
 import { ToolRegistry } from './registry.js';
@@ -161,15 +165,21 @@ describe('createGuardedTool', () => {
       createFirecrawlClient({ apiKey: 'fc-test', fetch: fetchMock as unknown as typeof fetch }),
     );
     const repo = {
+      ...createStubShoppingRepository(),
       add: vi.fn(async () => ({
         added: [
-          { id: '1', name: 'zucchero', quantity: '10 kg', status: 'active', addedAt: new Date() },
+          {
+            id: '00000000-0000-4000-8000-000000000011',
+            listId: '00000000-0000-4000-8000-000000000001',
+            name: 'zucchero',
+            quantity: '10 kg',
+            status: 'active',
+            addedAt: new Date(),
+            boughtAt: null,
+          },
         ],
         alreadyPresent: [],
       })),
-      remove: vi.fn(),
-      list: vi.fn(async () => []),
-      markAllBought: vi.fn(),
     } as unknown as ShoppingListRepository & { add: ReturnType<typeof vi.fn> };
     const registry = new ToolRegistry();
     for (const s of [...web, ...createShoppingTools(repo)]) registry.register(s);
@@ -220,7 +230,7 @@ describe('createGuardedTool', () => {
     };
     expect(await approvals.store.resolve('u', req.approvalId, 'approved')).toBe('approved');
     approvals.pending.settle(req.approvalId, 'approved');
-    expect(await p).toMatchObject({ added: [{ name: 'zucchero' }] });
+    expect(await p).toMatchObject({ added: ['zucchero'] });
     expect(repo.add).toHaveBeenCalledTimes(1);
     expect(
       await approvals.store.consume('u', req.approvalId, 'shopping_list_add', {

@@ -117,8 +117,8 @@ async function main(): Promise<void> {
   const shoppingBase = createShoppingListRepository(postgres.pool);
   const shopping: typeof shoppingBase = {
     ...shoppingBase,
-    markAllBought: async (userId) => {
-      const n = await shoppingBase.markAllBought(userId);
+    markAllBought: async (userId, listId) => {
+      const n = await shoppingBase.markAllBought(userId, listId);
       if (n > 0)
         void events
           .publish(userId, 'shopping_list.cleared', { items: n })
@@ -273,6 +273,7 @@ async function main(): Promise<void> {
       allowedOrigins: config.ws.allowedOrigins,
       repo: documentsRepo,
     },
+    shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

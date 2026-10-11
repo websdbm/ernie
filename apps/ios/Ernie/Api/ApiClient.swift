@@ -165,6 +165,48 @@ struct ApiClient: Sendable {
         return try await request("POST", "/v1/documents", body: Body(title: doc.title, source: doc.source, language: language, pages: doc.pages))
     }
 
+    // MARK: liste della spesa (scheda interattiva, v1.4)
+
+    private struct BlockOut: Decodable { var block: ContentBlock }
+
+    func shoppingList(id: String) async throws -> ContentBlock {
+        let out: BlockOut = try await request("GET", "/v1/shopping/lists/\(id)")
+        return out.block
+    }
+
+    func shoppingSetChecked(listId: String, itemId: String, checked: Bool) async throws -> ContentBlock {
+        struct Body: Encodable { var checked: Bool }
+        let out: BlockOut = try await request("PATCH", "/v1/shopping/lists/\(listId)/items/\(itemId)", body: Body(checked: checked))
+        return out.block
+    }
+
+    func shoppingAddItem(listId: String, name: String, quantity: String? = nil) async throws -> ContentBlock {
+        struct Body: Encodable { var name: String; var quantity: String? }
+        let out: BlockOut = try await request("POST", "/v1/shopping/lists/\(listId)/items", body: Body(name: name, quantity: quantity))
+        return out.block
+    }
+
+    func shoppingRemoveItem(listId: String, itemId: String) async throws -> ContentBlock {
+        let out: BlockOut = try await request("DELETE", "/v1/shopping/lists/\(listId)/items/\(itemId)")
+        return out.block
+    }
+
+    func shoppingClearBought(listId: String) async throws -> ContentBlock {
+        let out: BlockOut = try await request("POST", "/v1/shopping/lists/\(listId)/clear-bought")
+        return out.block
+    }
+
+    func shoppingSetStatus(listId: String, archived: Bool) async throws -> ContentBlock {
+        struct Body: Encodable { var status: String }
+        let out: BlockOut = try await request("PATCH", "/v1/shopping/lists/\(listId)", body: Body(status: archived ? "archived" : "active"))
+        return out.block
+    }
+
+    func shoppingDelete(listId: String) async throws {
+        struct Empty: Decodable {}
+        let _: Empty? = try? await request("DELETE", "/v1/shopping/lists/\(listId)")
+    }
+
     func registerDevice(token: String, environment: String) async throws {
         struct Body: Encodable { var platform = "ios"; var token: String; var environment: String; var appVersion: String?; var locale: String? }
         struct Out: Decodable { var id: String }

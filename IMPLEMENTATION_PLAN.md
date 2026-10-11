@@ -213,6 +213,17 @@ Verbale (11 ott 2026, sera): prova end-to-end da riga di comando (`pnpm --filter
 - **Identità visiva (decisione dell'utente, 11 ott sera)**: Ernie diventa un **orso in pixel art** (occhiali tondi, ciuffo chiaro, cornice al neon viola) per icona e avatar; sostituisce la mascotte peluche. Avatar animato a scatti di pixel (respiro, inclinazione quando pensa, bocca che si apre a ogni parola del sintetizzatore); M10 = sprite sheet con più fotogrammi al posto del 3D in WebView.
 - **Da sistemare**: dopo un riavvio del server l'app riparte con la conversazione vuota (la ripresa della sessione fallisce e si apre una sessione nuova): la trascrizione locale andrebbe conservata anche quando cambia la sessione.
 
+## M7c — Liste della spesa multiple e interattive; avatar a sprite ✅
+
+Decisioni dell'utente (11 ott 2026, sera): più liste con un nome, salvate sul server e richiamabili in qualunque conversazione; la lista è una **scheda interattiva** (tocca una voce → spuntata e barrata, finisce in fondo; aggiungi dal campo; togli dal menu a tenuta; archivia, ripristina, elimina dal menu ⋯); Ernie riconosce la lista dal nome e, se non è chiaro quale, mostra la **scelta tra le liste** come scheda toccabile; si lavora sulle liste a parole (crea, rinomina, archivia, riprendi, elimina). Avatar: **sprite sheet con animazioni disegnate**, non procedurali, consistenti tra i fotogrammi.
+
+Realizzazione:
+- Migrazione 0014 `shopping_lists` (nome, stato attiva/archiviata/eliminata, `last_used_at`) + `list_id` sulle voci; le voci esistenti finiscono nella lista «Spesa»; stato «presa» (`bought`) visibile finché non si tolgono le prese.
+- Repository con `resolve(hint)`: per nome (esatto, poi contenuto), altrimenti l'unica lista attiva o quella usata negli ultimi 30 minuti, altrimenti «scegli». Tool: `shopping_list_get/add/remove/check/clear`, `shopping_lists`, `shopping_list_create/archive/rename/delete`; ogni esito presenta la scheda `shopping_list` o la scelta `shopping_lists` (protocollo v1.4).
+- Parser italiano: nome della lista in coda («… nella lista Esselunga», «… la lista di Natale»), spunte («ho preso il latte», «spunta il pane», «non ho preso…»), operazioni sulle liste («crea una lista Natale», «quali liste ho?», «archivia/riprendi/elimina/rinomina la lista …»); «svuota» toglie tutto, «ho fatto la spesa» segna tutto come preso. Scelta ambigua → scheda con `pendingText` e segnaposto `{lista}`: l'app rimanda la frase con il nome scelto.
+- REST `/v1/shopping/lists…` per la scheda (spunta, aggiungi, togli, togli le prese, archivia/ripristina, elimina): ogni azione restituisce il blocco aggiornato; nell'app `ShoppingStore` tiene una copia per lista così tutte le schede della stessa lista restano allineate (aggiornamento ottimistico sulla spunta).
+- Avatar: `BearSheet` 4×4 (celle 256 px) generato con il modello di immagini di Figma dallo stesso orso: riga 1 idle (respiro, battito di ciglia), riga 2 ascolto e pensiero, riga 3 quattro forme di bocca, riga 4 emozioni (felice, sorpreso, triste, occhiolino); `PixelBearView` scorre il foglio per fotogramma (`SpriteFrame`, nessuna interpolazione), sequenze per stato, bocca sulle parole del sintetizzatore, emozione dal turno (`lastAvatarEmotion`) in idle.
+
 ## M8 — Conversazione vocale avanzata ⏳
 
 Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S3** (WKWebView + TalkingHead su iPhone: FPS, CPU, batteria, termica per 10 minuti, latenza marker→visema, AEC con audio dal WKWebView) eseguito qui; S2 (RealityKit) decaduto con la scelta di TalkingHead.
@@ -220,6 +231,10 @@ Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Acti
 Criteri: nessuna trascrizione della voce sintetica come input utente in un test registrato; barge-in interrompe entro 300 ms; esito di S3 documentato con misure su dispositivo.
 
 ## M9 — Ottimizzazione e hardening ⏳
+
+Aggiunte decise con l'utente (11 ott 2026, dall'analisi di Open Dots, `docs/research/09-open-dots.md`):
+- [ ] **Regole «Consenti sempre»** per utente: tabella `tool_rules` (tool → connettore → categoria), controllo nel policy engine prima della richiesta, voce «Consenti sempre» nella scheda di conferma dell'app, revoca in Impostazioni → Sicurezza.
+- [ ] **Pausa automatica delle automazioni** dopo 3 fallimenti consecutivi o su errori che richiedono l'utente (credenziali scadute), con motivo nella scheda e ripresa manuale; tolleranza di misfire esplicita.
 
 **Valutazione** (B.8): test deterministici in CI (router, policy, skill, idempotenza); 20–50 scenari da fallimenti reali valutati sullo stato finale; giudice LLM di famiglia diversa calibrato su ~100 esempi; **pass^k (k = 3–5)** per automazioni e azioni sensibili; **benchmark appaiato** router completo vs miglior modello singolo vs economico fisso vs router casuale, con costo reale, cache hit rate e intervalli di confidenza; valore di Jev misurato separatamente su memoria/tool/skill; gate di regressione a ogni cambio. **Hardening** (B.9): TLS (Caddy), backup Postgres, retention e cifratura, rate limiting, Docker secrets, OTel opzionale con semconv fissate; profilazione e latenza TTFT; valutazione TypeScript 7.
 

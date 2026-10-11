@@ -16,6 +16,8 @@ final class AppModel {
     let speaker = Speaker()
     /// Allegato in preparazione (skill «Documenti»): lettura sul telefono e caricamento del testo.
     let documents = DocumentComposer()
+    /// Liste della spesa mostrate nelle schede (spunta, aggiungi, togli via REST).
+    let shopping = ShoppingStore()
     var settings = LocalSettings.load()
 
     var api: ApiClient? { credentials.map { ApiClient(credentials: $0) } }
@@ -118,6 +120,8 @@ final class AppModel {
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
         documents.configure(api: api)
+        shopping.configure(api: api)
+        store.onBlock = { [shopping] block in shopping.apply(block) }
         // Modello vocale italiano scaricato in anticipo: il primo tocco sul microfono non deve aspettare.
         Task { await self.voice?.prewarm() }
         store.connect()

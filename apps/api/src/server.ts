@@ -5,6 +5,7 @@ import { type AutomationRoutesOptions, automationRoutes } from './routes/automat
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
+import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
@@ -22,6 +23,7 @@ export interface BuildServerOptions {
   /** Catalogo delle skill con interruttori per utente. */
   readonly skills?: SkillsRoutesOptions;
   readonly documents?: DocumentsRoutesOptions;
+  readonly shopping?: ShoppingRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -85,6 +87,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.me) await app.register(meRoutes, opts.me);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
+  if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
 
   return app;
 }

@@ -16,6 +16,8 @@ final class ConversationStore {
     var settings: LocalSettings
     /// Testo da proporre nel campo di scrittura (es. «Affina la ricetta …»): letto e azzerato dalla barra di input.
     var composerSuggestion: String?
+    /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
+    var onBlock: ((ContentBlock) -> Void)?
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?
@@ -216,6 +218,7 @@ final class ConversationStore {
         case .toolConfirmationResolved(let p):
             update(confirmation: p.approvalId) { $0.decision = p.decision }
         case .assistantBlock(let p):
+            onBlock?(p.block)
             if case .unknown = p.block { break }
             upsertAssistant(for: e.correlationId) { m in
                 if !m.blocks.contains(p.block) { m.blocks.append(p.block) }

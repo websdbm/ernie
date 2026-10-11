@@ -17,9 +17,168 @@ struct BlockView: View {
             DocumentCard(block: block, conversation: conversation)
         case .schema(let block):
             SchemaCard(block: block, conversation: conversation)
+        case .shoppingList(let block):
+            ShoppingListCard(block: block, conversation: conversation)
+        case .shoppingLists(let block):
+            ShoppingListsCard(block: block, conversation: conversation)
         case .unknown:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Liste della spesa (v1.4)
+
+/// Scheda interattiva: tocca una voce per spuntarla (barrata, in fondo), aggiungi dal campo, togli dal menu a tenuta.
+struct ShoppingListCard: View {
+    let block: ShoppingListBlock
+    var conversation: ConversationStore?
+    @Environment(AppModel.self) private var model
+    @State private var newItem = ""
+    @FocusState private var adding: Bool
+
+    private var list: ShoppingListBlock { model.shopping.current(block) }
+    private var open: [ShoppingListItem] { list.items.filter { !$0.checked } }
+    private var bought: [ShoppingListItem] { list.items.filter(\.checked) }
+    private var isBusy: Bool { model.shopping.busy.contains(list.listId) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(list.name, systemImage: "cart.fill").font(.subheadline.weight(.semibold)).lineLimit(1)
+                if list.status == "archived" {
+                    Text("archiviata").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2).background(Color.secondary.opacity(0.15), in: Capsule())
+                }
+                Spacer(minLength: 4)
+                Text(counter).font(.caption).foregroundStyle(.secondary)
+                Menu {
+                    if !bought.isEmpty {
+                        Button("Togli le voci prese", systemImage: "checkmark.circle") { Task { await model.shopping.clearBought(listId: list.listId) } }
+                    }
+                    if list.status == "archived" {
+                        Button("Ripristina", systemImage: "tray.and.arrow.up") { Task { await model.shopping.setArchived(listId: list.listId, false) } }
+                    } else {
+                        Button("Archivia", systemImage: "archivebox") { Task { await model.shopping.setArchived(listId: list.listId, true) } }
+                    }
+                    Button("Elimina la lista", systemImage: "trash", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
+                } label: {
+                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Azioni sulla lista")
+            }
+            if list.items.isEmpty {
+                Text("Lista vuota: aggiungi qualcosa qui sotto.").font(.footnote).foregroundStyle(.secondary)
+            }
+            ForEach(open + bought) { item in
+                row(item)
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle").foregroundStyle(Color.accentColor)
+                TextField("Aggiungi una voce", text: $newItem)
+                    .focused($adding)
+                    .textInputAutocapitalization(.sentences)
+                    .onSubmit(submit)
+                if !newItem.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button("Aggiungi", action: submit).font(.caption.weight(.semibold))
+                }
+            }
+            .font(.callout)
+            .padding(.top, 2)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .animation(.easeInOut(duration: 0.2), value: list)
+        .opacity(isBusy ? 0.85 : 1)
+        .task(id: block.listId) { await model.shopping.refresh(block.listId) }
+    }
+
+    private var counter: String {
+        let n = open.count
+        if list.items.isEmpty { return "" }
+        if n == 0 { return "tutto preso" }
+        return "\(n) da prendere" + (bought.isEmpty ? "" : " · \(bought.count) \(bought.count == 1 ? "presa" : "prese")")
+    }
+
+    private func row(_ item: ShoppingListItem) -> some View {
+        Button {
+            Task { await model.shopping.toggle(listId: list.listId, item: item) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(item.checked ? Color.green : Color.secondary)
+                Text(item.name)
+                    .strikethrough(item.checked, color: .secondary)
+                    .foregroundStyle(item.checked ? .secondary : .primary)
+                if let q = item.quantity, !q.isEmpty {
+                    Text(q).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.callout)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(item.checked ? "Rimetti da prendere" : "Segna come presa", systemImage: item.checked ? "arrow.uturn.backward" : "checkmark") {
+                Task { await model.shopping.toggle(listId: list.listId, item: item) }
+            }
+            Button("Togli dalla lista", systemImage: "minus.circle", role: .destructive) {
+                Task { await model.shopping.remove(listId: list.listId, item: item) }
+            }
+        }
+        .accessibilityLabel("\(item.name)\(item.quantity.map { ", \($0)" } ?? ""), \(item.checked ? "presa" : "da prendere")")
+        .accessibilityHint("Tocca per \(item.checked ? "rimettere da prendere" : "segnare come presa")")
+    }
+
+    private func submit() {
+        let text = newItem
+        newItem = ""
+        adding = false
+        Task { await model.shopping.add(listId: list.listId, name: text) }
+    }
+}
+
+/// Scelta tra più liste: tocca una lista per rimandare la richiesta con quel nome (o aprirla).
+struct ShoppingListsCard: View {
+    let block: ShoppingListsBlock
+    var conversation: ConversationStore?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(block.title, systemImage: "list.bullet.rectangle").font(.subheadline.weight(.semibold))
+            ForEach(block.lists) { list in
+                Button {
+                    let template = block.pendingText ?? "mostrami la lista {lista}"
+                    conversation?.send(template.replacingOccurrences(of: "{lista}", with: list.name), inputMode: "text")
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: list.archived ? "archivebox" : "cart")
+                            .foregroundStyle(list.archived ? Color.secondary : Color.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(list.name).font(.callout.weight(.medium)).foregroundStyle(.primary)
+                            Text(subtitle(list)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func subtitle(_ l: ShoppingListSummary) -> String {
+        var parts: [String] = []
+        parts.append(l.open == 0 ? "niente da prendere" : "\(l.open) da prendere")
+        if l.bought > 0 { parts.append("\(l.bought) \(l.bought == 1 ? "presa" : "prese")") }
+        if l.archived { parts.append("archiviata") }
+        return parts.joined(separator: " · ")
     }
 }
 

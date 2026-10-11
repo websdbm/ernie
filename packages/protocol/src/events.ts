@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const PROTOCOL_VERSION = 1 as const;
 /** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 3 as const;
+export const PROTOCOL_MINOR = 4 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -337,12 +337,45 @@ export const SchemaBlock = z.object({
   title: z.string().min(1).max(160),
   diagram: SchemaDiagram,
 });
+/** Lista della spesa interattiva (v1.4): le voci si spuntano, aggiungono e tolgono dalla scheda via REST. */
+export const ShoppingListItem = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(120),
+  quantity: z.string().max(40).optional(),
+  checked: z.boolean(),
+});
+export const ShoppingListBlock = z.object({
+  kind: z.literal('shopping_list'),
+  listId: z.uuid(),
+  name: z.string().min(1).max(60),
+  status: z.enum(['active', 'archived']),
+  items: z.array(ShoppingListItem).max(200),
+});
+/** Scelta tra più liste (v1.4): toccandone una, l'app rimanda `pendingText` con il nome della lista. */
+export const ShoppingListsBlock = z.object({
+  kind: z.literal('shopping_lists'),
+  title: z.string().max(100),
+  lists: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        name: z.string().min(1).max(60),
+        open: z.number().int().min(0),
+        bought: z.number().int().min(0),
+        archived: z.boolean(),
+      }),
+    )
+    .max(50),
+  pendingText: z.string().max(500).optional(),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
   RecipesBlock,
   DocumentBlock,
   SchemaBlock,
+  ShoppingListBlock,
+  ShoppingListsBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 
