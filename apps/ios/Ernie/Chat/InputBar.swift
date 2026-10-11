@@ -55,7 +55,7 @@ struct InputBar: View {
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
                         .onSubmit(sendDraft)
                     Button(action: onSkills) {
-                        Image(systemName: "shield.lefthalf.filled")
+                        Image(systemName: "bolt.shield.fill")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 44, height: 44)

@@ -5,6 +5,8 @@
  *   node apps/ios/scripts/asc.mjs invite <email> <nome> <cognome> [ruolo]   invita un membro del team (default CUSTOMER_SUPPORT) con accesso alla sola app Ernie
  *   node apps/ios/scripts/asc.mjs add-internal <email> <gruppo>             aggiunge un utente del team (già accettato) al gruppo interno
  *   node apps/ios/scripts/asc.mjs testers <gruppo>                          elenca i tester di un gruppo
+ *   node apps/ios/scripts/asc.mjs bundles                                   App ID registrati (com.websdbm.ernie*) con le capability
+ *   node apps/ios/scripts/asc.mjs app-groups <identifier> [nome]            registra l'App ID se manca e abilita la capability App Groups
  * Variabili: ASC_KEY_ID (default APWGU2N593), ASC_ISSUER_ID, ASC_KEY_PATH (~/.appstoreconnect/private_keys/AuthKey_<id>.p8), ASC_APP_ID (default 6821598639).
  */
 import { readFileSync } from 'node:fs';
@@ -87,7 +89,50 @@ switch (cmd) {
     out({ id: r.data.id, ...r.data.attributes });
     break;
   }
+  case 'bundles': {
+    const r = await api('GET', '/v1/bundleIds?filter[identifier]=com.websdbm.ernie,com.websdbm.ernie.widgets&include=bundleIdCapabilities&limit=20');
+    const caps = new Map((r.included ?? []).map((c) => [c.id, c.attributes.capabilityType]));
+    out(r.data.map((b) => ({
+      id: b.id,
+      identifier: b.attributes.identifier,
+      platform: b.attributes.platform,
+      capabilities: (b.relationships?.bundleIdCapabilities?.data ?? []).map((c) => caps.get(c.id) ?? c.id),
+    })));
+    break;
+  }
+  case 'app-groups': {
+    const [identifier, name = identifier] = args;
+    if (!identifier) throw new Error('uso: app-groups <identifier> [nome]');
+    const found = await api('GET', `/v1/bundleIds?filter[identifier]=${encodeURIComponent(identifier)}&include=bundleIdCapabilities`);
+    let bundle = found.data.find((b) => b.attributes.identifier === identifier);
+    if (!bundle) {
+      const created = await api('POST', '/v1/bundleIds', {
+        data: { type: 'bundleIds', attributes: { identifier, name: name.replace(/[^A-Za-z0-9 ]/g, ' '), platform: 'IOS' } },
+      });
+      bundle = created.data;
+      console.error(`App ID ${identifier} registrato (${bundle.id})`);
+    }
+    const has = (found.included ?? []).some((c) => c.attributes.capabilityType === 'APP_GROUPS' && (bundle.relationships?.bundleIdCapabilities?.data ?? []).some((x) => x.id === c.id));
+    if (has) {
+      out({ id: bundle.id, identifier, appGroups: 'già abilitata' });
+      break;
+    }
+    const r = await api('POST', '/v1/bundleIdCapabilities', {
+      data: {
+        type: 'bundleIdCapabilities',
+        attributes: { capabilityType: 'APP_GROUPS' },
+        relationships: { bundleId: { data: { type: 'bundleIds', id: bundle.id } } },
+      },
+    });
+    out({ id: bundle.id, identifier, capability: r.data.id, appGroups: 'abilitata' });
+    break;
+  }
+  case 'get': {
+    // Sonda generica (diagnostica): node asc.mjs get /v1/bundleIds
+    out(await api('GET', args[0]));
+    break;
+  }
   default:
-    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | add-internal <email> <gruppo>');
+    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | add-internal <email> <gruppo> | bundles | app-groups <identifier> [nome] | get <path>');
     process.exit(64);
 }
