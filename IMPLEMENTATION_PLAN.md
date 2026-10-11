@@ -255,6 +255,8 @@ Realizzazione:
 - Agente: le persone collegate entrano nel prefisso della sessione («Persone collegate (Famiglia): Giorgio (figlio)»).
 - iOS: Impostazioni → Famiglia (persone collegate, inviti con codice e condivisione, «Ho un codice d'invito», scollega); scheda promemoria con matita → testo, giorno e ora modificabili in linea («Salva»/«Lascia così»); «· per Giorgio» / «· da papà» nelle schede; notifica locale «Promemoria da papà»; widget con «da papà».
 - Test: parser e skill (Famiglia), store con account finti (automazione nell'account del destinatario, viste, modifica, annullamento, estraneo escluso), repository su Postgres con RLS (invito, accettazione, specularità, scollegamento).
+- Pulsante Skill: scudo con fulmine (`bolt.shield.fill`, scelta dell'utente tra sedici proposte rese nel simulatore).
+- **Da fare a mano (utente)**: il widget richiede l'App Group `group.com.websdbm.ernie`, che l'API di App Store Connect non sa registrare (la capability App Groups è già abilitata via API sui due App ID `com.websdbm.ernie` e `com.websdbm.ernie.widgets`): portale sviluppatori → Identifiers → App Groups → registrare `group.com.websdbm.ernie`, poi in ciascun App ID → App Groups → Configure → selezionarlo. Finché manca, le build TestFlight sono archiviate senza widget e senza app group (spec temporanea derivata da `project.yml`); la build successiva lo reintegra.
 
 ## M8 — Conversazione vocale avanzata ⏳
 
