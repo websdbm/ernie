@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import Ernie
@@ -33,6 +34,19 @@ struct SpeechTests {
             .numbered(start: 1, ["Zuppa", "Pollo"]),
             .quote("nota"),
         ])
+    }
+
+    @Test func livelloMicrofonoInScalaPercettiva() {
+        #expect(AudioLevel.normalized(rms: 0) == 0)
+        #expect(AudioLevel.normalized(rms: 1) == 1)
+        // −20 dBFS (parlato vicino) → 0,6; −50 dBFS (silenzio) → 0.
+        #expect(abs(AudioLevel.normalized(rms: 0.1) - 0.6) < 0.001)
+        #expect(AudioLevel.normalized(rms: 0.001) < 0.11)
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4)!
+        buffer.frameLength = 4
+        for i in 0..<4 { buffer.floatChannelData![0][i] = 0.5 }
+        #expect(abs(AudioLevel.rms(of: buffer) - 0.5) < 0.0001)
     }
 
     @Test func elencoNumeratoInterrottoNonRiparteDaUno() {

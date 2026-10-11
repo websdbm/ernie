@@ -27,6 +27,8 @@ struct DiagnosticsView: View {
             Section("Trascrizione") {
                 LabeledContent("Motore usato", value: model.voice?.engineName ?? "—")
                 LabeledContent("Voice processing", value: (model.voice?.voiceProcessingActive ?? false) ? "attivo" : "non attivo")
+                LabeledContent("Modello italiano (iOS 26)", value: model.voice?.modelState.label ?? "—")
+                if let error = model.voice?.lastError { Text(error).font(.footnote).foregroundStyle(.red) }
                 Text(availability).font(.footnote).foregroundStyle(.secondary)
             }
             Section("Spike S1: marker della sintesi vocale") {

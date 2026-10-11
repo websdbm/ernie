@@ -42,6 +42,8 @@ final class MicrophoneCapture {
     private(set) var voiceProcessing = false
     /// Ultima diagnostica della sessione raccolta durante l'avvio (vuota se tutto è andato bene al primo colpo).
     private(set) var diagnostics = ""
+    /// Livello d'ingresso (0…1, scala percettiva) per ogni buffer del tap (~40 ms): da impostare prima di `start()`.
+    var onLevel: (@Sendable (Float) -> Void)?
 
     func start() async throws -> AsyncStream<AudioChunk> {
         let input = engine.inputNode
@@ -61,9 +63,12 @@ final class MicrophoneCapture {
         }
         format = fmt
         Log.speech.info("microfono: \(Int(fmt.sampleRate)) Hz, \(fmt.channelCount) canali, voice processing \(self.voiceProcessing)")
-        let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(64))
+        // 512 buffer ≈ 20 s a 48 kHz: l'audio detto mentre il trascrittore si avvia non va perso.
+        let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(512))
+        let level = onLevel
         // `format: nil` = formato d'uscita del nodo, lo stesso appena verificato.
         input.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+            level?(AudioLevel.normalized(rms: AudioLevel.rms(of: buffer)))
             // Il buffer del tap vale solo durante la callback: ne serve una copia per consumarlo altrove.
             if let copy = buffer.deepCopy() { continuation.yield(AudioChunk(buffer: copy)) }
         }
@@ -134,5 +139,25 @@ extension AVAudioPCMBuffer {
             dstPtr[i].mDataByteSize = UInt32(bytes)
         }
         return copy
+    }
+}
+
+/// Livello del microfono per il riscontro visivo (barre) e per capire se l'utente stava parlando.
+enum AudioLevel {
+    /// RMS dei campioni float del primo canale (0 se il formato non è float o il buffer è vuoto).
+    static func rms(of buffer: AVAudioPCMBuffer) -> Float {
+        guard let data = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let n = Int(buffer.frameLength)
+        let ch = data[0]
+        var sum: Float = 0
+        for i in 0..<n { sum += ch[i] * ch[i] }
+        return (sum / Float(n)).squareRoot()
+    }
+
+    /// Scala percettiva: −50 dBFS → 0, 0 dBFS → 1. Il parlato vicino al telefono sta tipicamente tra 0,4 e 0,8.
+    static func normalized(rms: Float) -> Float {
+        guard rms > 0 else { return 0 }
+        let db = 20 * log10(rms)
+        return min(1, max(0, (db + 50) / 50))
     }
 }

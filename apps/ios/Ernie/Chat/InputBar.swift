@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// Un campo e un solo pulsante: microfono da tenere premuto, invio quando c'è testo, stop mentre Ernie parla.
+/// Un campo e un solo pulsante: microfono (un tocco avvia l'ascolto), invio quando c'è testo, stop mentre Ernie parla.
+/// In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla, ↑ invia.
 struct InputBar: View {
     @Binding var draft: String
     var composing: FocusState<Bool>.Binding
     let conversation: ConversationStore
     let voice: VoiceController
-    @State private var pressing = false
 
-    private enum Mode { case mic, send, stop, listening }
+    private enum Mode { case mic, send, stop, voice }
 
     private var mode: Mode {
-        if voice.isListening { return .listening }
+        if voice.isActive { return .voice }
         if !draft.trimmingCharacters(in: .whitespaces).isEmpty { return .send }
         if conversation.isBusy { return .stop }
         return .mic
@@ -19,37 +19,72 @@ struct InputBar: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            if voice.isListening || !voice.liveTranscript.isEmpty && voice.isFinalizing {
-                Text(voice.liveTranscript.isEmpty ? "Ti ascolto…" : voice.liveTranscript)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            if let error = voice.lastError ?? conversation.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
-                    .transition(.opacity)
-            }
-            if let error = voice.lastError ?? conversation.lastError {
-                Text(error).font(.caption2).foregroundStyle(.red).padding(.horizontal, 20)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Scrivi, o tieni premuto il microfono", text: $draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused(composing)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
-                    .onSubmit(sendDraft)
-                actionButton
+                if mode == .voice {
+                    Button { voice.cancelListening() } label: { icon("xmark", fill: .secondary) }
+                        .accessibilityLabel("Annulla")
+                    voicePanel
+                    voiceButton
+                } else {
+                    TextField("Scrivi, o tocca il microfono", text: $draft, axis: .vertical)
+                        .lineLimit(1...6)
+                        .focused(composing)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
+                        .onSubmit(sendDraft)
+                    actionButton
+                }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.bar)
-        .animation(.easeInOut(duration: 0.15), value: voice.isListening)
+        .animation(.easeInOut(duration: 0.15), value: voice.phase)
         .onChange(of: conversation.composerSuggestion) { _, suggestion in
             guard let suggestion else { return }
             draft = suggestion
             conversation.composerSuggestion = nil
             composing.wrappedValue = true
+        }
+    }
+
+    /// Stato della voce al posto del campo di testo: cosa sta succedendo, livello del microfono, trascrizione.
+    private var voicePanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(voice.statusText)
+                .font(.callout)
+                .foregroundStyle(voice.liveTranscript.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if voice.isListening {
+                LevelMeter(level: voice.inputLevel)
+            } else if case .downloadingModel(let progress) = voice.phase {
+                ProgressView(value: progress)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
+    }
+
+    @ViewBuilder
+    private var voiceButton: some View {
+        switch voice.phase {
+        case .listening:
+            Button { voice.finishListening() } label: { icon("arrow.up", fill: .red) }
+                .accessibilityLabel("Invia quello che ho detto")
+        default:
+            ProgressView()
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("Attendi")
         }
     }
 
@@ -62,24 +97,14 @@ struct InputBar: View {
         case .stop:
             Button { conversation.bargeIn() } label: { icon("stop.fill", fill: .secondary) }
                 .accessibilityLabel("Interrompi")
-        case .mic, .listening:
-            icon(mode == .listening ? "waveform" : "mic.fill", fill: mode == .listening ? .red : Color.accentColor)
-                .scaleEffect(pressing ? 1.12 : 1)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !pressing {
-                                pressing = true
-                                composing.wrappedValue = false
-                                voice.beginPushToTalk()
-                            }
-                        }
-                        .onEnded { _ in
-                            pressing = false
-                            voice.endPushToTalk()
-                        }
-                )
-                .accessibilityLabel("Tieni premuto per parlare")
+        case .mic, .voice:
+            Button {
+                composing.wrappedValue = false
+                voice.startListening()
+            } label: {
+                icon("mic.fill", fill: Color.accentColor)
+            }
+            .accessibilityLabel("Parla: un tocco avvia l'ascolto")
         }
     }
 
@@ -95,5 +120,29 @@ struct InputBar: View {
         let text = draft
         draft = ""
         conversation.send(text, inputMode: "text")
+    }
+}
+
+/// Barre che seguono il livello del microfono: se non si muovono, il microfono non sente.
+struct LevelMeter: View {
+    let level: Float
+    private static let weights: [CGFloat] = [0.35, 0.6, 0.85, 1, 0.7, 0.5, 0.9, 0.65, 1, 0.8, 0.55, 0.4, 0.75, 0.5]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 3) {
+            ForEach(Array(Self.weights.enumerated()), id: \.offset) { _, weight in
+                Capsule()
+                    .fill(Color.red.opacity(0.85))
+                    .frame(width: 3, height: 4 + 18 * CGFloat(level) * weight)
+            }
+            Text(level > 0.35 ? "ti sento" : "silenzio")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 6)
+                .contentTransition(.numericText())
+        }
+        .frame(height: 22, alignment: .center)
+        .animation(.linear(duration: 0.06), value: level)
+        .accessibilityHidden(true)
     }
 }

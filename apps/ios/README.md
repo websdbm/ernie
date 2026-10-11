@@ -1,6 +1,6 @@
 # Ernie iOS (M7)
 
-Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con lo spazio in alto riservato all'avatar tridimensionale (M10) e un solo pulsante: microfono da tenere premuto, invio quando c'è testo, stop mentre Ernie parla. Le richieste di conferma dei tool e le notifiche delle automazioni compaiono come schede dentro la conversazione, con Approva / Rifiuta (Face ID o codice). Le impostazioni stanno dietro il menu in alto a destra.
+Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con lo spazio in alto riservato all'avatar tridimensionale (M10) e un solo pulsante: microfono (un tocco avvia l'ascolto, ↑ invia, ✕ annulla; stato, livello del microfono e trascrizione in tempo reale nella barra), invio quando c'è testo, stop mentre Ernie parla. Le richieste di conferma dei tool e le notifiche delle automazioni compaiono come schede dentro la conversazione, con Approva / Rifiuta (Face ID o codice). Le impostazioni stanno dietro il menu in alto a destra.
 
 ## Requisiti
 

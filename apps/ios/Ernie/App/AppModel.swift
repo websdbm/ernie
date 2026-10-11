@@ -107,6 +107,8 @@ final class AppModel {
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
+        // Modello vocale italiano scaricato in anticipo: il primo tocco sul microfono non deve aspettare.
+        Task { await self.voice?.prewarm() }
         store.connect()
         await inbox.refresh()
         await requestPushAuthorization()

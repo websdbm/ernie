@@ -35,6 +35,101 @@ enum SpeechInputFactory {
     }
 }
 
+/// Modello italiano di SpeechTranscriber (iOS 26): stato e scaricamento una sola volta, con avanzamento condiviso.
+/// Il primo tocco sul microfono non deve restare muto mentre il sistema scarica il modello: `VoiceController`
+/// lo chiede in anticipo (`prewarm`) e, se serve ancora, mostra l'avanzamento.
+actor SpeechModel {
+    static let shared = SpeechModel()
+
+    enum State: Equatable, Sendable {
+        case unavailable(String)
+        case notInstalled
+        case downloading(Double)
+        case installed
+
+        var label: String {
+            switch self {
+            case .unavailable(let why): "non disponibile (\(why))"
+            case .notInstalled: "da scaricare"
+            case .downloading(let p): "in scaricamento \(Int(p * 100))%"
+            case .installed: "installato"
+            }
+        }
+    }
+
+    private(set) var state: State = .notInstalled
+    private var install: Task<Void, Error>?
+
+    private static func module() -> SpeechTranscriber {
+        SpeechTranscriber(locale: SpeechInputFactory.locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
+    }
+
+    /// Stato letto dal sistema (non scarica nulla).
+    func refresh() async -> State {
+        guard SpeechTranscriber.isAvailable else {
+            state = .unavailable("SpeechTranscriber assente su questo dispositivo")
+            return state
+        }
+        guard await SpeechTranscriber.supportedLocale(equivalentTo: SpeechInputFactory.locale) != nil else {
+            state = .unavailable("italiano non supportato")
+            return state
+        }
+        if case .downloading = state, install != nil { return state }
+        switch await AssetInventory.status(forModules: [Self.module()]) {
+        case .installed: state = .installed
+        case .downloading: state = .downloading(0)
+        case .supported: state = .notInstalled
+        case .unsupported: state = .unavailable("modello italiano non supportato")
+        @unknown default: state = .notInstalled
+        }
+        return state
+    }
+
+    /// Scarica e installa il modello se manca; chiamate concorrenti condividono lo stesso scaricamento.
+    func ensureInstalled() async throws {
+        if case .installed = await refresh() { return }
+        if case .unavailable(let why) = state {
+            throw NSError(domain: "Ernie.Speech", code: 8, userInfo: [NSLocalizedDescriptionKey: why])
+        }
+        if let install { return try await install.value }
+        let task = Task { try await self.download() }
+        install = task
+        defer { install = nil }
+        try await task.value
+    }
+
+    private func download() async throws {
+        let module = Self.module()
+        _ = try? await AssetInventory.reserve(locale: SpeechInputFactory.locale)
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) else {
+            state = .installed
+            return
+        }
+        state = .downloading(0)
+        Log.speech.info("scarico il modello di trascrizione italiano")
+        let poll = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.setProgress(request.progress.fractionCompleted)
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+        defer { poll.cancel() }
+        do {
+            try await request.downloadAndInstall()
+            state = .installed
+            Log.speech.info("modello di trascrizione italiano installato")
+        } catch {
+            state = .notInstalled
+            Log.speech.error("scaricamento del modello fallito: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    private func setProgress(_ p: Double) {
+        if case .downloading = state { state = .downloading(p) }
+    }
+}
+
 /// iOS 26: SpeechAnalyzer + SpeechTranscriber, modelli scaricati dal sistema (AssetInventory), risultati volatili.
 final class ModernTranscriber: SpeechInput, @unchecked Sendable {
     let engineName = "SpeechTranscriber (iOS 26, on-device)"
@@ -50,10 +145,8 @@ final class ModernTranscriber: SpeechInput, @unchecked Sendable {
             reportingOptions: [.volatileResults],
             attributeOptions: []
         )
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            Log.speech.info("scarico il modello di trascrizione italiano")
-            try await request.downloadAndInstall()
-        }
+        // Di norma già installato da `prewarm`; altrimenti lo scaricamento avviene qui (senza avanzamento visibile).
+        try await SpeechModel.shared.ensureInstalled()
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         self.analyzer = analyzer
         guard let targetFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
