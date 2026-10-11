@@ -121,7 +121,8 @@ describe.skipIf(!ready)('prefisso stabile su due turni reali (online)', () => {
     );
     expect(bodies[0]?.model).toBe(bodies[1]?.model);
     expect(bodies[0]?.session_id).toBe(sessionId);
-    expect((bodies[0]?.usage as { include: boolean }).include).toBe(true);
+    const usageOpt = bodies[0]?.usage as { include?: boolean } | undefined;
+    expect(usageOpt?.include).toBe(true);
     const calls = recorder.record.mock.calls as unknown as Array<
       [{ usage: { costReportedUsd?: number } }]
     >;
