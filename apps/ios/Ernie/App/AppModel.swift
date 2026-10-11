@@ -187,6 +187,8 @@ struct LocalSettings: Codable, Sendable, Equatable {
     var voiceOutput = true
     /// Con la voce accesa, legge anche le risposte alle domande scritte (non solo a quelle dette a voce).
     var speakTextReplies = false
+    /// Conversazione continua (M8): un tocco sul microfono apre un dialogo a mani libere, finché non si tocca ✕.
+    var continuousVoice = false
 
     static let key = "ernie.localSettings"
 
@@ -196,6 +198,7 @@ struct LocalSettings: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         voiceOutput = try c.decodeIfPresent(Bool.self, forKey: .voiceOutput) ?? true
         speakTextReplies = try c.decodeIfPresent(Bool.self, forKey: .speakTextReplies) ?? false
+        continuousVoice = try c.decodeIfPresent(Bool.self, forKey: .continuousVoice) ?? false
     }
 
     static func load() -> LocalSettings {

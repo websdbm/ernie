@@ -1,6 +1,6 @@
-# Ernie iOS (M7)
+# Ernie iOS (M7–M8)
 
-Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con in alto l'avatar (l'orso in pixel art animato a fotogrammi da uno sprite sheet: idle, ascolto, pensiero, bocca sulle parole, emozioni) e un solo pulsante: microfono (un tocco avvia l'ascolto, ↑ invia, ✕ annulla; stato, livello del microfono e trascrizione in tempo reale nella barra), invio quando c'è testo, stop mentre Ernie parla. Le richieste di conferma dei tool e le notifiche delle automazioni compaiono come schede dentro la conversazione, con Approva / Rifiuta (Face ID o codice). La voce si accende e spegne dal pulsante altoparlante in alto (spenta: solo risposte scritte); le skill *disponibili* si scelgono in Impostazioni → Skill e quelle *attive* si accendono e spengono dal pulsante ✦ accanto al microfono (pannello compatto con cerca, senza azzerare la conversazione); le impostazioni stanno dietro il menu in alto a destra.
+Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con in alto l'avatar (l'orso in pixel art animato a fotogrammi da uno sprite sheet: idle, ascolto, pensiero, bocca sulle parole, emozioni) e un solo pulsante: microfono (un tocco avvia l'ascolto, ↑ invia, ✕ annulla; stato, livello del microfono e trascrizione in tempo reale nella barra), invio quando c'è testo, stop mentre Ernie parla. **Conversazione continua** (M8): con l'impostazione omonima, o tenendo premuto il microfono, il dialogo è a mani libere: la frase parte da sola quando fai una pausa, Ernie risponde e torna ad ascoltarti; mentre parla il microfono è spento (la sua voce non viene mai trascritta) e toccandolo lo interrompi; ✕ chiude. Le richieste di conferma dei tool e le notifiche delle automazioni compaiono come schede dentro la conversazione, con Approva / Rifiuta (Face ID o codice). La voce si accende e spegne dal pulsante altoparlante in alto (spenta: solo risposte scritte); le skill *disponibili* si scelgono in Impostazioni → Skill e quelle *attive* si accendono e spengono dal pulsante ✦ accanto al microfono (pannello compatto con cerca, senza azzerare la conversazione); le impostazioni stanno dietro il menu in alto a destra.
 
 ## Requisiti
 
@@ -43,9 +43,9 @@ Ernie/App        ErnieApp, AppModel (stato radice), AppDelegate (APNs, notifiche
 Ernie/Protocol   porting del protocollo v1.1: eventi (Codable), deduplica e sequenze, client WebSocket con ripresa e riconnessione
 Ernie/Api        REST: /v1/me, impostazioni, notifiche, approvazioni, dispositivi
 Ernie/Chat       modelli, ConversationStore (eventi → stato, TTS incrementale, cronologia locale), ChatView, schede, barra di input, AvatarStage
-Ernie/Speech     sessione audio (playAndRecord + voice processing), cattura, SpeechTranscriber/SFSpeechRecognizer, Speaker, VoiceController, probe S1
+Ernie/Speech     sessione audio (playAndRecord + voice processing), cattura, SpeechTranscriber/SFSpeechRecognizer, Speaker, VoiceController (conversazione continua, eventi audio), TurnDetector (fine turno automatica), probe S1
 Ernie/Settings   onboarding, impostazioni (voce, interruttore di emergenza, diagnostica)
-ErnieTests       test unitari (Swift Testing): protocollo, deduplica, frasi per il TTS, latenza, schede
+ErnieTests       test unitari (Swift Testing): protocollo, deduplica, frasi per il TTS, latenza, schede, fine turno e ciclo vocale
 ```
 
 ## Famiglia e promemoria a un familiare
@@ -54,7 +54,7 @@ Impostazioni → Famiglia: «Invita un familiare» crea un codice (6 caratteri, 
 
 ## Diagnostica
 
-Impostazioni → Diagnostica mostra la latenza udibile per stadio dei turni vocali (rilascio del pulsante → trascrizione finale → primo token → prima parola sintetizzata; obiettivo p50 < 1,5 s), il motore di trascrizione in uso e il probe dello spike S1 (marker delle voci italiane, vedi `docs/research/08-spike-s1-marker-tts.md`).
+Impostazioni → Diagnostica mostra la latenza udibile per stadio dei turni vocali (rilascio del pulsante → trascrizione finale → primo token → prima parola sintetizzata; obiettivo p50 < 1,5 s), il motore di trascrizione in uso, i turni chiusi automaticamente, la latenza dell'ultimo barge-in (obiettivo < 300 ms), l'ultimo evento audio di sistema (interruzione, cambio di route, reset) e il probe dello spike S1 (marker delle voci italiane, vedi `docs/research/08-spike-s1-marker-tts.md`).
 
 ## Vincoli verificati (ottobre 2026; dettagli e fonti in `docs/research/02`, `04`, `03-revisione.md`)
 

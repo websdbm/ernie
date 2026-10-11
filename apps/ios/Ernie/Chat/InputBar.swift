@@ -2,9 +2,10 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Un campo, il pulsante ✦ delle skill e un solo pulsante d'azione: microfono (un tocco avvia l'ascolto), invio quando
-/// c'è testo, stop mentre Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione
-/// in tempo reale; ✕ annulla, ↑ invia.
+/// Un campo, il pulsante ✦ delle skill e un solo pulsante d'azione: microfono (un tocco avvia l'ascolto; tenuto premuto,
+/// o con l'impostazione «Conversazione continua», apre il dialogo a mani libere), invio quando c'è testo, stop mentre
+/// Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla,
+/// ↑ invia. Nella conversazione continua, mentre Ernie risponde, il microfono interrompe e riapre l'ascolto.
 struct InputBar: View {
     @Binding var draft: String
     var composing: FocusState<Bool>.Binding
@@ -158,9 +159,24 @@ struct InputBar: View {
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if voice.isListening {
-                LevelMeter(level: voice.inputLevel)
+                HStack(spacing: 8) {
+                    LevelMeter(level: voice.inputLevel)
+                    if voice.continuous {
+                        Text("a mani libere")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } else if case .downloadingModel(let progress) = voice.phase {
                 ProgressView(value: progress)
+            } else if voice.isWaitingReply {
+                HStack(spacing: 6) {
+                    Image(systemName: conversation.agentState == .speaking ? "speaker.wave.2.fill" : "ellipsis")
+                        .symbolEffect(.variableColor.iterative, isActive: true)
+                    Text("a mani libere")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 14)
@@ -174,6 +190,9 @@ struct InputBar: View {
         case .listening:
             Button { voice.finishListening() } label: { icon("arrow.up", fill: .red) }
                 .accessibilityLabel("Invia quello che ho detto")
+        case .waitingReply:
+            Button { voice.interrupt() } label: { icon("mic.fill", fill: Color.accentColor) }
+                .accessibilityLabel("Interrompi Ernie e parla")
         default:
             ProgressView()
                 .frame(width: 44, height: 44)
@@ -197,7 +216,12 @@ struct InputBar: View {
             } label: {
                 icon("mic.fill", fill: Color.accentColor)
             }
-            .accessibilityLabel("Parla: un tocco avvia l'ascolto")
+            // Pressione lunga: conversazione continua anche senza l'impostazione (il tocco al rilascio è ignorato perché l'ascolto è già partito).
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                composing.wrappedValue = false
+                voice.startListening(continuous: true)
+            })
+            .accessibilityLabel("Parla: un tocco avvia l'ascolto, tieni premuto per la conversazione continua")
         }
     }
 

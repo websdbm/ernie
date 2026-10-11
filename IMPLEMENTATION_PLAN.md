@@ -17,7 +17,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M5 | Tool e skill: registry, executor con policy e approvazioni, Firecrawl, lista della spesa deterministica, skill apprese, test di sicurezza | ✅ |
 | M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ✅ |
 | M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ✅ |
-| M8 | Voce avanzata: modalità continua, sintesi incrementale, interruzione, errori audio | ⏳ |
+| M8 | Voce avanzata: conversazione continua con fine turno automatica, sintesi incrementale, barge-in con `spokenThroughIndex`, errori audio | ✅ |
 | M9 | Ottimizzazione: benchmark token, cache, profilazione, latenza, e2e, hardening | ⏳ |
 | M10 | Avatar 3D: three.js + TalkingHead in WKWebView, modulo italiano, lip-sync on-device, integrazione | ⏳ |
 | R | Ricerca bibliografica (3 ricercatori + revisore) e integrazione nei documenti | ✅ |
@@ -258,11 +258,24 @@ Realizzazione:
 - Pulsante Skill: scudo con fulmine (`bolt.shield.fill`, scelta dell'utente tra sedici proposte rese nel simulatore).
 - **Da fare a mano (utente)**: il widget richiede l'App Group `group.com.websdbm.ernie`, che l'API di App Store Connect non sa registrare (la capability App Groups è già abilitata via API sui due App ID `com.websdbm.ernie` e `com.websdbm.ernie.widgets`): portale sviluppatori → Identifiers → App Groups → registrare `group.com.websdbm.ernie`, poi in ciascun App ID → App Groups → Configure → selezionarlo. Finché manca, le build TestFlight sono archiviate senza widget e senza app group (spec temporanea derivata da `project.yml`); la build successiva lo reintegra.
 
-## M8 — Conversazione vocale avanzata ⏳
+## M8 — Conversazione vocale avanzata ✅
 
-Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S3** (WKWebView + TalkingHead su iPhone: FPS, CPU, batteria, termica per 10 minuti, latenza marker→visema, AEC con audio dal WKWebView) eseguito qui; S2 (RealityKit) decaduto con la scelta di TalkingHead.
+Ambito previsto: modalità continua **solo in primo piano** con VAD e fine turno (semantico con Smart Turn v3 in Core ML, altrimenti silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7).
 
-Criteri: nessuna trascrizione della voce sintetica come input utente in un test registrato; barge-in interrompe entro 300 ms; esito di S3 documentato con misure su dispositivo.
+Realizzazione (11 ott 2026, sera):
+- **Conversazione continua** (`VoiceController`, fase `waitingReply`): un tocco sul microfono con l'impostazione «Conversazione continua» (o una pressione lunga, una tantum) apre il dialogo a mani libere. La frase parte da sola quando l'utente fa una pausa, Ernie risponde a voce e il microfono si riapre alla chiusura del turno (`ConversationStore.onSettled`: risposta completa **e** voce finita); ✕ chiude; toccando il microfono mentre Ernie risponde si interrompe e si torna subito all'ascolto. Solo in primo piano: nessuna Live Activity né `AudioRecordingIntent`. La sessione audio resta attiva tra un turno e l'altro per riaprire il microfono più in fretta.
+- **Fine turno automatica** (`TurnDetector`, regola pura e testata): parlato rilevato (livello ≥ 0,35 **o** parole trascritte), poi silenzio ≥ 0,7 s con trascrizione non vuota e ferma da ≥ 0,4 s; senza parlato per 12 s la conversazione si chiude da sola con un messaggio; rumore senza parole per 4 s azzera il conteggio; oltre 60 s il turno parte comunque; il primo turno vuoto a mani libere riapre il microfono senza disturbare, il secondo chiude con spiegazione. **Smart Turn v3 in Core ML non è stato fatto**: la conversione del modello e la sua valutazione in italiano sono lavoro a sé (rinviato, da riconsiderare se la regola di silenzio si rivelasse insufficiente nell'uso).
+- **Mute logico**: mentre Ernie parla il microfono è **spento** (half-duplex): `VoiceLoopPolicy.shouldResumeListening` riapre l'ascolto solo con stato `idle` e sintetizzatore fermo, e `mayOpenMicrophone` impedisce l'apertura con la sintesi in corso (prima si ferma). La voce sintetica non può quindi essere trascritta come input: garanzia per costruzione, verificata dai test della regola (non da una registrazione, che in simulatore non è possibile: SpeechTranscriber e SFSpeechRecognizer non sono disponibili).
+- **Barge-in misurato**: `Speaker.stop()` registra l'istante della richiesta e `didCancel` la latenza (`lastStopLatencyMs`, in Diagnostica e nel log); il server riceve `user.cancel` con `spokenThroughIndex` e **lo usa**: `ClientConnection` annota ciò che l'utente ha sentito e il turno successivo riceve la nota «l'utente ha interrotto la tua risposta precedente (ha sentito solo: «…»). Non ripetere ciò che ha già sentito; se chiede di continuare, riprendi da dove ti ha fermato» (una volta sola); nello state del router la risposta compare come interrotta. Test in `connection.test.ts`.
+- **Prefisso attributivo**: le notice di `web_search` e `web_fetch` chiedono al modello di premettere la fonte («Secondo <sito>, …») quando riferisce contenuti esterni, così a voce si distinguono le parole di Ernie da quelle altrui.
+- **Errori audio (B.7)**: interruzioni (`interruptionNotification`: chiamata o altra app → ascolto annullato con messaggio, voce zittita; alla fine, se il sistema lo consente, la conversazione continua riprende), cambi di route (`routeChangeNotification`: cuffie scollegate durante l'ascolto → cattura riavviata sulla nuova route), reset dei servizi media (`mediaServicesWereResetNotification`: sintetizzatore ricreato, stato riportato a riposo con messaggio). L'ultimo evento è visibile in Diagnostica.
+- Testo del permesso microfono aggiornato (non più «tieni premuto»).
+
+### Verbale di verifica M8 (11 ott 2026, sera)
+- Server: lint, typecheck e 173 test verdi (nuovo test del barge-in: la nota arriva al turno successivo e si consuma una volta sola).
+- iOS: build e 31 test unitari verdi nel simulatore (8 nuovi: `TurnDetector` e `VoiceLoopPolicy`, impostazioni locali).
+- Criteri: «nessuna trascrizione della voce sintetica come input» soddisfatto per costruzione (microfono spento durante la sintesi) e verificato dai test della regola; «barge-in entro 300 ms»: in simulatore, stop toccato a metà di una risposta di otto frasi, il sintetizzatore si è fermato in **11 ms** (dalla richiesta al callback: in simulatore arriva `didFinish`, non `didCancel`, per questo la misura accetta entrambi); la misura su iPhone si legge in Diagnostica nell'uso reale. **S3 decaduto**: con l'avatar a sprite sheet (decisione dell'11 ott) non c'è più WKWebView né TalkingHead da misurare; S2 già decaduto.
+- Da provare su iPhone (non in simulatore): soglie del rilevatore (0,35 / 0,7 s / 0,4 s) nell'uso quotidiano, comportamento con cuffie Bluetooth e con una chiamata in arrivo.
 
 ## M9 — Ottimizzazione e hardening ⏳
 

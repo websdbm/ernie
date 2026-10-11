@@ -117,6 +117,10 @@ export class ClientConnection {
   private session: SessionRecord | undefined;
   private readonly dedupe = new EventDeduper(2048);
   private readonly activeTurns = new Map<string, AbortController>();
+  /** Barge-in: fino a quale carattere l'utente ha sentito la risposta che ha interrotto (per correlationId). */
+  private readonly spokenThrough = new Map<string, number>();
+  /** Ultima risposta interrotta dall'utente: ciò che ha sentito e ciò che non ha sentito (per il turno successivo). */
+  private interruptedReply: { heard: string; unheard: string } | undefined;
   /** Ultimi scambi (max 6 righe) per lo state del router: non persistiti. */
   private readonly recentTurns: string[] = [];
   private sending: Promise<void> = Promise.resolve();
@@ -180,7 +184,14 @@ export class ClientConnection {
         return this.onUserMessage(event);
       case 'user.cancel': {
         const ac = this.activeTurns.get(event.payload.targetCorrelationId);
-        if (ac) ac.abort();
+        if (ac) {
+          if (event.payload.spokenThroughIndex !== undefined)
+            this.spokenThrough.set(
+              event.payload.targetCorrelationId,
+              event.payload.spokenThroughIndex,
+            );
+          ac.abort();
+        }
         return;
       }
       case 'session.ping':
@@ -471,6 +482,8 @@ export class ClientConnection {
       contextBlocks.push(
         `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,
       );
+    const interruptedNote = this.takeInterruptedNote();
+    if (interruptedNote) contextBlocks.push(interruptedNote);
     const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
 
     const ac = new AbortController();
@@ -527,6 +540,7 @@ export class ClientConnection {
         if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         const r = res as
           | {
+              text?: string;
               cancelled?: boolean;
               loopDetected?: boolean;
               costUsd?: number;
@@ -535,6 +549,8 @@ export class ClientConnection {
               latencyMs?: number;
             }
           | undefined;
+        if (r?.cancelled) this.noteInterruption(correlationId, r.text ?? '');
+        this.spokenThrough.delete(correlationId);
         if (!this.deps.memories) return;
         const outcome = r?.loopDetected ? 'loop' : r?.cancelled ? 'cancelled' : 'completed';
         await this.deps.memories.afterTurn({
@@ -611,6 +627,31 @@ export class ClientConnection {
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * Barge-in (M8): la risposta interrotta non è stata sentita per intero. Si registra fin dove l'utente l'ha sentita
+   * (`spokenThroughIndex` del `user.cancel`, altrimenti nulla) così il turno successivo lo sa; nello state del router
+   * la risposta compare come interrotta.
+   */
+  private noteInterruption(correlationId: string, text: string): void {
+    const idx = this.spokenThrough.get(correlationId);
+    const cut = Math.max(0, Math.min(text.length, idx ?? 0));
+    const heard = text.slice(0, cut).trim();
+    const unheard = text.slice(cut).trim();
+    this.interruptedReply = { heard, unheard };
+    this.remember('assistente', `${heard || '(nulla)'} [interrotta dall'utente]`);
+  }
+
+  /** Nota per il turno successivo sulla risposta interrotta; si consuma una volta sola. */
+  private takeInterruptedNote(): string | undefined {
+    const r = this.interruptedReply;
+    this.interruptedReply = undefined;
+    if (!r || (!r.heard && !r.unheard)) return undefined;
+    const heard = r.heard
+      ? `ha sentito solo: «${r.heard.slice(-600)}»`
+      : 'non ne ha sentita nessuna parte';
+    return `Nota: l'utente ha interrotto la tua risposta precedente (${heard}). Non ripetere ciò che ha già sentito; se chiede di continuare, riprendi da dove ti ha fermato.`;
   }
 
   private remember(role: 'utente' | 'assistente', text: string): void {

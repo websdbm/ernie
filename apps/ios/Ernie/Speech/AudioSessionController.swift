@@ -13,6 +13,14 @@ enum AudioSessionController {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    /// Route corrente in breve («MicrophoneBuiltIn → Speaker»), per gli eventi audio in Diagnostica.
+    static func routeSummary() -> String {
+        let s = AVAudioSession.sharedInstance()
+        let ins = s.currentRoute.inputs.map(\.portType.rawValue).joined(separator: "+")
+        let outs = s.currentRoute.outputs.map(\.portType.rawValue).joined(separator: "+")
+        return "\(ins.isEmpty ? "nessun ingresso" : ins) → \(outs.isEmpty ? "nessuna uscita" : outs)"
+    }
+
     /// Stato della sessione per il log e i messaggi d'errore: frequenza, ingressi, route, altre app in riproduzione.
     static func describe() -> String {
         let s = AVAudioSession.sharedInstance()

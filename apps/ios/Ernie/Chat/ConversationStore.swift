@@ -18,6 +18,8 @@ final class ConversationStore {
     var composerSuggestion: String?
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
     var onBlock: ((ContentBlock) -> Void)?
+    /// Turno chiuso del tutto (risposta finita e voce terminata): la conversazione continua riapre il microfono.
+    var onSettled: (() -> Void)?
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?
@@ -263,7 +265,9 @@ final class ConversationStore {
     }
 
     private func recomputeState() {
+        let previous = agentState
         if isListening { agentState = .listening } else if speaker.isSpeaking { agentState = .speaking } else if activeCorrelationId != nil { agentState = .thinking } else { agentState = .idle }
+        if agentState == .idle, previous != .idle { onSettled?() }
     }
 
     private func fail(_ message: String) {

@@ -10,9 +10,12 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var voiceDescription = "—"
     /// Bocca dell'avatar: si alterna a ogni parola pronunciata (callback di parola del sintetizzatore, spike S1).
     private(set) var mouthOpen = false
+    /// Barge-in: millisecondi dalla richiesta di stop al silenzio effettivo del sintetizzatore (criterio M8: < 300 ms).
+    private(set) var lastStopLatencyMs: Int?
     var onSpeakingChanged: ((Bool) -> Void)?
 
-    private let synthesizer = AVSpeechSynthesizer()
+    private var synthesizer = AVSpeechSynthesizer()
+    private var stopRequestedAt: ContinuousClock.Instant?
     private var voice: AVSpeechSynthesisVoice?
     private var buffer = ""
     private var spokenThrough = 0
@@ -76,11 +79,23 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     func stop() -> Int {
         buffer = ""
         if synthesizer.isSpeaking || queued > 0 {
+            stopRequestedAt = .now
             synthesizer.stopSpeaking(at: .immediate)
         }
         queued = 0
         setSpeaking(false)
         return spokenThrough
+    }
+
+    /// Dopo un reset dei servizi media il sintetizzatore va ricreato (quello vecchio resta muto).
+    func rebuild() {
+        synthesizer.delegate = nil
+        synthesizer = AVSpeechSynthesizer()
+        synthesizer.delegate = self
+        synthesizer.usesApplicationAudioSession = true
+        queued = 0
+        setSpeaking(false)
+        selectVoice()
     }
 
     private func enqueue(_ sentence: String) {
@@ -122,14 +137,27 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        let now = ContinuousClock.now
         Task { @MainActor in
+            self.noteStopped(at: now)
             self.queued = max(0, self.queued - 1)
             if self.queued == 0 { self.setSpeaking(false) }
         }
     }
 
+    /// Latenza del barge-in: dal `stop()` al primo callback del sintetizzatore (`didCancel` o, in simulatore, `didFinish`).
+    private func noteStopped(at now: ContinuousClock.Instant) {
+        guard let t = stopRequestedAt else { return }
+        let ms = Int((now - t) / .milliseconds(1))
+        lastStopLatencyMs = ms
+        stopRequestedAt = nil
+        Log.speech.info("barge-in: sintesi fermata in \(ms) ms")
+    }
+
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        let now = ContinuousClock.now
         Task { @MainActor in
+            self.noteStopped(at: now)
             self.queued = max(0, self.queued - 1)
             if self.queued == 0 { self.setSpeaking(false) }
         }

@@ -172,11 +172,13 @@ const client = (sessionId: string) => {
       JSON.stringify(
         createEvent('user.message', { text }, { sessionId, correlationId, seq: seq.next() }),
       ),
-    cancel: (target: string) =>
+    cancel: (target: string, spokenThroughIndex?: number) =>
       JSON.stringify(
         createEvent(
           'user.cancel',
-          { targetCorrelationId: target },
+          spokenThroughIndex === undefined
+            ? { targetCorrelationId: target }
+            : { targetCorrelationId: target, spokenThroughIndex },
           { sessionId, correlationId: randomUUID(), seq: seq.next() },
         ),
       ),
@@ -341,6 +343,69 @@ describe('ClientConnection', () => {
     await conn.handleRaw(c.cancel(corr));
     await tick();
     expect(s.types().at(-1)).toBe('assistant.cancelled');
+  });
+
+  it('barge-in: il turno successivo sa fin dove l’utente ha sentito la risposta interrotta', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const contexts: Array<string | undefined> = [];
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          runTurn: async (input: TurnInput) => {
+            contexts.push(input.memoryContext);
+            await input.emit('assistant.started', { route: 'llm' });
+            if (input.text === 'lungo') {
+              await input.emit('assistant.text.delta', { delta: 'Ciao. Ecco tre ricette per te.' });
+              await new Promise<void>((resolve) =>
+                input.abortSignal.addEventListener('abort', () => resolve()),
+              );
+              await input.emit('assistant.cancelled', { reason: 'user' });
+              return {
+                text: 'Ciao. Ecco tre ricette per te.',
+                cancelled: true,
+                llmCalls: 1,
+                toolCalls: 0,
+                latencyMs: 1,
+                costUsd: 0,
+                loopDetected: false,
+              };
+            }
+            await input.emit('assistant.text.completed', { text: 'ok' });
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+            return {
+              text: 'ok',
+              cancelled: false,
+              llmCalls: 1,
+              toolCalls: 0,
+              latencyMs: 1,
+              costUsd: 0,
+              loopDetected: false,
+            };
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    const corr = randomUUID();
+    await conn.handleRaw(c.message('lungo', corr));
+    await tick();
+    await conn.handleRaw(c.cancel(corr, 5));
+    await tick();
+    await conn.handleRaw(c.message('continua'));
+    await tick();
+    expect(contexts[0]).toBeUndefined();
+    expect(contexts[1]).toContain('ha sentito solo: «Ciao.»');
+    expect(contexts[1]).toContain('interrotto la tua risposta precedente');
+    // La nota vale una volta sola.
+    await conn.handleRaw(c.message('altro'));
+    await tick();
+    expect(contexts[2]).toBeUndefined();
   });
 });
 

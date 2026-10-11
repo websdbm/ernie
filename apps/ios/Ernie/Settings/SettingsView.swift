@@ -46,6 +46,17 @@ struct SettingsView: View {
                         }
                     ))
                     .disabled(!model.settings.voiceOutput)
+                    Toggle("Conversazione continua", isOn: Binding(
+                        get: { model.settings.continuousVoice },
+                        set: { value in
+                            model.settings.continuousVoice = value
+                            model.settings.save()
+                            model.conversation?.settings = model.settings
+                        }
+                    ))
+                    Text("Un tocco sul microfono apre un dialogo a mani libere: la frase parte da sola quando fai una pausa, Ernie risponde e torna ad ascoltarti; ✕ chiude. Senza questa opzione, tieni il microfono premuto a lungo per lo stesso effetto una volta sola.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     LabeledContent("Voce", value: model.speaker.voiceDescription)
                 }
                 Section {

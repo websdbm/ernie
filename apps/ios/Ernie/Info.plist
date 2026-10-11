@@ -36,7 +36,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conferma delle azioni sensibili: approvazioni e interruttore di emergenza.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ernie ascolta la tua voce mentre tieni premuto il pulsante per parlare.</string>
+	<string>Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo.</string>
 	<key>UIBackgroundModes</key>

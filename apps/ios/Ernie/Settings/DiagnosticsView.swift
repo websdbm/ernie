@@ -31,6 +31,12 @@ struct DiagnosticsView: View {
                 if let error = model.voice?.lastError { Text(error).font(.footnote).foregroundStyle(.red) }
                 Text(availability).font(.footnote).foregroundStyle(.secondary)
             }
+            Section("Conversazione continua e barge-in") {
+                LabeledContent("Fine turno", value: "automatica: pausa di 0,7 s con trascrizione ferma")
+                LabeledContent("Turni chiusi da soli", value: "\(model.voice?.autoEndedTurns ?? 0)")
+                LabeledContent("Ultimo barge-in", value: model.speaker.lastStopLatencyMs.map { "\($0) ms (obiettivo < 300)" } ?? "—")
+                LabeledContent("Ultimo evento audio", value: model.voice?.lastAudioEvent.map { "\($0.description) · \($0.at.formatted(date: .omitted, time: .shortened))" } ?? "nessuno")
+            }
             Section("Spike S1: marker della sintesi vocale") {
                 Button(probing ? "In corso…" : "Esegui con le voci italiane installate") {
                     Task {
