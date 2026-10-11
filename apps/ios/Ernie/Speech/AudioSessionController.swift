@@ -12,6 +12,16 @@ enum AudioSessionController {
     static func deactivate() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
+
+    /// Stato della sessione per il log e i messaggi d'errore: frequenza, ingressi, route, altre app in riproduzione.
+    static func describe() -> String {
+        let s = AVAudioSession.sharedInstance()
+        let ins = s.currentRoute.inputs.map(\.portType.rawValue).joined(separator: "+")
+        let outs = s.currentRoute.outputs.map(\.portType.rawValue).joined(separator: "+")
+        return "sessione \(Int(s.sampleRate)) Hz, canali in ingresso \(s.inputNumberOfChannels), ingresso disponibile \(s.isInputAvailable ? "sì" : "no"), "
+            + "route \(ins.isEmpty ? "nessuno" : ins) → \(outs.isEmpty ? "nessuno" : outs), altre app audio \(s.isOtherAudioPlaying ? "sì" : "no"), "
+            + "categoria \(s.category.rawValue), modo \(s.mode.rawValue)"
+    }
 }
 
 /// Buffer PCM da passare tra thread audio e attori: AVAudioPCMBuffer non è Sendable, qui non viene più mutato.
@@ -20,33 +30,39 @@ struct AudioChunk: @unchecked Sendable {
 }
 
 /// Cattura dal microfono con AVAudioEngine; i buffer escono da un AsyncStream.
+///
+/// Su iPhone (iOS 18+, visto su iOS 27.0.1) `inputNode.outputFormat(forBus: 0)` può risultare vuoto (0 Hz, 0 canali)
+/// subito dopo l'attivazione della sessione, in particolare con l'elaborazione vocale attiva o con un'altra app in
+/// riproduzione: `installTap` con quel formato solleva un'eccezione e chiude l'app (crash log della build 8).
+/// Qui il formato viene atteso con qualche tentativo, la sessione riattivata, e in ultima istanza si rinuncia
+/// all'elaborazione vocale; se resta vuoto si segnala un errore con la diagnostica della sessione.
 final class MicrophoneCapture {
     private let engine = AVAudioEngine()
     private(set) var format: AVAudioFormat?
     private(set) var voiceProcessing = false
+    /// Ultima diagnostica della sessione raccolta durante l'avvio (vuota se tutto è andato bene al primo colpo).
+    private(set) var diagnostics = ""
 
-    func start() throws -> AsyncStream<AudioChunk> {
+    func start() async throws -> AsyncStream<AudioChunk> {
         let input = engine.inputNode
         // L'elaborazione vocale (AEC/AGC) va attivata prima di leggere il formato e installare il tap;
         // su alcuni dispositivi non è disponibile: si prosegue senza.
-        if !input.isVoiceProcessingEnabled {
-            do {
-                try input.setVoiceProcessingEnabled(true)
-                voiceProcessing = true
-            } catch {
-                Log.speech.warning("voice processing non attivabile: \(error.localizedDescription, privacy: .public)")
-            }
-        } else {
-            voiceProcessing = true
+        setVoiceProcessing(true, on: input)
+        var fmt = await waitForFormat(of: input)
+        if fmt == nil, voiceProcessing {
+            Log.speech.warning("formato vuoto con elaborazione vocale: riprovo senza (niente cancellazione d'eco)")
+            setVoiceProcessing(false, on: input)
+            fmt = await waitForFormat(of: input)
         }
-        let fmt = input.outputFormat(forBus: 0)
-        // Un formato vuoto (0 Hz o 0 canali) fa abortire installTap: meglio un errore gestito.
-        guard fmt.sampleRate > 0, fmt.channelCount > 0 else {
-            throw NSError(domain: "Ernie.Speech", code: 6, userInfo: [NSLocalizedDescriptionKey: "microfono non disponibile (formato audio vuoto)"])
+        guard let fmt else {
+            throw NSError(domain: "Ernie.Speech", code: 6, userInfo: [
+                NSLocalizedDescriptionKey: "microfono non disponibile (formato audio vuoto; \(diagnostics))",
+            ])
         }
         format = fmt
         Log.speech.info("microfono: \(Int(fmt.sampleRate)) Hz, \(fmt.channelCount) canali, voice processing \(self.voiceProcessing)")
         let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(64))
+        // `format: nil` = formato d'uscita del nodo, lo stesso appena verificato.
         input.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
             // Il buffer del tap vale solo durante la callback: ne serve una copia per consumarlo altrove.
             if let copy = buffer.deepCopy() { continuation.yield(AudioChunk(buffer: copy)) }
@@ -66,6 +82,37 @@ final class MicrophoneCapture {
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+    }
+
+    private func setVoiceProcessing(_ enabled: Bool, on input: AVAudioInputNode) {
+        guard input.isVoiceProcessingEnabled != enabled else { voiceProcessing = enabled; return }
+        do {
+            try input.setVoiceProcessingEnabled(enabled)
+            voiceProcessing = enabled
+        } catch {
+            voiceProcessing = input.isVoiceProcessingEnabled
+            Log.speech.warning("voice processing \(enabled ? "non attivabile" : "non disattivabile"): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Formato d'uscita del nodo d'ingresso quando è valido; altrimenti qualche tentativo a breve distanza,
+    /// con riattivazione della sessione a metà strada. Solo il formato d'uscita conta: è quello usato dal tap.
+    private func waitForFormat(of input: AVAudioInputNode) async -> AVAudioFormat? {
+        for attempt in 1...4 {
+            let out = input.outputFormat(forBus: 0)
+            if out.sampleRate > 0, out.channelCount > 0 { return out }
+            let hw = input.inputFormat(forBus: 0)
+            diagnostics = "\(AudioSessionController.describe()); nodo in \(Int(hw.sampleRate)) Hz/\(hw.channelCount) ch, out \(Int(out.sampleRate)) Hz/\(out.channelCount) ch, VP \(voiceProcessing ? "on" : "off")"
+            Log.speech.warning("formato microfono vuoto (tentativo \(attempt)): \(self.diagnostics, privacy: .public)")
+            if attempt == 2 {
+                // Riattivare la sessione fa ricostruire la route d'ingresso.
+                AudioSessionController.deactivate()
+                try? AudioSessionController.activateForVoice()
+            }
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        let out = input.outputFormat(forBus: 0)
+        return out.sampleRate > 0 && out.channelCount > 0 ? out : nil
     }
 }
 

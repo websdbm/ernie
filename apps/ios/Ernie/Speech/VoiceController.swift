@@ -65,7 +65,7 @@ final class VoiceController {
             }
             try AudioSessionController.activateForVoice()
             let capture = MicrophoneCapture()
-            let audio = try capture.start()
+            let audio = try await capture.start()
             guard let format = capture.format else { throw NSError(domain: "Ernie.Speech", code: 5) }
             self.capture = capture
             voiceProcessingActive = capture.voiceProcessing
