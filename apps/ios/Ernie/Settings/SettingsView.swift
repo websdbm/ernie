@@ -11,6 +11,10 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Voce") {
+                    Toggle("Risposte a voce", isOn: Binding(
+                        get: { model.settings.voiceOutput },
+                        set: { model.setVoiceOutput($0) }
+                    ))
                     Toggle("Leggi a voce anche le risposte scritte", isOn: Binding(
                         get: { model.settings.speakTextReplies },
                         set: { value in
@@ -19,6 +23,7 @@ struct SettingsView: View {
                             model.conversation?.settings = model.settings
                         }
                     ))
+                    .disabled(!model.settings.voiceOutput)
                     LabeledContent("Voce", value: model.speaker.voiceDescription)
                 }
                 Section {

@@ -227,8 +227,14 @@ final class ConversationStore {
     }
 
     private func shouldSpeak(_ correlationId: String) -> Bool {
-        guard correlationId == activeCorrelationId else { return false }
+        guard correlationId == activeCorrelationId, settings.voiceOutput else { return false }
         return activeInputMode == "voice" || settings.speakTextReplies
+    }
+
+    /// Zittisce la voce (pulsante in alto) lasciando che il turno continui per iscritto.
+    func muteSpeech() {
+        _ = speaker.stop()
+        recomputeState()
     }
 
     private func finishTurn(_ correlationId: String) {

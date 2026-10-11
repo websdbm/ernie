@@ -31,6 +31,12 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Voce accesa/spenta: in giro basta la risposta scritta.
+                    Button { model.setVoiceOutput(!model.settings.voiceOutput) } label: {
+                        Image(systemName: model.settings.voiceOutput ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .foregroundStyle(model.settings.voiceOutput ? Color.accentColor : Color.secondary)
+                    }
+                    .accessibilityLabel(model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla")
                     // Skill a portata di mano: pannello a scomparsa, senza lasciare la conversazione.
                     Button { showSkills = true } label: { Image(systemName: "sparkles") }
                         .accessibilityLabel("Skill")

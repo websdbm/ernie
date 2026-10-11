@@ -66,6 +66,14 @@ final class AppModel {
         conversation?.startNewSession()
     }
 
+    /// Voce accesa/spenta: vale subito; spegnendola, se Ernie sta parlando, si zittisce senza interrompere il turno.
+    func setVoiceOutput(_ on: Bool) {
+        settings.voiceOutput = on
+        settings.save()
+        conversation?.settings = settings
+        if !on { conversation?.muteSpeech() }
+    }
+
     func refreshProfile() async {
         guard let api else { return }
         if let me = try? await api.me() { profile = me }
@@ -138,11 +146,22 @@ final class AppModel {
     }
 }
 
-/// Preferenze locali (non segrete): lettura vocale delle risposte scritte, URL del server mostrato nelle impostazioni.
+/// Preferenze locali (non segrete): voce accesa/spenta, lettura vocale delle risposte scritte.
 struct LocalSettings: Codable, Sendable, Equatable {
+    /// Interruttore della voce (pulsante in alto): spento, Ernie risponde solo per iscritto, anche alle domande dette a voce.
+    var voiceOutput = true
+    /// Con la voce accesa, legge anche le risposte alle domande scritte (non solo a quelle dette a voce).
     var speakTextReplies = false
 
     static let key = "ernie.localSettings"
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        voiceOutput = try c.decodeIfPresent(Bool.self, forKey: .voiceOutput) ?? true
+        speakTextReplies = try c.decodeIfPresent(Bool.self, forKey: .speakTextReplies) ?? false
+    }
 
     static func load() -> LocalSettings {
         guard let data = UserDefaults.standard.data(forKey: key),
