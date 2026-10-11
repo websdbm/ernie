@@ -22,6 +22,13 @@ export class SkillRegistry {
     return [...this.skills.values()].sort((a, b) => a.id.localeCompare(b.id));
   }
 
+  /** Copia del registry con le sole skill indicate (interruttori per utente). */
+  only(ids: ReadonlySet<string>): SkillRegistry {
+    const r = new SkillRegistry();
+    for (const s of this.list()) if (ids.has(s.id)) r.register(s);
+    return r;
+  }
+
   /** Prima skill deterministica che riconosce la frase: nessun modello coinvolto. */
   match(text: string): SkillMatch | null {
     for (const s of this.list()) {

@@ -59,24 +59,33 @@ final class ModernTranscriber: SpeechInput, @unchecked Sendable {
         guard let targetFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
             throw NSError(domain: "Ernie.Speech", code: 1, userInfo: [NSLocalizedDescriptionKey: "formato audio non disponibile"])
         }
-        let converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+        Log.speech.info("SpeechTranscriber: formato analizzatore \(Int(targetFormat.sampleRate)) Hz, \(targetFormat.channelCount) canali")
+        let sameFormat = targetFormat.sampleRate == inputFormat.sampleRate && targetFormat.channelCount == inputFormat.channelCount && targetFormat.commonFormat == inputFormat.commonFormat
+        let converter = sameFormat ? nil : AVAudioConverter(from: inputFormat, to: targetFormat)
+        if !sameFormat, converter == nil {
+            throw NSError(domain: "Ernie.Speech", code: 7, userInfo: [NSLocalizedDescriptionKey: "conversione audio non disponibile per il trascrittore"])
+        }
         let (inputStream, builder) = AsyncStream.makeStream(of: AnalyzerInput.self, bufferingPolicy: .unbounded)
         inputBuilder = builder
         feeder = Task.detached { [converter] in
             for await chunk in audio {
                 guard let converter else { builder.yield(AnalyzerInput(buffer: chunk.buffer)); continue }
-                let ratio = targetFormat.sampleRate / inputFormat.sampleRate
-                let capacity = AVAudioFrameCount(Double(chunk.buffer.frameLength) * ratio) + 16
+                let ratio = targetFormat.sampleRate / max(inputFormat.sampleRate, 1)
+                let capacity = max(AVAudioFrameCount(Double(chunk.buffer.frameLength) * ratio) + 16, 16)
                 guard let out = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { continue }
                 var consumed = false
                 var error: NSError?
-                converter.convert(to: out, error: &error) { _, status in
+                let status = converter.convert(to: out, error: &error) { _, status in
                     if consumed { status.pointee = .noDataNow; return nil }
                     consumed = true
                     status.pointee = .haveData
                     return chunk.buffer
                 }
-                if error == nil, out.frameLength > 0 { builder.yield(AnalyzerInput(buffer: out)) }
+                if status == .error || error != nil {
+                    Log.speech.warning("conversione audio fallita: \(error?.localizedDescription ?? "-", privacy: .public)")
+                    continue
+                }
+                if out.frameLength > 0 { builder.yield(AnalyzerInput(buffer: out)) }
             }
             builder.finish()
         }

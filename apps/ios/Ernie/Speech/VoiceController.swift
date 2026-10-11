@@ -25,8 +25,10 @@ final class VoiceController {
         self.speaker = speaker
     }
 
+    private var starting = false
+
     func beginPushToTalk() {
-        guard !isListening, !isFinalizing else { return }
+        guard !isListening, !isFinalizing, !starting else { return }
         lastError = nil
         if speaker.isSpeaking || conversation.isBusy { conversation.bargeIn() }
         isListening = true
@@ -55,6 +57,8 @@ final class VoiceController {
     // MARK: - privato
 
     private func startCapture() async {
+        starting = true
+        defer { starting = false }
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw NSError(domain: "Ernie.Speech", code: 4, userInfo: [NSLocalizedDescriptionKey: "permesso microfono negato"])
