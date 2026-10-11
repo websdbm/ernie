@@ -3,6 +3,7 @@ import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
+import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
@@ -14,6 +15,8 @@ export interface BuildServerOptions {
   readonly ws?: WsPluginOptions;
   /** REST delle automazioni, notifiche, approvazioni differite, eventi e webhook (M6). */
   readonly automations?: AutomationRoutesOptions;
+  /** Profilo, impostazioni e dispositivi push (M7). */
+  readonly me?: MeRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -74,6 +77,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   if (opts.ws) await registerWs(app, opts.ws);
   if (opts.automations) await app.register(automationRoutes, opts.automations);
+  if (opts.me) await app.register(meRoutes, opts.me);
 
   return app;
 }

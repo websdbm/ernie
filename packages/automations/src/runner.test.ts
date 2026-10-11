@@ -129,6 +129,7 @@ function fakeRepo(automations: Automation[]) {
         r.outcome?.pendingActions?.some((p) => p.approvalId === approvalId),
       ) ?? null,
     spentTodayUsd: async () => 0,
+    getUserSettings: async () => ({}),
     notify: async (u, n) => {
       const x: Notification = {
         id: randomUUID(),

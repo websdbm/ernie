@@ -1,14 +1,58 @@
-# Ernie iOS (milestone M7–M8, avatar M10)
+# Ernie iOS (M7)
 
-Client nativo SwiftUI: interfaccia principale dell'agente. Il progetto Xcode verrà creato nella M7.
+Client SwiftUI per iOS 26: **una sola schermata** in stile chat, con lo spazio in alto riservato all'avatar tridimensionale (M10) e un solo pulsante: microfono da tenere premuto, invio quando c'è testo, stop mentre Ernie parla. Le richieste di conferma dei tool e le notifiche delle automazioni compaiono come schede dentro la conversazione, con Approva / Rifiuta (Face ID o codice). Le impostazioni stanno dietro il menu in alto a destra.
+
+## Requisiti
+
+- Xcode 27 (SDK iOS 27), un simulatore o un iPhone con iOS 26.
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) per rigenerare il progetto da `project.yml`; il progetto generato è comunque versionato.
+- Backend raggiungibile: in simulatore `http://localhost:3000`; su iPhone l'IP del Mac nella stessa rete (es. `http://192.168.1.10:3000`) oppure l'URL della VPS in HTTPS.
+
+## Avvio
+
+```bash
+cd apps/ios
+xcodegen generate                 # solo se hai modificato project.yml o aggiunto file
+open Ernie.xcodeproj              # scegli un simulatore iPhone con iOS 26 e premi Run
+```
+
+Da riga di comando (simulatore avviato):
+
+```bash
+xcodebuild build -project Ernie.xcodeproj -scheme Ernie -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath build CODE_SIGNING_ALLOWED=NO
+xcrun simctl install booted build/Build/Products/Debug-iphonesimulator/Ernie.app && xcrun simctl launch booted com.websdbm.ernie
+xcodebuild test  -project Ernie.xcodeproj -scheme Ernie -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath build CODE_SIGNING_ALLOWED=NO
+```
+
+Al primo avvio l'app chiede l'indirizzo del server e la chiave API (`pnpm admin:create-user` la stampa una sola volta). Entrambi finiscono nel Keychain.
+
+## Su iPhone
+
+1. In Xcode → target Ernie → Signing & Capabilities: imposta il tuo team (il bundle id predefinito è `com.websdbm.ernie`, modificabile in `project.yml`).
+2. Le notifiche push richiedono la capability Push Notifications nel profilo e, lato server, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY` (chiave `.p8`) in `.env`; senza, le notifiche restano in-app e l'app le legge all'apertura e a ogni evento `automation.run.updated`.
+3. La trascrizione usa `SpeechTranscriber` (iOS 26, on-device) se l'italiano è supportato; il modello viene scaricato dal sistema al primo uso. Altrimenti usa `SFSpeechRecognizer` con rotazione delle richieste entro il limite di un minuto. In simulatore `SpeechTranscriber` non ha lingue: si usa il ripiego.
+
+## Struttura
+
+```
+Ernie/App        ErnieApp, AppModel (stato radice), AppDelegate (APNs, notifiche)
+Ernie/Protocol   porting del protocollo v1.1: eventi (Codable), deduplica e sequenze, client WebSocket con ripresa e riconnessione
+Ernie/Api        REST: /v1/me, impostazioni, notifiche, approvazioni, dispositivi
+Ernie/Chat       modelli, ConversationStore (eventi → stato, TTS incrementale, cronologia locale), ChatView, schede, barra di input, AvatarStage
+Ernie/Speech     sessione audio (playAndRecord + voice processing), cattura, SpeechTranscriber/SFSpeechRecognizer, Speaker, VoiceController, probe S1
+Ernie/Settings   onboarding, impostazioni (voce, interruttore di emergenza, diagnostica)
+ErnieTests       test unitari (Swift Testing): protocollo, deduplica, frasi per il TTS, latenza, schede
+```
+
+## Diagnostica
+
+Impostazioni → Diagnostica mostra la latenza udibile per stadio dei turni vocali (rilascio del pulsante → trascrizione finale → primo token → prima parola sintetizzata; obiettivo p50 < 1,5 s), il motore di trascrizione in uso e il probe dello spike S1 (marker delle voci italiane, vedi `docs/research/08-spike-s1-marker-tts.md`).
 
 ## Vincoli verificati (ottobre 2026; dettagli e fonti in `docs/research/02`, `04`, `03-revisione.md`)
 
-- **Speech-to-text**: `SpeechAnalyzer` + `SpeechTranscriber` (iOS 26+, on-device, modelli scaricati dal sistema tramite `AssetInventory`; italiano incluso al lancio). Verificare a runtime `supportedLocales` e `installedLocales`. Fallback: `SFSpeechRecognizer` (limite di **1 minuto** per richiesta: rotazione delle richieste; quote giornaliere; possibile uso di rete).
-- **Text-to-speech**: `AVSpeechSynthesizer`, sintesi incrementale per frasi, interrompibile. Per il lip-sync: callback di parola garantiti; marker fonemici (`AVSpeechSynthesisMarker.Mark.phoneme`) da verificare con le voci italiane (spike S1).
-- **Audio**: `AVAudioSession` `.playAndRecord` **più `setVoiceProcessingEnabled(true)`** sull'input node: il solo modo `.voiceChat` non attiva cancellazione d'eco e AGC.
-- **Background**: nessuna wake word per app terze né avvio del microfono dal background; `AudioRecordingIntent` richiede una Live Activity. La modalità continua è prevista con app in primo piano.
-- **Latenza**: obiettivo udibile p50 < 1,5 s (800 ms come ambizione), strumentata per stadio.
-- **Trasporto**: WebSocket con il protocollo v1/v1.1 di `packages/protocol` (eventi con id, sessionId, correlationId, seq, ts; cancel idempotente con `spokenThroughIndex`; snapshot + replay).
-- **Sicurezza**: token nel Keychain; nessun segreto nel bundle; nessuna immagine markdown da URL esterni; step-up Face ID per azioni critiche; nessuna connessione verso URL ricevuti da deep link.
-- **Avatar (M10)**: three.js + TalkingHead (MIT) in `WKWebView`, JS e asset nel bundle; GLB con rig Mixamo, 52 blendshape ARKit e 15 visemi Oculus; lip-sync on-device da `AVSpeechSynthesizer.write()` (PCM + marker di parola) con modulo italiano `lipsync-it.mjs` da scrivere; barge-in con `streamInterrupt()`. Unreal/MetaHuman esclusi, RealityKit scartato (ARCHITECTURE.md §13).
+- **Speech-to-text**: `SpeechAnalyzer` + `SpeechTranscriber` (iOS 26+, on-device, modelli scaricati dal sistema tramite `AssetInventory`). Verificare a runtime `supportedLocales`/`installedLocales`. Fallback `SFSpeechRecognizer` (limite di **1 minuto** per richiesta: rotazione).
+- **Text-to-speech**: `AVSpeechSynthesizer`, sintesi incrementale per frasi, interrompibile. Spike S1: con le voci italiane `write()` non produce marker; `speak()` consegna i callback di parola (niente fonemi).
+- **Audio**: `AVAudioSession` `.playAndRecord` **più `setVoiceProcessingEnabled(true)`** sull'input node (AEC/AGC).
+- **Background**: nessuna wake word né microfono dal background; conversazione continua (M8) in primo piano.
+- **Sicurezza**: chiave nel Keychain; nessun segreto nel bundle; markdown solo inline (nessuna immagine remota); step-up Face ID per approvazioni e interruttore di emergenza; nessuna connessione verso URL ricevuti da deep link.
+- **Avatar (M10)**: three.js + TalkingHead in `WKWebView` al posto di `AvatarStage`, stessa macchina a stati (idle / listening / thinking / speaking) ed eventi `avatar.*`.

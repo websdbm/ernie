@@ -16,7 +16,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M4 | Memoria: semantica ed episodica, ricerca ibrida RRF, snapshot + memory_search, consolidamento asincrono, export/oblio | ✅ |
 | M5 | Tool e skill: registry, executor con policy e approvazioni, Firecrawl, lista della spesa deterministica, skill apprese, test di sicurezza | ✅ |
 | M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ✅ |
-| M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ⏳ |
+| M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ✅ |
 | M8 | Voce avanzata: modalità continua, sintesi incrementale, interruzione, errori audio | ⏳ |
 | M9 | Ottimizzazione: benchmark token, cache, profilazione, latenza, e2e, hardening | ⏳ |
 | M10 | Avatar 3D: three.js + TalkingHead in WKWebView, modulo italiano, lip-sync on-device, integrazione | ⏳ |
@@ -155,11 +155,33 @@ Criteri di accettazione e verifica (11 ott 2026, stack Docker locale ricostruito
 
 Osservazioni per la M9: il riepilogo di una run guidata concatena il testo di tutti gli step (anche le frasi intermedie prima dei tool); la frase «aggiungi alla lista latte, pane e uova» non è riconosciuta dalla skill deterministica (ordine «aggiungi alla lista X») ed è passata dal modello (0,007 USD); gli episodi di memoria non sono registrati per le run automatiche. Spesa di sviluppo cumulativa ≈ 0,30 USD (tetto autorizzato 3 €).
 
-## M7 — App iOS ⏳
+## M7 — App iOS ✅
 
-Ambito: progetto Xcode SwiftUI in `apps/ios`; autenticazione (Keychain); chat testuale; WebSocket con protocollo v1.1 (porting deduplica/sequenze, snapshot + replay); push-to-talk con `SpeechTranscriber` (controllo `supportedLocales`/`installedLocales`, download asset) e fallback `SFSpeechRecognizer` con **rotazione entro il limite di 1 minuto**; TTS con `AVSpeechSynthesizer`; `.playAndRecord` + **`setVoiceProcessingEnabled(true)`** (A.13); streaming; cronologia e sessioni; APNs; nessuna immagine markdown da URL esterni; step-up Face ID per azioni critiche; kill switch (B.7). **Spike S1** (marker di `speak()`/`write()` con voci italiane) e **S6** (App Thinning Size Report) avviati qui perché toccano il TTS (B.11).
+Ambito: progetto Xcode SwiftUI in `apps/ios`; autenticazione (Keychain); chat testuale; WebSocket con protocollo v1.1 (porting deduplica/sequenze, snapshot + replay); push-to-talk con `SpeechTranscriber` (controllo `supportedLocales`/`installedLocales`, download asset) e fallback `SFSpeechRecognizer` con rotazione entro il limite di 1 minuto; TTS con `AVSpeechSynthesizer`; `.playAndRecord` + `setVoiceProcessingEnabled(true)` (A.13); streaming; cronologia; APNs; nessuna immagine markdown da URL esterni; step-up Face ID per azioni critiche; kill switch (B.7). Spike S1 e S6 (B.11).
 
-Criteri: l'utente parla, il testo arriva al backend, la risposta viene letta a voce; funziona su device con iOS 26; latenza udibile strumentata per stadio con obiettivo **p50 < 1,5 s** (A.14); esito di S1 documentato.
+Decisione dell'utente (11 ott 2026): **interfaccia essenziale in stile chat**, una sola schermata, nessuna ridondanza di comandi, spazio riservato all'avatar tridimensionale.
+
+Consegnato:
+- `apps/ios/project.yml` (XcodeGen) → `Ernie.xcodeproj`: target `Ernie` (iOS 26, Swift 6, concorrenza stretta, bundle `com.websdbm.ernie`, Info.plist con permessi microfono/riconoscimento/Face ID, `aps-environment`) e `ErnieTests` (Swift Testing).
+- **Una schermata**: `AvatarStage` (segnaposto animato per l'avatar, consumatore della macchina a stati idle/listening/thinking/speaking, da sostituire nella M10), conversazione con messaggi in streaming e markdown solo inline, **schede** di conferma dei tool e di notifica delle automazioni con Approva/Rifiuta (step-up Face ID/codice; le azioni sospese chiamano `POST /v1/approvals/:id`), barra con un campo e **un solo pulsante** (microfono da tenere premuto / invio / stop = barge-in). Menu: nuova conversazione, impostazioni (lettura vocale delle risposte scritte, interruttore di emergenza con step-up, diagnostica, account, esci). Onboarding con server e chiave API nel Keychain.
+- **Protocollo** in Swift: `AgentEvent` Codable con 22 tipi di payload e tolleranza ai tipi sconosciuti, `EventDeduper`/`SequenceTracker`/`SequenceSource`, `ProtocolClient` (actor) con `session.start` + `resumeFromSeq`, ping ogni 25 s, riconnessione con backoff, nuova sessione per nuova conversazione; cronologia locale per sessione (JSON con protezione completa del file).
+- **Voce**: `AudioSessionController` (`.playAndRecord`, `.voiceChat`, altoparlante, Bluetooth) + `setVoiceProcessingEnabled(true)` sull'input node; `MicrophoneCapture` (AVAudioEngine → AsyncStream); `ModernTranscriber` (SpeechAnalyzer + SpeechTranscriber it_IT, AssetInventory, risultati volatili, conversione al formato migliore) scelto a runtime se l'italiano è supportato, altrimenti `LegacyTranscriber` (SFSpeechRecognizer, on-device se disponibile, rotazione ogni 55 s); `VoiceController` push-to-talk con barge-in; `Speaker` (TTS incrementale per frasi, voce italiana di qualità più alta, `spokenThroughIndex` dai callback di parola); `LatencyTrace` per stadio con p50/p95 in Diagnostica; probe S1 su dispositivo.
+- **Backend per il client**: `GET /v1/me`, `PATCH /v1/me/settings` (allowlist: `killSwitch`, `dailyBudgetUsd`, `speakReplies`), `POST/GET/DELETE /v1/devices` (migrazione 0010 con riassegnazione del token via funzione `SECURITY DEFINER`), invio push APNs dal worker (`packages/automations/src/push.ts`: JWT ES256 con `dsaEncoding: 'ieee-p1363'`, HTTP/2, rimozione dei token non validi), interruttore di emergenza rispettato dal runner (`getUserSettings`).
+- Spike **S1** (docs/research/08): `write()` senza marker con le voci italiane; `speak()` con callback di parola in tempo reale; nessun fonema → lip-sync M10 in variante B. **S6** rinviato: l'App Thinning Size Report richiede la firma con il team dello sviluppatore; misura disponibile: build Debug per simulatore 3,5 MB (senza asset dell'avatar).
+- Test: 13 test Swift (protocollo, deduplica, frasi per il TTS, latenza, schede); backend 158 test.
+- Deviazioni dichiarate: nessuna CI per iOS (runner macOS con Xcode 27 non disponibile in modo affidabile); verifica locale documentata nel verbale. APNs implementato ma non verificabile senza credenziali Apple dell'utente (sandbox); la consegna in-app è verificata.
+
+Criteri di accettazione e verifica (11 ott 2026, Xcode 27.0, simulatore iPhone 17 con iOS 26.5, backend nello stack Docker locale):
+- [x] Build e test: `xcodebuild build` senza errori (Swift 6, concorrenza stretta); `xcodebuild test` 13 test verdi; backend 158 test verdi. Le build per simulatore vanno firmate ad-hoc: con `CODE_SIGNING_ALLOWED=NO` il Keychain rifiuta le scritture.
+- [x] **Accesso e sessione**: credenziali verificate su `GET /v1/me` e salvate nel Keychain; connessione WebSocket (riga in `sessions` con `client_platform = ios`), `POST /v1/devices` chiamato con il token push del simulatore; cronologia ripristinata a ogni riavvio dell'app (JSON locale) e sessione ripresa con `resumeFromSeq`.
+- [x] **Conversazione**: messaggio testuale → risposta della skill deterministica (0 LLM) e risposta del modello con tool (`get_time`, `shopping_list_add`: chip del tool con esito, testo in streaming); lista che segue il fondo.
+- [x] **Schede nella chat**: notifiche delle automazioni (risultato e richiesta di approvazione) mostrate come schede; Approva → step-up (richiesta di Face ID/codice comparsa; nel simulatore saltata con `ERNIE_DEBUG_SKIP_STEPUP=1`) → `POST /v1/approvals/:id` → scheda «Eseguita», run `succeeded`, lista passata da 6 a 21 voci; `GET /v1/notifications` allinea le azioni già decise.
+- [x] **Voce**: push-to-talk porta lo stato a «ti ascolto» e chiede il permesso del microfono; nel simulatore `SpeechTranscriber` non ha lingue e `SFSpeechRecognizer` non è disponibile → errore mostrato e stato ripristinato (**la trascrizione va verificata su iPhone**). Sintesi vocale verificata: risposta letta con la voce Alice, 350 caratteri pronunciati e tracciati per il barge-in (log `sintesi avviata/terminata`); corretto un difetto emerso qui (risposte senza streaming non venivano lette).
+- [x] **Impostazioni e diagnostica**: voce in uso, interruttore di emergenza, latenza per stadio (nessun turno vocale nel simulatore), disponibilità del motore di trascrizione, probe S1 eseguito nell'app (Alice: `write()` senza marker, `speak()` 14 callback di parola, primo a 0,16 s).
+- [ ] **Latenza udibile p50 < 1,5 s su device**: non misurabile nel simulatore (nessun STT); strumentazione pronta in Diagnostica, misura da fare su iPhone.
+- [x] Nessun segreto nel repository: chiave API solo nel Keychain; hook `ERNIE_DEBUG_*` compilati solo in Debug.
+
+Osservazioni: il tool `tap` del simulatore invia due eventi ai toggle (si usa un trascinamento); `xcodebuild test` reinstalla l'app senza firma e la fa uscire dal Keychain (derived data separata). Spesa aggiuntiva della M7 ≈ 0,02 USD (due turni con modello).
 
 ## M8 — Conversazione vocale avanzata ⏳
 

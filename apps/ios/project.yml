@@ -1,0 +1,79 @@
+name: Ernie
+options:
+  bundleIdPrefix: com.websdbm
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "27.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Team Apple di Alessandro (firma automatica); le build per simulatore non lo richiedono.
+    DEVELOPMENT_TEAM: 76X78MBPR3
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+targets:
+  Ernie:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ernie
+    info:
+      path: Ernie/Info.plist
+      properties:
+        CFBundleDisplayName: Ernie
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: it
+        CFBundleLocalizations: [it]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSMicrophoneUsageDescription: "Ernie ascolta la tua voce mentre tieni premuto il pulsante per parlare."
+        NSSpeechRecognitionUsageDescription: "La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo."
+        NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
+        UIBackgroundModes: [remote-notification]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Ernie/Ernie.entitlements
+      properties:
+        aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie
+        PRODUCT_NAME: Ernie
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+  ErnieTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ErnieTests
+    dependencies:
+      - target: Ernie
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Ernie:
+    build:
+      targets:
+        Ernie: all
+        ErnieTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [ErnieTests]

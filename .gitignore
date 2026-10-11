@@ -20,3 +20,10 @@ apps/ios/**/xcuserdata/
 apps/ios/**/DerivedData/
 apps/ios/**/*.xcuserstate
 apps/ios/**/.build/
+
+# iOS
+apps/ios/build/
+apps/ios/**/xcuserdata/
+apps/ios/**/*.xcuserstate
+apps/ios/Ernie.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+apps/ios/build-tests/

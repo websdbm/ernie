@@ -221,6 +221,12 @@ async function main(): Promise<void> {
       redis: redis.client,
       logger,
     },
+    me: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      pool: postgres.pool,
+      version: config.service.version,
+    },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

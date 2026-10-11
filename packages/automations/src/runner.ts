@@ -29,6 +29,7 @@ import {
 } from '@ernie/tools';
 import type { Redis } from 'ioredis';
 import { publishUserEvent } from './notify.js';
+import type { PushSender } from './push.js';
 import { RUN_ATTEMPTS } from './queue.js';
 import type { AutomationRepository, RunFinish } from './repository.js';
 import { isTooLate } from './schedule.js';
@@ -89,6 +90,8 @@ export interface GuidedDeps {
 export interface RunnerDeps {
   readonly pool: Pool;
   readonly repo: AutomationRepository;
+  /** Notifiche push (APNs); assente se non configurate. */
+  readonly push?: PushSender;
   readonly logger: Logger;
   readonly redis: Pick<Redis, 'publish' | 'set'>;
   /** Registry delle skill deterministiche dell'utente (nessun modello). */
@@ -140,6 +143,12 @@ export async function executeRun(
     return null;
   }
   const t0 = now();
+  // Interruttore di emergenza dell'utente: nessuna automazione viene eseguita finché è attivo.
+  if ((await deps.repo.getUserSettings(run.userId)).killSwitch === true)
+    return finish(deps, automation, run, {
+      status: 'skipped',
+      error: "interruttore di emergenza attivo: automazioni sospese dall'utente",
+    });
   if (
     data.triggerType === 'cron' &&
     automation.catchUp === 'none' &&
@@ -219,9 +228,21 @@ async function finish(
   if (opts.silent) return updated;
   if (automation.notify && f.status !== 'skipped') {
     try {
-      await deps.repo.notify(run.userId, notificationFor(automation, updated));
+      const n = await deps.repo.notify(run.userId, notificationFor(automation, updated));
+      await deps.push?.notifyUser(run.userId, {
+        title: n.title,
+        body: n.body,
+        data: {
+          kind: n.kind,
+          notificationId: n.id,
+          runId: run.id,
+          automationId: automation.id,
+          status: updated.status,
+        },
+        threadId: 'automations',
+      });
     } catch (err) {
-      deps.logger.warn({ err, runId: run.id }, 'notifica non salvata');
+      deps.logger.warn({ err, runId: run.id }, 'notifica non salvata o non inviata');
     }
   }
   const summary = updated.outcome?.summary ?? updated.error ?? undefined;

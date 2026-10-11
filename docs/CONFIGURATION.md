@@ -39,6 +39,8 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `AUTOMATION_CATCHUP_TOLERANCE_S` | no | `900` | Con `catchUp = none`, una run cron in ritardo oltre questa soglia (più il jitter) viene saltata. |
 | `AUTOMATION_SYNC_EVERY_S` | no | `60` | Ogni quanto il worker allinea i job scheduler BullMQ alle automazioni abilitate. |
 | `AUTOMATION_CONCURRENCY` | no | `2` | Run di automazione eseguite in parallelo da ciascun worker. |
+| `APNS_TEAM_ID` / `APNS_KEY_ID` / `APNS_PRIVATE_KEY` | per le push | — | Autenticazione APNs a token (chiave `.p8` in PEM; le sequenze `\n` letterali sono accettate). Senza le tre variabili il worker non invia push: le notifiche restano in-app (`/v1/notifications`). |
+| `APNS_BUNDLE_ID` | no | `com.websdbm.ernie` | `apns-topic` delle push; deve coincidere con il bundle id dell'app iOS. L'ambiente (sandbox o produzione) è per dispositivo, dichiarato dall'app alla registrazione (`POST /v1/devices`). |
 
 ## Variabili solo per Docker Compose
 

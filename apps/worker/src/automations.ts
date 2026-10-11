@@ -3,8 +3,11 @@ import { createPgApprovalStore, type Memory } from '@ernie/agent-core';
 import {
   AUTOMATION_QUEUE,
   automationBackoff,
+  createApnsClient,
   createAutomationQueue,
   createAutomationRepository,
+  createDeviceRepository,
+  createPushSender,
   dedupeKeys,
   enqueueRun,
   executeRun,
@@ -147,11 +150,22 @@ export async function startAutomations(
     );
   }
 
+  // Push APNs: solo con APNS_TEAM_ID, APNS_KEY_ID e APNS_PRIVATE_KEY; altrimenti le notifiche restano in-app.
+  const push = config.push.apns
+    ? createPushSender({
+        apns: createApnsClient(config.push.apns, logger),
+        devices: createDeviceRepository(pool),
+        logger,
+      })
+    : undefined;
+  if (!push) logger.warn('APNs non configurato: nessuna notifica push, solo notifiche in-app');
+
   const runner: RunnerDeps = {
     pool,
     repo,
     logger,
     redis: connection,
+    ...(push ? { push } : {}),
     skillsFor: async () => skills,
     guided,
     catchUpToleranceSeconds: config.automations.catchUpToleranceSeconds,
@@ -232,7 +246,7 @@ export async function startAutomations(
   return {
     async close() {
       clearInterval(timer);
-      await Promise.allSettled([worker.close(), queue.close()]);
+      await Promise.allSettled([worker.close(), queue.close(), push?.close()]);
     },
   };
 }

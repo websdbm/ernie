@@ -173,6 +173,8 @@ export interface AutomationRepository {
   listRecentRuns(userId: string, limit?: number): Promise<AutomationRun[]>;
   findRunByApproval(userId: string, approvalId: string): Promise<AutomationRun | null>;
   spentTodayUsd(userId: string, automationId: string): Promise<number>;
+  /** `users.settings` dell'utente (interruttore di emergenza, budget personale). */
+  getUserSettings(userId: string): Promise<Record<string, unknown>>;
   notify(
     userId: string,
     n: { kind: string; title: string; body: string; payload?: unknown },
@@ -438,6 +440,16 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
           [automationId, userId],
         );
         return Number(res.rows[0]?.spent ?? 0);
+      });
+    },
+
+    async getUserSettings(userId) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<{ settings: Record<string, unknown> }>(
+          `SELECT settings FROM users WHERE id = $1`,
+          [userId],
+        );
+        return res.rows[0]?.settings ?? {};
       });
     },
 

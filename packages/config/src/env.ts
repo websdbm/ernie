@@ -68,6 +68,11 @@ export const envSchema = z.object({
   AUTOMATION_CATCHUP_TOLERANCE_S: z.coerce.number().int().min(0).default(900),
   AUTOMATION_SYNC_EVERY_S: z.coerce.number().int().min(5).default(60),
   AUTOMATION_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  /** APNs (token-based): senza queste variabili le notifiche push non vengono inviate. */
+  APNS_TEAM_ID: z.string().min(1).optional(),
+  APNS_KEY_ID: z.string().min(1).optional(),
+  APNS_PRIVATE_KEY: z.string().min(1).optional(),
+  APNS_BUNDLE_ID: z.string().min(1).default('com.websdbm.ernie'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -109,6 +114,14 @@ export interface AppConfig {
     readonly catchUpToleranceSeconds: number;
     readonly syncEverySeconds: number;
     readonly concurrency: number;
+  };
+  readonly push: {
+    readonly apns: {
+      readonly teamId: string;
+      readonly keyId: string;
+      readonly privateKey: string;
+      readonly bundleId: string;
+    } | null;
   };
   readonly router: {
     readonly jevModel: string;
@@ -205,6 +218,17 @@ export function toAppConfig(env: Env): AppConfig {
       syncEverySeconds: env.AUTOMATION_SYNC_EVERY_S,
       concurrency: env.AUTOMATION_CONCURRENCY,
     },
+    push: {
+      apns:
+        env.APNS_TEAM_ID && env.APNS_KEY_ID && env.APNS_PRIVATE_KEY
+          ? {
+              teamId: env.APNS_TEAM_ID,
+              keyId: env.APNS_KEY_ID,
+              privateKey: env.APNS_PRIVATE_KEY,
+              bundleId: env.APNS_BUNDLE_ID,
+            }
+          : null,
+    },
     router: {
       jevModel: env.JEV_MODEL,
       timeoutMs: env.JEV_TIMEOUT_MS,
@@ -257,6 +281,16 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     memory: config.memory,
     tools: config.tools,
     automations: config.automations,
+    push: {
+      apns: config.push.apns
+        ? {
+            teamId: config.push.apns.teamId,
+            keyId: config.push.apns.keyId,
+            privateKey: REDACTED,
+            bundleId: config.push.apns.bundleId,
+          }
+        : null,
+    },
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),

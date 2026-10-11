@@ -98,6 +98,7 @@ function fakeRepo() {
     listRecentRuns: async () => [],
     findRunByApproval: async () => null,
     spentTodayUsd: async () => 0,
+    getUserSettings: async () => ({}),
     notify: async (u, n) => {
       const x: Notification = {
         id: randomUUID(),

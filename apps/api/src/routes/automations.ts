@@ -244,16 +244,34 @@ export async function automationRoutes(
       return { runs: await opts.repo.listRecentRuns(requireAuth(req).userId, q.limit) };
     });
 
+    /** Le azioni sospese nel payload vengono allineate allo stato attuale della run (decisioni già prese). */
     api.get('/v1/notifications', async (req, reply) => {
       const q = NotificationsQuery.safeParse(req.query ?? {});
       if (!q.success) return badRequest(reply, 'invalid_query', 'parametri non validi');
-      return {
-        notifications: await opts.repo.listNotifications(
-          requireAuth(req).userId,
-          q.data.unread,
-          q.data.limit,
-        ),
-      };
+      const userId = requireAuth(req).userId;
+      const list = await opts.repo.listNotifications(userId, q.data.unread, q.data.limit);
+      const notifications = await Promise.all(
+        list.map(async (n) => {
+          const payload = n.payload as { runId?: unknown; pendingActions?: unknown } | null;
+          if (
+            !payload ||
+            typeof payload.runId !== 'string' ||
+            !Array.isArray(payload.pendingActions)
+          )
+            return n;
+          const run = await opts.repo.getRun(userId, payload.runId);
+          if (!run?.outcome?.pendingActions) return n;
+          return {
+            ...n,
+            payload: {
+              ...payload,
+              pendingActions: run.outcome.pendingActions,
+              runStatus: run.status,
+            },
+          };
+        }),
+      );
+      return { notifications };
     });
 
     api.post('/v1/notifications/read', async (req, reply) => {
