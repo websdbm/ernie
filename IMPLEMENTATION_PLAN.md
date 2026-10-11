@@ -226,6 +226,18 @@ Realizzazione:
 - REST `/v1/shopping/lists…` per la scheda (spunta, aggiungi, togli, togli le prese, archivia/ripristina, elimina): ogni azione restituisce il blocco aggiornato; nell'app `ShoppingStore` tiene una copia per lista così tutte le schede della stessa lista restano allineate (aggiornamento ottimistico sulla spunta).
 - Avatar: `BearSheet` 4×4 (celle 256 px) generato con il modello di immagini di Figma dallo stesso orso: riga 1 idle (respiro, battito di ciglia), riga 2 ascolto e pensiero, riga 3 quattro forme di bocca, riga 4 emozioni (felice, sorpreso, triste, occhiolino); `PixelBearView` scorre il foglio per fotogramma (`SpriteFrame`, nessuna interpolazione), sequenze per stato, bocca sulle parole del sintetizzatore, emozione dal turno (`lastAvatarEmotion`) in idle.
 
+## M7d — Skill «Ricordami»: promemoria con notifica, email e widget ✅
+
+Richiesta dell'utente (11 ott 2026, sera): «ricordami di fare X il giorno Y alle ore Z»; giorno omesso = oggi; all'ora stabilita Ernie si sveglia e manda una notifica sul telefono, e come opzione un'email (Brevo, chiavi dell'utente); i promemoria devono comparire sulla schermata di blocco e in un widget. «Dovrebbe essere parte dell'heartbeat»: lo è già, il motore delle automazioni (M6) con i trigger una tantum e i lavori ritardati al secondo.
+
+Realizzazione:
+- Skill deterministica `ricordami` (parser italiano: orari «alle 17», «alle 7 e mezza di sera», relativi «tra 20 minuti», giorni «domani», «lunedì», «il 15 ottobre», «il 3/1», momenti «stasera», «domani mattina»; giorno omesso = oggi, domani se l'ora è passata, sempre dichiarato nella risposta; senza ora chiede; «che promemoria ho?», «annulla il promemoria delle 17»). Fuso Europe/Rome senza dipendenze (`zoned.ts`).
+- Promemoria = automazione una tantum `promemoria_<id>` con azione deterministica `__promemoria__ <testo>` e job ritardato accodato subito (`apps/api/src/reminders.ts`); allo scatto il worker esegue la skill e il runner notifica (scheda in chat via WS, push APNs se configurato, email se l'utente l'ha attivata). Rotte `GET/DELETE /v1/reminders`. Blocco `reminders` (protocollo v1.6).
+- Email: `packages/automations/src/email.ts` (Brevo transazionale), `BREVO_API_KEY`/`BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME`; impostazioni utente `email` ed `emailNotifications` (PATCH /v1/me/settings; nell'app Impostazioni → Notifiche).
+- iOS: scheda promemoria con «Annulla»; **notifiche locali** programmate alla creazione (schermata di blocco anche senza push, dedup per id); istantanea JSON nel gruppo app `group.com.websdbm.ernie`; **widget** WidgetKit `ErnieWidgets` (blocco: in linea, circolare, rettangolare; Home: piccolo e medio) con timeline che passa al promemoria successivo allo scatto.
+- Da fare per il push vero: chiave APNs (.p8) dell'utente in `APNS_*`; per l'email: chiavi Brevo e mittente verificato.
+- Script `apps/ios/scripts/asc.mjs` (App Store Connect via API: gruppi, tester, inviti) per aggiungere tester interni.
+
 ## M8 — Conversazione vocale avanzata ⏳
 
 Modalità continua **solo in primo piano** (o `AudioRecordingIntent` + Live Activity) con VAD e **fine turno semantico** (spike Smart Turn v3 in Core ML; fallback silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7). **Spike S3** (WKWebView + TalkingHead su iPhone: FPS, CPU, batteria, termica per 10 minuti, latenza marker→visema, AEC con audio dal WKWebView) eseguito qui; S2 (RealityKit) decaduto con la scelta di TalkingHead.
