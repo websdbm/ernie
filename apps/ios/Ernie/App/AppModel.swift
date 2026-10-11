@@ -36,7 +36,10 @@ final class AppModel {
     /// Verifica le credenziali su `/v1/me`, le salva nel Keychain e avvia la conversazione.
     func signIn(serverURL: URL, apiKey: String) async -> Bool {
         signInError = nil
-        let candidate = Credentials(serverURL: serverURL, apiKey: apiKey)
+        let candidate = Credentials(
+            serverURL: serverURL,
+            apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
         do {
             let me = try await ApiClient(credentials: candidate).me()
             try candidate.save()
