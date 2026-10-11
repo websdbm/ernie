@@ -37,6 +37,9 @@ export interface SessionStore {
     modelClass: 'standard' | 'heavy',
   ): Promise<SessionRecord['modelClass']>;
   setContextTags(userId: string, sessionId: string, tags: readonly string[]): Promise<void>;
+  /** Contaminazione della sessione: contenuto non fidato in cronologia → i turni successivi partono contaminati. */
+  markTainted(sessionId: string, source: string, ttlSeconds: number): Promise<void>;
+  isTainted(sessionId: string): Promise<boolean>;
   /** Prossimo numero di sequenza server→client (monotono per sessione). */
   nextSeq(sessionId: string): Promise<number>;
   currentSeq(sessionId: string): Promise<number>;
@@ -53,6 +56,7 @@ export interface SessionStoreOptions {
 const key = {
   seq: (id: string) => `ernie:sess:${id}:seq`,
   log: (id: string) => `ernie:sess:${id}:log`,
+  taint: (id: string) => `ernie:sess:${id}:taint`,
 };
 
 export function createSessionStore(
@@ -151,6 +155,14 @@ export function createSessionStore(
       await withUser(pool, userId, (client) =>
         client.query(`UPDATE sessions SET context_tags = $2 WHERE id = $1`, [sessionId, [...tags]]),
       );
+    },
+
+    async markTainted(sessionId, source, ttlSeconds) {
+      await redis.set(key.taint(sessionId), source.slice(0, 200), 'EX', Math.max(1, ttlSeconds));
+    },
+
+    async isTainted(sessionId) {
+      return (await redis.exists(key.taint(sessionId))) === 1;
     },
 
     async nextSeq(sessionId) {

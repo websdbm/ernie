@@ -1,0 +1,23 @@
+{
+  "name": "@ernie/skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Skill Registry ed Executor: skill deterministiche (lista della spesa), skill guidate, ciclo di vita delle skill apprese",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/db": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@ernie/tools": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

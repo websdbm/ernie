@@ -14,7 +14,7 @@ Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/d
 | M2 | Agente minimo: Mastra, Soul per utente, sessioni, OpenRouter, streaming WS, persistenza, costi, RLS | ✅ |
 | M3 | JEV Router: adapter, soglie calibrate, comandi deterministici, Policy Engine con taint e approvazioni, isteresi di classe, loop detector | ✅ |
 | M4 | Memoria: semantica ed episodica, ricerca ibrida RRF, snapshot + memory_search, consolidamento asincrono, export/oblio | ✅ |
-| M5 | Tool e skill: registry, executor, permessi, Firecrawl, skill deterministiche, test di sicurezza | ⏳ |
+| M5 | Tool e skill: registry, executor con policy e approvazioni, Firecrawl, lista della spesa deterministica, skill apprese, test di sicurezza | ✅ |
 | M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ⏳ |
 | M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ⏳ |
 | M8 | Voce avanzata: modalità continua, sintesi incrementale, interruzione, errori audio | ⏳ |
@@ -109,11 +109,26 @@ Criteri:
 - Cache dei prompt attiva: con Soul + snapshot + tool il prefisso supera i 512 token; secondo turno della nuova sessione con 760 token letti dalla cache, costo 0,0014 $ contro 0,0022 $.
 - Spesa cumulativa di sviluppo (spike, calibrazione, prove, valutazioni): circa 0,05 $ (tetto autorizzato: 3 €).
 
-## M5 — Tool e skill ⏳
+## M5 — Tool e skill ✅
 
-Ambito: `packages/tools` (registry con JSON Schema 2020-12 strict, `response_format`, paginazione, tetto di token con handle, errori `isError`, idempotency key, etichette di rischio, **set stabile per sessione + `tool_search`/`call_tool`** (A.4), tool `web_search`/`web_fetch` su **Firecrawl**, adapter MCP 2026-07-28 solo Streamable HTTP, conferme via `requireApproval` con storage) (B.5); `packages/skills` (formato agentskills.io, stati `draft→proposed→tested→approved→active→deprecated`, versioni immutabili per hash, scansione alla scrittura e al recupero, eval con/senza skill, pipeline di apprendimento con approvazione) (B.2); **sandbox** come servizio Compose dedicato con gVisor o microVM, senza rete né segreti, limiti di risorse, egress con allowlist (B.1).
+Realizzato: `packages/tools` (registry con metadati e selezione per categorie/scope/nucleo; executor con policy deny → ask → allow, approvazioni monouso via protocollo, timeout/retry, validazione output, taint, audit `tool_calls`, tetto risultato; tool `get_time`, `memory_search`, `shopping_list_add/remove/get/clear`, `web_search`/`web_fetch` su Firecrawl con sanificazione e filtri di dominio); `packages/skills` (skill deterministica `shopping_list` con parser italiano, registry con match prima di Jev e candidate per Jev, skill guidate nel turno, skill apprese con ciclo di vita, versioni per hash, scansione, rilevamento di procedure ripetute); migrazione 0008 (`tool_calls`, `shopping_items`, `skills` con RLS); contaminazione di sessione persistente in Redis; CLI `admin:skills`; demo con risposta alle conferme.
 
-Criteri: il modello riceve solo il nucleo stabile + definizioni caricate via meta-tool (test sul payload e sulla stabilità del prefisso); una skill deterministica completa senza chiamate LLM; **test di sicurezza**: injection da pagina Firecrawl reale non attiva tool con side effect (taint → `ask`); codice generato non eseguibile fuori sandbox (test negativo); skill con codice mai attivata automaticamente; suite di regressione delle skill ripetuta su due modelli.
+Criteri:
+- [x] il modello riceve solo il set stabile della sessione (categorie abilitate + nucleo), verificato nei log e nel test del registry; il meta-tool `tool_search` è rinviato a M9 (catalogo ancora piccolo).
+- [x] una skill deterministica completa senza chiamate LLM: "aggiungi il latte e le uova alla lista della spesa" → 16 ms, `llmCalls: 0`, voci in tabella.
+- [x] **test di sicurezza**: injection in una pagina (test con mock) e pagina reale via Firecrawl → la run è contaminata, `shopping_list_add` chiede conferma; senza risposta scade e viene negata; con approvazione esegue una sola volta (approvazione consumata); con rifiuto `denied_by_user`; il turno successivo senza nuova ricerca parte contaminato (taint di sessione). Audit in `tool_calls` e `tool_approvals` coerente.
+- [x] codice generato non eseguibile: nessuna generazione di codice finché manca la sandbox; le skill apprese sono solo markdown con scansione anti-codice (test).
+- [x] skill con codice mai attivata automaticamente: non esistono skill con codice; le skill ad alto rischio richiedono approvazione di un owner (test).
+- [ ] suite di regressione delle skill su due modelli → M9 con l'harness di valutazione.
+- [ ] adapter MCP → M9.
+
+### Verbale di verifica M5 (11 ott 2026)
+
+- `pnpm lint` 0 errori; `pnpm build` ok; `pnpm test`: 25 file, 122 test (più 1 online opzionale), inclusi executor con scenario di injection, repository della lista su Postgres, ciclo di vita delle skill su Postgres.
+- Firecrawl reale: ricerca con estrazione 2,8–11 s (4 crediti per 2 risultati), scrape 2,8 s; la chiave è stata rifiutata finché non è stata rigenerata.
+- End-to-end con API e worker reali: skill deterministica (16 ms, 0 LLM); "mi servono le cose per la carbonara" → Jev → modello con tool → 3 voci con quantità aggiunte; "cerca il tiramisù e aggiungi gli ingredienti" → `web_search` contamina → conferma richiesta → scaduta/negata, poi approvata (3 voci aggiunte), poi nel turno successivo ancora richiesta (taint di sessione) e infine rifiutata; `leggimi la lista` → 4 voci. Un difetto trovato e corretto in corsa: la pulizia del contesto dei tool del turno precedente poteva azzerare quello del turno successivo (ora protetta e anticipata).
+- Osservazione per M9: con la soglia `deep_reasoning` 0,35 le richieste domestiche con pianificazione fanno salire la sessione a `heavy` (Opus): turni da 0,01–0,04 $ con contenuti web in cronologia. Spesa cumulativa di sviluppo: circa 0,22 $ (tetto 3 €).
+- GitGuardian ha segnalato come "Generic Password" la password di sviluppo `ernie_app` in `.env.example`, `docker-compose.yml` e nel workflow CI: sono valori predefiniti per lo sviluppo locale, nessuna chiave reale è nel repository (verificato con scansione della storia). Aggiunto un avviso all'avvio in produzione se la password del database è quella predefinita.
 
 ## M6 — Automazioni ⏳
 
@@ -160,7 +175,7 @@ Tre ricercatori (Opus): `docs/research/01-architettura-agenti.md` (133 fonti), `
 
 - Chiave Anthropic non disponibile: i modelli Anthropic passano da OpenRouter (chiave presente).
 - **Saldo OpenRouter esaurito** (11 ott 2026: 48 $ accreditati, 48,09 $ usati). I test online della M2 richiedono una ricarica; i test offline con mock procedono.
-- Chiave Firecrawl non ancora disponibile: necessaria dalla M5.
+- Chiave Firecrawl disponibile dall'11 ott 2026 (rigenerata dopo un primo rifiuto).
 - Account Apple Developer e dispositivo con iOS 26 necessari dalla M7 (APNs richiede account a pagamento).
 - Decisions API di Jev in alpha: monitorare i cambiamenti di contratto.
 - Avatar: serve un asset GLB con licenza compatibile con un'app commerciale (Avaturn è gratuito solo per uso non commerciale); la produzione in Blender è lavoro da pianificare in M10.

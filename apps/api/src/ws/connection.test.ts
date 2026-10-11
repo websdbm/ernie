@@ -30,6 +30,7 @@ function fakeStore(owner = auth.userId) {
   const sessions = new Map<string, string>(); // id → userId
   const classes = new Map<string, 'standard' | 'heavy'>();
   const tags_ = new Map<string, string[]>();
+  const taints = new Map<string, string>();
   const store: SessionStore = {
     async ensure(userId, _k, sessionId) {
       const existing = sessions.get(sessionId);
@@ -54,6 +55,12 @@ function fakeStore(owner = auth.userId) {
     async setContextTags(_u, id, tags) {
       tags_.set(id, [...tags]);
     },
+    async markTainted(id, source) {
+      taints.set(id, source);
+    },
+    async isTainted(id) {
+      return taints.has(id);
+    },
     async nextSeq(id) {
       const n = seqs.get(id) ?? 0;
       seqs.set(id, n + 1);
@@ -70,7 +77,7 @@ function fakeStore(owner = auth.userId) {
       return (logs.get(id) ?? []).filter((e) => e.seq > after);
     },
   };
-  return { store, logs, sessions, owner, classes, tags: tags_ };
+  return { store, logs, sessions, owner, classes, tags: tags_, taints };
 }
 
 function fakeSocket() {
@@ -402,5 +409,43 @@ describe('ClientConnection: routing', () => {
     expect(seen[0]?.decision?.source).toBe('jev');
     expect(seen[0]?.decision?.inputTokens).toBe(900);
     expect(d.decisions.record).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ClientConnection: contesto dei tool e contaminazione di sessione', () => {
+  it('imposta il contesto per il turno e, dopo contenuto non fidato, il turno successivo parte contaminato', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const contexts: Array<{ requestId: string; tainted: boolean } | null> = [];
+    const d = deps(
+      {
+        runTurn: async (input: TurnInput) => {
+          await input.emit('assistant.completed', {});
+        },
+      },
+      st,
+    );
+    const conn = new ClientConnection(s.socket, auth, {
+      ...d,
+      tools: {
+        categories: ['web'],
+        setToolContext: (_id, ctx) => {
+          contexts.push(ctx ? { requestId: ctx.requestId, tainted: ctx.run.tainted } : null);
+          if (ctx && contexts.length === 1) ctx.onTainted?.('web_search:test'); // simula un tool che ingerisce contenuto esterno
+        },
+      },
+    });
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('cerca una ricetta'));
+    await tick();
+    expect(contexts[0]?.tainted).toBe(false);
+    expect(st.taints.get(sessionId)).toBe('web_search:test');
+    await conn.handleRaw(c.message('aggiungi gli ingredienti'));
+    await tick();
+    const second = contexts.filter((x) => x !== null)[1];
+    expect(second?.tainted).toBe(true);
+    expect(contexts.filter((x) => x === null).length).toBeGreaterThanOrEqual(2);
   });
 });

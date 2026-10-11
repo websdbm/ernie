@@ -17,7 +17,7 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `OPENROUTER_API_KEY` | dalla M2 | — | Modelli di chat via OpenRouter e Decisions API di Jev. |
 | `OPENAI_API_KEY` | dalla M4 | — | Embeddings (`text-embedding-3-small`). |
 | `ANTHROPIC_API_KEY` | opzionale | — | Se presente, i modelli Anthropic possono essere chiamati direttamente. |
-| `FIRECRAWL_API_KEY` | dalla M5 | — | Ricerca ed estrazione web. |
+| `FIRECRAWL_API_KEY` | per i tool web | — | Ricerca ed estrazione web (Firecrawl v2). Senza chiave i tool `web_*` non vengono registrati. Misurato: ricerca con estrazione 3–12 s, scrape ~3 s. |
 | `WS_ALLOWED_ORIGINS` | no | vuoto | Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin e passano sempre. |
 | `LLM_DAILY_BUDGET_USD` | no | `2` | Tetto di spesa giornaliero per utente (UTC) se `users.settings.dailyBudgetUsd` non è impostato. `0` disabilita il controllo. |
 | `MODEL_LIGHT` / `MODEL_STANDARD` / `MODEL_HEAVY` | no | `anthropic/claude-haiku-5.5` / `-sonnet-5.5` / `-opus-5.5` | ID OpenRouter per classe di modello. |
@@ -30,6 +30,10 @@ Tutte le variabili sono validate all'avvio da `@ernie/config` (`packages/config/
 | `MEMORY_RETRIEVAL_LIMIT` | no | `4` | Memorie recuperate per turno quando il router indica `needs_memory`; `0` disabilita. |
 | `MEMORY_CONSOLIDATION_DELAY_S` | no | `20` | Ritardo del job di consolidamento dopo un turno (un job per thread al minuto). |
 | `MEMORY_RETENTION_DAYS` | no | `30` | Dopo quanti giorni i ricordi cancellati vengono eliminati fisicamente (purge notturno del worker). |
+| `TOOL_CATEGORIES` | no | `utility,memory,shopping_list,web` | Categorie di tool abilitate nelle sessioni (set stabile per sessione; `memory_search` e `get_time` sono sempre presenti). |
+| `TOOL_APPROVAL_TTL_S` | no | `120` | Validità di una richiesta di conferma di un tool; scaduta, l'azione è negata. |
+| `POLICY_RISK_ASK_THRESHOLD` | no | `0.75` | Con segnale di rischio del router oltre questa soglia, i tool con effetti esterni richiedono conferma. |
+| `WEB_ALLOWED_DOMAINS` / `WEB_BLOCKED_DOMAINS` | no | vuoto | Allow/deny list di domini (CSV) per `web_search` e `web_fetch`. |
 
 ## Variabili solo per Docker Compose
 
@@ -49,6 +53,7 @@ pnpm bootstrap:storage     # tabelle mastra_* create dal proprietario
 pnpm admin:create-user -- --name "Alessandro" --companion Ernie --role owner
 pnpm --filter @ernie/tests calibrate:jev --write   # ricalibra le soglie del router (≈ 0,002 USD)
 pnpm --filter @ernie/tests eval:memory --write     # misura recall@k del recupero (OpenAI, < 0,001 USD)
+pnpm admin:skills -- detect --user <uuid>          # procedure ripetute; poi propose/test/approve/activate/reject --id <uuid>
 ```
 
 `admin:create-user` stampa una sola volta `API_KEY=ernie_…`: va conservata dal client (Keychain su iOS). Ogni utente ottiene una copia personale dei Soul globali, modificabile in seguito.

@@ -33,6 +33,10 @@ Scenari concreti forniti dall'utente. Servono a tre cose: guidare le scelte di p
 
 Gli acquisti sono dati personali: `user_id` + RLS su `shopping_items` e `memories`; export e cancellazione per utente; nessun invio a servizi esterni se non la query di ricerca (ingredienti, mai lo storico completo).
 
+### Stato (11 ott 2026)
+
+Verificati end-to-end: 1 e 2 (skill deterministica, 0 LLM), 3 (modello con i tool della lista: 3 ingredienti con quantità), 6 (pagina web reale → scrittura con conferma, negata o approvata). Da fare: 4 (abitudini da acquisti simulati, M6/M9), 5 (ricette coerenti con le abitudini: dipende dalla memoria consolidata), 7 (automazione, M6).
+
 ### Golden set iniziale (da ampliare con i fallimenti reali)
 
 1. "aggiungi due litri di latte" → lista aggiornata, 0 LLM.

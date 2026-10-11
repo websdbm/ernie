@@ -50,6 +50,12 @@ export const envSchema = z.object({
   MEMORY_RETRIEVAL_LIMIT: z.coerce.number().int().min(0).max(10).default(4),
   MEMORY_CONSOLIDATION_DELAY_S: z.coerce.number().int().min(0).default(20),
   MEMORY_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
+  /** Categorie di tool abilitate per le sessioni (CSV). */
+  TOOL_CATEGORIES: z.string().default('utility,memory,shopping_list,web'),
+  TOOL_APPROVAL_TTL_S: z.coerce.number().int().min(10).max(3600).default(120),
+  POLICY_RISK_ASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
+  WEB_ALLOWED_DOMAINS: z.string().default(''),
+  WEB_BLOCKED_DOMAINS: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -77,6 +83,13 @@ export interface AppConfig {
     readonly retrievalLimit: number;
     readonly consolidationDelaySeconds: number;
     readonly retentionDays: number;
+  };
+  readonly tools: {
+    readonly categories: readonly string[];
+    readonly approvalTtlSeconds: number;
+    readonly riskAskThreshold: number;
+    readonly webAllowedDomains: readonly string[];
+    readonly webBlockedDomains: readonly string[];
   };
   readonly router: {
     readonly jevModel: string;
@@ -124,6 +137,12 @@ export function parseEnv(source: EnvSource): Env {
   return result.data;
 }
 
+const csv = (v: string): string[] =>
+  v
+    .split(',')
+    .map((x) => x.trim())
+    .filter((x) => x !== '');
+
 export function toAppConfig(env: Env): AppConfig {
   return {
     env: env.NODE_ENV,
@@ -152,6 +171,13 @@ export function toAppConfig(env: Env): AppConfig {
       retrievalLimit: env.MEMORY_RETRIEVAL_LIMIT,
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
       retentionDays: env.MEMORY_RETENTION_DAYS,
+    },
+    tools: {
+      categories: csv(env.TOOL_CATEGORIES),
+      approvalTtlSeconds: env.TOOL_APPROVAL_TTL_S,
+      riskAskThreshold: env.POLICY_RISK_ASK_THRESHOLD,
+      webAllowedDomains: csv(env.WEB_ALLOWED_DOMAINS),
+      webBlockedDomains: csv(env.WEB_BLOCKED_DOMAINS),
     },
     router: {
       jevModel: env.JEV_MODEL,
@@ -203,6 +229,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     llm: config.llm,
     router: config.router,
     memory: config.memory,
+    tools: config.tools,
     redis: { url: redactUrlCredentials(config.redis.url) },
     providers: {
       openrouterApiKey: present(config.providers.openrouterApiKey),

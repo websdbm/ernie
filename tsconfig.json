@@ -29,6 +29,12 @@
       "path": "packages/agent-core"
     },
     {
+      "path": "packages/tools"
+    },
+    {
+      "path": "packages/skills"
+    },
+    {
       "path": "apps/api"
     },
     {

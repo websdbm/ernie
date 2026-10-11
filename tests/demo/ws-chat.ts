@@ -1,7 +1,8 @@
 /**
  * Demo da terminale: una sessione testuale con Ernie via WebSocket (protocollo v1).
  *   ERNIE_API_KEY=ernie_... pnpm --filter @ernie/tests demo:chat "ciao, chi sei?"
- * Variabili: ERNIE_URL (default ws://localhost:3000/v1/ws), ERNIE_SESSION_ID (per riprendere una sessione).
+ * Variabili: ERNIE_URL (default ws://localhost:3000/v1/ws), ERNIE_SESSION_ID (per riprendere una sessione),
+ * ERNIE_DEMO_APPROVE=approve|deny per rispondere alle richieste di conferma dei tool.
  */
 import { randomUUID } from 'node:crypto';
 import { createEvent, decodeEvent, isUserVisible, SequenceSource } from '@ernie/protocol';
@@ -61,6 +62,37 @@ const done = new Promise<void>((resolve) => {
         ws.close();
         resolve();
         break;
+      case 'tool.started':
+        console.error(`[tool ${e.payload.toolId}] ${e.payload.argsPreview ?? ''}`);
+        break;
+      case 'tool.completed':
+        console.error(
+          `[tool ${e.payload.toolId} ${e.payload.ok ? 'ok' : 'errore'} ${e.payload.durationMs}ms] ${e.payload.error ?? e.payload.resultPreview ?? ''}`,
+        );
+        break;
+      case 'tool.confirmation.requested': {
+        const decision =
+          process.env.ERNIE_DEMO_APPROVE === 'approve'
+            ? 'approve'
+            : process.env.ERNIE_DEMO_APPROVE === 'deny'
+              ? 'deny'
+              : null;
+        console.error(
+          `[conferma richiesta per ${e.payload.toolId}: ${e.payload.reason ?? ''}] → ${decision ?? 'nessuna risposta'}`,
+        );
+        if (decision) {
+          ws.send(
+            JSON.stringify(
+              createEvent(
+                'tool.confirmation.respond',
+                { approvalId: e.payload.approvalId, decision },
+                { sessionId, correlationId: e.correlationId, seq: seq.next() },
+              ),
+            ),
+          );
+        }
+        break;
+      }
       case 'error':
         console.error(`[errore ${e.payload.code}] ${e.payload.message}`);
         ws.close();

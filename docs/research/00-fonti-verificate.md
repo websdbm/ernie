@@ -33,7 +33,7 @@ Verifiche effettuate direttamente sulla documentazione ufficiale durante l'anali
 
 - LiteLLM proxy: https://docs.litellm.ai/docs/proxy/docker_quick_start — immagine `docker.litellm.ai/berriai/litellm`, `LITELLM_MASTER_KEY`, `config.yaml` con `model_list`; DB necessario per virtual key e spend tracking.
 - BullMQ connessioni: https://docs.bullmq.io/guide/connections — ioredis predefinito (da installare), `maxRetriesPerRequest: null` per i worker, backend astratto in v6.
-- Firecrawl Search: https://docs.firecrawl.dev/features/search — `POST https://api.firecrawl.dev/v2/search`, SDK `firecrawl`, `scrapeOptions.formats`, 2 crediti/10 risultati.
+- Firecrawl Search: https://docs.firecrawl.dev/features/search — `POST https://api.firecrawl.dev/v2/search`, SDK `firecrawl`, `scrapeOptions.formats`, 2 crediti/10 risultati. Verifica reale (11 ott 2026): risposta `{ success, data: { web: [{ url, title, description, markdown, metadata, position }] }, creditsUsed }`; `/v2/scrape` → `{ data: { markdown, metadata } }`; latenze 2,8–11,9 s per la ricerca con estrazione, 2,8 s lo scrape; una pagina YouTube ha restituito 2 MB di markdown (troncato dal tool).
 - pnpm 11 impostazioni: https://pnpm.io/settings — `allowBuilds` in `pnpm-workspace.yaml`.
 - Hermes Agent (riferimento funzionale): https://hermes-agent.nousresearch.com/docs
 

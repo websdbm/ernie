@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../agent-core" },
+    { "path": "../db" },
+    { "path": "../memory" },
+    { "path": "../observability" },
+    { "path": "../protocol" }
+  ]
+}

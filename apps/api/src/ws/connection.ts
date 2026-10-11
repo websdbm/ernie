@@ -1,5 +1,5 @@
 import type { ApprovalStore, CompanionAgent, PendingApprovals, TurnInput } from '@ernie/agent-core';
-import { runTurn as defaultRunTurn, routeCommand } from '@ernie/agent-core';
+import { runTurn as defaultRunTurn, RunContext, routeCommand } from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
 import { formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
@@ -15,6 +15,8 @@ import {
   PROTOCOL_VERSION,
   parseClientEvent,
 } from '@ernie/protocol';
+import type { SkillRegistry } from '@ernie/skills';
+import type { ToolContextRef } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
@@ -23,6 +25,21 @@ import { SessionForbiddenError, type SessionRecord, type SessionStore } from '..
 export interface SocketLike {
   send(data: string): void;
   close(code?: number, reason?: string): void;
+}
+
+export interface TurnOutcomeInfo {
+  userId: string;
+  sessionId: string;
+  requestId: string;
+  userText: string;
+  route: string;
+  modelClass: string;
+  model?: string;
+  outcome: 'completed' | 'cancelled' | 'error' | 'loop';
+  costUsd: number;
+  llmCalls: number;
+  toolCalls: number;
+  latencyMs: number;
 }
 
 export interface ConnectionDeps {
@@ -45,34 +62,36 @@ export interface ConnectionDeps {
     readonly repo: MemoryRepository;
     readonly retrievalLimit: number;
     /** Chiamato a fine turno: episodio deterministico e consolidamento asincrono. */
-    readonly afterTurn: (info: {
-      userId: string;
-      sessionId: string;
-      requestId: string;
-      userText: string;
-      route: string;
-      modelClass: string;
-      model?: string;
-      outcome: 'completed' | 'cancelled' | 'error' | 'loop';
-      costUsd: number;
-      llmCalls: number;
-      toolCalls: number;
-      latencyMs: number;
-    }) => Promise<void>;
+    readonly afterTurn: (info: TurnOutcomeInfo) => Promise<void>;
+  };
+  /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
+  readonly tools?: {
+    readonly categories: readonly string[];
+    readonly setToolContext: (sessionId: string, ctx: ToolContextRef['current']) => void;
+    /** Durata della contaminazione di sessione dopo contenuto non fidato. */
+    readonly taintTtlSeconds?: number;
+  };
+  readonly skills?: {
+    readonly registryFor: (userId: string) => Promise<SkillRegistry>;
   };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
 
-const deterministicDecision = (
+const NULL_UUID = '00000000-0000-4000-8000-000000000000';
+const uuid = z.uuid();
+
+const localDecision = (
+  route: 'deterministic' | 'skill',
   modelClass: RouteDecision['modelClass'],
   latencyMs: number,
+  skillId: string | null = null,
 ): RouteDecision => ({
-  route: 'deterministic',
+  route,
   modelClass,
   deepReasoning: false,
   needsMemory: false,
   toolCategories: [],
-  skillId: null,
+  skillId,
   riskSignal: 0,
   confidence: 1,
   source: 'deterministic',
@@ -80,8 +99,6 @@ const deterministicDecision = (
   inputTokens: 0,
   latencyMs,
 });
-
-const uuid = z.uuid();
 
 /** Gestisce una connessione WebSocket: una sessione per connessione, un turno attivo per volta. */
 export class ClientConnection {
@@ -109,18 +126,13 @@ export class ClientConnection {
       await this.sendError('invalid_json', 'Messaggio non valido', false);
       return;
     }
-    const res = (() => {
-      try {
-        return { ok: true as const, event: parseClientEvent(parsed) };
-      } catch (err) {
-        return { ok: false as const, err };
-      }
-    })();
-    if (!res.ok) {
+    let event: ClientEvent;
+    try {
+      event = parseClientEvent(parsed);
+    } catch {
       await this.sendError('invalid_event', 'Evento non conforme al protocollo v1', false);
       return;
     }
-    const event = res.event;
     if (this.dedupe.isDuplicate(event.id)) return;
     try {
       await this.dispatch(event);
@@ -280,13 +292,14 @@ export class ClientConnection {
     const t0 = Date.now();
     const correlationId = event.correlationId;
     const sessionId = this.sessionId;
+    const text = event.payload.text;
     const budget =
       typeof this.auth.settings.dailyBudgetUsd === 'number'
         ? this.auth.settings.dailyBudgetUsd
         : this.deps.dailyBudgetUsd;
 
     // 1) Router deterministico: comandi riconosciuti → nessuna chiamata a Jev né a un modello.
-    const command = routeCommand(event.payload.text, {
+    const command = routeCommand(text, {
       companionName: this.auth.companionName,
       modelClass: this.session.modelClass,
       contextTags: this.session.contextTags,
@@ -312,36 +325,45 @@ export class ClientConnection {
         this.auth.userId,
         sessionId,
         correlationId,
-        deterministicDecision(this.session.modelClass, Date.now() - t0),
+        localDecision('deterministic', this.session.modelClass, Date.now() - t0),
       );
-      await this.send(
-        'assistant.started',
-        { route: 'deterministic', modelClass: this.session.modelClass },
-        correlationId,
-      );
-      await this.send('assistant.text.completed', { text: command.text }, correlationId);
-      await this.send(
-        'assistant.completed',
-        {
-          finishReason: 'stop',
-          usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            llmCalls: 0,
-            toolCalls: 0,
-            latencyMs: Date.now() - t0,
-            costUsdActual: 0,
-            route: 'deterministic',
-          },
-        },
-        correlationId,
-      );
-      this.remember('utente', event.payload.text);
-      this.remember('assistente', command.text);
+      await this.replyLocally('deterministic', command.text, correlationId, t0, text);
       return;
     }
 
-    // 2) Budget, poi decisione (cache → Jev → fallback); il Policy Engine può solo restringere.
+    // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
+    const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth.userId) : null;
+    const match = skills?.match(text) ?? null;
+    if (match) {
+      const reply = await match.skill.run(match.plan, {
+        userId: this.auth.userId,
+        sessionId,
+        requestId: correlationId,
+      });
+      await this.deps.decisions.record(
+        this.auth.userId,
+        sessionId,
+        correlationId,
+        localDecision('skill', this.session.modelClass, Date.now() - t0, match.skill.id),
+      );
+      await this.replyLocally('skill', reply.text, correlationId, t0, text);
+      await this.deps.memories?.afterTurn({
+        userId: this.auth.userId,
+        sessionId,
+        requestId: correlationId,
+        userText: text,
+        route: 'skill',
+        modelClass: this.session.modelClass,
+        outcome: 'completed',
+        costUsd: 0,
+        llmCalls: 0,
+        toolCalls: reply.actions.length,
+        latencyMs: Date.now() - t0,
+      });
+      return;
+    }
+
+    // 3) Budget, poi decisione (cache → Jev → fallback); il Policy Engine può solo restringere.
     try {
       await this.deps.budget.assertWithinBudget(this.auth.userId, budget);
     } catch (err) {
@@ -357,11 +379,11 @@ export class ClientConnection {
       throw err;
     }
     const decision = await this.deps.router.decide({
-      text: event.payload.text,
+      text,
       inputMode: event.payload.inputMode,
       recentTurns: this.recentTurns,
-      toolCategories: [],
-      skillCandidates: [],
+      toolCategories: this.deps.tools?.categories ?? [],
+      skillCandidates: skills?.candidates(text) ?? [],
       sessionModelClass: this.session.modelClass,
     });
     await this.deps.decisions.record(this.auth.userId, sessionId, correlationId, decision);
@@ -382,16 +404,17 @@ export class ClientConnection {
       return;
     }
 
-    // Memorie recuperate per il turno (fuori dal prefisso), solo se il router le ritiene necessarie.
-    let memoryContext: string | undefined;
+    // Contesto del turno (fuori dal prefisso): memorie pertinenti e, se Jev indica una skill guidata, la sua procedura.
+    const contextBlocks: string[] = [];
     if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {
       try {
         const hits = await this.deps.memories.repo.search({
           userId: this.auth.userId,
-          query: event.payload.text,
+          query: text,
           limit: this.deps.memories.retrievalLimit,
         });
-        memoryContext = formatRetrievedMemories(hits) || undefined;
+        const block = formatRetrievedMemories(hits);
+        if (block) contextBlocks.push(block);
       } catch (err) {
         this.deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
@@ -399,22 +422,49 @@ export class ClientConnection {
         );
       }
     }
-    const turnStartedAt = Date.now();
+    const guided = decision.skillId ? skills?.guided(decision.skillId) : undefined;
+    if (guided)
+      contextBlocks.push(
+        `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,
+      );
+    const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
+
     const ac = new AbortController();
     this.activeTurns.set(correlationId, ac);
     const run = this.deps.runTurn ?? defaultRunTurn;
-    this.remember('utente', event.payload.text);
-    // Il turno gira in background così `user.cancel` può essere gestito mentre lo stream è aperto.
+    this.remember('utente', text);
+    const turnStartedAt = Date.now();
+    const sessionTainted = await this.deps.store.isTainted(sessionId);
+    const run_ = new RunContext(this.auth.userId, this.auth.scopes, decision.riskSignal);
+    if (sessionTainted) run_.markUntrusted('session:history');
+    const taintTtl = this.deps.tools?.taintTtlSeconds ?? 1800;
+    this.deps.tools?.setToolContext(sessionId, {
+      userId: this.auth.userId,
+      sessionId,
+      requestId: correlationId,
+      scopes: this.auth.scopes,
+      run: run_,
+      emit: (type, payload) => this.send(type, payload, correlationId),
+      signal: ac.signal,
+      onTainted: (source) => {
+        void this.deps.store.markTainted(sessionId, source, taintTtl).catch(() => {});
+      },
+    });
+    const clearToolContext = () => {
+      // Solo se il contesto corrente è ancora di questo turno: un turno successivo potrebbe averlo già sostituito.
+      this.deps.tools?.setToolContext(sessionId, null);
+    };
+    // Il turno gira in background così `user.cancel` e `tool.confirmation.respond` possono essere gestiti nel frattempo.
     void run({
       userId: this.auth.userId,
       sessionId,
       correlationId,
-      text: event.payload.text,
+      text,
       inputMode: event.payload.inputMode,
       companion,
       ...(memoryContext ? { memoryContext } : {}),
       decision: {
-        route: decision.route,
+        route: decision.route === 'skill' ? 'llm' : decision.route,
         modelClass: companion.profile.modelClass,
         source: decision.source,
         costUsd: decision.costUsd,
@@ -430,6 +480,7 @@ export class ClientConnection {
       },
     })
       .then(async (res) => {
+        if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         const r = res as
           | {
               cancelled?: boolean;
@@ -446,7 +497,7 @@ export class ClientConnection {
           userId: this.auth.userId,
           sessionId,
           requestId: correlationId,
-          userText: event.payload.text,
+          userText: text,
           route: decision.route,
           modelClass: companion.profile.modelClass,
           model: companion.profile.modelId,
@@ -458,6 +509,7 @@ export class ClientConnection {
         });
       })
       .catch(async (err) => {
+        if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         this.deps.logger.error({ err, correlationId }, 'runTurn ha rigettato');
         await this.sendError('turn_failed', 'Il turno non è stato completato', true, correlationId);
       })
@@ -465,6 +517,40 @@ export class ClientConnection {
         this.activeTurns.delete(correlationId);
         void this.deps.store.touch(this.auth.userId, sessionId).catch(() => {});
       });
+  }
+
+  /** Risposta locale (comando o skill deterministica): tre eventi, nessuna chiamata a modelli. */
+  private async replyLocally(
+    route: 'deterministic' | 'skill',
+    reply: string,
+    correlationId: string,
+    t0: number,
+    userText: string,
+  ): Promise<void> {
+    await this.send(
+      'assistant.started',
+      { route, modelClass: this.session?.modelClass ?? 'standard' },
+      correlationId,
+    );
+    await this.send('assistant.text.completed', { text: reply }, correlationId);
+    await this.send(
+      'assistant.completed',
+      {
+        finishReason: 'stop',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          llmCalls: 0,
+          toolCalls: 0,
+          latencyMs: Date.now() - t0,
+          costUsdActual: 0,
+          route,
+        },
+      },
+      correlationId,
+    );
+    this.remember('utente', userText);
+    this.remember('assistente', reply);
   }
 
   private async spentToday(): Promise<number> {
@@ -491,7 +577,7 @@ export class ClientConnection {
     // Serializza gli invii: seq monotono e ordine di emissione garantito anche con emit concorrenti.
     const next = this.sending.then(async () => {
       if (this.closed) return;
-      const sessionId = this.sessionId ?? '00000000-0000-4000-8000-000000000000';
+      const sessionId = this.sessionId ?? NULL_UUID;
       const seq = this.sessionId ? await this.deps.store.nextSeq(this.sessionId) : 0;
       const event: AgentEvent = createEvent(type, payload, {
         sessionId,
@@ -512,11 +598,6 @@ export class ClientConnection {
     retryable: boolean,
     correlationId?: string,
   ): Promise<void> {
-    return this.send(
-      'error',
-      { code, message, retryable },
-      correlationId ?? '00000000-0000-4000-8000-000000000000',
-      false,
-    );
+    return this.send('error', { code, message, retryable }, correlationId ?? NULL_UUID, false);
   }
 }

@@ -28,7 +28,18 @@ import {
   createModelGateway,
 } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
+import { createLearnedSkillRepository, createShoppingListSkill } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
+import {
+  createFirecrawlClient,
+  createMemorySearchSpec,
+  createShoppingListRepository,
+  createShoppingTools,
+  createToolCallRecorder,
+  createWebTools,
+  getTimeTool,
+  ToolRegistry,
+} from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createCompanionFactory } from './companion.js';
 import { createPostgres } from './infra/postgres.js';
@@ -46,6 +57,11 @@ async function main(): Promise<void> {
     base: { version: config.service.version, env: config.env },
   });
   logger.info({ config: redactConfig(config) }, 'avvio api');
+  if (config.env === 'production' && /:(ernie|ernie_app)@/.test(config.db.url)) {
+    logger.warn(
+      'DATABASE_URL usa la password di sviluppo predefinita: in produzione va cambiata (APP_DB_PASSWORD, POSTGRES_PASSWORD)',
+    );
+  }
 
   const postgres = createPostgres(config, logger);
   const redis = createRedis(config.redis.url, logger);
@@ -63,6 +79,7 @@ async function main(): Promise<void> {
 
   const storage = createMastraStorage({ connectionString: config.db.url, disableInit: true });
   const memory = createConversationMemory(storage);
+
   // Memory Engine: embeddings OpenAI (o finti senza chiave, solo full-text), coda di consolidamento sul worker.
   const embedder = config.providers.openaiApiKey
     ? createOpenAIEmbedder(config.providers.openaiApiKey, config.memory.embeddingModel)
@@ -71,6 +88,39 @@ async function main(): Promise<void> {
     logger.warn('OPENAI_API_KEY assente: memoria con embedder finto (solo full-text)');
   const memories = createMemoryRepository(postgres.pool, embedder, { logger });
   const memoryQueue = createMemoryQueue(redis.client);
+
+  // Tool Registry: nucleo (orario, memoria) + lista della spesa + web (solo con chiave Firecrawl).
+  const shopping = createShoppingListRepository(postgres.pool);
+  const registry = new ToolRegistry()
+    .register(getTimeTool)
+    .register(createMemorySearchSpec(memories));
+  for (const t of createShoppingTools(shopping)) registry.register(t);
+  if (config.providers.firecrawlApiKey) {
+    const web = createWebTools(
+      createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
+      {
+        allowedDomains: config.tools.webAllowedDomains,
+        blockedDomains: config.tools.webBlockedDomains,
+        maxResults: 5,
+        maxCharsPerResult: 3_000,
+      },
+    );
+    for (const t of web) registry.register(t);
+  } else {
+    logger.warn('FIRECRAWL_API_KEY assente: tool web non registrati');
+  }
+  const approvals = {
+    store: createPgApprovalStore(postgres.pool),
+    pending: new PendingApprovals(),
+  };
+  const executor = {
+    policyRules: { riskAskThreshold: config.tools.riskAskThreshold },
+    approvals: { ...approvals, ttlMs: config.tools.approvalTtlSeconds * 1000 },
+    audit: createToolCallRecorder(postgres.pool, logger),
+    logger,
+  };
+  const learnedSkills = createLearnedSkillRepository(postgres.pool, registry);
+
   const companions = createCompanionFactory({
     gateway,
     memory,
@@ -78,8 +128,19 @@ async function main(): Promise<void> {
     logger,
     memories,
     snapshotMaxChars: config.memory.snapshotMaxChars,
+    tools: {
+      registry,
+      executor,
+      categories: config.tools.categories,
+      core: ['memory_search', 'get_time'],
+    },
+    skills: { builtin: [createShoppingListSkill(shopping)], learned: learnedSkills },
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
+  logger.info(
+    { tools: registry.list().map((t) => t.id), categories: config.tools.categories },
+    'registry dei tool',
+  );
 
   // Router JEV: soglie da file (calibrate su dati etichettati), cache esatta su Redis, fallback deterministico.
   let thresholds = DEFAULT_THRESHOLDS;
@@ -121,10 +182,10 @@ async function main(): Promise<void> {
         budget: createBudgetGuard(postgres.pool),
         dailyBudgetUsd: config.llm.dailyBudgetUsd,
         getCompanion: companions.getCompanion,
-        invalidateCompanion: (sessionId) => companions.cache.delete(sessionId),
+        invalidateCompanion: (sessionId) => companions.invalidate(sessionId),
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
-        approvals: { store: createPgApprovalStore(postgres.pool), pending: new PendingApprovals() },
+        approvals,
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,
@@ -146,6 +207,12 @@ async function main(): Promise<void> {
             }
           },
         },
+        tools: {
+          categories: config.tools.categories,
+          setToolContext: companions.setToolContext,
+          taintTtlSeconds: 1800,
+        },
+        skills: { registryFor: companions.skillsFor },
       },
     },
   });

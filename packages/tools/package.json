@@ -1,0 +1,26 @@
+{
+  "name": "@ernie/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tool Registry ed Executor: metadati, selezione per categoria, policy, approvazioni, timeout, audit; tool integrati (orario, lista della spesa, web via Firecrawl, memoria)",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ernie/agent-core": "workspace:*",
+    "@ernie/db": "workspace:*",
+    "@ernie/memory": "workspace:*",
+    "@ernie/observability": "workspace:*",
+    "@ernie/protocol": "workspace:*",
+    "@mastra/core": "^1.75.0",
+    "zod": "^4.6.5"
+  }
+}

@@ -97,6 +97,9 @@ describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_a
     const replay = await store.replay(sessionId, 0);
     expect(replay.map((e) => e.seq)).toEqual([1]);
     expect(await store.currentSeq(sessionId)).toBe(1);
+    expect(await store.isTainted(sessionId)).toBe(false);
+    await store.markTainted(sessionId, 'web_fetch:https://x', 60);
+    expect(await store.isTainted(sessionId)).toBe(true);
   });
 
   it('llm_calls per utente e budget giornaliero', async () => {
