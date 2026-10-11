@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Spazio riservato all'avatar tridimensionale (M10: `WKWebView` con three.js + TalkingHead).
-/// Oggi mostra un segnaposto animato che reagisce allo stato dell'agente ed è consumatore della stessa macchina a stati.
+/// Spazio riservato all'avatar (M10: `WKWebView` con three.js + TalkingHead e un personaggio peluche 3D).
+/// Oggi mostra la mascotte di Ernie (stile peluche morbido, decisione dell'utente dell'11 ott 2026) che reagisce
+/// allo stato dell'agente ed è consumatrice della stessa macchina a stati.
 struct AvatarStage: View {
     let state: AgentState
     let name: String
@@ -9,7 +10,7 @@ struct AvatarStage: View {
     let emotion: String
     var compact = false
 
-    @State private var pulse = false
+    @State private var breathe = false
 
     private var caption: String {
         switch connection {
@@ -25,31 +26,39 @@ struct AvatarStage: View {
         }
     }
 
-    private var tint: Color {
+    private var ringColor: Color {
         switch state {
-        case .idle: .accentColor
+        case .idle: .clear
         case .listening: .red
         case .thinking: .orange
         case .speaking: .green
         }
     }
 
+    private var size: CGFloat { compact ? 56 : 150 }
+
     var body: some View {
         VStack(spacing: compact ? 4 : 8) {
             ZStack {
                 Circle()
-                    .fill(tint.opacity(0.18))
-                    .scaleEffect(pulse ? 1.08 : 0.94)
-                Circle()
-                    .fill(LinearGradient(colors: [tint.opacity(0.9), tint.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .padding(compact ? 10 : 18)
-                Image(systemName: "face.smiling")
-                    .font(.system(size: compact ? 20 : 40, weight: .light))
-                    .foregroundStyle(.white)
+                    .stroke(ringColor.opacity(0.55), lineWidth: compact ? 3 : 5)
+                    .scaleEffect(breathe ? 1.06 : 0.98)
+                    .opacity(state == .idle ? 0 : 1)
+                Image("Mascot")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    .scaleEffect(breathe ? 1.02 : 0.99)
+                    .rotationEffect(.degrees(state == .thinking ? (breathe ? 2 : -2) : 0))
+                    .shadow(color: .black.opacity(0.12), radius: compact ? 4 : 10, y: compact ? 2 : 6)
             }
-            .frame(width: compact ? 48 : 110, height: compact ? 48 : 110)
-            .animation(.easeInOut(duration: state == .listening ? 0.5 : 1.6).repeatForever(autoreverses: true), value: pulse)
-            .onAppear { pulse = true }
+            .frame(width: size + 16, height: size + 16)
+            .animation(
+                .easeInOut(duration: state == .listening ? 0.45 : (state == .speaking ? 0.3 : 1.8)).repeatForever(autoreverses: true),
+                value: breathe
+            )
+            .onAppear { breathe = true }
             if !compact {
                 Text(caption)
                     .font(.footnote)
@@ -58,10 +67,10 @@ struct AvatarStage: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, compact ? 6 : 14)
+        .padding(.vertical, compact ? 6 : 12)
         .background(Color(.secondarySystemBackground))
         .animation(.easeInOut(duration: 0.2), value: compact)
         .accessibilityLabel("\(name), \(caption)")
-        // M10: sostituire il contenuto con AvatarWebView(state:, emotion:) mantenendo questa API.
+        // M10: sostituire il contenuto con AvatarWebView(state:, emotion:) mantenendo questa API; `emotion` è già disponibile.
     }
 }
