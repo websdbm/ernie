@@ -17,16 +17,15 @@ struct ChatView: View {
                         // L'avatar galleggia sulla conversazione: i messaggi scorrono sotto e restano visibili
                         // attorno al cerchio (richiesta dell'utente, 12 ott 2026).
                         ZStack(alignment: .top) {
-                            MessageList(conversation: conversation, topInset: AvatarStage.height(compact: composing))
-                            AvatarStage(
+                            MessageList(conversation: conversation, topInset: FloatingAvatar.topInset(model.settings, composing: composing))
+                            FloatingAvatar(
                                 state: conversation.agentState,
                                 name: model.companionName,
                                 connection: conversation.connection,
                                 emotion: conversation.lastAvatarEmotion,
-                                compact: composing,
+                                composing: composing,
                                 mouthOpen: model.speaker.mouthOpen
                             )
-                            .allowsHitTesting(false)
                         }
                         InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
                     }
@@ -47,6 +46,19 @@ struct ChatView: View {
                     .accessibilityLabel(model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla")
                     Menu {
                         Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
+                        Button(model.settings.avatarHidden ? "Mostra avatar" : "Nascondi avatar", systemImage: model.settings.avatarHidden ? "eye" : "eye.slash") {
+                            withAnimation(.spring(duration: 0.35)) { model.settings.avatarHidden.toggle() }
+                            model.settings.save()
+                        }
+                        Button("Avatar in alto al centro", systemImage: "arrow.up.to.line") {
+                            withAnimation(.spring(duration: 0.35)) {
+                                model.settings.avatarHidden = false
+                                model.settings.avatarAnchor = .top
+                                model.settings.avatarCompact = false
+                                model.settings.avatarSize = 132
+                            }
+                            model.settings.save()
+                        }
                         Button("Impostazioni", systemImage: "gearshape") { showSettings = true }
                     } label: {
                         Image(systemName: "ellipsis.circle")

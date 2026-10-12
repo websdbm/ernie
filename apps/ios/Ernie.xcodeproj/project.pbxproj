@@ -13,6 +13,7 @@
 		0F23035C5EE3AF3D3E2F004F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */; };
 		0FA8703F7C5EA31F8BC1B551 /* LatencyTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */; };
 		0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AF98DF9BED3D01480A522D /* SpeechInput.swift */; };
+		107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */; };
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
 		24A95C8605017621BC54120B /* DocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957834F4A9047230E5195B26 /* DocumentsTests.swift */; };
 		25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD07317404B3BEF77505FA3 /* ConversationStore.swift */; };
@@ -140,6 +141,7 @@
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStore.swift; sourceTree = "<group>"; };
+		CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingAvatar.swift; sourceTree = "<group>"; };
 		D2589F13E371B721791902AA /* EventsCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsCodingTests.swift; sourceTree = "<group>"; };
 		D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieWidgets.swift; sourceTree = "<group>"; };
 		D938C458270FB5964436CBF8 /* BlockViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockViews.swift; sourceTree = "<group>"; };
@@ -269,6 +271,7 @@
 				1072AD1394544857B5BED36D /* ChatModels.swift */,
 				4361E7F7124014F0D94B4EA2 /* ChatView.swift */,
 				6DD07317404B3BEF77505FA3 /* ConversationStore.swift */,
+				CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */,
 				C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */,
 				52FF043456831431801189D0 /* InputBar.swift */,
 				CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */,
@@ -479,6 +482,7 @@
 				E7585979677E79EA572D5506 /* ErnieApp.swift in Sources */,
 				620DDDD97BD030CF92AA4CEC /* Events.swift in Sources */,
 				3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */,
+				107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */,
 				3F6A6A60642E8F5C1DC50070 /* IconGalleryView.swift in Sources */,
 				BBDEEC2608B0EBCBAFA19BF2 /* Ids.swift in Sources */,
 				171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */,

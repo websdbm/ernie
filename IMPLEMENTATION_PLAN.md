@@ -258,6 +258,15 @@ Realizzazione:
 - Pulsante Skill: scudo con fulmine (`bolt.shield.fill`, scelta dell'utente tra sedici proposte rese nel simulatore).
 - App Group `group.com.websdbm.ernie` per il widget: l'API di App Store Connect non sa registrare i gruppi (la capability App Groups è stata abilitata via API sui due App ID, comandi `bundles` e `app-groups` in `asc.mjs`); il gruppo è stato creato dall'utente nel portale e assegnato ai due App ID dal browser (11 ott sera). La build 22 è uscita senza widget (spec temporanea senza app group); dalla build 24 il widget è incluso.
 
+## M7f — Interfaccia: avatar galleggiante e leggibilità ✅
+
+Richiesta dell'utente (12 ott 2026): l'interfaccia era «poco curata»: l'area dell'avatar copriva la chat; poi: avatar rimovibile, ridimensionabile e riposizionabile, richiamabile da una linguetta; risposte lunghe come «muro di testo», interlinea scarsa.
+
+Realizzazione:
+- Avatar che galleggia sulla conversazione (`FloatingAvatar`): trascina → si aggancia all'ancora più vicina (alto centro, angoli, lati); tocca → badge piccolo/normale; pizzica → dimensione libera 72–220 pt; tieni premuto → si nasconde in una linguetta sul bordo (anello colorato di stato visibile anche lì); con la tastiera si riduce da solo; voci «Mostra/Nascondi avatar» e «Avatar in alto al centro» nel menu ⋯. Posizione, dimensione e stato nelle preferenze locali.
+- Stile: accento viola come l'orso (`AccentColor`), alone al neon dietro l'avatar, bolle utente a gradiente, velatura dello sfondo, didascalia di stato solo quando serve.
+- Leggibilità: interlinea e spazio fra capoversi; i paragrafi lunghi (più di tre frasi) vengono spezzati in capoversi di due o tre frasi sul client (`Markdown.readable`, con riguardo per abbreviazioni e numeri); migrazione 0016: il Soul chiede risposte brevi e, quando lunghe, capoversi di due o tre frasi separati da una riga vuota.
+
 ## M8 — Conversazione vocale avanzata ✅
 
 Ambito previsto: modalità continua **solo in primo piano** con VAD e fine turno (semantico con Smart Turn v3 in Core ML, altrimenti silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7).

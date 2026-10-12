@@ -1,31 +1,14 @@
 import SwiftUI
 
-/// Spazio riservato all'avatar. Decisione dell'utente (11 ott 2026, sera): Ernie è un orso in pixel art (occhiali tondi,
-/// ciuffo chiaro, cornice al neon viola), lo stesso dell'icona. L'animazione è a sprite «procedurale»: movimenti a scatti
-/// di pixel (respiro, inclinazione quando pensa, bocca che si apre a ogni parola pronunciata), senza sfocature.
-/// M10 sostituirà l'immagine singola con uno sprite sheet (più fotogrammi) mantenendo questa API.
-struct AvatarStage: View {
+/// Avatar di Ernie: un orso in pixel art (decisione dell'utente, 11 ott 2026), lo stesso dell'icona, animato a fotogrammi
+/// dallo sprite sheet `BearSheet`. Il posizionamento sulla conversazione è in `FloatingAvatar`.
+/// Il cerchio dell'avatar: alone al neon traslucido, anello dell'accento, anello di stato (ascolto/pensiero/parlato)
+/// e l'orso animato. Usato dall'avatar galleggiante a qualunque dimensione.
+struct AvatarBubble: View {
     let state: AgentState
-    let name: String
-    let connection: ProtocolClient.ConnectionState
     let emotion: String
-    var compact = false
-    /// Bocca aperta/chiusa mentre Ernie parla (dal sintetizzatore vocale).
-    var mouthOpen = false
-
-    private var caption: String {
-        switch connection {
-        case .connecting, .reconnecting: return "connessione…"
-        case .disconnected: return "non connesso"
-        case .connected:
-            switch state {
-            case .idle: return "pronto"
-            case .listening: return "ti ascolto"
-            case .thinking: return "ci penso"
-            case .speaking: return "parlo"
-            }
-        }
-    }
+    let mouthOpen: Bool
+    let size: CGFloat
 
     private var ringColor: Color {
         switch state {
@@ -36,46 +19,40 @@ struct AvatarStage: View {
         }
     }
 
-    private var size: CGFloat { compact ? 56 : 132 }
-
-    /// Altezza occupata in cima alla conversazione (la chat scorre sotto, visibile attorno al cerchio).
-    static func height(compact: Bool) -> CGFloat { compact ? 72 : 196 }
-
     var body: some View {
-        VStack(spacing: compact ? 4 : 8) {
-            ZStack {
-                // Alone al neon, traslucido: la conversazione resta visibile intorno al cerchio.
-                Circle()
-                    .fill(RadialGradient(colors: [Color.accentColor.opacity(compact ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.78))
-                    .frame(width: size * 1.6, height: size * 1.6)
-                Circle()
-                    .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: compact ? 1.5 : 2)
-                    .frame(width: size + 8, height: size + 8)
-                Circle()
-                    .stroke(ringColor.opacity(0.75), lineWidth: compact ? 3 : 5)
-                    .frame(width: size + 14, height: size + 14)
-                    .opacity(state == .idle ? 0 : 1)
-                PixelBearView(state: state, mouthOpen: mouthOpen, size: size, emotion: emotion)
-            }
-            .frame(width: size + 16, height: size + 16)
-            if !compact {
-                // Didascalia solo quando c'è qualcosa da dire («ti ascolto», «ci penso», «connessione…»):
-                // a riposo sparisce e non copre i messaggi che scorrono sotto.
-                Text(caption)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.regularMaterial, in: Capsule())
-                    .opacity(connection == .connected && state == .idle ? 0 : 1)
+        let small = size < 90
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [Color.accentColor.opacity(small ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.78))
+                .frame(width: size * 1.6, height: size * 1.6)
+            Circle()
+                .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: small ? 1.5 : 2)
+                .frame(width: size + 8, height: size + 8)
+            Circle()
+                .stroke(ringColor.opacity(0.75), lineWidth: small ? 3 : 5)
+                .frame(width: size + 14, height: size + 14)
+                .opacity(state == .idle ? 0 : 1)
+            PixelBearView(state: state, mouthOpen: mouthOpen, size: size, emotion: emotion)
+        }
+        .frame(width: size + 16, height: size + 16)
+        .animation(.easeInOut(duration: 0.2), value: state)
+    }
+}
+
+/// Testo di stato sotto l'avatar («ti ascolto», «ci penso», «connessione…»); a riposo non c'è niente da dire.
+enum AvatarCaption {
+    static func text(connection: ProtocolClient.ConnectionState, state: AgentState) -> String? {
+        switch connection {
+        case .connecting, .reconnecting: return "connessione…"
+        case .disconnected: return "non connesso"
+        case .connected:
+            switch state {
+            case .idle: return nil
+            case .listening: return "ti ascolto"
+            case .thinking: return "ci penso"
+            case .speaking: return "parlo"
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, compact ? 6 : 10)
-        .animation(.easeInOut(duration: 0.2), value: compact)
-        .accessibilityLabel("\(name), \(caption)")
-        // M10: sprite sheet con più fotogrammi (idle, ascolto, pensiero, parlato, emozioni) dietro la stessa API.
     }
 }
 

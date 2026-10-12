@@ -189,6 +189,11 @@ struct LocalSettings: Codable, Sendable, Equatable {
     var speakTextReplies = false
     /// Conversazione continua (M8): un tocco sul microfono apre un dialogo a mani libere, finché non si tocca ✕.
     var continuousVoice = false
+    /// Avatar galleggiante: dove è agganciato, quanto è grande, se è ridotto a badge o nascosto nella linguetta.
+    var avatarAnchor: AvatarAnchor = .top
+    var avatarSize: Double = 132
+    var avatarCompact = false
+    var avatarHidden = false
 
     static let key = "ernie.localSettings"
 
@@ -199,6 +204,10 @@ struct LocalSettings: Codable, Sendable, Equatable {
         voiceOutput = try c.decodeIfPresent(Bool.self, forKey: .voiceOutput) ?? true
         speakTextReplies = try c.decodeIfPresent(Bool.self, forKey: .speakTextReplies) ?? false
         continuousVoice = try c.decodeIfPresent(Bool.self, forKey: .continuousVoice) ?? false
+        avatarAnchor = try c.decodeIfPresent(AvatarAnchor.self, forKey: .avatarAnchor) ?? .top
+        avatarSize = try c.decodeIfPresent(Double.self, forKey: .avatarSize) ?? 132
+        avatarCompact = try c.decodeIfPresent(Bool.self, forKey: .avatarCompact) ?? false
+        avatarHidden = try c.decodeIfPresent(Bool.self, forKey: .avatarHidden) ?? false
     }
 
     static func load() -> LocalSettings {

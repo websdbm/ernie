@@ -31,6 +31,54 @@ enum Markdown {
         }
     }
 
+    /// Paragrafi lunghi (più di tre frasi) spezzati in capoversi di due o tre frasi: il testo si legge, non si subisce.
+    /// Il modello è istruito a farlo da sé (Soul); qui si rimedia quando non lo fa.
+    static func readable(_ paragraph: String) -> [String] {
+        let sentences = split(paragraph)
+        guard sentences.count > 3, paragraph.count > 220 else { return [paragraph] }
+        var out: [String] = []
+        var i = 0
+        while i < sentences.count {
+            let remaining = sentences.count - i
+            let take = remaining == 4 ? 2 : min(remaining, 3) // mai una frase sola in coda
+            out.append(sentences[i..<(i + take)].joined(separator: " "))
+            i += take
+        }
+        return out
+    }
+
+    private static let abbreviations: Set<String> = ["es.", "ecc.", "dott.", "dott.ssa", "sig.", "sig.ra", "prof.", "n.", "pag.", "art.", "ca.", "p.", "pp.", "tel.", "cfr."]
+
+    /// Frasi: dopo . ! ? seguiti da spazio e maiuscola (o virgolette/parentesi), non dopo abbreviazioni o numeri.
+    static func split(_ s: String) -> [String] {
+        let chars = Array(s)
+        var out: [String] = []
+        var current = ""
+        var i = 0
+        while i < chars.count {
+            current.append(chars[i])
+            if ".!?".contains(chars[i]), i + 1 < chars.count, chars[i + 1] == " " {
+                var j = i + 1
+                while j < chars.count, chars[j] == " " { j += 1 }
+                if j < chars.count, chars[j].isUppercase || "«\"(".contains(chars[j]) {
+                    let trimmed = current.trimmingCharacters(in: .whitespaces)
+                    let lastWord = trimmed.split(separator: " ").last.map(String.init) ?? ""
+                    let numberDot = chars[i] == "." && !lastWord.dropLast().isEmpty && lastWord.dropLast().allSatisfy(\.isNumber)
+                    if !abbreviations.contains(lastWord.lowercased()), !numberDot {
+                        out.append(trimmed)
+                        current = ""
+                        i = j
+                        continue
+                    }
+                }
+            }
+            i += 1
+        }
+        let tail = current.trimmingCharacters(in: .whitespaces)
+        if !tail.isEmpty { out.append(tail) }
+        return out
+    }
+
     static func blocks(_ text: String) -> [Block] {
         var out: [Block] = []
         var paragraph: [String] = []
@@ -95,11 +143,14 @@ struct MarkdownText: View {
     var font: Font = .body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Markdown.blocks(text)) { block in
                 switch block {
                 case .paragraph(let s):
-                    Text(Markdown.render(s)).font(font)
+                    // Interlinea più ariosa e capoversi brevi: le risposte lunghe non diventano un muro di testo.
+                    ForEach(Array(Markdown.readable(s).enumerated()), id: \.offset) { _, part in
+                        Text(Markdown.render(part)).font(font).lineSpacing(3)
+                    }
                 case .heading(let s):
                     Text(Markdown.render(s)).font(.headline).padding(.top, 2)
                 case .quote(let s):
