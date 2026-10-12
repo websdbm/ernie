@@ -118,7 +118,7 @@ export function createDocumentTools(deps: DocumentToolDeps): ToolSpec[] {
     version: '1',
     category: 'documents',
     description:
-      'Disegna lo schema di un documento nel tipo richiesto (mindmap = mappa dei concetti, flow = flusso di passi, timeline = linea del tempo) e lo mostra come scheda.',
+      'Disegna lo schema di un documento nel tipo richiesto (outline = schema a frecce da studio per paragrafi, mindmap = mappa dei concetti, flow = flusso di passi, timeline = linea del tempo) e lo mostra come scheda.',
     risk: { readsPrivate: true, ingestsUntrusted: true, externalEffect: false, write: true },
     timeoutMs: 120_000,
     costEstimateUsd: 0.03,

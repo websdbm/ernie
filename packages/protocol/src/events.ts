@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const PROTOCOL_VERSION = 1 as const;
 /** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 7 as const;
+export const PROTOCOL_MINOR = 8 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -285,6 +285,22 @@ export const MindNode: z.ZodType<MindNode> = z.lazy(() =>
     children: z.array(MindNode).max(12).optional(),
   }),
 );
+/** Schema «a frecce» da studio (v1.8): per ogni paragrafo del testo una sezione; dentro, catene di frasi brevi
+ * (un solo `next` = la catena prosegue) e ramificazioni (più `next`), come negli appunti scritti a mano. */
+export interface OutlineNode {
+  readonly label: string;
+  readonly next?: OutlineNode[] | undefined;
+}
+export const OutlineNode: z.ZodType<OutlineNode> = z.lazy(() =>
+  z.object({
+    label: z.string().min(1).max(160),
+    next: z.array(OutlineNode).max(12).optional(),
+  }),
+);
+export const OutlineSection = z.object({
+  title: z.string().min(1).max(160),
+  nodes: z.array(OutlineNode).min(1).max(40),
+});
 export const FlowStep = z.object({
   id: z.string().min(1).max(40),
   label: z.string().min(1).max(160),
@@ -302,6 +318,7 @@ export const TimelineEvent = z.object({
 });
 /** Schema grafico di un testo (v1.3): dati chiusi, disegnati nativamente dal client (mai immagini generate). */
 export const SchemaDiagram = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('outline'), sections: z.array(OutlineSection).min(1).max(60) }),
   z.object({ type: z.literal('mindmap'), root: MindNode }),
   z.object({
     type: z.literal('flow'),
@@ -311,7 +328,7 @@ export const SchemaDiagram = z.discriminatedUnion('type', [
   z.object({ type: z.literal('timeline'), events: z.array(TimelineEvent).min(2).max(40) }),
 ]);
 export type SchemaDiagram = z.infer<typeof SchemaDiagram>;
-export const SchemaType = z.enum(['mindmap', 'flow', 'timeline']);
+export const SchemaType = z.enum(['outline', 'mindmap', 'flow', 'timeline']);
 export type SchemaType = z.infer<typeof SchemaType>;
 /** Scheda di un documento letto (v1.3): prodotti da studio; il testo intero resta sul server. */
 export const DocumentBlock = z.object({

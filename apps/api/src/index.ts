@@ -62,6 +62,7 @@ import {
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createCompanionFactory } from './companion.js';
+import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
@@ -351,7 +352,10 @@ async function main(): Promise<void> {
           taintTtlSeconds: 1800,
         },
         skills: { registryFor: companions.skillsFor },
-        documents: { describe: (userId, id) => documentsRepo.describe(userId, id) },
+        documents: {
+          describe: (userId, id) => documentsRepo.describe(userId, id),
+          flow: createDocumentsFlow({ repo: documentsRepo, summarizer }),
+        },
       },
     },
   });

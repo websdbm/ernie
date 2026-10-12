@@ -21,6 +21,7 @@ import type { SkillRegistry } from '@ernie/skills';
 import type { ToolContextRef } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
+import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '../documents-flow.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 
@@ -84,6 +85,8 @@ export interface ConnectionDeps {
       userId: string,
       id: string,
     ) => Promise<{ id: string; title: string; pages: number; source: string } | null>;
+    /** Percorso deterministico (riassunto e schema dell'allegato, schema di un documento per titolo). */
+    readonly flow?: DocumentsFlow;
   };
   readonly runTurn?: (input: TurnInput) => Promise<unknown>;
 }
@@ -341,8 +344,45 @@ export class ClientConnection {
         return;
       }
       attachmentNotes.push(
-        `[Allegato a questo messaggio: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}. Usa document_summarize con questo id.]`,
+        `[Allegato a questo messaggio: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}. Lavora SOLO su questo documento (questo id), non su documenti precedenti.]`,
       );
+    }
+    // Allegato senza una domanda: riassunto e schema vengono prodotti qui, senza passare dal modello
+    // (che in passato ha riusato un documento precedente). Con una domanda il modello entra, annotato.
+    const flow = this.deps.documents?.flow;
+    const attachedId = attachments[0]?.id;
+    if (flow && attachedId) {
+      const req = parseDocumentRequest(text);
+      if (!req.question) {
+        const reply = await this.runDocumentsFlow(
+          () =>
+            flow.attached(
+              { userId: this.auth.userId, sessionId, requestId: correlationId },
+              attachedId,
+              req,
+            ),
+          correlationId,
+          t0,
+          text,
+        );
+        if (reply) return;
+      }
+    } else if (flow && attachments.length === 0) {
+      const cmd = parseSchemaCommand(text);
+      if (cmd) {
+        const reply = await this.runDocumentsFlow(
+          () =>
+            flow.schemaByTitle(
+              { userId: this.auth.userId, sessionId, requestId: correlationId },
+              cmd.title,
+              cmd.type,
+            ),
+          correlationId,
+          t0,
+          text,
+        );
+        if (reply) return;
+      }
     }
     // La riga dell'allegato precede il testo: il modello la vede subito e non la scambia per un riferimento a documenti passati.
     const modelText = attachmentNotes.length ? `${attachmentNotes.join('\n')}\n\n${text}` : text;
@@ -580,6 +620,82 @@ export class ClientConnection {
   }
 
   /** Risposta locale (comando o skill deterministica): tre eventi, nessuna chiamata a modelli. */
+  /** Esegue il percorso deterministico dei documenti e risponde con le schede; false se non c'era nulla da fare. */
+  private async runDocumentsFlow(
+    run: () => Promise<{ text: string; blocks: readonly ContentBlock[] } | null>,
+    correlationId: string,
+    t0: number,
+    userText: string,
+  ): Promise<boolean> {
+    const sessionId = this.sessionId;
+    if (!sessionId) return false;
+    await this.send(
+      'assistant.started',
+      { route: 'skill', modelClass: this.session?.modelClass ?? 'standard' },
+      correlationId,
+    );
+    try {
+      const reply = await run();
+      if (!reply) return false;
+      await this.deps.decisions.record(
+        this.auth.userId,
+        sessionId,
+        correlationId,
+        localDecision(
+          'skill',
+          this.session?.modelClass ?? 'standard',
+          Date.now() - t0,
+          'documenti',
+        ),
+      );
+      let n = 0;
+      for (const block of reply.blocks)
+        await this.send(
+          'assistant.block',
+          { blockId: `${correlationId}:${n++}`, block },
+          correlationId,
+        );
+      await this.send('assistant.text.completed', { text: reply.text }, correlationId);
+      await this.send(
+        'assistant.completed',
+        {
+          finishReason: 'stop',
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            llmCalls: 0,
+            toolCalls: reply.blocks.length,
+            latencyMs: Date.now() - t0,
+          },
+        },
+        correlationId,
+      );
+      await this.deps.memories?.afterTurn({
+        userId: this.auth.userId,
+        sessionId,
+        requestId: correlationId,
+        userText,
+        route: 'skill',
+        modelClass: this.session?.modelClass ?? 'standard',
+        outcome: 'completed',
+        costUsd: 0,
+        llmCalls: 0,
+        toolCalls: reply.blocks.length,
+        latencyMs: Date.now() - t0,
+      });
+      return true;
+    } catch (err) {
+      this.deps.logger.warn({ err }, 'percorso documenti fallito');
+      await this.sendError(
+        'document_failed',
+        `Non sono riuscito a leggere il documento: ${err instanceof Error ? err.message : String(err)}`,
+        true,
+        correlationId,
+      );
+      return true;
+    }
+  }
+
   private async replyLocally(
     route: 'deterministic' | 'skill',
     reply: string,

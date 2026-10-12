@@ -103,3 +103,51 @@ describe('titolo derivato dal testo', () => {
     expect(deriveTitle(['12 34', ''], new Date(2026, 9, 11))).toBe('Documento del 11/10/2026');
   });
 });
+
+describe('schema a frecce (outline)', () => {
+  it('raggruppa i nodi per sezione, catene e ramificazioni come negli appunti', () => {
+    const d = toDiagram(
+      {
+        type: 'outline',
+        nodes: [
+          {
+            id: 'a',
+            parent: null,
+            label: 'Verso il 2350 a.C.',
+            section: 'Il regno unico di Lugalzaggesi',
+          },
+          { id: 'b', parent: 'a', label: 'un re, Lugalzaggesi' },
+          { id: 'c', parent: 'b', label: 'riuscì a estendere il proprio dominio' },
+          { id: 'd', parent: null, label: 'I Sumeri', section: 'La religione' },
+          { id: 'e', parent: 'd', label: 'veneravano le forze della natura' },
+          { id: 'f', parent: 'd', label: 'compievano riti della fertilità' },
+        ],
+        steps: [],
+        links: [],
+        events: [],
+      },
+      'I Sumeri',
+    );
+    expect(d.type).toBe('outline');
+    if (d.type !== 'outline') return;
+    expect(d.sections.map((s) => s.title)).toEqual([
+      'Il regno unico di Lugalzaggesi',
+      'La religione',
+    ]);
+    expect(d.sections[0]?.nodes).toEqual([
+      {
+        label: 'Verso il 2350 a.C.',
+        next: [
+          {
+            label: 'un re, Lugalzaggesi',
+            next: [{ label: 'riuscì a estendere il proprio dominio' }],
+          },
+        ],
+      },
+    ]);
+    expect(d.sections[1]?.nodes[0]?.next?.map((n) => n.label)).toEqual([
+      'veneravano le forze della natura',
+      'compievano riti della fertilità',
+    ]);
+  });
+});
