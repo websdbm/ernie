@@ -36,27 +36,44 @@ struct AvatarStage: View {
         }
     }
 
-    private var size: CGFloat { compact ? 56 : 150 }
+    private var size: CGFloat { compact ? 56 : 132 }
+
+    /// Altezza occupata in cima alla conversazione (la chat scorre sotto, visibile attorno al cerchio).
+    static func height(compact: Bool) -> CGFloat { compact ? 72 : 196 }
 
     var body: some View {
         VStack(spacing: compact ? 4 : 8) {
             ZStack {
+                // Alone al neon, traslucido: la conversazione resta visibile intorno al cerchio.
                 Circle()
-                    .stroke(ringColor.opacity(0.55), lineWidth: compact ? 3 : 5)
+                    .fill(RadialGradient(colors: [Color.accentColor.opacity(compact ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.78))
+                    .frame(width: size * 1.6, height: size * 1.6)
+                Circle()
+                    .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: compact ? 1.5 : 2)
+                    .frame(width: size + 8, height: size + 8)
+                Circle()
+                    .stroke(ringColor.opacity(0.75), lineWidth: compact ? 3 : 5)
+                    .frame(width: size + 14, height: size + 14)
                     .opacity(state == .idle ? 0 : 1)
                 PixelBearView(state: state, mouthOpen: mouthOpen, size: size, emotion: emotion)
             }
             .frame(width: size + 16, height: size + 16)
             if !compact {
+                // Didascalia solo quando c'è qualcosa da dire («ti ascolto», «ci penso», «connessione…»):
+                // a riposo sparisce e non copre i messaggi che scorrono sotto.
                 Text(caption)
-                    .font(.footnote)
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.regularMaterial, in: Capsule())
+                    .opacity(connection == .connected && state == .idle ? 0 : 1)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, compact ? 6 : 12)
-        .background(Color(.secondarySystemBackground))
+        .padding(.vertical, compact ? 6 : 10)
+        .animation(.easeInOut(duration: 0.2), value: compact)
         .accessibilityLabel("\(name), \(caption)")
         // M10: sprite sheet con più fotogrammi (idle, ascolto, pensiero, parlato, emozioni) dietro la stessa API.
     }

@@ -35,6 +35,8 @@
 	<string>Per scansionare documenti con la fotocamera: il testo viene letto sul telefono, l'immagine non viene conservata.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conferma delle azioni sensibili: approvazioni e interruttore di emergenza.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Per raggiungere il tuo server Ernie quando è sulla stessa rete Wi-Fi.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

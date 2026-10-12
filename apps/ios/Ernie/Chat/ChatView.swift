@@ -14,17 +14,23 @@ struct ChatView: View {
             Group {
                 if let conversation = model.conversation, let voice = model.voice {
                     VStack(spacing: 0) {
-                        AvatarStage(
-                            state: conversation.agentState,
-                            name: model.companionName,
-                            connection: conversation.connection,
-                            emotion: conversation.lastAvatarEmotion,
-                            compact: composing,
-                            mouthOpen: model.speaker.mouthOpen
-                        )
-                        MessageList(conversation: conversation)
+                        // L'avatar galleggia sulla conversazione: i messaggi scorrono sotto e restano visibili
+                        // attorno al cerchio (richiesta dell'utente, 12 ott 2026).
+                        ZStack(alignment: .top) {
+                            MessageList(conversation: conversation, topInset: AvatarStage.height(compact: composing))
+                            AvatarStage(
+                                state: conversation.agentState,
+                                name: model.companionName,
+                                connection: conversation.connection,
+                                emotion: conversation.lastAvatarEmotion,
+                                compact: composing,
+                                mouthOpen: model.speaker.mouthOpen
+                            )
+                            .allowsHitTesting(false)
+                        }
                         InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
                     }
+                    .background(ChatBackdrop())
                 } else {
                     ProgressView()
                 }
@@ -58,8 +64,25 @@ struct ChatView: View {
     }
 }
 
+/// Sfondo della schermata: una velatura dell'accento in alto che sfuma nel colore di sistema.
+struct ChatBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+            LinearGradient(
+                colors: [Color.accentColor.opacity(0.14), Color.accentColor.opacity(0.04), .clear],
+                startPoint: .top,
+                endPoint: .center
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
 struct MessageList: View {
     let conversation: ConversationStore
+    /// Spazio lasciato in alto per l'avatar che galleggia sopra la lista.
+    var topInset: CGFloat = 0
 
     /// Cambia quando arriva un elemento nuovo o cresce il testo in streaming: la lista segue il fondo.
     private var tail: String {
@@ -87,6 +110,8 @@ struct MessageList: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
+            .contentMargins(.top, topInset, for: .scrollContent)
+            .scrollIndicators(.hidden)
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: tail) { _, _ in
@@ -99,14 +124,14 @@ struct MessageList: View {
 private struct EmptyHint: View {
     var body: some View {
         VStack(spacing: 6) {
-            Text("Scrivi, oppure tieni premuto il microfono e parla.")
-            Text("Le proposte delle automazioni compaiono qui.")
+            Text("Scrivi, oppure tocca il microfono e parla.")
+            Text("Promemoria, liste e proposte compaiono qui.")
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.top, 40)
+        .padding(.top, 24)
     }
 }
 
@@ -124,15 +149,20 @@ struct MessageRow: View {
                         ForEach(attachments, id: \.id) { a in
                             Label("\(a.title) · \(a.pages) \(a.pages == 1 ? "pagina" : "pagine")", systemImage: "doc.text.fill")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.white.opacity(0.85))
                                 .lineLimit(1)
                         }
                     }
                     Text(message.text)
                 }
+                .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 18))
+                .background(
+                    LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.78)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                )
+                .shadow(color: Color.accentColor.opacity(0.18), radius: 6, y: 3)
             }
         case .assistant:
             VStack(alignment: .leading, spacing: 6) {
@@ -158,6 +188,7 @@ struct MessageRow: View {
                     Text("Interrotto").font(.caption2).foregroundStyle(.secondary)
                 }
             }
+            .padding(.trailing, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .system:
             Text(message.text)
