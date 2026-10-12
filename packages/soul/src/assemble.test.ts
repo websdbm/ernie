@@ -69,7 +69,7 @@ describe('assembleSoul', () => {
     ).toThrowError(SoulBudgetError);
   });
 
-  it('il Core Soul seminato dalla migrazione 0005 rispetta il budget di 400 token', async () => {
+  it('il Core Soul seminato dalla migrazione 0005 rispetta il budget del Core Soul', async () => {
     const sql = await readFile(
       new URL('../../../infrastructure/migrations/0005_seed_souls.sql', import.meta.url),
       'utf8',

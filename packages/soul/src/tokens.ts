@@ -8,4 +8,4 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN_IT);
 }
 
-export const CORE_SOUL_TOKEN_BUDGET = 400;
+export const CORE_SOUL_TOKEN_BUDGET = 600;
