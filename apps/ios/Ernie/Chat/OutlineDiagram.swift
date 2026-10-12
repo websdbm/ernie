@@ -38,7 +38,7 @@ struct OutlineLayout {
         var maxWidth: CGFloat = 0
         for (index, section) in sections.enumerated() {
             let title = section.title.uppercased()
-            let ts = Self.textSize(title, font: Self.titleFont, maxWidth: 360)
+            let ts = Self.textSize(title, font: Self.titleFont, maxWidth: 420)
             titles.append(Title(text: title, rect: CGRect(origin: CGPoint(x: 0, y: y), size: ts)))
             maxWidth = max(maxWidth, ts.width)
             y += ts.height + 8
@@ -60,7 +60,7 @@ struct OutlineLayout {
             attributes: [.font: font],
             context: nil
         )
-        return CGSize(width: ceil(r.width) + 8, height: ceil(r.height) + 4)
+        return CGSize(width: ceil(r.width) + 12, height: ceil(r.height) + 6)
     }
 
     private static func measure(_ node: OutlineNode, bold: Bool) -> Sub {
@@ -124,7 +124,7 @@ struct OutlineCanvas: View {
         Canvas { ctx, _ in
             ctx.scaleBy(x: scale, y: scale)
             for t in layout.titles {
-                ctx.draw(Text(t.text).font(.caption.weight(.bold)).foregroundColor(.accentColor), in: t.rect)
+                ctx.draw(Text(t.text).font(.caption.weight(.bold)).foregroundColor(.accentColor), in: Self.roomy(t.rect))
             }
             for a in layout.arrows {
                 var path = Path()
@@ -140,10 +140,16 @@ struct OutlineCanvas: View {
                 ctx.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
             }
             for n in layout.nodes {
-                ctx.draw(Text(n.text).font(n.bold ? .footnote.weight(.semibold) : .footnote).foregroundColor(.primary), in: n.rect)
+                // Un po' di margine in più rispetto alla misura: tra un nodo e l'altro c'è spazio e non compaiono puntini.
+                ctx.draw(Text(n.text).font(n.bold ? .footnote.weight(.semibold) : .footnote).foregroundColor(.primary), in: Self.roomy(n.rect))
             }
         }
         .frame(width: layout.size.width * scale, height: layout.size.height * scale)
+    }
+
+    /// Rettangolo allargato verso destra e in basso (mai a sinistra: il testo resta allineato e non si taglia).
+    private static func roomy(_ r: CGRect) -> CGRect {
+        CGRect(x: r.minX, y: r.minY - 1, width: r.width + 10, height: r.height + 4)
     }
 }
 

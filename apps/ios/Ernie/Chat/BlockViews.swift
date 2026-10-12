@@ -524,8 +524,12 @@ struct SchemaCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("\(kindLabel) · \(block.title)", systemImage: "square.3.layers.3d").font(.subheadline.weight(.semibold)).lineLimit(2)
+            HStack(alignment: .top) {
+                // Tipo in evidenza e titolo del documento intero (niente puntini): le azioni stanno a destra.
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(kindLabel, systemImage: "square.3.layers.3d").font(.subheadline.weight(.semibold))
+                    Text(block.title).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: 4)
                 // Altro tipo di schema dello stesso documento: comando deterministico, nessun modello coinvolto.
                 if let conversation {
