@@ -267,6 +267,10 @@ Realizzazione:
 - Stile: accento viola come l'orso (`AccentColor`), alone al neon dietro l'avatar, bolle utente a gradiente, velatura dello sfondo, didascalia di stato solo quando serve.
 - Leggibilità: interlinea e spazio fra capoversi; i paragrafi lunghi (più di tre frasi) vengono spezzati in capoversi di due o tre frasi sul client (`Markdown.readable`, con riguardo per abbreviazioni e numeri); migrazione 0016: il Soul chiede risposte brevi e, quando lunghe, capoversi di due o tre frasi separati da una riga vuota.
 
+## D1 — Deploy su staging3 ✅
+
+Richiesta dell'utente (12 ott 2026): «spostiamo lì Ernie», accesso root a staging3. Procedura e comandi in `docs/DEPLOY.md`. Scelte: rispettare la convenzione del server (Docker rootless dell'utente `staging3`, demone di root lasciato mascherato; porte dei container solo su localhost; ufw invariato), sito Caddy `ernie.staging3.eklettica.it` con certificato automatico (l'app diventa raggiungibile anche fuori dalla rete Tailscale: serve a Giorgio), dati migrati dal Mac (dump 0,6 MB: 8 utenti, 53 memorie, 3 documenti, 8 automazioni). Trovato e corretto in corsa: Soul core oltre budget (migrazione 0017) e timeout del router Jev troppo stretto dal VPS (`JEV_TIMEOUT_MS=4000`).
+
 ## M8 — Conversazione vocale avanzata ✅
 
 Ambito previsto: modalità continua **solo in primo piano** con VAD e fine turno (semantico con Smart Turn v3 in Core ML, altrimenti silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7).
