@@ -117,9 +117,12 @@ struct OutlineLayout {
 /// Il disegno vero e proprio, alla dimensione naturale (per la scheda, dentro uno scorrimento orizzontale; per l'esportazione intero).
 struct OutlineCanvas: View {
     let layout: OutlineLayout
+    /// Riduzione applicata nel disegno stesso (niente scaleEffect: la dimensione di layout resta coerente).
+    var scale: CGFloat = 1
 
     var body: some View {
         Canvas { ctx, _ in
+            ctx.scaleBy(x: scale, y: scale)
             for t in layout.titles {
                 ctx.draw(Text(t.text).font(.caption.weight(.bold)).foregroundColor(.accentColor), in: t.rect)
             }
@@ -140,33 +143,26 @@ struct OutlineCanvas: View {
                 ctx.draw(Text(n.text).font(n.bold ? .footnote.weight(.semibold) : .footnote).foregroundColor(.primary), in: n.rect)
             }
         }
-        .frame(width: layout.size.width, height: layout.size.height)
+        .frame(width: layout.size.width * scale, height: layout.size.height * scale)
     }
 }
 
-/// Nella scheda: scorre in orizzontale quando il diagramma è più largo dello schermo.
+/// Nella scheda: si rimpicciolisce fino all'80 % per stare nello schermo; oltre, scorre in orizzontale.
 struct OutlineDiagramView: View {
     let sections: [OutlineSection]
 
     var body: some View {
         let layout = OutlineLayout(sections: sections)
-        // Si rimpicciolisce fino all'80 % per stare nello schermo; oltre, scorre in orizzontale.
-        GeometryReader { geo in
-            let scale = min(1, max(0.8, geo.size.width / max(layout.size.width, 1)))
-            ScrollView(.horizontal, showsIndicators: true) {
-                OutlineCanvas(layout: layout)
-                    .scaleEffect(scale, anchor: .topLeading)
-                    .frame(width: layout.size.width * scale, height: layout.size.height * scale, alignment: .topLeading)
-            }
+        let scale = Self.scale(for: layout)
+        ScrollView(.horizontal, showsIndicators: true) {
+            OutlineCanvas(layout: layout, scale: scale)
         }
-        .frame(height: OutlineDiagramView.height(for: layout))
+        .frame(height: layout.size.height * scale + 4)
         .accessibilityLabel("Schema a frecce: \(sections.count) sezioni")
     }
 
-    /// Altezza riservata nella scheda (larghezza dello schermo stimata: il ridimensionamento non supera il 20 %).
-    static func height(for layout: OutlineLayout) -> CGFloat {
+    static func scale(for layout: OutlineLayout) -> CGFloat {
         let available = UIScreen.main.bounds.width - 56
-        let scale = min(1, max(0.8, available / max(layout.size.width, 1)))
-        return layout.size.height * scale + 4
+        return min(1, max(0.8, available / max(layout.size.width, 1)))
     }
 }

@@ -22,9 +22,11 @@ struct AvatarBubble: View {
     var body: some View {
         let small = size < 90
         ZStack {
+            // L'alone è solo decorativo: non intercetta i tocchi (la chat sotto resta usabile).
             Circle()
-                .fill(RadialGradient(colors: [Color.accentColor.opacity(small ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.78))
-                .frame(width: size * 1.6, height: size * 1.6)
+                .fill(RadialGradient(colors: [Color.accentColor.opacity(small ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.5 + 22))
+                .frame(width: size + 56, height: size + 56)
+                .allowsHitTesting(false)
             Circle()
                 .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: small ? 1.5 : 2)
                 .frame(width: size + 8, height: size + 8)

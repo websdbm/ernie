@@ -129,6 +129,12 @@ struct MessageList: View {
             .onChange(of: tail) { _, _ in
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            // All'avvio la lista pigra stima le altezze delle schede grandi (schemi) e può fermarsi oltre la fine:
+            // dopo la prima impaginazione si riallinea al fondo.
+            .task {
+                try? await Task.sleep(for: .milliseconds(400))
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
         }
     }
 }

@@ -39,12 +39,15 @@ enum CardExport {
         return renderer.uiImage
     }
 
-    /// Salva nella galleria (solo aggiunta: permesso «Aggiungi foto», mai lettura).
-    static func saveToPhotos(_ image: UIImage) async -> Bool {
+    /// Salva nella galleria (solo aggiunta: permesso «Aggiungi foto», mai lettura). Fuori dal thread principale:
+    /// Photos esegue la modifica su una propria coda, quindi la chiusura non deve essere isolata al MainActor.
+    nonisolated static func saveToPhotos(_ image: UIImage) async -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else { return false }
+        guard status == .authorized || status == .limited, let data = image.pngData() else { return false }
         do {
-            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
+            }
             return true
         } catch {
             return false

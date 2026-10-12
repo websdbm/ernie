@@ -25,7 +25,7 @@ struct FloatingAvatar: View {
     @State private var pinch: CGFloat = 1
 
     static let minSize: CGFloat = 72
-    static let maxSize: CGFloat = 220
+    static let maxSize: CGFloat = 180
     private let margin: CGFloat = 10
 
     /// Spazio da lasciare in cima alla lista quando l'avatar è agganciato in alto al centro.
@@ -79,6 +79,8 @@ struct FloatingAvatar: View {
         let base = Self.center(for: model.settings.avatarAnchor, diameter: d, in: size, margin: margin)
         let caption = d >= 90 ? AvatarCaption.text(connection: connection, state: state) : nil
         return AvatarBubble(state: state, emotion: emotion, mouthOpen: mouthOpen, size: d)
+            // Si tocca e si trascina solo il cerchio: fuori, i tocchi vanno alla conversazione.
+            .contentShape(Circle())
             .overlay(alignment: .bottom) {
                 if let caption {
                     Text(caption)
