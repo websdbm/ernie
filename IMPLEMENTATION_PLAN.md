@@ -311,6 +311,8 @@ Aggiunte decise con l'utente (11 ott 2026, dall'analisi di Open Dots, `docs/rese
 
 Criteri: numeri del benchmark pubblicati nel repo con metodo riproducibile; nessuna affermazione di risparmio non supportata; ripristino da backup provato.
 
+Aggiunte proposte dall'analisi di Muffin (12 ott 2026, `docs/research/10-muffin-agent.md`, da confermare con l'utente): compattazione dei risultati dei tool nel contesto (A1), skill deterministica «cosa hai fatto oggi» dal registro `tool_calls` (A2), gate della proattività con insieme chiuso di segnali, ore di quiete e tetto giornaliero (A3), «perché lo sai?» sulla memoria (A4), scene di attacco come test della policy e del taint (A5); poi giudice delle contraddizioni, intenzione-prima-dell'effetto, regola «i documenti non diventano fatti sull'utente».
+
 ## M10 — Avatar 3D ⏳
 
 Decisione dell'utente (10 ott 2026): **three.js + TalkingHead (MIT) in WKWebView**. Unreal/MetaHuman esclusi (nessun embedding iOS documentato, MetaHuman mobile senza blendshape, lip-sync da audio non a runtime, app "UE-first" rifiutata); RealityKit, Unity, Godot scartati o in attesa (ARCHITECTURE.md §2, §13).
