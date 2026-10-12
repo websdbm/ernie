@@ -59,6 +59,15 @@ final class AppModel {
         }
     }
 
+    /// Cambia solo l'indirizzo del server tenendo la chiave: verifica, salva e ricollega la conversazione.
+    func changeServer(to url: URL) async -> Bool {
+        guard let current = credentials else { return false }
+        conversation?.disconnect()
+        let ok = await signIn(serverURL: url, apiKey: current.apiKey)
+        if !ok { await activate(current) }
+        return ok
+    }
+
     func signOut() {
         conversation?.disconnect()
         conversation = nil

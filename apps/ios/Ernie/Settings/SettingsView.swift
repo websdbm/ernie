@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var email = ""
     @State private var emailNotifications = false
     @State private var emailError: String?
+    @State private var showChangeServer = false
 
     private func loadEmail() {
         let s = model.profile?.settings
@@ -102,6 +103,7 @@ struct SettingsView: View {
                 }
                 Section("Account") {
                     LabeledContent("Server", value: model.credentials?.serverURL.host() ?? "—")
+                    Button("Cambia server") { showChangeServer = true }
                     LabeledContent("Companion", value: model.companionName)
                     LabeledContent("Ruolo", value: model.profile?.role ?? "—")
                     if let v = model.profile?.server?.version { LabeledContent("Versione server", value: v) }
@@ -116,6 +118,7 @@ struct SettingsView: View {
             .navigationTitle("Impostazioni")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } } }
+            .sheet(isPresented: $showChangeServer) { ChangeServerView() }
             .task {
                 await model.refreshProfile()
                 killSwitch = model.profile?.killSwitch ?? false

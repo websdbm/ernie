@@ -1,6 +1,12 @@
 import Foundation
 
 /// Server e chiave API dell'utente: entrambi nel Keychain, mai nel bundle né nei log.
+/// Server di Ernie usato dalla famiglia (staging3, dietro Caddy con certificato pubblico): proposto al primo avvio
+/// e in «Cambia server». Si può sempre sostituire con un altro indirizzo.
+enum DefaultServer {
+    static let url = URL(string: "https://ernie.staging3.eklettica.it")!
+}
+
 struct Credentials: Sendable, Equatable {
     let serverURL: URL
     let apiKey: String

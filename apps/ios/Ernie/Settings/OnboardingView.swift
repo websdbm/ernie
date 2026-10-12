@@ -3,7 +3,7 @@ import SwiftUI
 /// Primo avvio: indirizzo del server e chiave API (creata con `admin:create-user`); salvati nel Keychain.
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
-    @State private var server = "https://"
+    @State private var server = DefaultServer.url.absoluteString
     @State private var apiKey = ""
     @State private var working = false
     @State private var localError: String?
@@ -28,7 +28,7 @@ struct OnboardingView: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("Su iPhone serve un indirizzo HTTPS (es. il tuo server o il Mac esposto con Tailscale). Nel simulatore va bene http://localhost:3000.")
+                    Text("È proposto il server della famiglia; puoi indicarne un altro (HTTPS; nel simulatore va bene http://localhost:3000).")
                 }
                 Section {
                     SecureField("ernie_…", text: $apiKey)
