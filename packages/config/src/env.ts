@@ -49,6 +49,8 @@ export const envSchema = z.object({
   MEMORY_SNAPSHOT_MAX_CHARS: z.coerce.number().int().min(200).max(8000).default(2000),
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1): soglia in caratteri, 0 = disattiva. */
   CONTEXT_COMPACT_MIN_CHARS: z.coerce.number().int().min(0).max(100_000).default(400),
+  /** Totale dei risultati storici compattabili oltre il quale scatta la compattazione a lotti; 0 = sempre. */
+  CONTEXT_COMPACT_BUDGET_CHARS: z.coerce.number().int().min(0).max(1_000_000).default(24_000),
   MEMORY_RETRIEVAL_LIMIT: z.coerce.number().int().min(0).max(10).default(4),
   MEMORY_CONSOLIDATION_DELAY_S: z.coerce.number().int().min(0).default(20),
   MEMORY_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
@@ -106,6 +108,8 @@ export interface AppConfig {
     readonly snapshotMaxChars: number;
     /** Soglia della compattazione dei risultati dei tool nel prompt; 0 = disattiva. */
     readonly compactMinChars: number;
+    /** Soglia a lotti della compattazione (caratteri dei risultati storici compattabili). */
+    readonly compactBudgetChars: number;
     readonly retrievalLimit: number;
     readonly consolidationDelaySeconds: number;
     readonly retentionDays: number;
@@ -216,6 +220,7 @@ export function toAppConfig(env: Env): AppConfig {
       embeddingModel: env.EMBEDDING_MODEL,
       snapshotMaxChars: env.MEMORY_SNAPSHOT_MAX_CHARS,
       compactMinChars: env.CONTEXT_COMPACT_MIN_CHARS,
+      compactBudgetChars: env.CONTEXT_COMPACT_BUDGET_CHARS,
       retrievalLimit: env.MEMORY_RETRIEVAL_LIMIT,
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
       retentionDays: env.MEMORY_RETENTION_DAYS,

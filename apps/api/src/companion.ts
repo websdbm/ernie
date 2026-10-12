@@ -33,7 +33,7 @@ export interface CompanionFactoryDeps {
   readonly memories?: MemoryRepository;
   readonly snapshotMaxChars?: number;
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva. */
-  readonly compaction?: { readonly minChars: number } | false;
+  readonly compaction?: { readonly minChars: number; readonly historyBudgetChars: number } | false;
   readonly tools?: {
     readonly registry: ToolRegistry;
     readonly executor: ExecutorDeps;

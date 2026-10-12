@@ -63,7 +63,10 @@ const outputs = (p: ModelPrompt) =>
 
 describe('compactPrompt', () => {
   it('sostituisce i risultati vecchi e grandi; conserva turno corrente, recenti, memoria, errori e piccoli', () => {
-    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), { keepRecent: 0 });
+    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), {
+      keepRecent: 0,
+      historyBudgetChars: 0,
+    });
     const o = outputs(out);
     expect(o.c1).toBe(placeholder('web_search', JSON.stringify(big('sumeri')).length));
     expect(o.c2).toBe(placeholder('web_fetch', JSON.stringify(big('uruk')).length));
@@ -82,7 +85,10 @@ describe('compactPrompt', () => {
   });
 
   it('keepRecent tiene interi gli ultimi risultati della cronologia (non del turno corrente)', () => {
-    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), { keepRecent: 4 });
+    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), {
+      keepRecent: 4,
+      historyBudgetChars: 0,
+    });
     // Cronologia: c1 c2 c3 c4 c5 → gli ultimi 4 (c2..c5) restano; solo c1 si compatta.
     const o = outputs(out);
     expect(o.c2).toEqual(big('uruk'));
@@ -90,8 +96,36 @@ describe('compactPrompt', () => {
     expect(stats.compacted).toBe(1);
   });
 
+  it('a lotti: sotto il budget il prompt resta identico (cache valida), sopra si compatta tutto insieme', () => {
+    const sumeri = JSON.stringify(big('sumeri')).length;
+    const uruk = JSON.stringify(big('uruk')).length;
+    // Candidati con keepRecent 0: c1 e c2 (c3 protetto, c4 errore, c5 piccolo). Budget appena sopra: niente.
+    const under = compactPrompt(prompt, new Set(['c6']), {
+      keepRecent: 0,
+      historyBudgetChars: sumeri + uruk + 1,
+    });
+    expect(under.prompt).toBe(prompt);
+    expect(under.stats.compacted).toBe(0);
+    // Budget raggiunto: entrambi in un colpo solo.
+    const over = compactPrompt(prompt, new Set(['c6']), {
+      keepRecent: 0,
+      historyBudgetChars: sumeri + uruk,
+    });
+    expect(over.stats.compacted).toBe(2);
+    // Stabilità: ricompattare il prompt già compattato non cambia nulla (i segnaposto sono piccoli).
+    const again = compactPrompt(over.prompt, new Set(['c6']), {
+      keepRecent: 0,
+      historyBudgetChars: sumeri + uruk,
+    });
+    expect(again.prompt).toBe(over.prompt);
+    expect(again.stats.compacted).toBe(0);
+  });
+
   it('senza nulla da compattare restituisce lo stesso array', () => {
-    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), { minChars: 100_000 });
+    const { prompt: out, stats } = compactPrompt(prompt, new Set(['c6']), {
+      minChars: 100_000,
+      historyBudgetChars: 0,
+    });
     expect(out).toBe(prompt);
     expect(stats.compacted).toBe(0);
   });
@@ -107,7 +141,11 @@ describe('compactPrompt', () => {
 describe('createToolResultCompactor', () => {
   it('conserva le chiamate del turno corrente lette dagli step e riporta le statistiche', () => {
     const seen: unknown[] = [];
-    const proc = createToolResultCompactor({ keepRecent: 0, onCompacted: (s) => seen.push(s) });
+    const proc = createToolResultCompactor({
+      keepRecent: 0,
+      historyBudgetChars: 0,
+      onCompacted: (s) => seen.push(s),
+    });
     const steps = [{ toolCalls: [{ toolCallId: 'c6' }], toolResults: [{ toolCallId: 'c6' }] }];
     expect(currentTurnToolCallIds(steps)).toEqual(new Set(['c6']));
     const res = proc.processLLMRequest?.({

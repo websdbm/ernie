@@ -5,6 +5,11 @@
  * vecchi e voluminosi sostituiti da un segnaposto con nome del tool e dimensione. Restano interi:
  * le chiamate (nome e argomenti), i risultati del turno corrente, gli ultimi `keepRecent` della
  * cronologia, gli errori e i risultati dei tool protetti (memoria), che non vanno mai cancellati.
+ *
+ * La compattazione scatta a lotti: solo quando i risultati storici compattabili superano
+ * `historyBudgetChars` si compattano tutti insieme. Ogni cambiamento del prompt invalida la cache del
+ * prefisso da quel punto in avanti (misurato il 12 ott 2026: a cache calda un turno è costato di più),
+ * quindi conviene cambiare il prefisso di rado e in blocco, non a ogni turno.
  */
 import type { Processor } from '@mastra/core/processors';
 
@@ -13,6 +18,11 @@ export interface CompactionOptions {
   readonly minChars?: number;
   /** Quanti risultati recenti della cronologia restano interi, oltre a quelli del turno corrente. */
   readonly keepRecent?: number;
+  /**
+   * Totale (caratteri) dei risultati storici compattabili oltre il quale scatta la compattazione di
+   * tutti insieme; sotto, il prompt resta com'è e la cache del prefisso vale. 0 = compatta sempre.
+   */
+  readonly historyBudgetChars?: number;
   /** Tool i cui risultati non si compattano mai (memoria: toglierli cambia ciò che l'agente «sa»). */
   readonly protectedTools?: readonly string[];
   /** Chiamata a ogni step in cui qualcosa è stato compattato (per log e misure). */
@@ -49,6 +59,7 @@ export type ModelPrompt = readonly PromptMessage[];
 export const DEFAULT_COMPACTION = {
   minChars: 400,
   keepRecent: 2,
+  historyBudgetChars: 24_000,
   protectedTools: ['memory_search'] as readonly string[],
 } as const;
 
@@ -83,7 +94,8 @@ export function placeholder(toolName: string, chars: number): string {
 }
 
 /**
- * Sostituisce i risultati vecchi e grandi con il segnaposto. `keepIds` sono le chiamate del turno corrente.
+ * Sostituisce i risultati vecchi e grandi con il segnaposto, tutti insieme e solo quando il loro totale
+ * supera `historyBudgetChars`. `keepIds` sono le chiamate del turno corrente.
  * Non muta il prompt ricevuto: restituisce lo stesso array se non c'è nulla da compattare.
  */
 export function compactPrompt(
@@ -93,6 +105,7 @@ export function compactPrompt(
 ): { prompt: ModelPrompt; stats: Omit<CompactionStats, 'stepNumber'> } {
   const minChars = opts.minChars ?? DEFAULT_COMPACTION.minChars;
   const keepRecent = Math.max(0, opts.keepRecent ?? DEFAULT_COMPACTION.keepRecent);
+  const budget = opts.historyBudgetChars ?? DEFAULT_COMPACTION.historyBudgetChars;
   const protectedTools = new Set(opts.protectedTools ?? DEFAULT_COMPACTION.protectedTools);
 
   const all: PromptToolResultPart[] = [];
@@ -102,6 +115,18 @@ export function compactPrompt(
   const recent = new Set(
     (keepRecent ? historical.slice(-keepRecent) : []).map((p) => p.toolCallId),
   );
+  // Candidati: storici, non recenti, non protetti, non errori, abbastanza grandi.
+  const sizes = new Map<string, number>();
+  for (const p of historical) {
+    if (recent.has(p.toolCallId) || protectedTools.has(p.toolName) || isErrorOutput(p.output))
+      continue;
+    const size = resultSize(p.output);
+    if (size >= minChars) sizes.set(p.toolCallId, size);
+  }
+  let total = 0;
+  for (const s of sizes.values()) total += s;
+  if (sizes.size === 0 || total < budget)
+    return { prompt, stats: { compacted: 0, removedChars: 0, toolResults: all.length } };
 
   let compacted = 0;
   let removedChars = 0;
@@ -109,16 +134,9 @@ export function compactPrompt(
     if (!Array.isArray(m.content)) return m;
     let changed = false;
     const content = (m.content as unknown[]).map((p) => {
-      if (
-        !isToolResult(p) ||
-        keepIds.has(p.toolCallId) ||
-        recent.has(p.toolCallId) ||
-        protectedTools.has(p.toolName) ||
-        isErrorOutput(p.output)
-      )
-        return p;
-      const size = resultSize(p.output);
-      if (size < minChars) return p;
+      if (!isToolResult(p)) return p;
+      const size = sizes.get(p.toolCallId);
+      if (size === undefined) return p;
       changed = true;
       compacted++;
       removedChars += size;
@@ -126,10 +144,7 @@ export function compactPrompt(
     });
     return changed ? { ...m, content } : m;
   });
-  return {
-    prompt: compacted ? out : prompt,
-    stats: { compacted, removedChars, toolResults: all.length },
-  };
+  return { prompt: out, stats: { compacted, removedChars, toolResults: all.length } };
 }
 
 /** Id delle chiamate tool del turno corrente, dagli step già eseguiti (`StepResult` dell'AI SDK). */
