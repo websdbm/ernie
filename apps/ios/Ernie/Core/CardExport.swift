@@ -1,3 +1,4 @@
+import Photos
 import SwiftUI
 import UIKit
 
@@ -5,8 +6,8 @@ import UIKit
 /// resa fuori schermo a larghezza fissa, sfondo bianco, una sola pagina alta quanto il contenuto.
 @MainActor
 enum CardExport {
-    static func pdf<V: View>(_ content: V, name: String) -> URL? {
-        let renderer = ImageRenderer(content: printable(content))
+    static func pdf<V: View>(_ content: V, name: String, width: CGFloat = 560) -> URL? {
+        let renderer = ImageRenderer(content: printable(content, width: width))
         renderer.scale = 2
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(fileName(name)).pdf")
         try? FileManager.default.removeItem(at: url)
@@ -24,18 +25,35 @@ enum CardExport {
         return written ? url : nil
     }
 
-    static func png<V: View>(_ content: V, name: String) -> URL? {
-        let renderer = ImageRenderer(content: printable(content))
-        renderer.scale = 3
-        guard let image = renderer.uiImage, let data = image.pngData() else { return nil }
+    static func png<V: View>(_ content: V, name: String, width: CGFloat = 560) -> URL? {
+        guard let image = image(content, width: width), let data = image.pngData() else { return nil }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(fileName(name)).png")
         try? data.write(to: url, options: .atomic)
         return url
     }
 
-    private static func printable<V: View>(_ content: V) -> some View {
+    /// Immagine della scheda (per il foglio di condivisione, che così offre «Salva immagine», e per la galleria).
+    static func image<V: View>(_ content: V, width: CGFloat = 560) -> UIImage? {
+        let renderer = ImageRenderer(content: printable(content, width: width))
+        renderer.scale = 3
+        return renderer.uiImage
+    }
+
+    /// Salva nella galleria (solo aggiunta: permesso «Aggiungi foto», mai lettura).
+    static func saveToPhotos(_ image: UIImage) async -> Bool {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else { return false }
+        do {
+            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func printable<V: View>(_ content: V, width: CGFloat) -> some View {
         content
-            .frame(width: 560, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .padding(28)
             .background(Color.white)
             .environment(\.colorScheme, .light)
@@ -57,21 +75,45 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-/// Pulsante «Esporta» con PDF e immagine, usato dalle schede.
+/// Pulsante «Esporta» con PDF, immagine e salvataggio nella galleria, usato dalle schede.
 struct ExportMenu<Content: View>: View {
     let name: String
+    /// Larghezza della resa (gli schemi a frecce larghi passano la propria).
+    var width: CGFloat = 560
     @ViewBuilder let content: () -> Content
-    @State private var shareURL: URL?
+    @State private var shareItems: [Any]?
+    @State private var saved: Bool?
 
     var body: some View {
         Menu {
-            Button("PDF", systemImage: "doc.richtext") { shareURL = CardExport.pdf(content(), name: name) }
-            Button("Immagine", systemImage: "photo") { shareURL = CardExport.png(content(), name: name) }
+            Button("Salva nella galleria", systemImage: "photo.badge.plus") {
+                Task {
+                    if let image = CardExport.image(content(), width: width) {
+                        saved = await CardExport.saveToPhotos(image)
+                    } else {
+                        saved = false
+                    }
+                    try? await Task.sleep(for: .seconds(2))
+                    saved = nil
+                }
+            }
+            Button("Condividi immagine", systemImage: "photo") {
+                if let image = CardExport.image(content(), width: width) { shareItems = [image] }
+            }
+            Button("Condividi PDF", systemImage: "doc.richtext") {
+                if let url = CardExport.pdf(content(), name: name, width: width) { shareItems = [url] }
+            }
         } label: {
-            Label("Esporta", systemImage: "square.and.arrow.up").font(.caption)
+            if let saved {
+                Label(saved ? "Salvata" : "Non salvata", systemImage: saved ? "checkmark.circle.fill" : "xmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(saved ? Color.green : Color.red)
+            } else {
+                Label("Esporta", systemImage: "square.and.arrow.up").font(.caption)
+            }
         }
-        .sheet(isPresented: Binding(get: { shareURL != nil }, set: { if !$0 { shareURL = nil } })) {
-            if let shareURL { ActivityView(items: [shareURL]) }
+        .sheet(isPresented: Binding(get: { shareItems != nil }, set: { if !$0 { shareItems = nil } })) {
+            if let shareItems { ActivityView(items: shareItems) }
         }
     }
 }

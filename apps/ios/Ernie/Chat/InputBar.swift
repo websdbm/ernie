@@ -17,6 +17,7 @@ struct InputBar: View {
     var documents: DocumentComposer?
     @State private var showScanner = false
     @State private var showFiles = false
+    @State private var showPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
 
     private enum Mode { case mic, send, stop, voice }
@@ -95,6 +96,7 @@ struct InputBar: View {
                 documents?.importImages([image], source: "photo")
             }
         }
+        .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty else { return }
             Task {
@@ -114,9 +116,8 @@ struct InputBar: View {
             if DocumentScannerView.isSupported {
                 Button("Scansiona", systemImage: "doc.viewfinder") { showScanner = true }
             }
-            PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
-                Label("Foto", systemImage: "photo.on.rectangle")
-            }
+            // Il selettore foto non si presenta da dentro un menu: lo apre un modificatore sulla barra.
+            Button("Foto", systemImage: "photo.on.rectangle") { showPhotos = true }
             Button("File (PDF)", systemImage: "folder") { showFiles = true }
         } label: {
             Image(systemName: "plus")

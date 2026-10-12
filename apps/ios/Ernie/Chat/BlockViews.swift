@@ -229,13 +229,19 @@ struct SchemaPrintView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(block.title).font(.title2.weight(.bold))
             switch block.diagram {
-            case .outline(let sections): OutlineDiagramView(sections: sections)
+            case .outline(let sections): OutlineCanvas(layout: OutlineLayout(sections: sections))
             case .mindmap(let root): MindMapView(root: root)
             case .flow(let steps, let links): FlowView(steps: steps, links: links)
             case .timeline(let events): TimelineSchemaView(events: events)
             }
         }
         .foregroundStyle(.black)
+    }
+
+    /// Larghezza della resa: lo schema a frecce è disegnato intero, anche se più largo della pagina standard.
+    static func exportWidth(_ block: SchemaBlock) -> CGFloat {
+        if case .outline(let sections) = block.diagram { return max(560, OutlineLayout(sections: sections).size.width + 16) }
+        return 560
     }
 }
 
@@ -534,7 +540,7 @@ struct SchemaCard: View {
                     }
                     .accessibilityLabel("Altro tipo di schema")
                 }
-                ExportMenu(name: "\(kindLabel) \(block.title)") { SchemaPrintView(block: block) }
+                ExportMenu(name: "\(kindLabel) \(block.title)", width: SchemaPrintView.exportWidth(block)) { SchemaPrintView(block: block) }
             }
             switch block.diagram {
             case .outline(let sections): OutlineDiagramView(sections: sections)
