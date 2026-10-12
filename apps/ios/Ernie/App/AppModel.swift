@@ -26,17 +26,18 @@ final class AppModel {
     var companionName: String { profile?.companionName ?? "Ernie" }
 
     func start() async {
-        if let saved = Credentials.load() {
-            await activate(saved)
-            return
-        }
         #if DEBUG
-        // Accesso automatico per i test (simulatore): SIMCTL_CHILD_ERNIE_API_KEY=… xcrun simctl launch … com.websdbm.ernie
+        // Accesso automatico per i test (simulatore): SIMCTL_CHILD_ERNIE_API_KEY=… [SIMCTL_CHILD_ERNIE_SERVER_URL=…]
+        // xcrun simctl launch … com.websdbm.ernie. Ha la precedenza sulle credenziali salvate (il Keychain del
+        // simulatore sopravvive alla reinstallazione dell'app).
         let env = ProcessInfo.processInfo.environment
         if let key = env["ERNIE_API_KEY"], let url = URL(string: env["ERNIE_SERVER_URL"] ?? "http://localhost:3000") {
-            _ = await signIn(serverURL: url, apiKey: key)
+            if await signIn(serverURL: url, apiKey: key) { return }
         }
         #endif
+        if let saved = Credentials.load() {
+            await activate(saved)
+        }
     }
 
     /// Verifica le credenziali su `/v1/me`, le salva nel Keychain e avvia la conversazione.
