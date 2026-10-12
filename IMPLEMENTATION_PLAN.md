@@ -271,6 +271,15 @@ Realizzazione:
 
 Richiesta dell'utente (12 ott 2026): «spostiamo lì Ernie», accesso root a staging3. Procedura e comandi in `docs/DEPLOY.md`. Scelte: rispettare la convenzione del server (Docker rootless dell'utente `staging3`, demone di root lasciato mascherato; porte dei container solo su localhost; ufw invariato), sito Caddy `ernie.staging3.eklettica.it` con certificato automatico (l'app diventa raggiungibile anche fuori dalla rete Tailscale: serve a Giorgio), dati migrati dal Mac (dump 0,6 MB: 8 utenti, 53 memorie, 3 documenti, 8 automazioni). Trovato e corretto in corsa: Soul core oltre budget (migrazione 0017) e timeout del router Jev troppo stretto dal VPS (`JEV_TIMEOUT_MS=4000`).
 
+## M7g — Documenti: schema «a frecce», scelta del tipo, percorso deterministico ✅
+
+Riscontro dell'utente (12 ott 2026, con le foto del quaderno e del libro): dopo una scansione Ernie «perdeva» l'allegato e riproponeva lo schema del documento precedente; non c'era modo di scegliere il tipo di schema; il tipo di schema che serve a scuola è quello del quaderno: per ogni paragrafo del libro un titoletto, poi catene di frasi brevi copiate dal testo collegate da frecce (soggetto → che cosa fece → conseguenza), con ramificazioni quando un soggetto ha più fatti.
+
+Realizzazione:
+- Nuovo tipo di schema `outline` (protocollo v1.8): sezioni per paragrafo, nodi con `next` (uno = la catena prosegue, più = ramificazione); il riassuntore lo produce in forma piatta (`section`, `parent`) con un prompt «da appunti scolastici» e lo preferisce per i manuali; disegnato nativamente nell'app (catene che vanno a capo, ramificazioni rientrate), esportabile.
+- Con un allegato il riassunto e lo schema vengono prodotti **senza passare dal modello** (`apps/api/src/documents-flow.ts`): il documento è sempre quello allegato, il tipo di schema è quello chiesto (parole nel messaggio) o quello suggerito; il modello entra solo per le domande sul testo, con una nota rafforzata «lavora SOLO su questo id». Costo: solo le chiamate del riassuntore (classe standard) invece del turno pesante (≈0,10 $ a turno con Opus).
+- Scelta esplicita nell'app: sull'allegato un menu «Schema» (Schema a frecce predefinito, Auto, Mappa mentale, Flusso, Linea del tempo); sulla scheda dello schema «altro tipo» (comando deterministico «schema «Titolo» come X»).
+
 ## M8 — Conversazione vocale avanzata ✅
 
 Ambito previsto: modalità continua **solo in primo piano** con VAD e fine turno (semantico con Smart Turn v3 in Core ML, altrimenti silenzio 500–800 ms); sintesi incrementale per frasi; **barge-in** = stop locale + `user.cancel` con `spokenThroughIndex`; mute logico del riconoscitore durante la sintesi; contenuti esterni letti con prefisso attributivo; gestione errori audio (B.7).

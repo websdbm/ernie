@@ -56,6 +56,10 @@ Al primo avvio l'app propone il server della famiglia (`https://ernie.staging3.e
 
 L'avatar galleggia sulla conversazione: trascinalo (si aggancia in alto al centro, negli angoli o ai lati), toccalo per ridurlo a badge, pizzicalo per ridimensionarlo, tienilo premuto per nasconderlo in una linguetta sul bordo (un tocco lo riporta). Dal menu ⋯: «Mostra/Nascondi avatar», «Avatar in alto al centro».
 
+## Documenti e schemi
+
+Con «+» si scansiona o si allega un PDF: sull'allegato il menu «Schema» sceglie il tipo (predefinito lo schema a frecce del quaderno: titoletti dei paragrafi e catene «soggetto → fatto → conseguenza»; oppure Auto, mappa mentale, flusso, linea del tempo). Riassunto e schema arrivano come schede; dalla scheda dello schema si chiede un altro tipo. Le domande sul testo («spiegami…») passano dal modello.
+
 ## Famiglia e promemoria a un familiare
 
 Impostazioni → Famiglia: «Invita un familiare» crea un codice (6 caratteri, 48 ore) scegliendo chi è l'altro (figlio/a, genitore, partner, altro), come lo chiami e come ti chiamerà; l'altro lo inserisce in «Ho un codice d'invito» sul proprio telefono. Da quel momento «ricorda a Giorgio di chiamarmi alle 17» crea il promemoria nell'account di Giorgio: la sua app mostra la scheda «Promemoria da papà», programma la notifica locale e aggiorna il widget; chi l'ha messo lo vede «· per Giorgio» e può cambiarlo o annullarlo dalla scheda (matita → testo, giorno e ora).
