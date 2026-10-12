@@ -32,6 +32,8 @@ export interface CompanionFactoryDeps {
   readonly cache?: SessionAgentCache;
   readonly memories?: MemoryRepository;
   readonly snapshotMaxChars?: number;
+  /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva. */
+  readonly compaction?: { readonly minChars: number } | false;
   readonly tools?: {
     readonly registry: ToolRegistry;
     readonly executor: ExecutorDeps;
@@ -188,6 +190,14 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         memory: deps.memory,
         ...(memorySnapshot ? { memorySnapshot } : {}),
         ...(tools ? { tools } : {}),
+        compaction:
+          deps.compaction === false
+            ? false
+            : {
+                ...(deps.compaction ?? {}),
+                onCompacted: (s) =>
+                  deps.logger.info({ sessionId: session.id, ...s }, 'contesto compattato'),
+              },
       });
       deps.logger.info(
         {

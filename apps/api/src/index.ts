@@ -196,6 +196,8 @@ async function main(): Promise<void> {
     logger,
     memories,
     snapshotMaxChars: config.memory.snapshotMaxChars,
+    compaction:
+      config.memory.compactMinChars > 0 ? { minChars: config.memory.compactMinChars } : false,
     tools: {
       registry,
       executor,

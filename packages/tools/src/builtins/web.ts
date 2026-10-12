@@ -196,6 +196,8 @@ export function createWebTools(client: FirecrawlClient, o: WebToolOptions = {}):
     ingestsUntrusted: true,
     externalEffect: false,
     write: false,
+    /** Query e URL partono verso Firecrawl e il sito: con dati privati e contenuto non fidato nella run → conferma. */
+    egress: true,
   } as const;
   return [
     defineTool({

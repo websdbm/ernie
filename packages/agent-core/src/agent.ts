@@ -2,6 +2,7 @@ import type { ClassProfile, ModelGateway } from '@ernie/model-gateway';
 import type { AssembledSoul } from '@ernie/soul';
 import { Agent } from '@mastra/core/agent';
 import type { Memory } from '@mastra/memory';
+import { type CompactionOptions, createToolResultCompactor } from './compact.js';
 
 type AgentTools = NonNullable<ConstructorParameters<typeof Agent>[0]['tools']>;
 
@@ -17,6 +18,8 @@ export interface CompanionAgentInput {
   readonly memorySnapshot?: string;
   /** Set di tool fisso per la sessione (il prefisso resta stabile). */
   readonly tools?: AgentTools;
+  /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva (misure A/B). */
+  readonly compaction?: CompactionOptions | false;
 }
 
 export interface CompanionAgent {
@@ -43,6 +46,9 @@ export function createCompanionAgent(input: CompanionAgentInput): CompanionAgent
     model: resolved.model,
     memory: input.memory,
     ...(input.tools ? { tools: input.tools } : {}),
+    ...(input.compaction === false
+      ? {}
+      : { inputProcessors: [createToolResultCompactor(input.compaction ?? {})] }),
   });
   return {
     agent,

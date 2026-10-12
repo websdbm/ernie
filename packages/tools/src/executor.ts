@@ -251,6 +251,7 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
               `output non conforme: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`,
               'bad_output',
             );
+          if (spec.risk.readsPrivate) ctx.run.markPrivateRead(spec.id);
           const source = spec.risk.ingestsUntrusted
             ? (spec.untrustedSource?.(input, parsed.data) ?? spec.id)
             : null;

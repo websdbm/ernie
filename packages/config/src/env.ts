@@ -47,6 +47,8 @@ export const envSchema = z.object({
   ROUTER_THRESHOLDS_FILE: z.string().min(1).default('infrastructure/router/thresholds.json'),
   EMBEDDING_MODEL: z.string().min(1).default('text-embedding-3-small'),
   MEMORY_SNAPSHOT_MAX_CHARS: z.coerce.number().int().min(200).max(8000).default(2000),
+  /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1): soglia in caratteri, 0 = disattiva. */
+  CONTEXT_COMPACT_MIN_CHARS: z.coerce.number().int().min(0).max(100_000).default(400),
   MEMORY_RETRIEVAL_LIMIT: z.coerce.number().int().min(0).max(10).default(4),
   MEMORY_CONSOLIDATION_DELAY_S: z.coerce.number().int().min(0).default(20),
   MEMORY_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
@@ -102,6 +104,8 @@ export interface AppConfig {
   readonly memory: {
     readonly embeddingModel: string;
     readonly snapshotMaxChars: number;
+    /** Soglia della compattazione dei risultati dei tool nel prompt; 0 = disattiva. */
+    readonly compactMinChars: number;
     readonly retrievalLimit: number;
     readonly consolidationDelaySeconds: number;
     readonly retentionDays: number;
@@ -211,6 +215,7 @@ export function toAppConfig(env: Env): AppConfig {
     memory: {
       embeddingModel: env.EMBEDDING_MODEL,
       snapshotMaxChars: env.MEMORY_SNAPSHOT_MAX_CHARS,
+      compactMinChars: env.CONTEXT_COMPACT_MIN_CHARS,
       retrievalLimit: env.MEMORY_RETRIEVAL_LIMIT,
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
       retentionDays: env.MEMORY_RETENTION_DAYS,

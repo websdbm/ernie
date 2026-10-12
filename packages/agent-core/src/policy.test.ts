@@ -44,6 +44,24 @@ describe('evaluateToolPolicy', () => {
     expect(evaluateToolPolicy(web, run.toPolicyContext()).kind).toBe('allow');
   });
 
+  it('egress: con contenuto non fidato e dati privati nella run, ricerca e fetch chiedono conferma', () => {
+    const search: ToolPolicyDescriptor = { ...web, risk: { ...web.risk, egress: true } };
+    const run = new RunContext('u', ['chat'], 0);
+    expect(evaluateToolPolicy(search, run.toPolicyContext()).kind).toBe('allow');
+    run.markUntrusted('web:https://example.com');
+    expect(evaluateToolPolicy(search, run.toPolicyContext()).kind).toBe('allow'); // navigare resta libero
+    run.markPrivateRead('shopping_list_get');
+    const v = evaluateToolPolicy(search, run.toPolicyContext());
+    expect(v.kind).toBe('ask');
+    expect(v.kind === 'ask' && v.reason).toContain('fuga di dati');
+    // Senza egress (lettura locale) la combinazione non blocca; senza taint neppure.
+    expect(evaluateToolPolicy(read, run.toPolicyContext()).kind).toBe('allow');
+    const clean = new RunContext('u', ['chat'], 0);
+    clean.markPrivateRead('memory_search');
+    expect(evaluateToolPolicy(search, clean.toPolicyContext()).kind).toBe('allow');
+    expect(run.privateSources).toEqual(['shopping_list_get']);
+  });
+
   it('il segnale di rischio del router può solo restringere; denyTools e alwaysAsk', () => {
     const risky = new RunContext('u', ['chat', 'email'], 0.9).toPolicyContext();
     expect(evaluateToolPolicy(send, risky).kind).toBe('ask');

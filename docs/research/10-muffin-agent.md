@@ -57,3 +57,8 @@ Da **non** adottare ora: file sigillati e Root of Trust (per un server di famigl
 ## 5. Conclusione
 
 Muffin è il progetto più vicino a Ernie per intenzione (continuità personale, autorità esplicita, memoria con provenienza) e il più rigoroso fra quelli visti: la sua forza è la disciplina (ADR, evidenze, kill criteria), non una tecnica unica. Le quattro idee A1–A3 e A5 valgono la pena subito perché toccano i nostri punti deboli misurati: costo del contesto, sorveglianza delle azioni, messaggi spontanei che arriveranno con la famiglia, e sicurezza del taint mai verificata da capo a fondo. Il resto entra nel piano quando serviranno compiti lunghi.
+
+
+## 6. Decisione e seguito (12 ott 2026)
+
+L'utente ha scelto A1 e A5 subito, A3 da approfondire. Fatto: compattazione dei risultati dei tool nel prompt del provider (`packages/agent-core/src/compact.ts`, hook `processLLMRequest` di Mastra, cronologia salvata intatta) e scene di attacco (`packages/tools/src/attack-scenes.test.ts`). Le scene hanno trovato un buco reale: dopo un documento ostile `web_search`/`web_fetch` erano liberi (nessun flag `write`/`externalEffect`), quindi query e URL potevano portare fuori dati privati. Chiuso con la terza gamba della Rule of Two (`risk.egress` + `RunContext.privateRead`). La memoria non prende più fatti dal testo dell'assistente scritto dopo chiamate a tool (B4 coperto senza giudice).

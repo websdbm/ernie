@@ -9,6 +9,8 @@ export interface ToolRisk {
   readonly ingestsUntrusted: boolean;
   readonly externalEffect: boolean;
   readonly write: boolean;
+  /** I parametri lasciano il dispositivo verso un servizio esterno (ricerca, fetch): canale di fuga per dati privati. */
+  readonly egress?: boolean;
 }
 
 export interface ToolPolicyDescriptor {
@@ -28,6 +30,8 @@ export interface PolicyContext {
   readonly userId: string;
   readonly scopes: readonly string[];
   readonly tainted: boolean;
+  /** Nella run un tool ha letto dati privati (liste, documenti, memoria). */
+  readonly privateRead?: boolean;
   readonly riskSignal: number;
   readonly policyVersion?: string;
 }
@@ -59,6 +63,14 @@ export function evaluateToolPolicy(
   if (ctx.tainted && (tool.risk.externalEffect || tool.risk.write)) {
     return { kind: 'ask', reason: 'run contaminata da contenuto non fidato (Rule of Two)' };
   }
+  // Terza gamba della Rule of Two: contenuto non fidato + dati privati + canale verso l'esterno = possibile esfiltrazione.
+  if (tool.risk.egress && ctx.tainted && ctx.privateRead) {
+    return {
+      kind: 'ask',
+      reason:
+        "possibile fuga di dati: nella run ci sono contenuti non fidati e dati privati, e questo tool invia i parametri all'esterno (Rule of Two)",
+    };
+  }
   const threshold = rules.riskAskThreshold ?? 0.75;
   if (tool.risk.externalEffect && ctx.riskSignal >= threshold) {
     return {
@@ -73,6 +85,8 @@ export function evaluateToolPolicy(
 export class RunContext {
   private _tainted = false;
   private readonly sources: string[] = [];
+  private _privateRead = false;
+  private readonly privateSources_: string[] = [];
 
   constructor(
     readonly userId: string,
@@ -93,11 +107,26 @@ export class RunContext {
     this.sources.push(source);
   }
 
+  get privateRead(): boolean {
+    return this._privateRead;
+  }
+
+  get privateSources(): readonly string[] {
+    return this.privateSources_;
+  }
+
+  /** Un tool ha letto dati privati: da qui, con contenuto non fidato nella run, i tool `egress` chiedono conferma. */
+  markPrivateRead(source: string): void {
+    this._privateRead = true;
+    this.privateSources_.push(source);
+  }
+
   toPolicyContext(): PolicyContext {
     return {
       userId: this.userId,
       scopes: this.scopes,
       tainted: this._tainted,
+      privateRead: this._privateRead,
       riskSignal: this.riskSignal,
     };
   }
