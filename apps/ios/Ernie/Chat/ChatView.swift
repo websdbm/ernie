@@ -166,8 +166,14 @@ struct MessageRow: View {
                         }
                     }
                     Text(message.text)
+                    if message.queued == true {
+                        Label("in attesa che Ernie finisca", systemImage: "clock")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
                 }
                 .foregroundStyle(.white)
+                .opacity(message.queued == true ? 0.75 : 1)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(

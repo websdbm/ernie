@@ -29,6 +29,8 @@ struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     var createdAt: Date
     /// Documenti allegati al messaggio (titolo e pagine), per il fumetto dell'utente.
     var attachments: [AttachmentInfo]?
+    /// Messaggio in coda: parte da solo appena Ernie finisce il turno in corso (mai «un turno è già in corso»).
+    var queued: Bool?
 }
 
 struct AttachmentInfo: Codable, Sendable, Equatable {

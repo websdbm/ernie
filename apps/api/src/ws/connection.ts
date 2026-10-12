@@ -316,7 +316,7 @@ export class ClientConnection {
     if (this.activeTurns.size > 0) {
       await this.sendError(
         'busy',
-        'Un turno è già in corso: attendi o invia user.cancel',
+        'Ernie sta ancora rispondendo: il messaggio partirà subito dopo.',
         true,
         event.correlationId,
       );

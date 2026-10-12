@@ -93,31 +93,78 @@ final class ConversationStore {
 
     // MARK: - azioni dell'utente
 
+    /// Messaggi scritti o toccati (schede) mentre Ernie sta ancora rispondendo: partono uno alla volta a turno finito.
+    private struct Outgoing { let messageId: String; let text: String; let inputMode: String; let attachments: [DocumentRef] }
+    private var outbox: [Outgoing] = []
+    var queuedCount: Int { outbox.count }
+
     func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = []) {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, !attachments.isEmpty { text = "Riassumi questo documento per studiarlo e fammi lo schema." }
         guard !text.isEmpty else { return }
-        if speaker.isSpeaking { bargeIn() }
-        let correlationId = Ids.new()
+        // Risposta a voce in corso: si zittisce la voce ma il turno continua (la risposta scritta arriva intera);
+        // il nuovo messaggio si mette in coda e parte a turno finito.
+        if speaker.isSpeaking { muteSpeech() }
         let info = attachments.map { AttachmentInfo(id: $0.id, title: $0.title, pages: $0.pages) }
-        items.append(.message(ChatMessage(id: Ids.new(), correlationId: correlationId, role: .user, text: text, inputMode: inputMode, createdAt: .now, attachments: info.isEmpty ? nil : info)))
-        activeCorrelationId = correlationId
-        activeInputMode = inputMode
-        agentState = .thinking
+        let messageId = Ids.new()
+        let queued = activeCorrelationId != nil
+        items.append(.message(ChatMessage(id: messageId, correlationId: queued ? "" : Ids.new(), role: .user, text: text, inputMode: inputMode, createdAt: .now, attachments: info.isEmpty ? nil : info, queued: queued ? true : nil)))
         lastError = nil
-        if currentTrace == nil || inputMode == "text" { currentTrace = LatencyTrace() }
+        let outgoing = Outgoing(messageId: messageId, text: text, inputMode: inputMode, attachments: attachments)
+        if queued {
+            outbox.append(outgoing)
+            persist()
+        } else {
+            dispatch(outgoing)
+        }
+    }
+
+    /// Invia davvero un messaggio: apre il turno e lo manda al server.
+    private func dispatch(_ out: Outgoing) {
+        let correlationId = Ids.new()
+        if let i = items.firstIndex(where: { $0.id == out.messageId }), case .message(var m) = items[i] {
+            m.correlationId = correlationId
+            m.queued = nil
+            items[i] = .message(m)
+        }
+        activeCorrelationId = correlationId
+        activeInputMode = out.inputMode
+        agentState = .thinking
+        if currentTrace == nil || out.inputMode == "text" { currentTrace = LatencyTrace() }
         currentTrace?.mark(.messageSent)
         persist()
         Task {
             do {
                 let payload = UserMessagePayload(
-                    text: text, inputMode: inputMode, locale: "it-IT",
-                    attachments: attachments.isEmpty ? nil : attachments.map { DocumentAttachment(id: $0.id) }
+                    text: out.text, inputMode: out.inputMode, locale: "it-IT",
+                    attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) }
                 )
                 try await client.send(.userMessage(payload), correlationId: correlationId)
             } catch {
                 self.fail("Invio non riuscito: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// A turno chiuso, parte il primo messaggio in coda (se c'è).
+    private func drainOutbox() {
+        guard activeCorrelationId == nil, !outbox.isEmpty else { return }
+        dispatch(outbox.removeFirst())
+    }
+
+    /// Il server ha rifiutato il messaggio perché un turno era ancora aperto: torna in coda e riparte da solo.
+    private func requeue(correlationId: String) {
+        guard let i = items.firstIndex(where: { if case .message(let m) = $0 { return m.correlationId == correlationId && m.role == .user } ; return false }),
+              case .message(var m) = items[i] else { return }
+        m.queued = true
+        items[i] = .message(m)
+        outbox.insert(Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: []), at: 0)
+        if activeCorrelationId == correlationId { activeCorrelationId = nil }
+        recomputeState()
+        persist()
+        Task {
+            try? await Task.sleep(for: .milliseconds(1500))
+            drainOutbox()
         }
     }
 
@@ -230,6 +277,10 @@ final class ConversationStore {
         case .automationRunUpdated:
             inbox.scheduleRefresh()
         case .error(let p):
+            if p.code == "busy" {
+                requeue(correlationId: e.correlationId)
+                break
+            }
             fail(p.message)
             if activeCorrelationId == e.correlationId { finishTurn(e.correlationId) }
         case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .sessionPing, .toolConfirmationRespond:
@@ -254,6 +305,7 @@ final class ConversationStore {
         if !speaker.isSpeaking { closeTrace() }
         recomputeState()
         persist()
+        drainOutbox()
     }
 
     private func closeTrace() {
