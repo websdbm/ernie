@@ -6,6 +6,8 @@
  *   node apps/ios/scripts/asc.mjs add-internal <email> <gruppo>             aggiunge un utente del team (già accettato) al gruppo interno
  *   node apps/ios/scripts/asc.mjs uninvite <email>                          ritira un invito non ancora accettato (per rifarlo con dati corretti)
  *   node apps/ios/scripts/asc.mjs testers <gruppo>                          elenca i tester di un gruppo
+ *   node apps/ios/scripts/asc.mjs devices                                   dispositivi registrati (per build ad hoc)
+ *   node apps/ios/scripts/asc.mjs device <nome> <udid>                      registra un iPhone per le build ad hoc (es. l'iPhone di un familiare)
  *   node apps/ios/scripts/asc.mjs bundles                                   App ID registrati (com.websdbm.ernie*) con le capability
  *   node apps/ios/scripts/asc.mjs app-groups <identifier> [nome]            registra l'App ID se manca e abilita la capability App Groups
  * Variabili: ASC_KEY_ID (default APWGU2N593), ASC_ISSUER_ID, ASC_KEY_PATH (~/.appstoreconnect/private_keys/AuthKey_<id>.p8), ASC_APP_ID (default 6821598639).
@@ -99,6 +101,20 @@ switch (cmd) {
     out({ removed: r.data.map((i) => i.id) });
     break;
   }
+  case 'devices': {
+    const r = await api('GET', '/v1/devices?fields[devices]=name,udid,platform,status,deviceClass&limit=100');
+    out(r.data.map((d) => ({ id: d.id, ...d.attributes })));
+    break;
+  }
+  case 'device': {
+    const [name, udid] = args;
+    if (!name || !udid) throw new Error('uso: device <nome> <udid>');
+    const r = await api('POST', '/v1/devices', {
+      data: { type: 'devices', attributes: { name, udid: udid.trim(), platform: 'IOS' } },
+    });
+    out({ id: r.data.id, ...r.data.attributes });
+    break;
+  }
   case 'bundles': {
     const r = await api('GET', '/v1/bundleIds?filter[identifier]=com.websdbm.ernie,com.websdbm.ernie.widgets&include=bundleIdCapabilities&limit=20');
     const caps = new Map((r.included ?? []).map((c) => [c.id, c.attributes.capabilityType]));
@@ -143,6 +159,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | uninvite <email> | add-internal <email> <gruppo> | bundles | app-groups <identifier> [nome] | get <path>');
+    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | uninvite <email> | add-internal <email> <gruppo> | devices | device <nome> <udid> | bundles | app-groups <identifier> [nome] | get <path>');
     process.exit(64);
 }
