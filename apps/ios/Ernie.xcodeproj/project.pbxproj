@@ -10,6 +10,7 @@
 		021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D938C458270FB5964436CBF8 /* BlockViews.swift */; };
 		022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
+		0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */; };
 		0F23035C5EE3AF3D3E2F004F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */; };
 		0FA8703F7C5EA31F8BC1B551 /* LatencyTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */; };
 		0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AF98DF9BED3D01480A522D /* SpeechInput.swift */; };
@@ -140,6 +141,7 @@
 		AD343071ED74C53EE49555CE /* VoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTests.swift; sourceTree = "<group>"; };
 		ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		AE75F3860E97C5BFE60E2A14 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlineDiagram.swift; sourceTree = "<group>"; };
 		BB6A663AAF174530467149DD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
@@ -280,6 +282,7 @@
 				CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */,
 				C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */,
 				52FF043456831431801189D0 /* InputBar.swift */,
+				B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */,
 				CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */,
 				4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */,
 			);
@@ -501,6 +504,7 @@
 				CB9E5DB1F0E5520712E8A09D /* Markdown.swift in Sources */,
 				8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */,
 				0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */,
+				0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */,
 				F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */,
 				308CBF03835CB246EF4E5725 /* ReminderSnapshot.swift in Sources */,
 				5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */,
