@@ -4,6 +4,7 @@
  *   node apps/ios/scripts/asc.mjs groups                      elenca i gruppi TestFlight dell'app
  *   node apps/ios/scripts/asc.mjs invite <email> <nome> <cognome> [ruolo]   invita un membro del team (default CUSTOMER_SUPPORT) con accesso alla sola app Ernie
  *   node apps/ios/scripts/asc.mjs add-internal <email> <gruppo>             aggiunge un utente del team (già accettato) al gruppo interno
+ *   node apps/ios/scripts/asc.mjs uninvite <email>                          ritira un invito non ancora accettato (per rifarlo con dati corretti)
  *   node apps/ios/scripts/asc.mjs testers <gruppo>                          elenca i tester di un gruppo
  *   node apps/ios/scripts/asc.mjs bundles                                   App ID registrati (com.websdbm.ernie*) con le capability
  *   node apps/ios/scripts/asc.mjs app-groups <identifier> [nome]            registra l'App ID se manca e abilita la capability App Groups
@@ -89,6 +90,15 @@ switch (cmd) {
     out({ id: r.data.id, ...r.data.attributes });
     break;
   }
+  case 'uninvite': {
+    const [email] = args;
+    if (!email) throw new Error('uso: uninvite <email>');
+    const r = await api('GET', `/v1/userInvitations?filter[email]=${encodeURIComponent(email)}`);
+    if (!r.data.length) throw new Error(`nessun invito in attesa per ${email}`);
+    for (const inv of r.data) await api('DELETE', `/v1/userInvitations/${inv.id}`);
+    out({ removed: r.data.map((i) => i.id) });
+    break;
+  }
   case 'bundles': {
     const r = await api('GET', '/v1/bundleIds?filter[identifier]=com.websdbm.ernie,com.websdbm.ernie.widgets&include=bundleIdCapabilities&limit=20');
     const caps = new Map((r.included ?? []).map((c) => [c.id, c.attributes.capabilityType]));
@@ -133,6 +143,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | add-internal <email> <gruppo> | bundles | app-groups <identifier> [nome] | get <path>');
+    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | uninvite <email> | add-internal <email> <gruppo> | bundles | app-groups <identifier> [nome] | get <path>');
     process.exit(64);
 }
