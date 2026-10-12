@@ -14,6 +14,42 @@ final class DocumentComposer {
         case failed(String)
     }
 
+    /// Tipo di schema scelto dall'utente per l'allegato (Auto = sceglie il riassuntore).
+    enum SchemaChoice: String, CaseIterable, Identifiable {
+        case outline, auto, mindmap, flow, timeline
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .outline: "Schema a frecce"
+            case .auto: "Auto"
+            case .mindmap: "Mappa mentale"
+            case .flow: "Flusso"
+            case .timeline: "Linea del tempo"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .outline: "list.bullet.indent"
+            case .auto: "sparkle"
+            case .mindmap: "point.3.connected.trianglepath.dotted"
+            case .flow: "arrow.triangle.branch"
+            case .timeline: "calendar.day.timeline.left"
+            }
+        }
+        /// Parole che il server riconosce nel messaggio.
+        var phrase: String? {
+            switch self {
+            case .outline: "schema a frecce"
+            case .auto: nil
+            case .mindmap: "mappa mentale"
+            case .flow: "flusso"
+            case .timeline: "linea del tempo"
+            }
+        }
+    }
+
+    /// Predefinito: lo schema a frecce del quaderno (richiesta dell'utente, 12 ott 2026).
+    var schemaChoice: SchemaChoice = .outline
     private(set) var phase: Phase = .idle
     private var api: ApiClient?
     private var job: Task<Void, Never>?
@@ -37,6 +73,15 @@ final class DocumentComposer {
         job?.cancel()
         job = nil
         phase = .idle
+        schemaChoice = .outline
+    }
+
+    /// Testo da inviare con l'allegato: quello scritto dall'utente, altrimenti la richiesta standard; con il tipo di schema scelto.
+    func messageText(draft: String) -> String {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let phrase = schemaChoice.phrase else { return text }
+        if text.isEmpty { return "Riassumi questo documento per studiarlo e fammi lo schema a \(phrase)." }
+        return "\(text) Schema: \(phrase)."
     }
 
     func importPDF(_ url: URL) {

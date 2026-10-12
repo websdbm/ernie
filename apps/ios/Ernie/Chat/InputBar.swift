@@ -140,6 +140,25 @@ struct InputBar: View {
                 .foregroundStyle({ if case .failed = documents.phase { return Color.red } else { return Color.primary } }())
                 .lineLimit(2)
             Spacer(minLength: 4)
+            if documents.ready != nil {
+                // Scelta esplicita del tipo di schema (richiesta dell'utente): Auto lascia decidere al riassuntore.
+                Menu {
+                    Picker("Schema", selection: Binding(get: { documents.schemaChoice }, set: { documents.schemaChoice = $0 })) {
+                        ForEach(DocumentComposer.SchemaChoice.allCases) { c in Label(c.title, systemImage: c.symbol).tag(c) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: documents.schemaChoice.symbol)
+                        Text(documents.schemaChoice == .auto ? "Schema" : documents.schemaChoice.title)
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                }
+                .accessibilityLabel("Tipo di schema")
+            }
             Button { documents.clear() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Togli l'allegato")
@@ -234,9 +253,9 @@ struct InputBar: View {
     }
 
     private func sendDraft() {
-        let text = draft
-        draft = ""
         let refs = documents?.ready.map { [$0] } ?? []
+        let text = refs.isEmpty ? draft : (documents?.messageText(draft: draft) ?? draft)
+        draft = ""
         documents?.clear()
         conversation.send(text, inputMode: "text", attachments: refs)
     }

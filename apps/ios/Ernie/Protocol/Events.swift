@@ -196,6 +196,17 @@ struct DocumentBlock: Codable, Sendable, Equatable {
 }
 
 /// Nodo della mappa (ricorsivo).
+/// Schema «a frecce» da studio (v1.8): sezioni per paragrafo; un solo `next` = la catena prosegue, più `next` = ramificazione.
+struct OutlineNode: Codable, Sendable, Equatable {
+    var label: String
+    var next: [OutlineNode]?
+}
+
+struct OutlineSection: Codable, Sendable, Equatable {
+    var title: String
+    var nodes: [OutlineNode]
+}
+
 struct MindNode: Codable, Sendable, Equatable {
     var label: String
     var note: String?
@@ -222,23 +233,26 @@ struct TimelineEvent: Codable, Sendable, Equatable {
 
 /// Schema grafico di un testo: dati chiusi, disegnati nativamente (mai immagini).
 enum SchemaDiagram: Sendable, Equatable, Codable {
+    case outline(sections: [OutlineSection])
     case mindmap(root: MindNode)
     case flow(steps: [FlowStep], links: [FlowLink])
     case timeline(events: [TimelineEvent])
 
     var typeName: String {
         switch self {
+        case .outline: "outline"
         case .mindmap: "mindmap"
         case .flow: "flow"
         case .timeline: "timeline"
         }
     }
 
-    private enum CodingKeys: String, CodingKey { case type, root, steps, links, events }
+    private enum CodingKeys: String, CodingKey { case type, root, steps, links, events, sections }
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(String.self, forKey: .type) {
+        case "outline": self = .outline(sections: try c.decode([OutlineSection].self, forKey: .sections))
         case "mindmap": self = .mindmap(root: try c.decode(MindNode.self, forKey: .root))
         case "flow": self = .flow(steps: try c.decode([FlowStep].self, forKey: .steps), links: try c.decodeIfPresent([FlowLink].self, forKey: .links) ?? [])
         case "timeline": self = .timeline(events: try c.decode([TimelineEvent].self, forKey: .events))
@@ -250,6 +264,7 @@ enum SchemaDiagram: Sendable, Equatable, Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(typeName, forKey: .type)
         switch self {
+        case .outline(let sections): try c.encode(sections, forKey: .sections)
         case .mindmap(let root): try c.encode(root, forKey: .root)
         case .flow(let steps, let links):
             try c.encode(steps, forKey: .steps)

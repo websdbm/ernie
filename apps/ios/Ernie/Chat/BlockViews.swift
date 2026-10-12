@@ -229,6 +229,7 @@ struct SchemaPrintView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(block.title).font(.title2.weight(.bold))
             switch block.diagram {
+            case .outline(let sections): OutlineView(sections: sections)
             case .mindmap(let root): MindMapView(root: root)
             case .flow(let steps, let links): FlowView(steps: steps, links: links)
             case .timeline(let events): TimelineSchemaView(events: events)
@@ -497,10 +498,22 @@ struct SchemaCard: View {
 
     private var kindLabel: String {
         switch block.diagram {
+        case .outline: "Schema a frecce"
         case .mindmap: "Mappa"
         case .flow: "Flusso"
         case .timeline: "Linea del tempo"
         }
+    }
+
+    /// Gli altri tipi (frase per il server, etichetta, simbolo).
+    private var otherKinds: [(String, String, String)] {
+        let all: [(String, String, String, Bool)] = [
+            ("schema a frecce", "Come schema a frecce", "list.bullet.indent", { if case .outline = block.diagram { return true } else { return false } }()),
+            ("mappa mentale", "Come mappa mentale", "point.3.connected.trianglepath.dotted", { if case .mindmap = block.diagram { return true } else { return false } }()),
+            ("flusso", "Come flusso", "arrow.triangle.branch", { if case .flow = block.diagram { return true } else { return false } }()),
+            ("linea del tempo", "Come linea del tempo", "calendar.day.timeline.left", { if case .timeline = block.diagram { return true } else { return false } }()),
+        ]
+        return all.filter { !$0.3 }.map { ($0.0, $0.1, $0.2) }
     }
 
     var body: some View {
@@ -508,9 +521,23 @@ struct SchemaCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Label("\(kindLabel) · \(block.title)", systemImage: "square.3.layers.3d").font(.subheadline.weight(.semibold)).lineLimit(2)
                 Spacer(minLength: 4)
+                // Altro tipo di schema dello stesso documento: comando deterministico, nessun modello coinvolto.
+                if let conversation {
+                    Menu {
+                        ForEach(otherKinds, id: \.0) { phrase, label, symbol in
+                            Button {
+                                conversation.send("schema «\(block.title)» come \(phrase)", inputMode: "text")
+                            } label: { Label(label, systemImage: symbol) }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Color.accentColor)
+                    }
+                    .accessibilityLabel("Altro tipo di schema")
+                }
                 ExportMenu(name: "\(kindLabel) \(block.title)") { SchemaPrintView(block: block) }
             }
             switch block.diagram {
+            case .outline(let sections): OutlineView(sections: sections)
             case .mindmap(let root): MindMapView(root: root)
             case .flow(let steps, let links): FlowView(steps: steps, links: links)
             case .timeline(let events): TimelineSchemaView(events: events)
@@ -519,6 +546,100 @@ struct SchemaCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+/// Schema «a frecce» come negli appunti a mano: titoletto del paragrafo, poi catene «soggetto → fatto → conseguenza»
+/// che vanno a capo da sole; dove un soggetto ha più fatti, le frecce si ramificano una sotto l'altra, rientrate.
+struct OutlineView: View {
+    let sections: [OutlineSection]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(section.title.uppercased())
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.bottom, 2)
+                    ForEach(Array(section.nodes.enumerated()), id: \.offset) { _, node in
+                        OutlineNodeView(node: node, head: true)
+                    }
+                }
+                if index < sections.count - 1 { Divider() }
+            }
+        }
+    }
+}
+
+struct OutlineNodeView: View {
+    let node: OutlineNode
+    var head = false
+
+    /// Catena di nodi con un solo seguito, appiattita; la coda è dove la catena finisce o si ramifica.
+    private var chain: (labels: [String], tail: [OutlineNode]) {
+        var labels = [node.label]
+        var current = node
+        while let next = current.next, next.count == 1, let only = next.first {
+            current = only
+            labels.append(only.label)
+        }
+        return (labels, current.next ?? [])
+    }
+
+    var body: some View {
+        let c = chain
+        VStack(alignment: .leading, spacing: 4) {
+            WrapLayout(spacing: 4) {
+                ForEach(Array(c.labels.enumerated()), id: \.offset) { i, label in
+                    if i > 0 { Text("→").font(.footnote.weight(.semibold)).foregroundStyle(Color.accentColor) }
+                    Text(label)
+                        .font(i == 0 && head ? .footnote.weight(.semibold) : .footnote)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(i == 0 && head ? Color.accentColor.opacity(0.14) : Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+            }
+            if !c.tail.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(c.tail.enumerated()), id: \.offset) { _, branch in
+                        HStack(alignment: .top, spacing: 4) {
+                            Text("→").font(.footnote.weight(.semibold)).foregroundStyle(Color.accentColor).padding(.top, 3)
+                            OutlineNodeView(node: branch)
+                        }
+                    }
+                }
+                .padding(.leading, 16)
+            }
+        }
+    }
+}
+
+/// Disposizione a righe che vanno a capo (per le catene di frecce).
+struct WrapLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for s in subviews {
+            let size = s.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return CGSize(width: width == .infinity ? maxX : width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for s in subviews {
+            let size = s.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
+            s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 
