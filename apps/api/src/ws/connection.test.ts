@@ -577,6 +577,64 @@ describe('ClientConnection: travaso proposto (B2)', () => {
   });
 });
 
+describe('ClientConnection: domanda in sospeso di una skill', () => {
+  it('«alle 9» dopo «a che ora?» crea il promemoria senza passare dal modello', async () => {
+    const { SkillRegistry, createReminderSkill } = await import('@ernie/skills');
+    const created: Array<{ text: string; at: Date }> = [];
+    const store = {
+      create: async (_u: string, r: { text: string; at: Date }) => {
+        created.push(r);
+        return { id: 'r1', text: r.text, at: r.at, status: 'scheduled' as const };
+      },
+      list: async () => [],
+      remove: async () => false,
+      update: async () => null,
+    };
+    const registry = new SkillRegistry();
+    registry.register(createReminderSkill(store as never));
+    const st = fakeStore();
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    let llmTurns = 0;
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          skills: { registryFor: async () => registry },
+          runTurn: async (input: TurnInput) => {
+            llmTurns++;
+            await input.emit('assistant.started', { route: 'llm' });
+            await input.emit('assistant.text.completed', { text: 'ok' });
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+            return {
+              text: 'ok',
+              cancelled: false,
+              llmCalls: 1,
+              toolCalls: 0,
+              latencyMs: 1,
+              costUsd: 0,
+              loopDetected: false,
+            };
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('ricordami di fatturare alla pizzeria'));
+    await tick();
+    await conn.handleRaw(c.message('Alle 9'));
+    await tick();
+    expect(created.map((r) => r.text)).toEqual(['fatturare alla pizzeria']);
+    expect(llmTurns).toBe(0);
+    // La domanda vale una volta sola: un altro orario ora va al percorso normale.
+    await conn.handleRaw(c.message('Alle 10'));
+    await tick();
+    expect(created).toHaveLength(1);
+  });
+});
+
 describe('ClientConnection: routing', () => {
   it('un comando è risolto senza Jev né modello e viene registrato come deterministico', async () => {
     const st = fakeStore();

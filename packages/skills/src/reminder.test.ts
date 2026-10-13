@@ -7,6 +7,7 @@ import {
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderStore,
+  reminderFollowUp,
   UnknownPersonError,
 } from './reminder.js';
 import { localParts, zonedToUtc } from './zoned.js';
@@ -236,5 +237,59 @@ describe('titolo e frase di conferma dei promemoria', () => {
     const r2 = await skill.run(guess, { userId: 'u', sessionId: null, requestId: 'x' });
     expect(r2.text).toContain('Ho inteso le 20 per «sera».');
     expect(r2.text).not.toContain('(');
+  });
+});
+
+describe('promemoria: data in lettere e risposta alla domanda «a che ora?»', () => {
+  it('«il due novembre» in lettere: giorno capito, ora predefinita dichiarata, testo pulito', () => {
+    const p = parseReminderCommand(
+      'Ricordami il due novembre di fatturare alla pizzeria romana 900 euro',
+      NOW,
+      TZ,
+    );
+    expect(p?.op).toBe('create');
+    if (p?.op !== 'create') return;
+    expect(p.text).toBe('fatturare alla pizzeria romana 900 euro');
+    expect(local(p.at)).toBe('2026-11-02 09:00');
+    expect(p.assumed).toEqual(['le 9, perché non hai detto l’ora']);
+    const q = parseReminderCommand(
+      'ricordami il ventitré dicembre alle 18 di comprare il panettone',
+      NOW,
+      TZ,
+    );
+    expect(q?.op === 'create' && local(q.at)).toBe('2026-12-23 18:00');
+    const r = parseReminderCommand('ricordami per il primo dicembre di pagare la rata', NOW, TZ);
+    expect(r?.op === 'create' && local(r.at)).toBe('2026-12-01 09:00');
+  });
+
+  it('«alle 9» dopo la domanda completa il promemoria; altro contenuto lo lascia cadere', () => {
+    const ask = parseReminderCommand('ricordami di fatturare alla pizzeria', NOW, TZ);
+    expect(ask).toMatchObject({ op: 'ask_time', text: 'fatturare alla pizzeria' });
+    const awaiting = { text: 'fatturare alla pizzeria' };
+    const done = reminderFollowUp(awaiting, 'Alle 9', NOW, TZ);
+    expect(done?.op).toBe('create');
+    if (done?.op !== 'create') return;
+    expect(done.text).toBe('fatturare alla pizzeria');
+    // Sabato alle 15 le 9 sono passate: domani, e lo dice.
+    expect(local(done.at)).toBe('2026-10-12 09:00');
+    expect(done.assumed).toEqual(['domani, perché oggi quell’ora è già passata']);
+    expect(reminderFollowUp(awaiting, 'ok, domani alle 8 grazie', NOW, TZ)?.op).toBe('create');
+    expect(reminderFollowUp(awaiting, 'che tempo fa domani?', NOW, TZ)).toBeNull();
+    expect(reminderFollowUp(awaiting, 'alle 9 chiama anche Mario', NOW, TZ)).toBeNull();
+    expect(reminderFollowUp(null, 'alle 9', NOW, TZ)).toBeNull();
+  });
+
+  it('la domanda della skill porta con sé il promemoria in sospeso', async () => {
+    const skill = createReminderSkill(null, TZ);
+    const plan = skill.match('ricordami di fatturare alla pizzeria');
+    const reply = await skill.run(plan, { userId: 'u', sessionId: 's', requestId: 'r' });
+    expect(reply.text).toContain(
+      'A che ora te lo ricordo? Il promemoria è «Fatturare alla pizzeria».',
+    );
+    expect(reply.awaiting).toEqual({ text: 'fatturare alla pizzeria' });
+    expect(skill.followUp?.(reply.awaiting, 'alle 17')).toMatchObject({
+      op: 'create',
+      text: 'fatturare alla pizzeria',
+    });
   });
 });

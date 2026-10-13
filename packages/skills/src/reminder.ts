@@ -51,6 +51,49 @@ export type ReminderPlan =
 
 export const REMINDER_FIRE_PREFIX = '__promemoria__ ';
 
+/** Giorni del mese in lettere («il due novembre», «il primo dicembre», «il ventitré»). */
+const DAY_WORDS: Record<string, number> = Object.fromEntries(
+  [
+    ['primo', 1],
+    ['uno', 1],
+    ['due', 2],
+    ['tre', 3],
+    ['quattro', 4],
+    ['cinque', 5],
+    ['sei', 6],
+    ['sette', 7],
+    ['otto', 8],
+    ['nove', 9],
+    ['dieci', 10],
+    ['undici', 11],
+    ['dodici', 12],
+    ['tredici', 13],
+    ['quattordici', 14],
+    ['quindici', 15],
+    ['sedici', 16],
+    ['diciassette', 17],
+    ['diciotto', 18],
+    ['diciannove', 19],
+    ['venti', 20],
+    ['ventuno', 21],
+    ['ventidue', 22],
+    ['ventitré', 23],
+    ['ventitre', 23],
+    ['ventiquattro', 24],
+    ['venticinque', 25],
+    ['ventisei', 26],
+    ['ventisette', 27],
+    ['ventotto', 28],
+    ['ventinove', 29],
+    ['trenta', 30],
+    ['trentuno', 31],
+  ].map(([w, n]) => [w, n]),
+) as Record<string, number>;
+// Dalla parola più lunga: «ventitré» non deve diventare «venti» + «tré».
+const DAY_WORDS_RE = Object.keys(DAY_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
+
 const WEEKDAYS = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const MONTHS = [
   'gennaio',
@@ -200,12 +243,15 @@ export function parseWhen(
     dayGiven = true;
     text = text.replace(wd[0], ' ');
   }
+  // «il 2 novembre», «il due novembre», «il primo dicembre», «per il 21 giugno», «2 novembre».
   const dm = new RegExp(
-    `\\s(?:il|l')\\s*(?<d>\\d{1,2})\\s+(?<mo>${MONTHS.join('|')})(?:\\s+(?<y>\\d{4}))?\\s`,
+    `\\s(?:(?:per\\s+il|entro\\s+il|il|l'|al|dal)\\s*)?(?<d>\\d{1,2}|${DAY_WORDS_RE})\\s+(?<mo>${MONTHS.join('|')})(?:\\s+(?<y>\\d{4}))?\\s`,
     'iu',
   ).exec(text);
   if (dm?.groups?.d && dm.groups.mo) {
-    d = Number(dm.groups.d);
+    d = /^\d+$/.test(dm.groups.d)
+      ? Number(dm.groups.d)
+      : (DAY_WORDS[dm.groups.d.toLowerCase()] ?? 0);
     m = MONTHS.indexOf(dm.groups.mo.toLowerCase()) + 1;
     if (dm.groups.y) y = Number(dm.groups.y);
     else if (m < today.month || (m === today.month && d < today.day)) y = today.year + 1;
@@ -355,6 +401,43 @@ export function parseReminderCommand(
   };
 }
 
+/**
+ * Risposta alla domanda «a che ora?»: il messaggio successivo è solo un orario («alle 9», «domani alle 8»,
+ * «tra 10 minuti», «stasera»), eventualmente con parole di cortesia. Qualunque altro contenuto: null, la
+ * domanda decade e il messaggio segue il percorso normale.
+ */
+export function reminderFollowUp(
+  awaiting: unknown,
+  input: string,
+  now = new Date(),
+  tz = 'Europe/Rome',
+): ReminderPlan | null {
+  const a = awaiting as { text?: unknown; who?: unknown } | null;
+  if (!a || typeof a.text !== 'string' || !a.text.trim()) return null;
+  const t = input
+    .replace(/[‘’´`]/gu, "'")
+    .replace(/[.!?]+$/gu, '')
+    .trim();
+  if (!t || t.split(/\s+/).length > 8 || /ricorda|promemoria/iu.test(t)) return null;
+  const parsed = parseWhen(t, now, tz);
+  if (!parsed || 'needTime' in parsed) return null;
+  const residue = ` ${parsed.text.replace(/[,;:]+/gu, ' ')} `
+    .replace(
+      /(?:^|\s)(?:ok|okay|va\s+bene|grazie|per\s+favore|perfetto|sì|si|allora|facciamo|mettilo|mettila|direi)(?=\s|$)/giu,
+      ' ',
+    )
+    .replace(/[\s,;:]+/gu, ' ')
+    .trim();
+  if (residue) return null;
+  return {
+    op: 'create',
+    text: a.text,
+    at: parsed.at,
+    assumed: parsed.assumed,
+    ...(typeof a.who === 'string' && a.who ? { who: a.who } : {}),
+  };
+}
+
 export function formatWhen(at: Date, tz: string, now = new Date()): string {
   const p = localParts(at, tz);
   const t = localParts(now, tz);
@@ -407,6 +490,7 @@ export function createReminderSkill(
       'che promemoria ho?',
     ],
     match: (text) => parseReminderCommand(text, new Date(), timezone),
+    followUp: (awaiting, text) => reminderFollowUp(awaiting, text, new Date(), timezone),
     run: async (plan, ctx): Promise<SkillReply> => {
       const p = plan as ReminderPlan;
       switch (p.op) {
@@ -417,8 +501,10 @@ export function createReminderSkill(
           };
         case 'ask_time':
           return {
-            text: `A che ora ${p.who ? `ricordo a ${p.who}` : 'ti ricordo'} di ${p.text}? Dimmi per esempio «alle 17» o «tra 30 minuti».`,
+            text: `A che ora ${p.who ? `lo ricordo a ${p.who}` : 'te lo ricordo'}? Il promemoria è «${tidyReminderText(p.text)}». Dimmi per esempio «alle 17», «domani alle 9» o «tra 30 minuti».`,
             actions: [],
+            // Il messaggio successivo («alle 9») completa questo promemoria.
+            awaiting: { text: p.text, ...(p.who ? { who: p.who } : {}) },
           };
         case 'create': {
           if (!store)

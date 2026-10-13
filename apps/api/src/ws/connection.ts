@@ -32,7 +32,12 @@ import {
   PROTOCOL_VERSION,
   parseClientEvent,
 } from '@ernie/protocol';
-import { formatFiredIntents, type IntentStore, type SkillRegistry } from '@ernie/skills';
+import {
+  type DeterministicSkill,
+  formatFiredIntents,
+  type IntentStore,
+  type SkillRegistry,
+} from '@ernie/skills';
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
@@ -181,6 +186,8 @@ export class ClientConnection {
   private readonly brainSuggested = new Set<string>();
   /** La proposta di travaso si valuta una volta per conversazione. */
   private brainTransferChecked = false;
+  /** Domanda di una skill in attesa di risposta nel messaggio successivo (es. «a che ora?»), 10 minuti. */
+  private pendingFollowUp: { skillId: string; awaiting: unknown; until: number } | null = null;
   /** Barge-in: fino a quale carattere l'utente ha sentito la risposta che ha interrotto (per correlationId). */
   private readonly spokenThrough = new Map<string, number>();
   /** Ultima risposta interrotta dall'utente: ciò che ha sentito e ciò che non ha sentito (per il turno successivo). */
@@ -502,7 +509,19 @@ export class ClientConnection {
 
     // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
     const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
-    const match = attachments.length === 0 ? (skills?.match(text) ?? null) : null;
+    // Risposta a una domanda della skill nel turno prima («alle 9» dopo «a che ora?»): vale una volta sola.
+    const pending = this.pendingFollowUp;
+    this.pendingFollowUp = null;
+    let followUpMatch: { skill: DeterministicSkill; plan: unknown } | null = null;
+    if (pending && pending.until > Date.now() && attachments.length === 0 && skills) {
+      const skill = skills.get(pending.skillId);
+      if (skill?.kind === 'deterministic' && skill.followUp) {
+        const plan = skill.followUp(pending.awaiting, text);
+        if (plan) followUpMatch = { skill, plan };
+      }
+    }
+    const match =
+      followUpMatch ?? (attachments.length === 0 ? (skills?.match(text) ?? null) : null);
     // Promemoria a evento: confronto full-text del messaggio, mai sulla frase che ne crea uno.
     const fired =
       this.deps.intents && attachments.length === 0 && match?.skill.id !== 'promemoria_evento'
@@ -516,6 +535,12 @@ export class ClientConnection {
         requestId: correlationId,
       });
       const reply = firedNote ? { ...raw, text: `${raw.text}\n\n${firedNote}` } : raw;
+      if (raw.awaiting !== undefined)
+        this.pendingFollowUp = {
+          skillId: match.skill.id,
+          awaiting: raw.awaiting,
+          until: Date.now() + 10 * 60_000,
+        };
       await this.deps.decisions.record(
         this.auth.userId,
         sessionId,

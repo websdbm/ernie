@@ -12,6 +12,11 @@ export interface SkillReply {
   readonly actions: readonly string[];
   /** Blocchi strutturati da mostrare come schede (protocollo v1.2). */
   readonly blocks?: readonly ContentBlock[];
+  /**
+   * La skill ha fatto una domanda e aspetta la risposta nel messaggio successivo (es. «a che ora?»): la
+   * connessione la tiene in sospeso e la passa a `followUp` della stessa skill.
+   */
+  readonly awaiting?: unknown;
 }
 
 /** Skill deterministica: riconosce la richiesta con regole e la esegue senza modelli. */
@@ -25,6 +30,8 @@ export interface DeterministicSkill {
   /** Restituisce un piano eseguibile se la frase è riconosciuta, altrimenti null. */
   readonly match: (text: string) => unknown | null;
   readonly run: (plan: unknown, ctx: SkillRunContext) => Promise<SkillReply>;
+  /** Risposta alla domanda in sospeso (`awaiting`): un piano eseguibile, oppure null se non c'entra. */
+  readonly followUp?: (awaiting: unknown, text: string) => unknown | null;
 }
 
 /** Skill guidata: istruzioni in markdown + tool consentiti; eseguita dal modello della sessione. */
