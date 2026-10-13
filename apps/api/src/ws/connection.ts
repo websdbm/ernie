@@ -122,6 +122,8 @@ export interface ConnectionDeps {
     text: string,
     exclude: readonly string[],
   ) => Promise<{ path: string; title: string; when: string; passage: string } | null>;
+  /** Second brain (B2): proposta di travaso dalla memoria (blocco per il contesto), al più una per conversazione. */
+  readonly brainTransfer?: (userId: string) => Promise<string | null>;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
   readonly tools?: {
     readonly categories: readonly string[];
@@ -177,6 +179,8 @@ export class ClientConnection {
   private readonly activeTurns = new Map<string, AbortController>();
   /** Note del second brain già accennate in questa conversazione (una volta per nota). */
   private readonly brainSuggested = new Set<string>();
+  /** La proposta di travaso si valuta una volta per conversazione. */
+  private brainTransferChecked = false;
   /** Barge-in: fino a quale carattere l'utente ha sentito la risposta che ha interrotto (per correlationId). */
   private readonly spokenThrough = new Map<string, number>();
   /** Ultima risposta interrotta dall'utente: ciò che ha sentito e ciò che non ha sentito (per il turno successivo). */
@@ -606,6 +610,20 @@ export class ClientConnection {
         }
       } catch {
         /* suggerimento facoltativo */
+      }
+    }
+    if (
+      this.deps.brainTransfer &&
+      !this.brainTransferChecked &&
+      attachments.length === 0 &&
+      decision.skillId !== 'second_brain'
+    ) {
+      this.brainTransferChecked = true;
+      try {
+        const block = await this.deps.brainTransfer(this.auth.userId);
+        if (block) contextBlocks.push(block);
+      } catch {
+        /* proposta facoltativa */
       }
     }
     if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {

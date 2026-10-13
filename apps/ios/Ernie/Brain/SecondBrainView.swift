@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 // MARK: - modelli (REST /v1/brain)
 
@@ -10,6 +11,8 @@ struct BrainNoteSummary: Codable, Sendable, Identifiable, Hashable {
     var refersFrom: String?
     var refersTo: String?
     var place: String?
+    /// Posizione come `[lat, lon]`, oppure `nil` se la nota non ha un luogo.
+    var coords: [Double]?
     var links: [String]
     var `private`: Bool
     var excerpt: String
@@ -123,6 +126,35 @@ enum BrainFormat {
 
 // MARK: - elenco
 
+/// Modo di vista della schermata Second brain.
+enum BrainViewMode: String, CaseIterable, Identifiable {
+    case elenco, tempo, mappa
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .elenco: "Elenco"
+        case .tempo: "Tempo"
+        case .mappa: "Mappa"
+        }
+    }
+}
+
+/// Un mese della vista «Tempo», con le sue note in ordine di data decrescente.
+private struct BrainMonth: Identifiable {
+    let key: String      // yyyy-MM
+    let title: String    // es. «ottobre 2026»
+    let notes: [BrainNoteSummary]
+    var id: String { key }
+}
+
+/// Una nota con posizione, da mostrare come annotazione sulla mappa.
+private struct BrainPin: Identifiable {
+    let note: BrainNoteSummary
+    let coordinate: CLLocationCoordinate2D
+    var id: String { note.id }
+}
+
 /// Second brain: note, persone, luoghi, progetti e documenti che Ernie scrive e collega (sincronizzati con Obsidian).
 /// In questa fase si sfoglia, si cerca e si legge; per annotare basta dirlo a Ernie.
 struct SecondBrainView: View {
@@ -134,10 +166,19 @@ struct SecondBrainView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var path: [String] = []
+    @State private var mode: BrainViewMode = .elenco
+    @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                Section {
+                    Picker("Vista", selection: $mode) {
+                        ForEach(BrainViewMode.allCases) { m in Text(m.label).tag(m) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
@@ -150,7 +191,7 @@ struct SecondBrainView: View {
                     }
                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                 }
-                if notes.isEmpty, !loading {
+                if mode != .mappa, notes.isEmpty, !loading {
                     Section {
                         Text(query.isEmpty
                              ? "Ancora vuoto. Di' a Ernie «annota che…» oppure mandagli una foto da salvare: le note compaiono qui e in Obsidian."
@@ -158,8 +199,45 @@ struct SecondBrainView: View {
                             .font(.callout).foregroundStyle(.secondary)
                     }
                 }
-                ForEach(notes) { n in
-                    NavigationLink(value: n.title) { row(n) }
+                switch mode {
+                case .elenco:
+                    ForEach(notes) { n in
+                        NavigationLink(value: n.title) { row(n) }
+                    }
+                case .tempo:
+                    ForEach(timeline) { m in
+                        Section {
+                            ForEach(m.notes) { n in
+                                NavigationLink(value: n.title) { row(n) }
+                            }
+                        } header: {
+                            Text(m.title)
+                        }
+                    }
+                case .mappa:
+                    Section {
+                        if pins.isEmpty {
+                            Text("Nessuna nota con un luogo: quelle annotate con la posizione del telefono compaiono qui.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        } else {
+                            Map(position: $camera) {
+                                ForEach(pins) { p in
+                                    Annotation(p.note.title, coordinate: p.coordinate) {
+                                        Button { path.append(p.note.title) } label: {
+                                            Image(systemName: BrainType.icon(p.note.type))
+                                                .font(.body.weight(.semibold))
+                                                .foregroundStyle(.white)
+                                                .frame(width: 36, height: 36)
+                                                .background(Color.accentColor, in: Circle())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .frame(height: 420)
+                            .listRowInsets(EdgeInsets())
+                        }
+                    }
                 }
                 if let error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
             }
@@ -188,6 +266,38 @@ struct SecondBrainView: View {
                 .foregroundStyle(selected ? Color.accentColor : .primary)
         }
         .buttonStyle(.plain)
+    }
+
+    /// Data di riferimento (`yyyy-MM-dd`): inizio della tratta se c'è, altrimenti data di creazione.
+    private static func refDate(_ n: BrainNoteSummary) -> String {
+        if let r = n.refersFrom, !r.isEmpty { return String(r.prefix(10)) }
+        return String(n.created.prefix(10))
+    }
+
+    /// Note raggruppate per mese, dal più recente; dentro ogni mese, dalla data più recente.
+    private var timeline: [BrainMonth] {
+        let groups = Dictionary(grouping: notes) { String(Self.refDate($0).prefix(7)) }
+        return groups.keys.sorted(by: >).map { key in
+            let items = (groups[key] ?? []).sorted { Self.refDate($0) > Self.refDate($1) }
+            return BrainMonth(key: key, title: Self.monthTitle(key), notes: items)
+        }
+    }
+
+    /// «2026-10» → «ottobre 2026».
+    private static func monthTitle(_ key: String) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "it_IT")
+        f.dateFormat = "yyyy-MM"
+        guard let d = f.date(from: key) else { return key }
+        return d.formatted(.dateTime.month(.wide).year().locale(Locale(identifier: "it_IT")))
+    }
+
+    /// Note con una posizione valida (`[lat, lon]`).
+    private var pins: [BrainPin] {
+        notes.compactMap { n in
+            guard let c = n.coords, c.count == 2 else { return nil }
+            return BrainPin(note: n, coordinate: CLLocationCoordinate2D(latitude: c[0], longitude: c[1]))
+        }
     }
 
     private func row(_ n: BrainNoteSummary) -> some View {

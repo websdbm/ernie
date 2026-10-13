@@ -86,6 +86,7 @@ import {
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createBrainRuntime } from './brain.js';
+import { formatTransferProposal, transferCandidate } from './brain-transfer.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
@@ -483,6 +484,35 @@ async function main(): Promise<void> {
         intents,
         profiles,
         brainSuggest: (userId, text, exclude) => brain.service.suggest(userId, text, exclude),
+        // Travaso dalla memoria (B2): una proposta ogni 30 giorni per argomento, ricordata in Redis.
+        brainTransfer: async (userId) => {
+          const [facts, notes, profile] = await Promise.all([
+            memories.listActiveSemantic(userId, 200),
+            brain.service.list(userId, { includePrivate: true, limit: 200 }),
+            profiles.get(userId),
+          ]);
+          const known = profile.family.map((m) => m.name).filter((n): n is string => Boolean(n));
+          const skip = new Set<string>();
+          for (let i = 0; i < 5; i++) {
+            const c = transferCandidate(
+              facts.map((f) => f.content),
+              notes.map((n) => n.title),
+              known,
+              { skip },
+            );
+            if (!c) return null;
+            const fresh = await redis.client.set(
+              `brain:transfer:${userId}:${c.entity.toLowerCase()}`,
+              '1',
+              'EX',
+              30 * 86_400,
+              'NX',
+            );
+            if (fresh === 'OK') return formatTransferProposal(c);
+            skip.add(c.entity.toLowerCase());
+          }
+          return null;
+        },
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,

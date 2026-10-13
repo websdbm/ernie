@@ -531,6 +531,52 @@ describe('ClientConnection: suggerimenti del second brain (B2)', () => {
   });
 });
 
+describe('ClientConnection: travaso proposto (B2)', () => {
+  it('la proposta si valuta una volta per conversazione e arriva nel contesto', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const contexts: Array<string | undefined> = [];
+    let calls = 0;
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          brainTransfer: async () => {
+            calls++;
+            return 'Travaso proposto: 5 ricordi su «Giorgio».';
+          },
+          runTurn: async (input: TurnInput) => {
+            contexts.push(input.memoryContext);
+            await input.emit('assistant.started', { route: 'llm' });
+            await input.emit('assistant.text.completed', { text: 'ok' });
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+            return {
+              text: 'ok',
+              cancelled: false,
+              llmCalls: 1,
+              toolCalls: 0,
+              latencyMs: 1,
+              costUsd: 0,
+              loopDetected: false,
+            };
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('ciao, come va oggi?'));
+    await tick();
+    await conn.handleRaw(c.message('dimmi una cosa simpatica'));
+    await tick();
+    expect(calls).toBe(1);
+    expect(contexts[0]).toContain('Travaso proposto');
+    expect(contexts[1] ?? '').not.toContain('Travaso');
+  });
+});
+
 describe('ClientConnection: routing', () => {
   it('un comando è risolto senza Jev né modello e viene registrato come deterministico', async () => {
     const st = fakeStore();

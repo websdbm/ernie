@@ -1,7 +1,7 @@
 /**
  * Demo da terminale: una sessione testuale con Ernie via WebSocket (protocollo v1).
  *   ERNIE_API_KEY=ernie_... pnpm --filter @ernie/tests demo:chat "ciao, chi sei?"
- * Variabili: ERNIE_URL (default ws://localhost:3000/v1/ws), ERNIE_SESSION_ID (per riprendere una sessione),
+ * Variabili: ERNIE_URL (default ws://localhost:3000/v1/ws), ERNIE_SESSION_ID (per riprendere una sessione), ERNIE_DEVICE="lat,lon,Luogo",
  * ERNIE_DEMO_APPROVE=approve|deny per rispondere alle richieste di conferma dei tool.
  */
 import { randomUUID } from 'node:crypto';
@@ -16,6 +16,20 @@ const url = process.env.ERNIE_URL ?? 'ws://localhost:3000/v1/ws';
 const sessionId = process.env.ERNIE_SESSION_ID ?? randomUUID();
 const text = process.argv.slice(2).join(' ') || 'Ciao! Presentati in una frase.';
 const seq = new SequenceSource();
+// Posizione simulata del telefono (protocollo v1.10): ERNIE_DEVICE="45.44,10.99,Verona".
+const deviceRaw = process.env.ERNIE_DEVICE?.split(',');
+const device =
+  deviceRaw && deviceRaw.length >= 2
+    ? {
+        timezone: 'Europe/Rome',
+        location: {
+          latitude: Number(deviceRaw[0]),
+          longitude: Number(deviceRaw[1]),
+          ...(deviceRaw[2] ? { place: deviceRaw.slice(2).join(',').trim() } : {}),
+          at: new Date().toISOString(),
+        },
+      }
+    : undefined;
 let streamed = false;
 
 const ws = new WebSocket(url, {
@@ -43,7 +57,7 @@ const done = new Promise<void>((resolve) => {
           JSON.stringify(
             createEvent(
               'user.message',
-              { text },
+              { text, ...(device ? { device } : {}) },
               { sessionId, correlationId: randomUUID(), seq: seq.next() },
             ),
           ),
