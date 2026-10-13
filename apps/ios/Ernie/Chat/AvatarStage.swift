@@ -148,7 +148,7 @@ struct PixelBearView: View {
     }
 }
 
-/// Un fotogramma dello sprite sheet: l'immagine intera scorre dietro una finestra quadrata, senza interpolazione.
+/// Un fotogramma dello sprite sheet, disegnato senza interpolazione (pixel netti a ogni dimensione).
 struct SpriteFrame: View {
     let sheet: String
     let index: Int
@@ -157,16 +157,41 @@ struct SpriteFrame: View {
     let size: CGFloat
 
     var body: some View {
-        let col = CGFloat(index % columns)
-        let row = CGFloat(index / columns)
-        Image(sheet)
-            .resizable()
-            .interpolation(.none)
-            .frame(width: size * CGFloat(columns), height: size * CGFloat(rows))
-            .offset(x: -col * size, y: -row * size)
-            // Il cambio di fotogramma è uno scatto: nessuna animazione (altrimenti il foglio scorre e si vedono due celle).
-            .transaction { $0.animation = nil }
-            .frame(width: size, height: size, alignment: .topLeading)
-            .clipped()
+        // Ogni fotogramma è un'immagine a sé, ritagliata una volta dal foglio: quando l'avatar cambia dimensione
+        // con l'animazione si scala solo la cella, e le celle vicine non possono affacciarsi ai bordi.
+        if let cell = SpriteCells.cell(sheet: sheet, index: index, columns: columns, rows: rows) {
+            Image(uiImage: cell)
+                .resizable()
+                .interpolation(.none)
+                .frame(width: size, height: size)
+        } else {
+            Color.clear.frame(width: size, height: size)
+        }
+    }
+}
+
+/// Celle degli sprite sheet, ritagliate in pixel dal foglio e tenute in memoria (16 immagini piccole per foglio).
+@MainActor
+enum SpriteCells {
+    private static var cache: [String: [UIImage]] = [:]
+
+    static func cell(sheet: String, index: Int, columns: Int, rows: Int) -> UIImage? {
+        let key = "\(sheet)#\(columns)x\(rows)"
+        if cache[key] == nil { cache[key] = slice(sheet: sheet, columns: columns, rows: rows) }
+        guard let cells = cache[key], cells.indices.contains(index) else { return nil }
+        return cells[index]
+    }
+
+    private static func slice(sheet: String, columns: Int, rows: Int) -> [UIImage] {
+        guard let image = UIImage(named: sheet), let cg = image.cgImage else { return [] }
+        let w = cg.width / columns
+        let h = cg.height / rows
+        var out: [UIImage] = []
+        for i in 0..<(columns * rows) {
+            let rect = CGRect(x: (i % columns) * w, y: (i / columns) * h, width: w, height: h)
+            guard let piece = cg.cropping(to: rect) else { return [] }
+            out.append(UIImage(cgImage: piece, scale: image.scale, orientation: image.imageOrientation))
+        }
+        return out
     }
 }
