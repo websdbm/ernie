@@ -48,6 +48,11 @@ export interface ReminderStoreDeps {
    * suona comunque all'ora scelta.
    */
   readonly proactive?: (c: ProactiveCandidate) => Promise<unknown>;
+  /** Email della scheda anagrafica: letta per i promemoria via email, salvata quando l'utente la dice. */
+  readonly email?: {
+    get(userId: string): Promise<string | null>;
+    set(userId: string, email: string): Promise<boolean>;
+  };
   /** Titolo breve dalla frase detta (modello leggero con ripiego deterministico); senza, pulizia deterministica. */
   readonly title?: (text: string, ctx: { userId: string; fromLabel?: string }) => Promise<string>;
 }
@@ -290,6 +295,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
         const a = await insert(userId, text, at, input.timezone, {
           ...(!sameText(spoken, text) ? { spoken } : {}),
           ...(input.repeat ? { repeat: input.repeat } : {}),
+          ...(input.channels ? { channels: input.channels } : {}),
         });
         return {
           id: a.id,
@@ -297,6 +303,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
           at: nextAt(a) ?? at,
           status: 'scheduled',
           ...(input.repeat ? { repeat: input.repeat } : {}),
+          ...(input.channels ? { channels: input.channels } : {}),
         };
       }
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
@@ -334,6 +341,13 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
           consider(await deps.automations.list(link.otherUserId), link.label);
       return out.sort((x, y) => x.at.getTime() - y.at.getTime());
     },
+    ...(deps.email
+      ? {
+          emailAddress: (userId: string) => deps.email?.get(userId) ?? Promise.resolve(null),
+          setEmail: (userId: string, email: string) =>
+            deps.email?.set(userId, email) ?? Promise.resolve(false),
+        }
+      : {}),
     async remove(userId, id) {
       const found = await locate(userId, id);
       if (!found) return false;

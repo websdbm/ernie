@@ -10,6 +10,8 @@ export interface MeRoutesOptions {
   readonly allowedOrigins: readonly string[];
   readonly pool: Pool;
   readonly version: string;
+  /** L'email vive nella scheda anagrafica: cambiata dalle impostazioni, si aggiorna anche lì. */
+  readonly onEmailChanged?: (userId: string, email: string) => Promise<void>;
 }
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -91,6 +93,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
             )
           ).rows[0],
       );
+      if (b.data.email !== undefined) await opts.onEmailChanged?.(auth.userId, b.data.email);
       return { settings: row?.settings ?? {} };
     });
 

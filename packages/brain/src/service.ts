@@ -65,6 +65,7 @@ export interface ChiSonoFields {
   gender?: string | null;
   city?: string | null;
   occupation?: string | null;
+  email?: string | null;
 }
 
 export interface ChiSonoInput extends ChiSonoFields {
@@ -83,6 +84,7 @@ const CHI_SONO_KEYS: Array<[keyof ChiSonoFields, string]> = [
   ['gender', 'genere'],
   ['city', 'citta'],
   ['occupation', 'lavoro'],
+  ['email', 'email'],
 ];
 
 const ERNIE_AUTHOR = 'Ernie';
@@ -323,6 +325,7 @@ export function createBrainService(opts: BrainServiceOptions) {
         ['gender', 'Genere'],
         ['city', 'Vive a'],
         ['occupation', 'Lavoro'],
+        ['email', 'Email'],
       ];
       const data = labels
         .filter(([k]) => p[k])

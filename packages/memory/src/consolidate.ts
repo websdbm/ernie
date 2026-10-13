@@ -72,6 +72,7 @@ export const ExtractedProfile = z.object({
   gender: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   occupation: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
   family: z
     .array(
       z.object({
@@ -119,7 +120,7 @@ per uno stato senza fine nota validTo è null. Nessun fatto → lista vuota.
 SCHEDA ANAGRAFICA (campo profile): compilala solo con dati che la persona dice ESPLICITAMENTE di sé, nelle righe «utente»:
 fullName (nome e cognome), preferredName (come vuole essere chiamata: «chiamami Ale»), birthDate (YYYY-MM-DD; --MM-DD se dice
 solo giorno e mese; un'età NON è una data di nascita), gender (come si descrive: uomo, donna, …), city (dove vive),
-occupation (lavoro). family: persone della sua famiglia (anche animali) con name, relation rispetto a lei (moglie, figlio,
+occupation (lavoro), email (il SUO indirizzo email, solo se lo detta come proprio; mai indirizzi di altri). family: persone della sua famiglia (anche animali) con name, relation rispetto a lei (moglie, figlio,
 madre, cane…), birthDate se detta, notes brevissime. evidence: le sue parole, al massimo 160 caratteri.
 Tutto ciò che non è detto è null; se nel batch non ci sono dati anagrafici, profile è null. I dati che metti in profile
 NON vanno ripetuti in facts.`;

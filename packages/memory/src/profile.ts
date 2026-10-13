@@ -16,6 +16,7 @@ export const PROFILE_FIELDS = [
   'gender',
   'city',
   'occupation',
+  'email',
 ] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
 
@@ -26,6 +27,7 @@ export const PROFILE_LIMITS: Record<ProfileField, number> = {
   gender: 30,
   city: 60,
   occupation: 80,
+  email: 120,
 };
 
 export const PROFILE_LABELS: Record<ProfileField, string> = {
@@ -35,6 +37,7 @@ export const PROFILE_LABELS: Record<ProfileField, string> = {
   gender: 'genere',
   city: 'dove vive',
   occupation: 'lavoro',
+  email: 'email',
 };
 
 export type ProfileSource = 'conversation' | 'user';
@@ -64,6 +67,8 @@ export const UserProfile = z.object({
   gender: z.string().max(30).optional(),
   city: z.string().max(60).optional(),
   occupation: z.string().max(80).optional(),
+  /** Indirizzo per le email dei promemoria (unica fonte; le impostazioni la ricopiano). */
+  email: z.string().max(120).optional(),
   family: z.array(FamilyMember).max(20).default([]),
   meta: z.record(z.string(), SourceMeta).default({}),
 });
@@ -79,6 +84,7 @@ export interface ProfileUpdate {
   readonly gender?: string | null | undefined;
   readonly city?: string | null | undefined;
   readonly occupation?: string | null | undefined;
+  readonly email?: string | null | undefined;
   readonly family?:
     | ReadonlyArray<{
         readonly name?: string | null | undefined;
@@ -135,6 +141,28 @@ export function normalizeBirthDate(
   return undefined;
 }
 
+/** Email valida in minuscolo, altrimenti undefined (un indirizzo sbagliato non deve finire nella scheda). */
+export function normalizeEmail(v: string | null | undefined): string | undefined {
+  const t =
+    typeof v === 'string'
+      ? v
+          .trim()
+          .toLowerCase()
+          .replace(/^mailto:/, '')
+      : '';
+  return /^[^\s@<>(),;:]+@[^\s@<>(),;:]+\.[a-z]{2,}$/.test(t) && t.length <= 120 ? t : undefined;
+}
+
+function normalizeField(
+  field: ProfileField,
+  raw: string | null | undefined,
+  now: Date,
+): string | undefined {
+  if (field === 'birthDate') return normalizeBirthDate(raw, now);
+  if (field === 'email') return normalizeEmail(raw);
+  return clean(raw, PROFILE_LIMITS[field]);
+}
+
 const fold = (s: string | undefined) =>
   (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -178,8 +206,7 @@ export function mergeProfile(
 
   for (const field of PROFILE_FIELDS) {
     const raw = update[field];
-    const value =
-      field === 'birthDate' ? normalizeBirthDate(raw, now) : clean(raw, PROFILE_LIMITS[field]);
+    const value = normalizeField(field, raw, now);
     if (value === undefined) continue;
     const before = current[field];
     const differs =
@@ -266,10 +293,7 @@ export function replaceProfileByUser(
   const next: UserProfile = { family: [], meta: {} };
   const changes: ProfileChange[] = [];
   for (const field of PROFILE_FIELDS) {
-    const value =
-      field === 'birthDate'
-        ? normalizeBirthDate(edited.fields[field], at)
-        : clean(edited.fields[field], PROFILE_LIMITS[field]);
+    const value = normalizeField(field, edited.fields[field], at);
     const before = current[field];
     if (value) next[field] = value;
     const same = (before ?? '') === (value ?? '');
@@ -402,6 +426,7 @@ export function renderProfile(
   if (profile.gender) lines.push(`Genere: ${profile.gender}`);
   if (profile.city) lines.push(`Vive a: ${profile.city}`);
   if (profile.occupation) lines.push(`Lavoro: ${profile.occupation}`);
+  if (profile.email) lines.push(`Email: ${profile.email}`);
   if (profile.family.length)
     lines.push(`Famiglia: ${profile.family.map((m) => describeMember(m, now)).join('; ')}`);
   if (!lines.length) return '';
@@ -475,6 +500,12 @@ export function createProfileStore(pool: Pool): ProfileStore {
            VALUES ($1, $2, $3, CASE WHEN $3 = 'user' THEN now() ELSE NULL END)`,
           [userId, JSON.stringify(changes), source],
         );
+        // L'email della scheda è quella delle notifiche: le impostazioni la ricopiano (l'invio legge da lì).
+        if (changes.some((ch) => ch.field === 'email'))
+          await c.query(
+            `UPDATE users SET settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object('email', $2::text) WHERE id = $1`,
+            [userId, data.email ?? ''],
+          );
       });
     },
     async recordConflicts(userId, conflicts) {

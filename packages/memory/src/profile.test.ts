@@ -182,3 +182,22 @@ describe('scheda anagrafica: date e testo', () => {
     ).toContain('data di nascita: 3 maggio 1975 (51 anni)');
   });
 });
+
+describe('scheda anagrafica: email', () => {
+  it('email valida in minuscolo; sbagliata ignorata; dalla chat non sostituisce quella scritta nell’app', async () => {
+    const { normalizeEmail } = await import('./profile.js');
+    expect(normalizeEmail(' Ale@Example.COM ')).toBe('ale@example.com');
+    expect(normalizeEmail('ale(at)example.com')).toBeUndefined();
+    const p = mergeProfile(emptyProfile(), { email: 'Ale@Example.com' }, chat).profile;
+    expect(p.email).toBe('ale@example.com');
+    const edited = replaceProfileByUser(
+      p,
+      { fields: { email: 'ufficio@example.com' }, family: [] },
+      at,
+    ).profile;
+    const r = mergeProfile(edited, { email: 'altro@example.com' }, chat);
+    expect(r.profile.email).toBe('ufficio@example.com');
+    expect(r.conflicts[0]).toMatchObject({ field: 'email', after: 'altro@example.com' });
+    expect(renderProfile(edited, at)).toContain('Email: ufficio@example.com');
+  });
+});

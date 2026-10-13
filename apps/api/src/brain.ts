@@ -22,6 +22,7 @@ export function chiSonoFromProfile(p: UserProfile): ChiSonoInput {
     gender: p.gender ?? null,
     city: p.city ?? null,
     occupation: p.occupation ?? null,
+    email: p.email ?? null,
     family: p.family.map((m) => ({
       relation: m.relation,
       ...(m.name ? { name: m.name } : {}),

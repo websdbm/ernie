@@ -40,9 +40,11 @@ import {
   createSessionSummaryStore,
   enqueueConsolidation,
   enqueueSessionSummary,
+  PROFILE_FIELDS,
   recordTurnEpisode,
   renderProfile,
   renderSessionSummary,
+  replaceProfileByUser,
 } from '@ernie/memory';
 import {
   buildProfiles,
@@ -161,8 +163,44 @@ async function main(): Promise<void> {
   const intents = createIntentStore(postgres.pool, family);
   // Promemoria («Ricordami»): automazioni una tantum accodate subito; a un familiare → nel suo account,
   // con scheda immediata nelle sue sessioni connesse (da lì partono notifica locale e widget).
+  /**
+   * L'email vive nella scheda anagrafica (unica fonte; le impostazioni la ricopiano per l'invio). Detta in chat
+   * o cambiata dall'app: provenienza «user», agenti ricostruiti, «Chi sono» aggiornata.
+   */
+  const setProfileEmail = async (userId: string, email: string): Promise<boolean> => {
+    const current = await profiles.get(userId);
+    const { profile, changes } = replaceProfileByUser(
+      current,
+      {
+        fields: {
+          ...Object.fromEntries(PROFILE_FIELDS.map((f) => [f, current[f] ?? null])),
+          email: email || null,
+        },
+        family: current.family.map((m) => ({
+          id: m.id,
+          relation: m.relation,
+          name: m.name ?? null,
+          birthDate: m.birthDate ?? null,
+          notes: m.notes ?? null,
+        })),
+      },
+      new Date(),
+    );
+    await profiles.save(userId, profile, changes, 'user');
+    if (changes.length) {
+      // Chiamati più tardi, quando agenti e second brain esistono già.
+      companions.invalidateUser(userId);
+      void brain.refreshChiSono(userId);
+    }
+    return true;
+  };
+
   const reminders = createReminderStore({
     automations,
+    email: {
+      get: async (userId) => (await profiles.get(userId)).email ?? null,
+      set: setProfileEmail,
+    },
     queue: automationQueue,
     knownTools: [],
     maxBudgetUsd: config.automations.maxRunBudgetUsd,
@@ -421,6 +459,9 @@ async function main(): Promise<void> {
       allowedOrigins: config.ws.allowedOrigins,
       pool: postgres.pool,
       version: config.service.version,
+      onEmailChanged: async (userId, email) => {
+        await setProfileEmail(userId, email);
+      },
     },
     skills: {
       authenticator,

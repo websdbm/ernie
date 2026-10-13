@@ -55,6 +55,8 @@ export interface ReminderStore {
       forLabel?: string;
       /** Ricorrente: `at` è la prima occorrenza. */
       repeat?: ReminderRepeat;
+      /** Canali chiesti a voce («mandamelo per email»). */
+      channels?: ReminderChannels;
     },
   ): Promise<Reminder>;
   /** Promemoria futuri ancora attivi, dal più vicino. */
@@ -66,6 +68,10 @@ export interface ReminderStore {
     id: string,
     patch: { text?: string; at?: Date; channels?: ReminderChannels },
   ): Promise<Reminder | null>;
+  /** Email della scheda anagrafica (per i promemoria via email); null se non c'è. */
+  emailAddress?(userId: string): Promise<string | null>;
+  /** Salva o sostituisce l'email nella scheda anagrafica (detta dall'utente). */
+  setEmail?(userId: string, email: string): Promise<boolean>;
 }
 
 export type ReminderPlan =
@@ -76,8 +82,11 @@ export type ReminderPlan =
       assumed: string[];
       who?: string;
       repeat?: ReminderRepeat;
+      /** «…e mandamelo per email»: canale email acceso su questo promemoria. */
+      email?: boolean;
     }
-  | { op: 'ask_time'; text: string; who?: string }
+  | { op: 'ask_time'; text: string; who?: string; email?: boolean }
+  | { op: 'set_email'; email: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
   | { op: 'fire'; text: string; from?: string };
@@ -393,6 +402,14 @@ export function parseReminderCommand(
       : { op: 'fire', text: body };
   }
   const lower = text.toLowerCase();
+  // «La mia email è …», «cambia la mia email in …», «usa … come email»: va nella scheda anagrafica.
+  const said =
+    /(?:la\s+mia\s+(?:e-?mail|mail|posta)\s+(?:è|e'|sarà|diventa)|cambia\s+(?:la\s+)?(?:mia\s+)?(?:e-?mail|mail)\s+(?:in|con)|(?:la\s+)?(?:nuova\s+)?(?:e-?mail|mail)\s+(?:per\s+i\s+promemoria\s+)?è)\s*:?\s*(?<e>\S+@\S+)/iu.exec(
+      text,
+    );
+  const saidAs = /usa\s+(?<e>\S+@\S+)\s+come\s+(?:(?:la\s+)?mia\s+)?(?:e-?mail|mail)/iu.exec(text);
+  const stated = normalizeEmailAddress(said?.groups?.e ?? saidAs?.groups?.e);
+  if (stated) return { op: 'set_email', email: stated };
   if (!/ricorda|promemoria/u.test(lower)) return null;
   if (
     /^(?:che|quali|quanti)\s+promemoria|^(?:i\s+miei|mostra(?:mi)?(?:\s+i)?|elenca(?:mi)?(?:\s+i)?|dimmi\s+i|vedi(?:\s+i)?)\s+(?:miei\s+)?promemoria|^promemoria$|^cosa\s+(?:mi\s+)?devi\s+ricordar/iu.test(
@@ -418,8 +435,13 @@ export function parseReminderCommand(
       text,
     );
   if (!anchor) return null;
-  const rest =
+  const joined =
     `${text.slice(0, anchor.index)} ${text.slice(anchor.index + anchor[0].length)}`.trim();
+  // «…e mandamelo per email», «anche via mail»: canale email su questo promemoria.
+  const emailAsk =
+    /\s(?:(?:e\s+)?(?:mandamelo|mandami(?:\s+una)?|inviamelo|scrivimi)\s+(?:anche\s+)?(?:per|via|una|in)?\s*(?:e-?mail|mail|posta)|(?:anche\s+|pure\s+)?(?:per|via|tramite|con\s+una)\s+(?:e-?mail|mail|posta(?:\s+elettronica)?))(?=\s|$)/iu;
+  const email = emailAsk.test(` ${joined} `);
+  const rest = email ? ` ${joined} `.replace(emailAsk, ' ').replace(/\s+/g, ' ').trim() : joined;
   if (!rest) return null;
   // Ricorrenti: «ogni venerdì alle 9», «ogni giorno alle 8», «il 5 di ogni mese».
   const rep = parseRepeat(rest);
@@ -431,18 +453,35 @@ export function parseReminderCommand(
       assumed: rep.assumed,
       repeat: rep.repeat,
       ...(who ? { who } : {}),
+      ...(email ? { email } : {}),
     };
   const parsed = parseWhen(rest, now, tz);
   if (parsed === null) return null;
   if ('needTime' in parsed)
-    return { op: 'ask_time', text: parsed.needTime, ...(who ? { who } : {}) };
+    return {
+      op: 'ask_time',
+      text: parsed.needTime,
+      ...(who ? { who } : {}),
+      ...(email ? { email } : {}),
+    };
   return {
     op: 'create',
     text: parsed.text,
     at: parsed.at,
     assumed: parsed.assumed,
     ...(who ? { who } : {}),
+    ...(email ? { email } : {}),
   };
+}
+
+/** Email valida in minuscolo (dalla frase dell'utente), altrimenti undefined. */
+export function normalizeEmailAddress(v: string | null | undefined): string | undefined {
+  const t = (v ?? '')
+    .trim()
+    .replace(/[.,;:!?»”)]+$/u, '')
+    .toLowerCase()
+    .replace(/^mailto:/, '');
+  return /^[^\s@<>(),;:«“]+@[^\s@<>(),;:]+\.[a-z]{2,}$/.test(t) && t.length <= 120 ? t : undefined;
 }
 
 /**
@@ -456,7 +495,13 @@ export function reminderFollowUp(
   now = new Date(),
   tz = 'Europe/Rome',
 ): ReminderPlan | null {
-  const a = awaiting as { text?: unknown; who?: unknown } | null;
+  const a = awaiting as { kind?: unknown; text?: unknown; who?: unknown; email?: unknown } | null;
+  // Risposta a «qual è la tua email?»: basta che nel messaggio ci sia un indirizzo valido.
+  if (a?.kind === 'email') {
+    const found = /\S+@\S+/u.exec(input);
+    const email = normalizeEmailAddress(found?.[0]);
+    return email ? { op: 'set_email', email } : null;
+  }
   if (!a || typeof a.text !== 'string' || !a.text.trim()) return null;
   const t = input
     .replace(/[‘’´`]/gu, "'")
@@ -479,6 +524,7 @@ export function reminderFollowUp(
     at: parsed.at,
     assumed: parsed.assumed,
     ...(typeof a.who === 'string' && a.who ? { who: a.who } : {}),
+    ...(a.email === true ? { email: true } : {}),
   };
 }
 
@@ -563,7 +609,12 @@ export function createReminderSkill(
             text: `A che ora ${p.who ? `lo ricordo a ${p.who}` : 'te lo ricordo'}? Il promemoria è «${tidyReminderText(p.text)}». Dimmi per esempio «alle 17», «domani alle 9» o «tra 30 minuti».`,
             actions: [],
             // Il messaggio successivo («alle 9») completa questo promemoria.
-            awaiting: { text: p.text, ...(p.who ? { who: p.who } : {}) },
+            awaiting: {
+              kind: 'time',
+              text: p.text,
+              ...(p.who ? { who: p.who } : {}),
+              ...(p.email ? { email: true } : {}),
+            },
           };
         case 'create': {
           if (!store)
@@ -576,6 +627,7 @@ export function createReminderSkill(
               timezone,
               ...(p.who ? { forLabel: p.who } : {}),
               ...(p.repeat ? { repeat: p.repeat } : {}),
+              ...(p.email ? { channels: { email: true } } : {}),
             });
           } catch (err) {
             if (err instanceof UnknownPersonError)
@@ -588,10 +640,11 @@ export function createReminderSkill(
           // Le stime dette in una frase a parte, senza parentesi annidate.
           const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
           const what = lowerFirst(r.text);
+          let reply: SkillReply;
           if (r.repeat) {
             const label = repeatLabel(r.repeat);
             const first = `La prima volta ${formatWhen(r.at, timezone)}.`;
-            return r.for
+            reply = r.for
               ? {
                   text: `🔁 Va bene: ${label} ricordo a ${r.for} di ${what}. ${first}${note} Arriva sul suo telefono.`,
                   actions: [`create:${r.id}`],
@@ -602,17 +655,39 @@ export function createReminderSkill(
                   actions: [`create:${r.id}`],
                   blocks: [toRemindersBlock([r], 'Promemoria')],
                 };
-          }
-          if (r.for)
-            return {
+          } else if (r.for)
+            reply = {
               text: `⏰ Va bene: ricordo a ${r.for} di ${what} ${formatWhen(r.at, timezone)}.${note} Il promemoria arriva sul suo telefono.`,
               actions: [`create:${r.id}`],
               blocks: [toRemindersBlock([r], `Promemoria per ${r.for}`)],
             };
+          else
+            reply = {
+              text: `⏰ Va bene: ti ricordo di ${what} ${formatWhen(r.at, timezone)}.${note}`,
+              actions: [`create:${r.id}`],
+              blocks: [toRemindersBlock([r], 'Promemoria')],
+            };
+          // Email chiesta ma indirizzo assente: lo chiedo e la risposta lo salva nella scheda.
+          if (p.email && store.emailAddress && !(await store.emailAddress(ctx.userId)))
+            return {
+              ...reply,
+              text: `${reply.text}\n\nPer mandartelo anche per email mi serve il tuo indirizzo: qual è? Lo salvo nella tua scheda.`,
+              awaiting: { kind: 'email' },
+            };
+          return reply;
+        }
+        case 'set_email': {
+          if (!store?.setEmail)
+            return { text: 'Non posso salvare l’email in questo contesto.', actions: [] };
+          const before = (await store.emailAddress?.(ctx.userId)) ?? null;
+          const ok = await store.setEmail(ctx.userId, p.email);
+          if (!ok) return { text: 'Non sono riuscito a salvare l’email, riprova.', actions: [] };
           return {
-            text: `⏰ Va bene: ti ricordo di ${what} ${formatWhen(r.at, timezone)}.${note}`,
-            actions: [`create:${r.id}`],
-            blocks: [toRemindersBlock([r], 'Promemoria')],
+            text:
+              before && before !== p.email
+                ? `✉️ Fatto: ho sostituito ${before} con ${p.email} nella tua scheda. Le email dei promemoria arriveranno lì.`
+                : `✉️ Fatto: ho salvato ${p.email} nella tua scheda. Le email dei promemoria arriveranno lì.`,
+            actions: ['set_email'],
           };
         }
         case 'list': {

@@ -286,10 +286,77 @@ describe('promemoria: data in lettere e risposta alla domanda «a che ora?»', (
     expect(reply.text).toContain(
       'A che ora te lo ricordo? Il promemoria è «Fatturare alla pizzeria».',
     );
-    expect(reply.awaiting).toEqual({ text: 'fatturare alla pizzeria' });
+    expect(reply.awaiting).toEqual({ kind: 'time', text: 'fatturare alla pizzeria' });
     expect(skill.followUp?.(reply.awaiting, 'alle 17')).toMatchObject({
       op: 'create',
       text: 'fatturare alla pizzeria',
     });
+  });
+});
+
+describe('promemoria: email nella scheda', () => {
+  it('«la mia email è …», «cambia la mia email in …», «usa … come email»', () => {
+    expect(parseReminderCommand('La mia email è Ale.Grassi@Example.com', NOW, TZ)).toEqual({
+      op: 'set_email',
+      email: 'ale.grassi@example.com',
+    });
+    expect(parseReminderCommand('cambia la mia mail in nuovo@posta.it.', NOW, TZ)).toEqual({
+      op: 'set_email',
+      email: 'nuovo@posta.it',
+    });
+    expect(parseReminderCommand('usa io@casa.org come email', NOW, TZ)).toEqual({
+      op: 'set_email',
+      email: 'io@casa.org',
+    });
+    expect(parseReminderCommand('la mia email è sbagliata', NOW, TZ)).toBeNull();
+  });
+
+  it('«…e mandamelo per email» accende il canale; senza indirizzo lo chiede e la risposta lo salva', async () => {
+    const plan = parseReminderCommand(
+      'ricordami domani alle 9 di pagare il bollo e mandamelo per email',
+      NOW,
+      TZ,
+    );
+    expect(plan).toMatchObject({ op: 'create', text: 'pagare il bollo', email: true });
+    let saved: string | null = null;
+    const created: Array<{ channels?: unknown }> = [];
+    const store: ReminderStore = {
+      create: async (_u, i) => {
+        created.push(i);
+        return {
+          id: 'r1',
+          text: i.text,
+          at: i.at,
+          status: 'scheduled',
+          ...(i.channels ? { channels: i.channels } : {}),
+        };
+      },
+      list: async () => [],
+      remove: async () => false,
+      update: async () => null,
+      emailAddress: async () => saved,
+      setEmail: async (_u, e) => {
+        saved = e;
+        return true;
+      },
+    };
+    const skill = createReminderSkill(store, TZ);
+    const reply = await skill.run(plan, { userId: 'u', sessionId: 's', requestId: 'r' });
+    expect(created[0]?.channels).toEqual({ email: true });
+    expect(reply.text).toContain('mi serve il tuo indirizzo');
+    expect(reply.awaiting).toEqual({ kind: 'email' });
+    const answer = skill.followUp?.(reply.awaiting, 'certo, è ale@example.com');
+    expect(answer).toEqual({ op: 'set_email', email: 'ale@example.com' });
+    const done = await skill.run(answer, { userId: 'u', sessionId: 's', requestId: 'r' });
+    expect(saved).toBe('ale@example.com');
+    expect(done.text).toContain('ho salvato ale@example.com nella tua scheda');
+    // Con l'indirizzo già noto non chiede nulla; sostituendolo lo dice.
+    const again = await skill.run(plan, { userId: 'u', sessionId: 's', requestId: 'r' });
+    expect(again.awaiting).toBeUndefined();
+    const changed = await skill.run(
+      { op: 'set_email', email: 'nuova@example.com' },
+      { userId: 'u', sessionId: 's', requestId: 'r' },
+    );
+    expect(changed.text).toContain('ho sostituito ale@example.com con nuova@example.com');
   });
 });

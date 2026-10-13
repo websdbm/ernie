@@ -84,7 +84,12 @@ export async function remindersRoutes(
         return reply
           .code(404)
           .send({ error: 'not_found', message: 'promemoria inesistente o ora già passata' });
-      return { reminder: json(r) };
+      // Email accesa ma indirizzo assente nella scheda: l'app lo chiede subito.
+      const needsEmail =
+        b.data.channels?.email === true &&
+        opts.store.emailAddress !== undefined &&
+        !(await opts.store.emailAddress(auth.userId));
+      return { reminder: json(r), ...(needsEmail ? { needsEmail: true } : {}) };
     });
 
     api.delete('/v1/reminders/:id', async (req, reply) => {
