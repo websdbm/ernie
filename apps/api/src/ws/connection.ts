@@ -865,7 +865,9 @@ export class ClientConnection {
         ...(persist === undefined ? {} : { persist }),
       });
       this.socket.send(JSON.stringify(event));
-      if (this.sessionId) await this.deps.store.append(this.sessionId, event);
+      // Le espressioni dell'avatar sono effimere: non si rinviano alla ripresa (sostituirebbero quella del momento).
+      if (this.sessionId && !type.startsWith('avatar.'))
+        await this.deps.store.append(this.sessionId, event);
     });
     this.sending = next.catch((err) => this.deps.logger.warn({ err }, 'invio evento fallito'));
     return next;

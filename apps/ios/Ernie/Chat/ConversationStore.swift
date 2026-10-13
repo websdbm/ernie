@@ -64,6 +64,12 @@ final class ConversationStore {
     // MARK: - connessione
 
     func connect() {
+        #if DEBUG
+        // Solo per le verifiche in simulatore: SIMCTL_CHILD_ERNIE_DEBUG_EMOTION=happy|sad|surprised|playful|love.
+        if let e = ProcessInfo.processInfo.environment["ERNIE_DEBUG_EMOTION"], !e.isEmpty {
+            showEmotion(e, durationMs: 30_000)
+        }
+        #endif
         pump?.cancel()
         pump = Task { [weak self] in
             guard let self else { return }
@@ -78,6 +84,21 @@ final class ConversationStore {
     func disconnect() {
         pump?.cancel()
         Task { await client.disconnect() }
+    }
+
+    /// Una sola ripresa automatica da `session_forbidden` per avvio (evita cicli se il server rifiuta anche la nuova).
+    private var recoveredForeignSession = false
+
+    /// Nuova sessione sul server; con `keepingHistory` le schede e i messaggi già visibili restano nella conversazione.
+    private func adoptNewSession(keepingHistory: Bool) {
+        lastSeq = -1
+        sessionId = Ids.new()
+        transcript.setCurrent(sessionId)
+        if !keepingHistory { items = [] }
+        persist()
+        let sid = sessionId
+        Log.chat.info("sessione salvata non disponibile: nuova sessione \(sid, privacy: .public)")
+        Task { await client.switchSession(to: sid) }
     }
 
     func startNewSession() {
@@ -221,9 +242,13 @@ final class ConversationStore {
 
     /// Mostra un'espressione e la riporta a neutra quando Ernie ha finito di parlare e la durata è passata.
     private func showEmotion(_ name: String, durationMs: Int) {
+        Log.chat.debug("espressione mostrata: \(name, privacy: .public) per \(durationMs) ms")
         lastAvatarEmotion = name
         emotionTask?.cancel()
         emotionTask = Task { [weak self] in
+            // L'evento arriva a fine turno, spesso un attimo prima che la voce parta: si lascia un margine,
+            // poi si aspetta la fine del parlato (durante il parlato si vede la bocca, non l'espressione).
+            try? await Task.sleep(for: .milliseconds(1500))
             var waited = 0
             while let self, self.speaker.isSpeaking, waited < 90_000, !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
@@ -312,6 +337,7 @@ final class ConversationStore {
                 if !m.blocks.contains(p.block) { m.blocks.append(p.block) }
             }
         case .avatarEmotion(let p):
+            Log.chat.info("espressione dell'avatar: \(p.name, privacy: .public)")
             showEmotion(p.name, durationMs: p.durationMs ?? 5000)
         case .automationRunUpdated, .inboxUpdated:
             inbox.scheduleRefresh()
@@ -320,6 +346,15 @@ final class ConversationStore {
                 requeue(correlationId: e.correlationId)
                 break
             }
+            // La sessione salvata appartiene a un altro utente o server (dopo «Cambia server» o una chiave nuova):
+            // si apre una sessione nuova tenendo la cronologia visibile e si rimanda il messaggio, una volta sola.
+            if p.code == "session_forbidden", !recoveredForeignSession {
+                recoveredForeignSession = true
+                adoptNewSession(keepingHistory: true)
+                requeue(correlationId: e.correlationId)
+                break
+            }
+            if p.code == "session_forbidden" { break }
             fail(p.message)
             if activeCorrelationId == e.correlationId { finishTurn(e.correlationId) }
         case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .sessionPing, .toolConfirmationRespond:

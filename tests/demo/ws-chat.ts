@@ -59,8 +59,14 @@ const done = new Promise<void>((resolve) => {
       case 'assistant.completed':
         process.stdout.write('\n');
         console.error(`[completato: ${JSON.stringify(e.payload.usage)}]`);
-        ws.close();
-        resolve();
+        // L'espressione dell'avatar arriva subito dopo la fine del turno: si aspetta un attimo prima di chiudere.
+        setTimeout(() => {
+          ws.close();
+          resolve();
+        }, 1_500);
+        break;
+      case 'avatar.emotion':
+        console.error(`[avatar.emotion ${JSON.stringify(e.payload)}]`);
         break;
       case 'tool.started':
         console.error(`[tool ${e.payload.toolId}] ${e.payload.argsPreview ?? ''}`);

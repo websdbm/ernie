@@ -80,7 +80,8 @@ struct PixelBearView: View {
         switch state {
         case .idle:
             if asleep { return ([3], 0.8) }
-            if let e = Self.emotionFrame(emotion) { return ([e, e, e, e, 0], 1.0) }
+            // L'espressione resta, con un battito di ciglia breve ogni tanto.
+            if let e = Self.emotionFrame(emotion) { return ([e, e, e, e, e, e, e, 3], 0.6) }
             return ([0, 0, 1, 1, 0, 0, 0, 3, 0, 0, 0, 1, 1, 0, 3], 0.45)
         case .listening: return ([4, 4, 5, 5], 0.5)
         case .thinking: return ([6, 6, 7, 7, 6, 7], 0.55)
@@ -129,10 +130,12 @@ struct PixelBearView: View {
                     // Sale e svanisce a scatti, come il resto dell'animazione in pixel art.
                     let phase = Double(Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 5) / 4
                     Text(mark)
-                        .font(.system(size: max(12, size * 0.2), weight: .heavy, design: .rounded))
-                        .foregroundStyle(mark == "z" ? Color.accentColor : Color.orange)
-                        .offset(x: size * 0.02, y: -size * 0.06 - phase * size * 0.12)
-                        .opacity(1 - phase * 0.7)
+                        .font(.system(size: max(12, size * 0.18), weight: .heavy, design: .rounded))
+                        .foregroundStyle(mark == "z" ? Color.white : Color.orange)
+                        .shadow(color: .black.opacity(0.35), radius: 1, y: 1)
+                        // Dentro il cerchio, in alto a destra: fuori verrebbe tagliato dal contenitore.
+                        .offset(x: -size * 0.1, y: size * 0.06 - phase * size * 0.1)
+                        .opacity(1 - phase * 0.6)
                         .allowsHitTesting(false)
                 }
             }
@@ -161,6 +164,8 @@ struct SpriteFrame: View {
             .interpolation(.none)
             .frame(width: size * CGFloat(columns), height: size * CGFloat(rows))
             .offset(x: -col * size, y: -row * size)
+            // Il cambio di fotogramma è uno scatto: nessuna animazione (altrimenti il foglio scorre e si vedono due celle).
+            .transaction { $0.animation = nil }
             .frame(width: size, height: size, alignment: .topLeading)
             .clipped()
     }
