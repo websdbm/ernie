@@ -87,6 +87,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink {
+                        ProfileView()
+                    } label: {
+                        Label("La tua scheda", systemImage: "person.text.rectangle")
+                    }
+                } footer: {
+                    Text("Nome, come vuoi essere chiamato, compleanno, famiglia: Ernie la compila mentre parlate e puoi correggerla.")
+                }
                 Section("Voce") {
                     Toggle("Risposte a voce", isOn: Binding(
                         get: { model.settings.voiceOutput },

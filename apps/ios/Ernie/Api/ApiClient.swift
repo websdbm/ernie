@@ -353,7 +353,7 @@ struct ApiClient: Sendable {
         }
     }
 
-    private func request<T: Decodable>(_ method: String, _ path: String, body: (some Encodable & Sendable)? = nil as String?) async throws -> T {
+    func request<T: Decodable>(_ method: String, _ path: String, body: (some Encodable & Sendable)? = nil as String?) async throws -> T {
         guard let url = URL(string: path, relativeTo: credentials.serverURL) else { throw ApiError(status: 0, code: "bad_url", message: "URL non valido") }
         var req = URLRequest(url: url)
         req.httpMethod = method
