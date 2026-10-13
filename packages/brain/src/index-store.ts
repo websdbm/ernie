@@ -215,7 +215,14 @@ export function createBrainIndex(pool: Pool, embedder: BrainEmbedder | null): Br
         (ch) => `${note.title}. ${ch.heading ? `${ch.heading}. ` : ''}${ch.content}`,
       );
       const vectors = await embed(texts);
-      const excerpt = note.body.replace(/\s+/g, ' ').trim().slice(0, 240);
+      // Anteprima senza i titoletti markdown (le pagine iniziano con «# Titolo», già mostrato a parte).
+      const excerpt = note.body
+        .split('\n')
+        .filter((l) => !/^#{1,6}\s/.test(l.trim()))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 240);
       await withUser(pool, userId, async (c) => {
         await c.query(
           `INSERT INTO brain_notes (user_id, path, title, note_type, created, refers_from, refers_to, place, lat, lon, links, private, source, excerpt, content_hash, updated_at)
