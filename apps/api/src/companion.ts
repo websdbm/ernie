@@ -189,6 +189,12 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       }
       if (profileText)
         memorySnapshot = memorySnapshot ? `${profileText}\n\n${memorySnapshot}` : profileText;
+      // Senza questa nota il modello dice «non posso ricordarlo» anche se la memoria si aggiorna da sola.
+      if (deps.memories || deps.profiles) {
+        const note =
+          'Come funziona la tua memoria: dopo ogni scambio quello che la persona racconta di sé viene annotato da solo (dati anagrafici e famiglia nella sua scheda, il resto tra i ricordi) e lo ritrovi nelle conversazioni successive. Non dire che non puoi ricordare o che ti manca uno strumento per salvarlo; se ti chiede cosa sai, rispondi da qui. Può vedere e correggere la scheda in Impostazioni › La tua scheda.';
+        memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
+      }
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];
