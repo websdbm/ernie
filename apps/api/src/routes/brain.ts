@@ -60,7 +60,34 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
       if (!ref)
         return reply.code(400).send({ error: 'invalid_query', message: 'atteso title o path' });
       const r = await opts.brain.read(userId, ref);
-      if (!r) return reply.code(404).send({ error: 'not_found', message: 'Nota non trovata' });
+      if (!r) {
+        // Pagina citata con [[…]] ma non ancora scritta: si mostra chi la cita, così il grafo resta navigabile.
+        const title = ref.replace(/\.md$/i, '').split('/').pop() ?? ref;
+        const citing = await opts.brain.list(userId, {
+          linkedTo: title,
+          includePrivate: true,
+          limit: 50,
+        });
+        if (!citing.length)
+          return reply.code(404).send({ error: 'not_found', message: 'Nota non trovata' });
+        return {
+          note: {
+            path: '',
+            title,
+            type: 'argomento',
+            created: citing[0]?.created ?? new Date().toISOString(),
+            refersFrom: null,
+            refersTo: null,
+            place: null,
+            coords: null,
+            links: [],
+            private: false,
+            source: null,
+            body: 'Pagina non ancora scritta: la citano le note qui sotto. Chiedi a Ernie di scriverla.',
+          },
+          backlinks: citing.map((n) => n.title),
+        };
+      }
       const n = r.note;
       return {
         note: {

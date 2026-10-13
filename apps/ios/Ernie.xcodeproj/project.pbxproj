@@ -16,6 +16,7 @@
 		0FA8703F7C5EA31F8BC1B551 /* LatencyTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */; };
 		0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AF98DF9BED3D01480A522D /* SpeechInput.swift */; };
 		107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */; };
+		1124F7AC9B4AC333E8B5EC54 /* SecondBrainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */; };
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
 		24A95C8605017621BC54120B /* DocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957834F4A9047230E5195B26 /* DocumentsTests.swift */; };
 		25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD07317404B3BEF77505FA3 /* ConversationStore.swift */; };
@@ -113,6 +114,7 @@
 		1C5F81F2C5E0230E53EE2493 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieApp.swift; sourceTree = "<group>"; };
 		23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsView.swift; sourceTree = "<group>"; };
+		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
 		2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ErnieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		372714292F29616AAC713015 /* DocumentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentComposer.swift; sourceTree = "<group>"; };
 		3B5A05A74A82D7EAD93D989E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 				CB75FC36D23A4E6A620C55E5 /* Info.plist */,
 				0F210F3F823F6FF0F85B3FEF /* Api */,
 				E59815C1313C28F0B09D70A8 /* App */,
+				E1DA6F70E1C483F5146CF30B /* Brain */,
 				8CDE19C05534E51D68489807 /* Chat */,
 				6A132ED97A8573A5D8CEAA36 /* Core */,
 				BD53059C99FB8FB8A5A6C405 /* Documents */,
@@ -337,6 +340,14 @@
 				AC094642FF9A09140787A348 /* DocumentScannerView.swift */,
 			);
 			path = Documents;
+			sourceTree = "<group>";
+		};
+		E1DA6F70E1C483F5146CF30B /* Brain */ = {
+			isa = PBXGroup;
+			children = (
+				2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */,
+			);
+			path = Brain;
 			sourceTree = "<group>";
 		};
 		E59815C1313C28F0B09D70A8 /* App */ = {
@@ -529,6 +540,7 @@
 				EC6B4F06442C52D95B789AFF /* ReminderAlarms.swift in Sources */,
 				308CBF03835CB246EF4E5725 /* ReminderSnapshot.swift in Sources */,
 				5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */,
+				1124F7AC9B4AC333E8B5EC54 /* SecondBrainView.swift in Sources */,
 				AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */,
 				929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */,
 				A93C1F25009D68617118B48F /* SettingsView.swift in Sources */,

@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
+    @State private var showBrain = false
     @State private var showSkills = false
     @State private var debugIcons = false
     @State private var draft = ""
@@ -46,6 +47,7 @@ struct ChatView: View {
                     .accessibilityLabel(model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla")
                     Menu {
                         Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
+                        Button("Second brain", systemImage: "brain.head.profile") { showBrain = true }
                         Button(model.settings.avatarHidden ? "Mostra avatar" : "Nascondi avatar", systemImage: model.settings.avatarHidden ? "eye" : "eye.slash") {
                             withAnimation(.spring(duration: 0.35)) { model.settings.avatarHidden.toggle() }
                             model.settings.save()
@@ -67,6 +69,7 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showBrain) { SecondBrainView() }
             .sheet(isPresented: $showSkills) { SkillsSheet() }
             #if DEBUG
             .sheet(isPresented: $debugIcons) { IconGalleryView() }
