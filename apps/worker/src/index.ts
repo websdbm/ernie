@@ -4,10 +4,13 @@ import { createPool } from '@ernie/db';
 import {
   consolidateThread,
   createFakeEmbedder,
+  createLlmSummarizer,
   createMemoryRepository,
   createOpenAIEmbedder,
+  createSessionSummaryStore,
   ensurePurgeSchedule,
   MEMORY_QUEUE,
+  summarizeSession,
 } from '@ernie/memory';
 import { buildProfiles, createLlmCallRecorder, createModelGateway } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
@@ -67,6 +70,7 @@ async function main(): Promise<void> {
     createMastraStorage({ connectionString: config.db.url, disableInit: true, max: 2 }),
   );
   const recorder = createLlmCallRecorder(pool, logger);
+  const sessionSummaries = createSessionSummaryStore(pool);
   const memoryQueue = new Queue(MEMORY_QUEUE, { connection });
   await ensurePurgeSchedule(memoryQueue, config.memory.retentionDays);
   const memoryWorker = new Worker(
@@ -87,6 +91,29 @@ async function main(): Promise<void> {
         }
         const data = job.data as { userId: string; threadId: string; sessionId: string };
         return consolidateThread({ pool, repo, threads, gateway, recorder, logger }, data);
+      }
+      if (job.name === 'summarize') {
+        // Riassunto della conversazione (ricerca 11 C1): senza modello ripiega su un riassunto deterministico.
+        const data = job.data as { userId: string; sessionId: string };
+        return summarizeSession(
+          {
+            threads,
+            store: sessionSummaries,
+            logger,
+            high: config.memory.summaryHigh,
+            low: config.memory.summaryLow,
+            ...(gateway
+              ? {
+                  summarizer: createLlmSummarizer(
+                    { gateway, recorder },
+                    data.userId,
+                    data.sessionId,
+                  ),
+                }
+              : {}),
+          },
+          data,
+        );
       }
       throw new Error(`job sconosciuto sulla coda ${MEMORY_QUEUE}: ${job.name}`);
     },

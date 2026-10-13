@@ -7,6 +7,10 @@ export interface ConsolidateJobData {
   readonly threadId: string;
   readonly sessionId: string;
 }
+export interface SummarizeJobData {
+  readonly userId: string;
+  readonly sessionId: string;
+}
 export interface PurgeJobData {
   readonly retentionDays: number;
 }
@@ -30,6 +34,23 @@ export async function enqueueConsolidation(
   await queue.add('consolidate', data, {
     // BullMQ 6 vieta i due punti negli id personalizzati.
     jobId: `consolidate_${data.threadId}_${bucket}`,
+    delay: delayMs,
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 5_000 },
+    removeOnComplete: 100,
+    removeOnFail: 100,
+  });
+}
+
+/** Riassunto della conversazione dopo un turno (debounce di un minuto come il consolidamento). */
+export async function enqueueSessionSummary(
+  queue: MemoryQueue,
+  data: SummarizeJobData,
+  delayMs = 3_000,
+): Promise<void> {
+  const bucket = Math.floor(Date.now() / 60_000);
+  await queue.add('summarize', data, {
+    jobId: `summarize_${data.sessionId}_${bucket}`,
     delay: delayMs,
     attempts: 2,
     backoff: { type: 'exponential', delay: 5_000 },

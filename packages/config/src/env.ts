@@ -48,6 +48,11 @@ export const envSchema = z.object({
   EMBEDDING_MODEL: z.string().min(1).default('text-embedding-3-small'),
   MEMORY_SNAPSHOT_MAX_CHARS: z.coerce.number().int().min(200).max(8000).default(2000),
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1): soglia in caratteri, 0 = disattiva. */
+  /** Messaggi della conversazione caricati per turno (tetto; il riassunto li riduce, ricerca 11 C1). */
+  CONTEXT_HISTORY_MESSAGES: z.coerce.number().int().min(6).max(200).default(34),
+  /** Isteresi del riassunto: oltre HIGH messaggi non riassunti si piega fino a lasciarne circa LOW. */
+  CONTEXT_SUMMARY_HIGH: z.coerce.number().int().min(4).max(190).default(24),
+  CONTEXT_SUMMARY_LOW: z.coerce.number().int().min(2).max(100).default(10),
   CONTEXT_COMPACT_MIN_CHARS: z.coerce.number().int().min(0).max(100_000).default(400),
   /** Totale dei risultati storici compattabili oltre il quale scatta la compattazione a lotti; 0 = sempre. */
   CONTEXT_COMPACT_BUDGET_CHARS: z.coerce.number().int().min(0).max(1_000_000).default(24_000),
@@ -108,6 +113,10 @@ export interface AppConfig {
     readonly snapshotMaxChars: number;
     /** Soglia della compattazione dei risultati dei tool nel prompt; 0 = disattiva. */
     readonly compactMinChars: number;
+    /** Riassunto della conversazione (ricerca 11 C1): finestra caricata e isteresi. */
+    readonly historyMessages: number;
+    readonly summaryHigh: number;
+    readonly summaryLow: number;
     /** Soglia a lotti della compattazione (caratteri dei risultati storici compattabili). */
     readonly compactBudgetChars: number;
     readonly retrievalLimit: number;
@@ -220,6 +229,9 @@ export function toAppConfig(env: Env): AppConfig {
       embeddingModel: env.EMBEDDING_MODEL,
       snapshotMaxChars: env.MEMORY_SNAPSHOT_MAX_CHARS,
       compactMinChars: env.CONTEXT_COMPACT_MIN_CHARS,
+      historyMessages: env.CONTEXT_HISTORY_MESSAGES,
+      summaryHigh: env.CONTEXT_SUMMARY_HIGH,
+      summaryLow: env.CONTEXT_SUMMARY_LOW,
       compactBudgetChars: env.CONTEXT_COMPACT_BUDGET_CHARS,
       retrievalLimit: env.MEMORY_RETRIEVAL_LIMIT,
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,

@@ -29,8 +29,11 @@ import {
   createMemoryQueue,
   createMemoryRepository,
   createOpenAIEmbedder,
+  createSessionSummaryStore,
   enqueueConsolidation,
+  enqueueSessionSummary,
   recordTurnEpisode,
+  renderSessionSummary,
 } from '@ernie/memory';
 import {
   buildProfiles,
@@ -107,7 +110,9 @@ async function main(): Promise<void> {
     );
 
   const storage = createMastraStorage({ connectionString: config.db.url, disableInit: true });
-  const memory = createConversationMemory(storage);
+  // Finestra caricata per turno; i messaggi oltre l'isteresi vengono riassunti (ricerca 11 C1).
+  const memory = createConversationMemory(storage, { lastMessages: config.memory.historyMessages });
+  const sessionSummaries = createSessionSummaryStore(postgres.pool);
 
   // Memory Engine: embeddings OpenAI (o finti senza chiave, solo full-text), coda di consolidamento sul worker.
   const embedder = config.providers.openaiApiKey
@@ -211,6 +216,10 @@ async function main(): Promise<void> {
     logger,
     memories,
     snapshotMaxChars: config.memory.snapshotMaxChars,
+    sessionSummary: async (userId, sessionId) => {
+      const s = await sessionSummaries.get(userId, sessionId);
+      return s ? { text: renderSessionSummary(s), coveredUntil: s.coveredUntil } : null;
+    },
     compaction:
       config.memory.compactMinChars > 0
         ? {
@@ -378,6 +387,11 @@ async function main(): Promise<void> {
                   { userId: info.userId, threadId: info.sessionId, sessionId: info.sessionId },
                   config.memory.consolidationDelaySeconds * 1000,
                 );
+                // Il job controlla da sé la soglia: costa una lettura se non c'è niente da riassumere.
+                await enqueueSessionSummary(memoryQueue, {
+                  userId: info.userId,
+                  sessionId: info.sessionId,
+                });
               }
             } catch (err) {
               logger.warn(

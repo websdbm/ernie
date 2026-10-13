@@ -4,6 +4,7 @@ export * from './episodes.js';
 export * from './queue.js';
 export * from './repository.js';
 export * from './rrf.js';
+export * from './session-summary.js';
 export * from './snapshot.js';
 export * from './tool.js';
 export * from './types.js';

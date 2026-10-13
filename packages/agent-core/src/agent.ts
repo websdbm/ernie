@@ -3,6 +3,7 @@ import type { AssembledSoul } from '@ernie/soul';
 import { Agent } from '@mastra/core/agent';
 import type { Memory } from '@mastra/memory';
 import { type CompactionOptions, createToolResultCompactor } from './compact.js';
+import { createSessionSummaryProcessor, type LoadedSummary } from './session-summary.js';
 
 type AgentTools = NonNullable<ConstructorParameters<typeof Agent>[0]['tools']>;
 
@@ -20,6 +21,8 @@ export interface CompanionAgentInput {
   readonly tools?: AgentTools;
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva (misure A/B). */
   readonly compaction?: CompactionOptions | false;
+  /** Riassunto della conversazione (ricerca 11, C1): sostituisce nel prompt i messaggi già riassunti. */
+  readonly sessionSummary?: () => Promise<LoadedSummary | null>;
 }
 
 export interface CompanionAgent {
@@ -46,9 +49,10 @@ export function createCompanionAgent(input: CompanionAgentInput): CompanionAgent
     model: resolved.model,
     memory: input.memory,
     ...(input.tools ? { tools: input.tools } : {}),
-    ...(input.compaction === false
-      ? {}
-      : { inputProcessors: [createToolResultCompactor(input.compaction ?? {})] }),
+    inputProcessors: [
+      ...(input.sessionSummary ? [createSessionSummaryProcessor(input.sessionSummary)] : []),
+      ...(input.compaction === false ? [] : [createToolResultCompactor(input.compaction ?? {})]),
+    ],
   });
   return {
     agent,

@@ -34,6 +34,11 @@ export interface CompanionFactoryDeps {
   readonly snapshotMaxChars?: number;
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva. */
   readonly compaction?: { readonly minChars: number; readonly historyBudgetChars: number } | false;
+  /** Riassunto della conversazione (ricerca 11 C1), letto a ogni turno dal processore dell'agente. */
+  readonly sessionSummary?: (
+    userId: string,
+    sessionId: string,
+  ) => Promise<{ text: string; coveredUntil: Date } | null>;
   readonly tools?: {
     readonly registry: ToolRegistry;
     readonly executor: ExecutorDeps;
@@ -190,6 +195,12 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         memory: deps.memory,
         ...(memorySnapshot ? { memorySnapshot } : {}),
         ...(tools ? { tools } : {}),
+        ...(deps.sessionSummary
+          ? {
+              sessionSummary: () =>
+                deps.sessionSummary?.(auth.userId, session.id) ?? Promise.resolve(null),
+            }
+          : {}),
         compaction:
           deps.compaction === false
             ? false
