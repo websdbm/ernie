@@ -86,3 +86,27 @@ Il server sincronizza ogni 5 minuti; in caso di modifiche contemporanee allo ste
 - **Repository.** Va creato un repository GitHub privato sul tuo account `websdbm`, per esempio `ernie-brain`. Il server di staging3 ha bisogno di una chiave di deploy con permesso di scrittura solo su quel repository. Sono azioni sul tuo account: le preparo io, ma servono il tuo via libera e il tuo controllo sulla chiave.
 - **Obsidian sul Mac** con il plugin Git, configurato una volta. Su iPhone il plugin funziona male, ma lì c'è l'app di Ernie.
 - **Il modello vede le note.** Ricerca e citazioni mandano al modello AI i pezzi pertinenti, come oggi con i documenti. Le riservate no, salvo tua richiesta esplicita.
+
+## 9. Sezione salute (13 ott 2026)
+
+Richiesta dell'utente: salvare analisi del sangue ed esami in una parte sensibile del wiki e confrontare i valori tra
+un'analisi e l'altra. Decisioni: archivio anche in Obsidian; lettura automatica a ogni caricamento; confronti e
+andamenti, spiegazioni prudenti, avvisi spontanei e una «tabellina» riconoscibile quando si chiede un parametro.
+
+- **Dati**: migrazione 0029 (`health_reports`, `health_values`, `health_notices`, RLS). I numeri stanno in Postgres; le
+  note leggibili nel vault, cartella `Salute/` (riservate): `Salute/Analisi/<Analisi del sangue del 7 ottobre 2026>.md`,
+  `Salute/Parametri/<Glicemia>.md` con lo storico, `Salute/Salute.md` come indice. Sono pagine generate: a ogni referto
+  si riscrivono (le modifiche fatte in Obsidian lì si perdono).
+- **Lettura**: al caricamento di un documento, se il testo sembra un referto (unità di misura tipiche + parole da
+  referto), il modello standard estrae le righe come scritte (schema largo, sezione sangue/urine); i controlli sono
+  deterministici in `@ernie/brain/health`: nomi dei parametri con sinonimi (GOT = AST, glucosio = glicemia…), numeri con
+  la virgola, intervalli («70 - 110», «< 200», «fino a 35»; al limite esatto di «< N» il valore è fuori), formula
+  leucocitaria in % separata dall'assoluto, urine separate dal sangue. Misura (`packages/agent-core/scripts/
+  health-extract-quality.ts`): 26/26 valori su un referto di prova, circa 1,4 centesimi a referto.
+- **Uso**: tool `health_parameter`, `health_report` (confronto con la precedente o con una data), `health_overview`,
+  `health_import` (per un documento già caricato); skill guidata «Salute» (spiegazioni prudenti, niente diagnosi né
+  terapie, il medico per i fuori intervallo). Blocco di protocollo `health` (v1.12) = la tabellina nell'app, con grafico
+  dello storico.
+- **Avvisi**: dopo un referto, un riepilogo («Ho letto il referto…») e, se è l'analisi più recente, i fuori intervallo
+  con i valori precedenti e i peggioramenti da tre analisi vicino al limite; detti una volta al turno successivo. Un
+  referto più recente rende superati gli avvisi non ancora detti dei precedenti.
