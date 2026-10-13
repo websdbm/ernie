@@ -126,6 +126,8 @@ struct AvatarEmotionPayload: Codable, Sendable, Equatable {
     var name: String
     var intensity: Double?
     var charOffset: Int?
+    /// v1.9: per quanto mostrarla dopo il parlato (poi l'orso torna neutro).
+    var durationMs: Int?
 }
 
 struct AvatarGesturePayload: Codable, Sendable, Equatable {

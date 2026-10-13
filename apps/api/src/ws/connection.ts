@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import type { ApprovalStore, CompanionAgent, PendingApprovals, TurnInput } from '@ernie/agent-core';
-import { runTurn as defaultRunTurn, RunContext, routeCommand } from '@ernie/agent-core';
+import {
+  type ApprovalStore,
+  type CompanionAgent,
+  runTurn as defaultRunTurn,
+  type EmotionInput,
+  inferEmotion,
+  type PendingApprovals,
+  RunContext,
+  routeCommand,
+  type TurnInput,
+} from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
 import { formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
@@ -459,7 +468,15 @@ export class ClientConnection {
         correlationId,
         localDecision('skill', this.session.modelClass, Date.now() - t0, match.skill.id),
       );
-      await this.replyLocally('skill', reply.text, correlationId, t0, text, reply.blocks);
+      await this.replyLocally(
+        'skill',
+        reply.text,
+        correlationId,
+        t0,
+        text,
+        reply.blocks,
+        reply.actions,
+      );
       await this.deps.memories?.afterTurn({
         userId: this.auth.userId,
         sessionId,
@@ -611,6 +628,11 @@ export class ClientConnection {
           | undefined;
         if (r?.cancelled) this.noteInterruption(correlationId, r.text ?? '');
         this.spokenThrough.delete(correlationId);
+        await this.sendEmotion(correlationId, {
+          userText: text,
+          replyText: r?.text ?? '',
+          outcome: r?.loopDetected ? 'loop' : r?.cancelled ? 'cancelled' : 'completed',
+        });
         if (!this.deps.memories) return;
         const outcome = r?.loopDetected ? 'loop' : r?.cancelled ? 'cancelled' : 'completed';
         await this.deps.memories.afterTurn({
@@ -632,6 +654,7 @@ export class ClientConnection {
         if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         this.deps.logger.error({ err, correlationId }, 'runTurn ha rigettato');
         await this.sendError('turn_failed', 'Il turno non è stato completato', true, correlationId);
+        await this.sendEmotion(correlationId, { userText: text, replyText: '', outcome: 'error' });
       })
       .finally(() => {
         this.activeTurns.delete(correlationId);
@@ -703,6 +726,11 @@ export class ClientConnection {
         toolCalls: reply.blocks.length,
         latencyMs: Date.now() - t0,
       });
+      await this.sendEmotion(correlationId, {
+        userText,
+        replyText: reply.text,
+        outcome: 'completed',
+      });
       return true;
     } catch (err) {
       this.deps.logger.warn({ err }, 'percorso documenti fallito');
@@ -723,6 +751,7 @@ export class ClientConnection {
     t0: number,
     userText: string,
     blocks: readonly ContentBlock[] = [],
+    actions?: readonly string[],
   ): Promise<void> {
     await this.send(
       'assistant.started',
@@ -755,6 +784,27 @@ export class ClientConnection {
     );
     this.remember('utente', userText);
     this.remember('assistente', reply);
+    await this.sendEmotion(correlationId, {
+      userText,
+      replyText: reply,
+      outcome: 'completed',
+      ...(actions ? { actions } : {}),
+    });
+  }
+
+  /** Espressione dell'avatar dedotta dal turno (M10): regole, nessun modello; nel dubbio non si manda nulla. */
+  private async sendEmotion(correlationId: string, input: EmotionInput): Promise<void> {
+    const e = inferEmotion(input);
+    if (!e) return;
+    try {
+      await this.send(
+        'avatar.emotion',
+        { name: e.name, intensity: e.intensity, durationMs: e.durationMs },
+        correlationId,
+      );
+    } catch {
+      /* espressione persa: non è un errore del turno */
+    }
   }
 
   private async spentToday(): Promise<number> {

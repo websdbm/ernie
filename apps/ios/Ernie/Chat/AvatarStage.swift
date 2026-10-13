@@ -68,14 +68,19 @@ struct PixelBearView: View {
     let size: CGFloat
     var emotion: String = ""
 
+    /// Dopo quanto tempo a riposo l'orso si addormenta (occhi chiusi e «z»); qualunque attività lo sveglia.
+    static let sleepAfter: TimeInterval = 120
+    @State private var idleSince = Date()
+
     private static let columns = 4
     private static let rows = 4
 
     /// Sequenza di fotogrammi e cadenza per stato.
-    private var sequence: (frames: [Int], tick: Double) {
+    private func sequence(asleep: Bool) -> (frames: [Int], tick: Double) {
         switch state {
         case .idle:
-            if let e = Self.emotionFrame(emotion) { return ([e, e, e, 0], 1.2) }
+            if asleep { return ([3], 0.8) }
+            if let e = Self.emotionFrame(emotion) { return ([e, e, e, e, 0], 1.0) }
             return ([0, 0, 1, 1, 0, 0, 0, 3, 0, 0, 0, 1, 1, 0, 3], 0.45)
         case .listening: return ([4, 4, 5, 5], 0.5)
         case .thinking: return ([6, 6, 7, 7, 6, 7], 0.55)
@@ -83,29 +88,59 @@ struct PixelBearView: View {
         }
     }
 
+    /// Fotogramma della riga delle emozioni (felice, sorpreso, triste, occhiolino) per il vocabolario del protocollo.
     static func emotionFrame(_ emotion: String) -> Int? {
         switch emotion.lowercased() {
-        case "happy", "felice", "contento", "allegro", "joy": 12
-        case "surprised", "sorpreso", "stupito", "wow": 13
-        case "sad", "triste", "dispiaciuto", "worried", "preoccupato": 14
+        case "happy", "love", "felice", "contento", "allegro", "joy": 12
+        case "surprised", "fear", "sorpreso", "stupito", "wow": 13
+        case "sad", "angry", "disgust", "triste", "dispiaciuto", "worried", "preoccupato": 14
         case "playful", "wink", "scherzoso", "complice": 15
         default: nil
         }
     }
 
+    /// Piccolo segno sopra l'orso: cuore per l'affetto, «!» per la sorpresa, «z» quando dorme.
+    private func badge(asleep: Bool) -> String? {
+        if state == .idle && asleep { return "z" }
+        guard state == .idle else { return nil }
+        switch emotion.lowercased() {
+        case "love": return "❤️"
+        case "surprised", "fear": return "!"
+        default: return nil
+        }
+    }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: sequence.tick)) { context in
-            let seq = sequence
+        // Ridisegno veloce solo mentre parla (bocca); a riposo bastano 5 fotogrammi al secondo.
+        TimelineView(.periodic(from: .now, by: state == .speaking ? 0.12 : 0.2)) { context in
+            let asleep = state == .idle && Self.emotionFrame(emotion) == nil
+                && context.date.timeIntervalSince(idleSince) > Self.sleepAfter
+            let seq = sequence(asleep: asleep)
             let step = Int(context.date.timeIntervalSinceReferenceDate / seq.tick) % max(seq.frames.count, 1)
             // Parlato: la bocca segue le parole del sintetizzatore (aperta/chiusa), con una leggera variazione di forma.
             let frame: Int = state == .speaking
                 ? (mouthOpen ? [10, 11, 9][step % 3] : 8)
                 : (seq.frames[step])
-            SpriteFrame(sheet: "BearSheet", index: frame, columns: Self.columns, rows: Self.rows, size: size)
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(0.12), radius: size > 100 ? 10 : 4, y: size > 100 ? 6 : 2)
+            ZStack(alignment: .topTrailing) {
+                SpriteFrame(sheet: "BearSheet", index: frame, columns: Self.columns, rows: Self.rows, size: size)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.12), radius: size > 100 ? 10 : 4, y: size > 100 ? 6 : 2)
+                if let mark = badge(asleep: asleep) {
+                    // Sale e svanisce a scatti, come il resto dell'animazione in pixel art.
+                    let phase = Double(Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 5) / 4
+                    Text(mark)
+                        .font(.system(size: max(12, size * 0.2), weight: .heavy, design: .rounded))
+                        .foregroundStyle(mark == "z" ? Color.accentColor : Color.orange)
+                        .offset(x: size * 0.02, y: -size * 0.06 - phase * size * 0.12)
+                        .opacity(1 - phase * 0.7)
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .frame(width: size, height: size)
+        .onChange(of: state) { idleSince = .now }
+        .onChange(of: emotion) { idleSince = .now }
+        .onChange(of: mouthOpen) { idleSince = .now }
         .accessibilityHidden(true)
     }
 }

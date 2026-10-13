@@ -12,6 +12,8 @@ final class ConversationStore {
     private(set) var lastError: String?
     private(set) var latencyHistory: [LatencyTrace] = []
     private(set) var lastAvatarEmotion = "neutral"
+    /// Espressione temporanea (M10): torna neutra dopo il parlato e la durata indicata dal server.
+    private var emotionTask: Task<Void, Never>?
     var currentTrace: LatencyTrace?
     var settings: LocalSettings
     /// Testo da proporre nel campo di scrittura (es. «Affina la ricetta …»): letto e azzerato dalla barra di input.
@@ -217,6 +219,22 @@ final class ConversationStore {
         persist()
     }
 
+    /// Mostra un'espressione e la riporta a neutra quando Ernie ha finito di parlare e la durata è passata.
+    private func showEmotion(_ name: String, durationMs: Int) {
+        lastAvatarEmotion = name
+        emotionTask?.cancel()
+        emotionTask = Task { [weak self] in
+            var waited = 0
+            while let self, self.speaker.isSpeaking, waited < 90_000, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                waited += 250
+            }
+            try? await Task.sleep(for: .milliseconds(durationMs))
+            guard !Task.isCancelled else { return }
+            self?.lastAvatarEmotion = "neutral"
+        }
+    }
+
     func setListening(_ on: Bool) {
         isListening = on
         if on { agentState = .listening } else { recomputeState() }
@@ -294,7 +312,7 @@ final class ConversationStore {
                 if !m.blocks.contains(p.block) { m.blocks.append(p.block) }
             }
         case .avatarEmotion(let p):
-            lastAvatarEmotion = p.name
+            showEmotion(p.name, durationMs: p.durationMs ?? 5000)
         case .automationRunUpdated, .inboxUpdated:
             inbox.scheduleRefresh()
         case .error(let p):

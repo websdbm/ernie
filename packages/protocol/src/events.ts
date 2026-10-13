@@ -192,6 +192,9 @@ export const AvatarEmotionName = z.enum([
   'disgust',
   'love',
   'sleep',
+  // v1.9: espressioni dell'orso in pixel art (M10), oltre al vocabolario di TalkingHead.
+  'surprised',
+  'playful',
 ]);
 export const AvatarGestureName = z.enum([
   'handup',
@@ -208,7 +211,13 @@ const charOffset = z.number().int().nonnegative().optional();
 
 export const AvatarEmotion = event(
   'avatar.emotion',
-  z.object({ name: AvatarEmotionName, intensity: z.number().min(0).max(1).default(1), charOffset }),
+  z.object({
+    name: AvatarEmotionName,
+    intensity: z.number().min(0).max(1).default(1),
+    charOffset,
+    /** v1.9: per quanto mostrarla dopo che Ernie ha finito di parlare (poi torna neutro). */
+    durationMs: z.number().int().min(500).max(30_000).optional(),
+  }),
 );
 export const AvatarGesture = event(
   'avatar.gesture',
