@@ -382,6 +382,51 @@ export function createBrainService(opts: BrainServiceOptions) {
       for (const f of files) await opts.index.upsert(userId, parseNote(f.path, f.content));
     },
 
+    /**
+     * Pagine generate da Ernie (es. la sezione salute): riservate, scritte per intero a ogni aggiornamento,
+     * con la data di nascita conservata. Un solo commit per tutte.
+     */
+    async writeGenerated(
+      userId: string,
+      notes: ReadonlyArray<{
+        readonly path: string;
+        readonly title: string;
+        readonly type: NoteType;
+        readonly body: string;
+        readonly links?: readonly string[];
+        readonly refersFrom?: string;
+        readonly source?: NoteSource;
+      }>,
+      message: string,
+    ): Promise<void> {
+      await ready(userId);
+      const v = vault(userId);
+      const files: BrainNote[] = [];
+      for (const n of notes) {
+        const old = await v.read(n.path);
+        const created = old ? parseNote(n.path, old).created : nowIso();
+        const refersFrom = isoDay(n.refersFrom);
+        const note: BrainNote = {
+          path: n.path,
+          title: n.title,
+          type: n.type,
+          created,
+          ...(refersFrom ? { refersFrom } : {}),
+          links: [...new Set([...(n.links ?? []), ...bodyLinks(n.body)])],
+          private: true,
+          ...(n.source ? { source: n.source } : {}),
+          body: n.body,
+        };
+        if (old !== serializeNote(note)) files.push(note);
+      }
+      if (!files.length) return;
+      await v.commit(
+        files.map((n) => ({ path: n.path, content: serializeNote(n) })),
+        message,
+      );
+      for (const n of files) await opts.index.upsert(userId, n);
+    },
+
     /** Sincronizza i vault con remoto: reindicizza i file cambiati e riporta in scheda le modifiche a «Chi sono». */
     async syncAll(): Promise<Array<{ userId: string; changed: number; conflict: boolean }>> {
       const out: Array<{ userId: string; changed: number; conflict: boolean }> = [];

@@ -127,6 +127,8 @@ export interface ConnectionDeps {
     text: string,
     exclude: readonly string[],
   ) => Promise<{ path: string; title: string; when: string; passage: string } | null>;
+  /** Sezione salute: avvisi dopo un nuovo referto (blocco per il contesto), detti una volta. */
+  readonly healthNotices?: (userId: string) => Promise<string | null>;
   /** Second brain (B2): proposta di travaso dalla memoria (blocco per il contesto), al più una per conversazione. */
   readonly brainTransfer?: (userId: string) => Promise<string | null>;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
@@ -701,6 +703,17 @@ export class ClientConnection {
         this.deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           'avvisi della scheda non letti',
+        );
+      }
+    }
+    if (this.deps.healthNotices) {
+      try {
+        const block = await this.deps.healthNotices(this.auth.userId);
+        if (block) contextBlocks.push(block);
+      } catch (err) {
+        this.deps.logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'avvisi della salute non letti',
         );
       }
     }

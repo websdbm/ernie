@@ -502,6 +502,39 @@ export const CitationsBlock = z.object({
     .min(1)
     .max(6),
 });
+/**
+ * Salute (v1.12, sezione salute del second brain): la «tabellina» riconoscibile. `parameter` = storico di un
+ * parametro (una riga per analisi); `report` = valori di un referto con il confronto con l'analisi precedente.
+ * Valori e fuori intervallo li calcola il server; l'avvertenza («non sono un medico») la scrive il client.
+ */
+export const HealthBlock = z.object({
+  kind: z.literal('health'),
+  mode: z.enum(['parameter', 'report']),
+  title: z.string().min(1).max(120),
+  subtitle: z.string().max(160).optional(),
+  rows: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(80),
+        /** YYYY-MM-DD (righe dello storico). */
+        date: z.string().max(10).optional(),
+        value: z.number().nullable(),
+        valueText: z.string().max(60).nullable().optional(),
+        unit: z.string().max(30).nullable().optional(),
+        refLow: z.number().nullable().optional(),
+        refHigh: z.number().nullable().optional(),
+        refText: z.string().max(60).nullable().optional(),
+        flag: z.enum(['alto', 'basso', 'normale', 'n/d']),
+        /** Valore dell'analisi precedente con la stessa unità (righe di un referto). */
+        previous: z.object({ value: z.number(), date: z.string().max(10) }).optional(),
+        trend: z.enum(['su', 'giu', 'stabile']).optional(),
+      }),
+    )
+    .min(1)
+    .max(80),
+  /** Riassunto deterministico («2 valori fuori intervallo: …»). */
+  summary: z.string().max(400).optional(),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -513,6 +546,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   DocumentsBlock,
   RemindersBlock,
   CitationsBlock,
+  HealthBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

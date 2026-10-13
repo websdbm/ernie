@@ -12,6 +12,7 @@ export const NOTE_TYPES = [
   'progetto',
   'argomento',
   'chi-sono',
+  'salute',
 ] as const;
 export type NoteType = (typeof NOTE_TYPES)[number];
 
@@ -23,6 +24,7 @@ export const FOLDERS: Record<NoteType, string> = {
   progetto: 'Progetti',
   argomento: 'Argomenti',
   'chi-sono': '',
+  salute: 'Salute',
 };
 
 export type NoteSource = 'chat' | 'voce' | 'foto' | 'pdf' | 'memoria' | 'obsidian' | 'scheda';

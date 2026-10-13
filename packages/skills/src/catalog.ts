@@ -165,6 +165,33 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultEnabled: true,
   },
   {
+    id: 'salute',
+    title: 'Salute',
+    icon: 'heart.text.square.fill',
+    tint: 'pink',
+    summary:
+      'Analisi del sangue ed esami: valori, confronti e andamenti, in una sezione riservata.',
+    description:
+      "Carica il referto delle analisi come documento: Ernie legge i valori e li salva nella sezione Salute del second brain, riservata. Chiedi «com'è il colesterolo?», «confronta le ultime analisi con quelle di marzo», «la glicemia sta salendo?»: arriva la tabellina con valori, intervalli di riferimento, fuori intervallo e andamento, con una spiegazione prudente. Ernie non è un medico: per i dubbi, il tuo medico.",
+    kind: 'guided',
+    tools: [
+      'health_parameter',
+      'health_report',
+      'health_overview',
+      'health_import',
+      'document_list',
+    ],
+    examples: [
+      'com’è il colesterolo nelle mie analisi?',
+      'confronta le ultime analisi del sangue con le precedenti',
+      'la glicemia sta salendo?',
+      'quali esami ho salvato?',
+      'aggiungi questo referto alle mie analisi',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
+  {
     id: 'diario',
     title: 'Cosa ho fatto',
     icon: 'clock.arrow.circlepath',
@@ -232,6 +259,31 @@ export const SECOND_BRAIN_SKILL_INSTRUCTIONS = [
   '5) Documento allegato o già caricato da salvare: leggi con document_get e scrivi una nota type documento con titolo, riassunto breve, punti chiave e il testo; collegalo.',
   '6) Conferma in una riga cosa hai annotato e dove (es. «Annotato in [[Casa]], collegato a [[Caldaia]]»). Hai mano libera nel riorganizzare: ogni modifica resta nella cronologia ed è annullabile.',
 ].join('\n');
+
+/** Skill guidata «Salute» (sezione salute del second brain, 13 ott 2026). */
+export const HEALTH_SKILL_INSTRUCTIONS = [
+  'Procedura «Salute» (analisi ed esami dell’utente: dati sensibili).',
+  "1) Domanda su un valore o un parametro («com'è il colesterolo?», «la ferritina?», «GOT»): health_parameter con il nome come lo dice l'utente. Su un'analisi intera o un confronto («le ultime analisi», «rispetto a marzo»): health_report (date/against se l'utente indica i giorni; se non conosci le date chiama prima health_overview). L'app mostra la tabellina: nel testo NON ripetere la tabella, commenta in due-quattro frasi.",
+  '2) Spiegazioni prudenti: cosa misura il parametro in parole semplici, se il valore è dentro o fuori dall’intervallo del laboratorio e come si è mosso rispetto a prima. Niente diagnosi, niente terapie o dosaggi, niente allarmismi; per valori fuori intervallo o andamenti che peggiorano suggerisci con calma di parlarne con il medico. Usa i riferimenti del referto, non intervalli tuoi.',
+  "3) Se l'utente dice di aver caricato un referto che non risulta: document_list per trovarlo e health_import con il suo id. Se un parametro non c'è, dillo e cita quelli disponibili.",
+  "4) I valori sono letti dal documento: se l'utente segnala un errore, dì che fa fede il referto originale.",
+  '5) Non riportare questi dati in altre note, messaggi o email senza una richiesta esplicita.',
+].join('\n');
+
+export function createHealthSkill(): GuidedSkill {
+  const entry = SKILL_CATALOG.find((s) => s.id === 'salute');
+  if (!entry) throw new Error('catalogo: skill salute mancante');
+  return {
+    id: entry.id,
+    kind: 'guided',
+    category: 'health',
+    description: entry.description,
+    examples: entry.examples,
+    allowedTools: entry.tools,
+    instructions: HEALTH_SKILL_INSTRUCTIONS,
+    riskClass: 'low',
+  };
+}
 
 export function createSecondBrainSkill(): GuidedSkill {
   const entry = SKILL_CATALOG.find((s) => s.id === 'second_brain');

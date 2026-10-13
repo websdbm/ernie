@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
   createConversationMemory,
+  createHealthExtractor,
   createMastraStorage,
   createPgApprovalStore,
   createReminderTitler,
@@ -56,6 +57,7 @@ import { createLogger } from '@ernie/observability';
 import {
   createDiarySkill,
   createDocumentsSkill,
+  createHealthSkill,
   createIntentSkill,
   createLearnedSkillRepository,
   createMemorySkill,
@@ -72,6 +74,7 @@ import {
   createBrainTools,
   createDocumentTools,
   createFirecrawlClient,
+  createHealthTools,
   createMemoryFocusStore,
   createMemorySearchSpec,
   createPgToolRuleStore,
@@ -92,6 +95,7 @@ import { formatTransferProposal, transferCandidate } from './brain-transfer.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
+import { createHealthRuntime } from './health.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createIntentStore } from './intents.js';
@@ -291,6 +295,17 @@ async function main(): Promise<void> {
     onProfileChanged: (userId) => companions.invalidateUser(userId),
   });
   for (const t of createBrainTools(brain.tools)) registry.register(t);
+  // Sezione salute: valori dei referti letti al caricamento, storico e confronti, note riservate nel vault.
+  const health = createHealthRuntime({
+    pool: postgres.pool,
+    extractor: gateway
+      ? createHealthExtractor({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger) })
+      : null,
+    brain: brain.service,
+    documents: documentsRepo,
+    logger,
+  });
+  for (const t of createHealthTools(health.tools)) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
@@ -357,6 +372,7 @@ async function main(): Promise<void> {
         createDocumentsSkill(),
         createSentinelsSkill(),
         createSecondBrainSkill(),
+        createHealthSkill(),
         // Promemoria a evento (ricerca 11, S1): fuori catalogo, viene prima di «Ricordami» nell'ordine.
         createIntentSkill(intents),
         createReminderSkill(reminders),
@@ -473,7 +489,8 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       repo: documentsRepo,
-      onCreated: (userId, documentId, pages) => {
+      onCreated: (userId, documentId, pages, title) => {
+        health.onDocumentCreated(userId, documentId, title, pages);
         void chunkStore
           .index(userId, documentId, pages)
           .catch((err: unknown) =>
@@ -532,6 +549,7 @@ async function main(): Promise<void> {
         },
         intents,
         profiles,
+        healthNotices: (userId) => health.takeNotices(userId),
         brainSuggest: (userId, text, exclude) => brain.service.suggest(userId, text, exclude),
         // Travaso dalla memoria (B2): una proposta ogni 30 giorni per argomento, ricordata in Redis.
         brainTransfer: async (userId) => {

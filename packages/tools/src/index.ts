@@ -1,6 +1,7 @@
 export * from './audit.js';
 export * from './builtins/brain.js';
 export * from './builtins/documents.js';
+export * from './builtins/health.js';
 export * from './builtins/memory.js';
 export * from './builtins/present.js';
 export * from './builtins/recipes.js';

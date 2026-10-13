@@ -66,7 +66,9 @@ export const envSchema = z.object({
   /** Categorie di tool abilitate per le sessioni (CSV). */
   TOOL_CATEGORIES: z
     .string()
-    .default('utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain'),
+    .default(
+      'utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain,health',
+    ),
   /** Second brain: cartella dei vault (uno per utente), remoti git per utente, chiave di deploy (base64). */
   BRAIN_DIR: z.string().default('./.data/brain'),
   /** URL pubblico del server (immagini nelle email, es. https://ernie.staging3.eklettica.it). */
