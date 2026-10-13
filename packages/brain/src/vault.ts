@@ -25,6 +25,8 @@ export interface SyncResult {
   readonly removed: string[];
   readonly conflict: boolean;
   readonly head: string | null;
+  /** Autori dei commit arrivati con la sincronizzazione, per file. */
+  readonly authors: Readonly<Record<string, readonly string[]>>;
 }
 
 export class VaultPathError extends Error {}
@@ -218,12 +220,13 @@ export class GitVault {
     await this.ensure();
     return this.exclusive(async () => {
       const before = await this.headUnlocked();
-      if (!this.opts.remote) return { changed: [], removed: [], conflict: false, head: before };
+      if (!this.opts.remote)
+        return { changed: [], removed: [], conflict: false, head: before, authors: {} };
       const { conflict } = await this.pullUnlocked();
       await this.git(['push', 'origin', this.branch], true);
       const after = await this.headUnlocked();
       if (!before || !after || before === after)
-        return { changed: [], removed: [], conflict, head: after };
+        return { changed: [], removed: [], conflict, head: after, authors: {} };
       const diff = await this.git(['diff', '--name-status', before, after]);
       const changed: string[] = [];
       const removed: string[] = [];
@@ -237,7 +240,25 @@ export class GitVault {
         else changed.push(a);
       }
       const md = (p: string) => p.toLowerCase().endsWith('.md') && p !== 'README.md';
-      return { changed: changed.filter(md), removed: removed.filter(md), conflict, head: after };
+      const authors: Record<string, string[]> = {};
+      for (const p of changed.filter(md)) {
+        const log = await this.git(['log', '--format=%an', `${before}..${after}`, '--', p], true);
+        authors[p] = [
+          ...new Set(
+            log.stdout
+              .split('\n')
+              .map((a) => a.trim())
+              .filter(Boolean),
+          ),
+        ];
+      }
+      return {
+        changed: changed.filter(md),
+        removed: removed.filter(md),
+        conflict,
+        head: after,
+        authors,
+      };
     });
   }
 

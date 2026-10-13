@@ -307,13 +307,12 @@ export function createBrainService(opts: BrainServiceOptions) {
           if (r.changed.length || r.removed.length) await reindex(userId, r);
           if (r.conflict)
             opts.logger?.warn({ userId }, 'second brain: conflitto risolto a favore di Obsidian');
-          if (r.changed.includes('Chi sono.md') && opts.onChiSonoEdited) {
-            const authorName = await v.lastAuthor('Chi sono.md');
-            if (authorName && authorName !== author.name) {
-              const text = await v.read('Chi sono.md');
-              if (text)
-                await opts.onChiSonoEdited(userId, parseChiSono(parseNote('Chi sono.md', text)));
-            }
+          // Se qualcuno diverso da Ernie ha toccato «Chi sono» (anche se poi c'è un'unione), i campi tornano in scheda.
+          const touchedBy = r.authors['Chi sono.md'] ?? [];
+          if (opts.onChiSonoEdited && touchedBy.some((a) => a !== author.name)) {
+            const text = await v.read('Chi sono.md');
+            if (text)
+              await opts.onChiSonoEdited(userId, parseChiSono(parseNote('Chi sono.md', text)));
           }
           out.push({ userId, changed: r.changed.length + r.removed.length, conflict: r.conflict });
         } catch (err) {
