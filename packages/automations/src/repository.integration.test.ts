@@ -126,6 +126,35 @@ describe.skipIf(!ready)('repository delle automazioni (Postgres, ruolo applicati
     expect(await repo.listByEvent(userB, 'shopping_list.cleared')).toHaveLength(0);
   });
 
+  it('pausa automatica: contatore, pausa con motivo, ripresa che azzera; RLS tra utenti', async () => {
+    const repo = createAutomationRepository(app);
+    const a = await repo.create(userA, {
+      key: 'pausa_test',
+      title: 'Pausa',
+      trigger: { type: 'cron', pattern: '0 9 * * *' },
+      action: { type: 'skill', skillId: 'shopping_list', input: 'cosa c’è nella lista?' },
+    });
+    expect(a).toMatchObject({ consecutiveFailures: 0, pausedReason: null, pausedAt: null });
+    expect(await repo.recordRunOutcome(userA, a.id, true)).toBe(1);
+    expect(await repo.recordRunOutcome(userA, a.id, true)).toBe(2);
+    expect(await repo.recordRunOutcome(userA, a.id, false)).toBe(0);
+    expect(await repo.recordRunOutcome(userA, a.id, true)).toBe(1);
+    // Un altro utente non vede né tocca il contatore (RLS).
+    expect(await repo.recordRunOutcome(userB, a.id, true)).toBe(0);
+    expect(await repo.pause(userB, a.id, 'no')).toBeNull();
+    const paused = await repo.pause(userA, a.id, '3 esecuzioni fallite di fila');
+    expect(paused).toMatchObject({ enabled: false, pausedReason: '3 esecuzioni fallite di fila' });
+    expect(paused?.pausedAt).toBeInstanceOf(Date);
+    expect((await repo.listEnabledForScheduler()).some((x) => x.id === a.id)).toBe(false);
+    const resumed = await repo.setEnabled(userA, a.id, true);
+    expect(resumed).toMatchObject({
+      enabled: true,
+      consecutiveFailures: 0,
+      pausedReason: null,
+      pausedAt: null,
+    });
+  });
+
   it('reclamo idempotente: due scheduler concorrenti → una run; il retry riprende la stessa riga', async () => {
     const repo = createAutomationRepository(app);
     const a = await repo.create(userA, {

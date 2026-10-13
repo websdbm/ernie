@@ -9,6 +9,7 @@ import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders.js';
 import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
+import { type ToolRulesRoutesOptions, toolRulesRoutes } from './routes/tool-rules.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
@@ -29,6 +30,7 @@ export interface BuildServerOptions {
   readonly reminders?: RemindersRoutesOptions;
   /** Famiglia (M7e): collegamenti fra installazioni. */
   readonly family?: FamilyRoutesOptions;
+  readonly toolRules?: ToolRulesRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -95,6 +97,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
   if (opts.family) await app.register(familyRoutes, opts.family);
+  if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);
 
   return app;
 }

@@ -98,6 +98,13 @@ struct SettingsView: View {
                 Section("Skill") {
                     NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
                 }
+                Section {
+                    NavigationLink("Azioni consentite sempre") { SecurityView() }
+                } header: {
+                    Text("Sicurezza")
+                } footer: {
+                    Text("Le azioni per cui hai scelto «Consenti sempre». Gli invii verso l'esterno chiedono sempre conferma.")
+                }
                 Section("Diagnostica") {
                     NavigationLink("Latenza, voce e spike") { DiagnosticsView() }
                 }

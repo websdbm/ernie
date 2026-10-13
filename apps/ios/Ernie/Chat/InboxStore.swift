@@ -41,6 +41,11 @@ final class InboxStore {
         }
     }
 
+    func resumeAutomation(id: String) async throws {
+        guard let api else { throw ApiError(status: 0, code: "no_api", message: "Non connesso") }
+        try await api.setAutomation(id: id, enabled: true)
+    }
+
     /// Decisione su un'azione sospesa: l'approvazione richiede lo sblocco del dispositivo (Face ID o codice).
     func decide(approvalId: String, approve: Bool) async throws -> ApprovalResult {
         guard let api else { throw ApiError(status: 0, code: "no_api", message: "Non connesso") }

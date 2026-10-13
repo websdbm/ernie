@@ -177,9 +177,30 @@ final class ConversationStore {
         agentState = isListening ? .listening : .idle
     }
 
-    func respond(to card: ConfirmationCard, approve: Bool) {
-        update(confirmation: card.approvalId) { $0.decision = approve ? "approved" : "denied" }
-        Task { try? await client.send(.toolConfirmationRespond(ToolConfirmationRespondPayload(approvalId: card.approvalId, decision: approve ? "approve" : "deny")), correlationId: card.correlationId) }
+    func respond(to card: ConfirmationCard, approve: Bool, always: Bool = false) {
+        update(confirmation: card.approvalId) {
+            $0.decision = approve ? "approved" : "denied"
+            if approve && always { $0.always = true }
+        }
+        let payload = ToolConfirmationRespondPayload(
+            approvalId: card.approvalId,
+            decision: approve ? "approve" : "deny",
+            always: approve && always ? true : nil
+        )
+        Task { try? await client.send(.toolConfirmationRespond(payload), correlationId: card.correlationId) }
+    }
+
+    /// «Riprendi» su un'automazione messa in pausa dal server dopo fallimenti ripetuti.
+    func resume(_ card: NotificationCard) async {
+        guard let id = card.automationId else { return }
+        do {
+            try await inbox.resumeAutomation(id: id)
+            update(notification: card.id) { $0.resumed = true }
+        } catch {
+            update(notification: card.id) { $0.resumed = false }
+            lastError = AppModel.describe(error)
+        }
+        persist()
     }
 
     func decide(action: PendingActionSummary, in card: NotificationCard, approve: Bool) async {
@@ -262,7 +283,7 @@ final class ConversationStore {
             }
             finishTurn(e.correlationId)
         case .toolConfirmationRequested(let p):
-            items.append(.confirmation(ConfirmationCard(approvalId: p.approvalId, correlationId: e.correlationId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview, reason: p.reason, expiresAt: p.expiresAt)))
+            items.append(.confirmation(ConfirmationCard(approvalId: p.approvalId, correlationId: e.correlationId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview, reason: p.reason, expiresAt: p.expiresAt, allowAlways: p.allowAlways)))
             persist()
         case .toolConfirmationResolved(let p):
             update(confirmation: p.approvalId) { $0.decision = p.decision }

@@ -50,6 +50,10 @@ struct ConfirmationCard: Codable, Sendable, Equatable, Identifiable {
     var reason: String?
     var expiresAt: String
     var decision: String?
+    /// Il server ammette «Consenti sempre» (tool senza effetto esterno).
+    var allowAlways: Bool? = nil
+    /// L'utente ha scelto «Consenti sempre».
+    var always: Bool? = nil
 }
 
 /// Azione sospesa da un'automazione (run headless): si approva o rifiuta dalla scheda.
@@ -69,8 +73,13 @@ struct NotificationCard: Codable, Sendable, Equatable, Identifiable {
     var body: String
     var createdAt: String
     var pendingActions: [PendingActionSummary] = []
+    /// Automazione a cui si riferisce (per «Riprendi» dopo una pausa automatica).
+    var automationId: String?
+    /// Esito di «Riprendi»: true ripresa, false non riuscita, nil non ancora toccato.
+    var resumed: Bool?
 
     var needsApproval: Bool { pendingActions.contains { $0.decision == nil } }
+    var isPaused: Bool { kind == "automation.paused" }
 
     init(_ n: NotificationItem) {
         id = n.id
@@ -78,6 +87,7 @@ struct NotificationCard: Codable, Sendable, Equatable, Identifiable {
         title = n.title
         body = n.body
         createdAt = n.createdAt
+        automationId = n.payload?["automationId"]?.stringValue
         pendingActions = (n.payload?["pendingActions"]?.arrayValue ?? []).compactMap { a in
             guard let approvalId = a["approvalId"]?.stringValue, let toolId = a["toolId"]?.stringValue else { return nil }
             return PendingActionSummary(

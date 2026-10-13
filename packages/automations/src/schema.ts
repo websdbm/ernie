@@ -82,6 +82,11 @@ export interface Automation {
   readonly version: number;
   readonly meta: Readonly<Record<string, unknown>>;
   readonly webhookSecret: string | null;
+  /** Esecuzioni fallite di fila (azzerate da un successo o dalla ripresa). */
+  readonly consecutiveFailures: number;
+  /** Motivo della pausa automatica; null se l'automazione non è in pausa. */
+  readonly pausedReason: string | null;
+  readonly pausedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }

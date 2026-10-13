@@ -61,6 +61,9 @@ function fakeRepo() {
         version: 1,
         meta: {},
         webhookSecret: a.trigger.type === 'webhook' ? 'segreto' : null,
+        consecutiveFailures: 0,
+        pausedReason: null,
+        pausedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -70,7 +73,17 @@ function fakeRepo() {
     setEnabled: async (u, id, enabled) => {
       const i = automations.findIndex((a) => a.id === id && a.userId === u);
       if (i < 0) return null;
-      automations[i] = { ...(automations[i] as Automation), enabled };
+      const cur = automations[i] as Automation;
+      automations[i] = enabled
+        ? { ...cur, enabled, pausedReason: null, pausedAt: null }
+        : { ...cur, enabled };
+      return automations[i] as Automation;
+    },
+    recordRunOutcome: async () => 0,
+    pause: async (u, id, reason) => {
+      const i = automations.findIndex((a) => a.id === id && a.userId === u);
+      if (i < 0) return null;
+      automations[i] = { ...(automations[i] as Automation), enabled: false, pausedReason: reason };
       return automations[i] as Automation;
     },
     remove: async (u, id) => {

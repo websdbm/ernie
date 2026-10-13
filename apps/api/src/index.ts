@@ -50,6 +50,7 @@ import {
   createDocumentTools,
   createFirecrawlClient,
   createMemorySearchSpec,
+  createPgToolRuleStore,
   createRecipeRepository,
   createRecipeTools,
   createShoppingListRepository,
@@ -181,10 +182,18 @@ async function main(): Promise<void> {
     store: createPgApprovalStore(postgres.pool),
     pending: new PendingApprovals(),
   };
+  // «Consenti sempre» (M9): solo tool registrati e senza effetto esterno.
+  const toolRules = createPgToolRuleStore(postgres.pool, {
+    eligible: (toolId) => {
+      const spec = registry.get(toolId);
+      return spec !== undefined && !spec.risk.externalEffect;
+    },
+  });
   const executor = {
     policyRules: { riskAskThreshold: config.tools.riskAskThreshold },
     approvals: { ...approvals, ttlMs: config.tools.approvalTtlSeconds * 1000 },
     audit: createToolCallRecorder(postgres.pool, logger),
+    rules: toolRules,
     logger,
   };
   const learnedSkills = createLearnedSkillRepository(postgres.pool, registry);
@@ -317,6 +326,12 @@ async function main(): Promise<void> {
       repo: family,
       onChanged: (userId) => companions.invalidateUser(userId),
     },
+    toolRules: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      rules: toolRules,
+      registry,
+    },
     ws: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -331,7 +346,7 @@ async function main(): Promise<void> {
         invalidateCompanion: (sessionId) => companions.invalidate(sessionId),
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
-        approvals,
+        approvals: { ...approvals, rules: toolRules },
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,

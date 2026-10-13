@@ -42,6 +42,7 @@ import {
   createDocumentTools,
   createFirecrawlClient,
   createMemorySearchSpec,
+  createPgToolRuleStore,
   createRecipeRepository,
   createRecipeTools,
   createShoppingListRepository,
@@ -143,6 +144,13 @@ export async function startAutomations(
       executor: {
         policyRules: { riskAskThreshold: config.tools.riskAskThreshold },
         audit: createToolCallRecorder(pool, logger),
+        // «Consenti sempre» vale anche per le automazioni guidate (stessa regola, stesso controllo).
+        rules: createPgToolRuleStore(pool, {
+          eligible: (toolId) => {
+            const spec = registry.get(toolId);
+            return spec !== undefined && !spec.risk.externalEffect;
+          },
+        }),
         logger,
       },
       approvals: {

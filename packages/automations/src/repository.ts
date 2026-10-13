@@ -33,6 +33,9 @@ interface ARow {
   version: number;
   meta: Record<string, unknown> | null;
   webhook_secret: string | null;
+  consecutive_failures: number;
+  paused_reason: string | null;
+  paused_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -67,7 +70,7 @@ interface NRow {
   created_at: Date;
 }
 
-const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, version, meta, webhook_secret, created_at, updated_at`;
+const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, version, meta, webhook_secret, consecutive_failures, paused_reason, paused_at, created_at, updated_at`;
 const R_COLS = `id, automation_id, user_id, scheduled_at, dedupe_key, trigger_type, trigger_payload, status, outcome, error, cost_usd, llm_calls, tool_calls, attempt, session_id, started_at, finished_at, created_at`;
 const N_COLS = `id, user_id, kind, title, body, payload, read_at, created_at`;
 
@@ -88,6 +91,9 @@ const toAutomation = (r: ARow): Automation => ({
   version: r.version,
   meta: r.meta ?? {},
   webhookSecret: r.webhook_secret,
+  consecutiveFailures: r.consecutive_failures ?? 0,
+  pausedReason: r.paused_reason ?? null,
+  pausedAt: r.paused_at ?? null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -150,7 +156,12 @@ export interface CreateOptions {
 
 export interface AutomationRepository {
   create(userId: string, input: unknown, opts?: CreateOptions): Promise<Automation>;
+  /** `enabled = true` è anche la ripresa da una pausa automatica: azzera contatore e motivo. */
   setEnabled(userId: string, id: string, enabled: boolean): Promise<Automation | null>;
+  /** Esito definitivo di una run: successo azzera, fallimento incrementa; restituisce il contatore. */
+  recordRunOutcome(userId: string, id: string, failed: boolean): Promise<number>;
+  /** Pausa automatica: disabilita con un motivo leggibile. */
+  pause(userId: string, id: string, reason: string): Promise<Automation | null>;
   remove(userId: string, id: string): Promise<boolean>;
   get(userId: string, id: string): Promise<Automation | null>;
   list(userId: string): Promise<Automation[]>;
@@ -242,8 +253,37 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
     async setEnabled(userId, id, enabled) {
       return withUser(pool, userId, async (client) => {
         const res = await client.query<ARow>(
-          `UPDATE automations SET enabled = $3, updated_at = now() WHERE id = $1 AND user_id = $2 RETURNING ${A_COLS}`,
+          `UPDATE automations SET enabled = $3,
+             consecutive_failures = CASE WHEN $3 THEN 0 ELSE consecutive_failures END,
+             paused_reason = CASE WHEN $3 THEN NULL ELSE paused_reason END,
+             paused_at = CASE WHEN $3 THEN NULL ELSE paused_at END,
+             updated_at = now()
+           WHERE id = $1 AND user_id = $2 RETURNING ${A_COLS}`,
           [id, userId, enabled],
+        );
+        const row = res.rows[0];
+        return row ? toAutomation(row) : null;
+      });
+    },
+
+    async recordRunOutcome(userId, id, failed) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<{ consecutive_failures: number }>(
+          `UPDATE automations
+             SET consecutive_failures = CASE WHEN $3 THEN consecutive_failures + 1 ELSE 0 END
+           WHERE id = $1 AND user_id = $2 RETURNING consecutive_failures`,
+          [id, userId, failed],
+        );
+        return res.rows[0]?.consecutive_failures ?? 0;
+      });
+    },
+
+    async pause(userId, id, reason) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<ARow>(
+          `UPDATE automations SET enabled = false, paused_reason = $3, paused_at = now(), updated_at = now()
+           WHERE id = $1 AND user_id = $2 RETURNING ${A_COLS}`,
+          [id, userId, reason.slice(0, 500)],
         );
         const row = res.rows[0];
         return row ? toAutomation(row) : null;

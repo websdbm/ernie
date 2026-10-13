@@ -146,6 +146,16 @@ struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var active: Bool
 }
 
+/// Regola «Consenti sempre»: per questo tool Ernie non chiede più conferma (mai per invii verso l'esterno).
+struct ToolRule: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var toolId: String
+    var origin: String
+    var createdAt: String
+    var title: String
+    var category: String?
+}
+
 struct DocumentRef: Codable, Sendable, Equatable {
     var id: String
     var title: String
@@ -185,6 +195,13 @@ struct ApiClient: Sendable {
         struct Body: Encodable { var ids: [String] }
         struct Out: Decodable { var marked: Int }
         let _: Out = try await request("POST", "/v1/notifications/read", body: Body(ids: ids))
+    }
+
+    /// Accende o spegne un'automazione; `true` è anche la ripresa da una pausa automatica (azzera il motivo).
+    func setAutomation(id: String, enabled: Bool) async throws {
+        struct Body: Encodable { var enabled: Bool }
+        struct Out: Decodable { var id: String; var enabled: Bool }
+        let _: Out = try await request("PATCH", "/v1/automations/\(id)", body: Body(enabled: enabled))
     }
 
     func approve(approvalId: String, decision: String) async throws -> ApprovalResult {
@@ -272,6 +289,18 @@ struct ApiClient: Sendable {
     // MARK: Famiglia (M7e)
 
     func family() async throws -> FamilyOverview { try await request("GET", "/v1/family") }
+
+    // MARK: regole «Consenti sempre» (v1.9)
+
+    func toolRules() async throws -> [ToolRule] {
+        struct Out: Decodable { var rules: [ToolRule] }
+        let out: Out = try await request("GET", "/v1/tool-rules")
+        return out.rules
+    }
+
+    func deleteToolRule(id: String) async throws {
+        try await requestNoContent("DELETE", "/v1/tool-rules/\(id)")
+    }
 
     func createFamilyInvite(label: String, relation: String, myLabel: String) async throws -> FamilyInvite {
         struct Body: Encodable { var label: String; var relation: String; var myLabel: String }

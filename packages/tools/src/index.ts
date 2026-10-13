@@ -8,4 +8,5 @@ export * from './builtins/time.js';
 export * from './builtins/web.js';
 export * from './executor.js';
 export * from './registry.js';
+export * from './rules.js';
 export * from './types.js';

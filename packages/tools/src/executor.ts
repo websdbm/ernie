@@ -11,6 +11,7 @@ import type { Logger } from '@ernie/observability';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { ToolCallRecorder } from './audit.js';
+import type { ToolRuleStore } from './rules.js';
 import { type ToolContext, ToolError, type ToolSpec } from './types.js';
 
 export interface ExecutorDeps {
@@ -28,6 +29,8 @@ export interface ExecutorDeps {
     readonly onDeferred?: (action: DeferredAction) => void;
   };
   readonly audit: ToolCallRecorder;
+  /** Regole «Consenti sempre» dell'utente: un `ask` su un tool senza effetto esterno diventa consenso già dato. */
+  readonly rules?: Pick<ToolRuleStore, 'allows'>;
   readonly logger: Pick<Logger, 'info' | 'warn' | 'error' | 'debug'>;
   /** Tetto in caratteri del risultato serializzato restituito al modello. */
   readonly maxResultChars?: number;
@@ -151,7 +154,15 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
         });
         return { error: 'denied', reason: verdict.reason } satisfies ToolErrorResult;
       }
-      if (verdict.kind === 'ask') {
+      // Regola «Consenti sempre»: la policy ha chiesto, l'utente ha già risposto sì per questo tool.
+      // Nell'audit resta `ask` con `approved = true` e nessun id di approvazione.
+      const standing =
+        verdict.kind === 'ask' &&
+        !spec.risk.externalEffect &&
+        deps.rules !== undefined &&
+        (await deps.rules.allows(ctx.userId, spec.id).catch(() => false));
+      if (standing) approved = true;
+      if (verdict.kind === 'ask' && !standing) {
         if (!deps.approvals) {
           await deps.audit.record({
             ...base,
@@ -187,6 +198,7 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           ...(preview(input) ? { argsPreview: preview(input) as string } : {}),
           reason: verdict.reason.slice(0, 300),
           expiresAt: created.expiresAt.toISOString(),
+          ...(deps.rules && !spec.risk.externalEffect ? { allowAlways: true } : {}),
         });
         if (deps.approvals.mode === 'deferred') {
           deps.approvals.onDeferred?.({

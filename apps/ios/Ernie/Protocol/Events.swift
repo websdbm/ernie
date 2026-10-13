@@ -40,6 +40,8 @@ struct UserCancelPayload: Codable, Sendable, Equatable {
 struct ToolConfirmationRespondPayload: Codable, Sendable, Equatable {
     var approvalId: String
     var decision: String
+    /// v1.9: «Consenti sempre» (crea la regola per il tool sul server).
+    var always: Bool?
 }
 
 struct EmptyPayload: Codable, Sendable, Equatable {}
@@ -111,6 +113,8 @@ struct ToolConfirmationRequestedPayload: Codable, Sendable, Equatable {
     var argsPreview: String?
     var reason: String?
     var expiresAt: String
+    /// v1.9: il server ammette «Consenti sempre» per questo tool.
+    var allowAlways: Bool?
 }
 
 struct ToolConfirmationResolvedPayload: Codable, Sendable, Equatable {

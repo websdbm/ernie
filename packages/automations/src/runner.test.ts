@@ -9,8 +9,10 @@ import {
   buildAutomationPrompt,
   executeRun,
   isTransientError,
+  needsUser,
   notificationFor,
   PermanentError,
+  pauseDecision,
   type RunnerDeps,
   TransientError,
 } from './runner.js';
@@ -36,6 +38,9 @@ const automation = (over: Partial<Automation> = {}): Automation => ({
   version: 1,
   meta: {},
   webhookSecret: null,
+  consecutiveFailures: 0,
+  pausedReason: null,
+  pausedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...over,
@@ -52,7 +57,29 @@ function fakeRepo(automations: Automation[]) {
     setEnabled: async (_u, id, enabled) => {
       const i = automations.findIndex((a) => a.id === id);
       if (i < 0) return null;
-      automations[i] = { ...(automations[i] as Automation), enabled };
+      const cur = automations[i] as Automation;
+      automations[i] = enabled
+        ? { ...cur, enabled, consecutiveFailures: 0, pausedReason: null, pausedAt: null }
+        : { ...cur, enabled };
+      return automations[i] as Automation;
+    },
+    recordRunOutcome: async (_u, id, failed) => {
+      const i = automations.findIndex((a) => a.id === id);
+      if (i < 0) return 0;
+      const cur = automations[i] as Automation;
+      const consecutiveFailures = failed ? cur.consecutiveFailures + 1 : 0;
+      automations[i] = { ...cur, consecutiveFailures };
+      return consecutiveFailures;
+    },
+    pause: async (_u, id, reason) => {
+      const i = automations.findIndex((a) => a.id === id);
+      if (i < 0) return null;
+      automations[i] = {
+        ...(automations[i] as Automation),
+        enabled: false,
+        pausedReason: reason,
+        pausedAt: new Date(),
+      };
       return automations[i] as Automation;
     },
     remove: async () => true,
@@ -347,6 +374,88 @@ describe('executeRun — automazione deterministica', () => {
     const run = await executeRun(d, job(a), 1);
     expect(run?.status).toBe('failed');
     expect(run?.error).toMatch(/provider/);
+  });
+});
+
+describe('pausa automatica', () => {
+  const failing = () =>
+    automation({
+      action: { type: 'skill', skillId: 'shopping_list', input: 'raccontami una barzelletta' },
+    });
+
+  it('dopo 3 fallimenti di fila si mette in pausa con un motivo; un successo intermedio azzera', async () => {
+    const a = failing();
+    const list = [a];
+    const { d, notifications } = deps(list, skills());
+    const at = (min: number) => {
+      const s = new Date(Date.now() - min * 1000);
+      return job(a, { scheduledAt: s.toISOString(), dedupeKey: dedupeKeys.cron(s) });
+    };
+    await executeRun(d, at(3), 1);
+    await executeRun(d, at(2), 1);
+    expect(list[0]?.consecutiveFailures).toBe(2);
+    expect(list[0]?.enabled).toBe(true);
+    // Un successo azzera il contatore.
+    list[0] = { ...(list[0] as Automation), action: automation().action };
+    await executeRun(d, at(1), 1);
+    expect(list[0]?.consecutiveFailures).toBe(0);
+    list[0] = { ...(list[0] as Automation), action: failing().action };
+    for (const m of [0.5, 0.4, 0.3]) await executeRun(d, at(m), 1);
+    expect(list[0]?.enabled).toBe(false);
+    expect(list[0]?.pausedReason).toMatch(/^3 esecuzioni fallite di fila\. Ultimo errore: /);
+    const last = notifications.at(-1);
+    expect(last?.kind).toBe('automation.paused');
+    expect(last?.body).toContain('Riprendi');
+    expect(last?.payload).toMatchObject({ automationId: a.id });
+    // La terza esecuzione fallita non produce anche la solita notifica di errore: una sola scheda.
+    expect(notifications.filter((n) => n.kind === 'automation.paused')).toHaveLength(1);
+    expect(notifications.slice(-2)[0]?.kind).toBe('automation.error');
+    // Le run successive vengono ignorate finché è in pausa; «Riprendi» azzera tutto.
+    expect(await executeRun(d, at(0.2), 1)).toBeNull();
+    await d.repo.setEnabled(USER, a.id, true);
+    expect(list[0]).toMatchObject({ enabled: true, consecutiveFailures: 0, pausedReason: null });
+  });
+
+  it('un errore che richiede l’utente mette in pausa subito, anche con notify spento', async () => {
+    const broken: DeterministicSkill = {
+      id: 'broken',
+      kind: 'deterministic',
+      category: 'test',
+      description: 'credenziali scadute',
+      examples: [],
+      match: (t) => (t === 'vai' ? {} : null),
+      run: async () => {
+        throw new Error('credenziali scadute per il servizio esterno');
+      },
+    };
+    const a = automation({
+      notify: false,
+      action: { type: 'skill', skillId: 'broken', input: 'vai' },
+    });
+    const list = [a];
+    const { d, notifications } = deps(list, new SkillRegistry().register(broken));
+    await expect(executeRun(d, job(a), 1)).rejects.toBeInstanceOf(PermanentError);
+    expect(list[0]?.enabled).toBe(false);
+    expect(list[0]?.pausedReason).toMatch(/^Serve un tuo intervento: credenziali scadute/);
+    expect(notifications.map((n) => n.kind)).toEqual(['automation.paused']);
+  });
+
+  it('le una tantum e le run saltate non contano', async () => {
+    expect(pauseDecision('skipped', 'x', 9)).toBeNull();
+    expect(pauseDecision('succeeded', null, 9)).toBeNull();
+    expect(pauseDecision('failed', 'boom', 2)).toBeNull();
+    expect(pauseDecision('budget_exceeded', 'budget', 3)).toMatch(/^3 esecuzioni/);
+    expect(needsUser('HTTP 401 Unauthorized')).toBe(true);
+    expect(needsUser('socket hang up')).toBe(false);
+    const a = automation({
+      trigger: { type: 'once', at: '2030-01-01T10:00:00.000Z' },
+      action: failing().action,
+    });
+    const list = [a];
+    const { d } = deps(list, skills());
+    await executeRun(d, job(a, { triggerType: 'once', dedupeKey: dedupeKeys.once(new Date()) }), 1);
+    expect(list[0]?.consecutiveFailures).toBe(0);
+    expect(list[0]?.pausedReason).toBeNull();
   });
 });
 

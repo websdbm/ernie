@@ -107,6 +107,42 @@ export interface RunnerDeps {
 
 type RunResult = RunFinish & { readonly transient?: boolean };
 
+/** Dopo quante esecuzioni fallite di fila un'automazione si mette in pausa da sola. */
+export const PAUSE_AFTER_FAILURES = 3;
+
+/**
+ * Errori che nessun nuovo tentativo può risolvere senza l'utente (credenziali, permessi, configurazione):
+ * l'automazione va in pausa subito invece di fallire ogni volta. Elenco chiuso e conservativo.
+ */
+const NEEDS_USER: readonly RegExp[] = [
+  /credenzial/i,
+  /token (?:scadut|non valid)/i,
+  /unauthori[sz]ed|\b401\b|\b403\b|forbidden/i,
+  /scope mancante/i,
+  /chiave (?:api )?(?:mancante|non valida|scaduta)/i,
+];
+
+export function needsUser(error: string | null | undefined): boolean {
+  return !!error && NEEDS_USER.some((re) => re.test(error));
+}
+
+/**
+ * Decide la pausa dopo l'esito definitivo di una run. Conta solo `failed` e `budget_exceeded`; un successo
+ * (o una run in attesa di approvazione) azzera il contatore; le run saltate non contano.
+ */
+export function pauseDecision(
+  status: AutomationRun['status'],
+  error: string | null,
+  consecutiveFailures: number,
+): string | null {
+  if (status !== 'failed' && status !== 'budget_exceeded') return null;
+  const last = (error ?? 'errore sconosciuto').slice(0, 300);
+  if (needsUser(error)) return `Serve un tuo intervento: ${last}`;
+  if (consecutiveFailures >= PAUSE_AFTER_FAILURES)
+    return `${consecutiveFailures} esecuzioni fallite di fila. Ultimo errore: ${last}`;
+  return null;
+}
+
 /**
  * Esegue una run dall'inizio alla fine: reclamo idempotente, tolleranza di ritardo, esecuzione
  * deterministica (skill) o guidata (modello con tool consentiti e budget), esito, notifica, evento.
@@ -229,9 +265,13 @@ async function finish(
     'run di automazione conclusa',
   );
   if (opts.silent) return updated;
-  if (automation.notify && f.status !== 'skipped') {
+  const pausedReason = await applyFailurePolicy(deps, automation, updated);
+  if ((automation.notify || pausedReason) && f.status !== 'skipped') {
+    const message = pausedReason
+      ? pausedNotification(automation, pausedReason)
+      : notificationFor(automation, updated);
     try {
-      const n = await deps.repo.notify(run.userId, notificationFor(automation, updated));
+      const n = await deps.repo.notify(run.userId, message);
       await deps.push?.notifyUser(run.userId, {
         title: n.title,
         body: n.body,
@@ -252,10 +292,7 @@ async function finish(
       try {
         const settings = await deps.repo.getUserSettings(run.userId);
         const to = emailRecipient(settings);
-        if (to) {
-          const n = notificationFor(automation, updated);
-          await deps.email.send({ to, subject: n.title, text: n.body });
-        }
+        if (to) await deps.email.send({ to, subject: message.title, text: message.body });
       } catch (err) {
         deps.logger.warn({ err, runId: run.id }, 'email non inviata');
       }
@@ -273,6 +310,51 @@ async function finish(
     },
   }).catch((err: unknown) => deps.logger.warn({ err }, 'pubblicazione evento fallita'));
   return updated;
+}
+
+/**
+ * Aggiorna il contatore dei fallimenti e, se serve, mette in pausa. Le una tantum (promemoria) non contano:
+ * si disabilitano da sole dopo l'esecuzione. Restituisce il motivo della pausa, o null.
+ */
+async function applyFailurePolicy(
+  deps: RunnerDeps,
+  automation: Automation,
+  run: AutomationRun,
+): Promise<string | null> {
+  if (automation.trigger.type === 'once' || run.status === 'skipped') return null;
+  try {
+    const failed = run.status === 'failed' || run.status === 'budget_exceeded';
+    const count = await deps.repo.recordRunOutcome(run.userId, automation.id, failed);
+    const reason = pauseDecision(run.status, run.error, count);
+    if (!reason) return null;
+    await deps.repo.pause(run.userId, automation.id, reason);
+    deps.logger.warn(
+      { automationId: automation.id, key: automation.key, count, reason },
+      'automazione messa in pausa',
+    );
+    return reason;
+  } catch (err) {
+    deps.logger.warn(
+      { err, automationId: automation.id },
+      'contatore dei fallimenti non aggiornato',
+    );
+    return null;
+  }
+}
+
+export function pausedNotification(
+  automation: Automation,
+  reason: string,
+): { kind: string; title: string; body: string; payload: unknown } {
+  return {
+    kind: 'automation.paused',
+    title: `${automation.title}: in pausa`,
+    body: `L'ho messa in pausa per non riprovare a vuoto. ${reason}\n\nQuando hai sistemato, tocca «Riprendi».`.slice(
+      0,
+      2000,
+    ),
+    payload: { automationId: automation.id, reason },
+  };
 }
 
 export function notificationFor(

@@ -44,6 +44,7 @@
 		930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
+		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
 		B11EC2252AE06CD8D2BB1294 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D05B4674194F94566A5561 /* Log.swift */; };
 		B97D35C0A50FFFDA8F981585 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA2FF63BFF2CB0C2696ED81 /* ApiClient.swift */; };
 		BBDEEC2608B0EBCBAFA19BF2 /* Ids.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124F4848C59674EF5F7A5CD8 /* Ids.swift */; };
@@ -147,6 +148,7 @@
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStore.swift; sourceTree = "<group>"; };
+		CCA2BB9EC2D73383C332B042 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingAvatar.swift; sourceTree = "<group>"; };
 		D2589F13E371B721791902AA /* EventsCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsCodingTests.swift; sourceTree = "<group>"; };
 		D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieWidgets.swift; sourceTree = "<group>"; };
@@ -241,6 +243,7 @@
 				5625CB5A1D7224D40E394A01 /* FamilyView.swift */,
 				A873D448B86F04E46852AD68 /* IconGalleryView.swift */,
 				BB6A663AAF174530467149DD /* OnboardingView.swift */,
+				CCA2BB9EC2D73383C332B042 /* SecurityView.swift */,
 				8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */,
 				23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */,
 			);
@@ -508,6 +511,7 @@
 				F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */,
 				308CBF03835CB246EF4E5725 /* ReminderSnapshot.swift in Sources */,
 				5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */,
+				AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */,
 				929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */,
 				A93C1F25009D68617118B48F /* SettingsView.swift in Sources */,
 				F54BB9A4CE55E3CA6D55CC42 /* ShoppingStore.swift in Sources */,

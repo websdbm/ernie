@@ -18,7 +18,7 @@ import {
   parseClientEvent,
 } from '@ernie/protocol';
 import type { SkillRegistry } from '@ernie/skills';
-import type { ToolContextRef } from '@ernie/tools';
+import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
 import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '../documents-flow.js';
@@ -60,7 +60,12 @@ export interface ConnectionDeps {
   readonly invalidateCompanion: (sessionId: string) => void;
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
-  readonly approvals?: { store: ApprovalStore; pending: PendingApprovals };
+  readonly approvals?: {
+    store: ApprovalStore;
+    pending: PendingApprovals;
+    /** «Consenti sempre» dalla scheda di conferma (v1.9). */
+    rules?: Pick<ToolRuleStore, 'allowFromApproval'>;
+  };
   readonly memories?: {
     readonly repo: MemoryRepository;
     readonly retrievalLimit: number;
@@ -229,6 +234,21 @@ export class ClientConnection {
             event.correlationId,
           );
           return;
+        }
+        // «Consenti sempre»: la regola nasce solo da un'approvazione valida e solo per tool ammessi.
+        if (outcome === 'approved' && event.payload.always && this.deps.approvals.rules) {
+          try {
+            const rule = await this.deps.approvals.rules.allowFromApproval(
+              this.auth.userId,
+              event.payload.approvalId,
+            );
+            this.deps.logger.info(
+              { userId: this.auth.userId, toolId: rule?.toolId ?? null },
+              rule ? 'regola «consenti sempre» creata' : 'regola «consenti sempre» non ammessa',
+            );
+          } catch (err) {
+            this.deps.logger.warn({ err }, 'regola «consenti sempre» non salvata');
+          }
         }
         this.deps.approvals.pending.settle(event.payload.approvalId, outcome);
         await this.send(

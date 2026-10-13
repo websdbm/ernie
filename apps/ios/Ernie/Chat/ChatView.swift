@@ -259,7 +259,7 @@ struct ConfirmationCardView: View {
                 Text(reason).font(.caption).foregroundStyle(.secondary)
             }
             if let decision = card.decision {
-                Text(decision == "approved" ? "Approvata" : decision == "denied" ? "Rifiutata" : "Scaduta")
+                Text(decision == "approved" ? (card.always == true ? "Approvata · d'ora in poi senza chiedere" : "Approvata") : decision == "denied" ? "Rifiutata" : "Scaduta")
                     .font(.caption.weight(.semibold))
             } else {
                 HStack {
@@ -274,6 +274,21 @@ struct ConfirmationCardView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .buttonStyle(.bordered)
+                if card.allowAlways == true {
+                    Button {
+                        Task {
+                            if await StepUp.authenticate(reason: "Consenti sempre questa azione a Ernie") {
+                                conversation.respond(to: card, approve: true, always: true)
+                            }
+                        }
+                    } label: {
+                        Label("Consenti sempre", systemImage: "checkmark.shield")
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                    Text("Revocabile in Impostazioni → Sicurezza.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
         }
         .padding()
@@ -289,6 +304,7 @@ struct NotificationCardView: View {
     private var icon: String {
         switch card.kind {
         case "automation.approval": "hand.raised"
+        case "automation.paused": "pause.circle"
         case "automation.error", "automation.deadletter": "exclamationmark.triangle"
         default: "sparkles"
         }
@@ -315,6 +331,19 @@ struct NotificationCardView: View {
                     }
                 }
                 .padding(.top, 2)
+            }
+            if card.isPaused, card.automationId != nil {
+                if card.resumed == true {
+                    Label("Ripresa", systemImage: "checkmark.circle").font(.caption.weight(.semibold))
+                } else {
+                    Button {
+                        Task { await conversation.resume(card) }
+                    } label: {
+                        Label(card.resumed == false ? "Riprova a riprendere" : "Riprendi", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
         }
         .padding()

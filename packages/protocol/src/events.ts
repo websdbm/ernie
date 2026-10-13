@@ -9,8 +9,8 @@ import { z } from 'zod';
  * per direzione (permette riordino, deduplica e ripresa dopo riconnessione).
  */
 export const PROTOCOL_VERSION = 1 as const;
-/** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`). */
-export const PROTOCOL_MINOR = 8 as const;
+/** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`); … 9 = «Consenti sempre» (`allowAlways`, `always`). */
+export const PROTOCOL_MINOR = 9 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -89,7 +89,12 @@ export const UserCancel = event(
 
 export const ToolConfirmationRespond = event(
   'tool.confirmation.respond',
-  z.object({ approvalId: z.uuid(), decision: z.enum(['approve', 'deny']) }),
+  z.object({
+    approvalId: z.uuid(),
+    decision: z.enum(['approve', 'deny']),
+    /** v1.9: «Consenti sempre» — oltre ad approvare, crea la regola per questo tool. */
+    always: z.boolean().optional(),
+  }),
 );
 
 export const SessionPing = event('session.ping', z.object({}));
@@ -167,6 +172,8 @@ export const ToolConfirmationRequested = event(
     argsPreview: z.string().max(500).optional(),
     reason: z.string().max(300).optional(),
     expiresAt: z.iso.datetime(),
+    /** v1.9: il tool ammette «Consenti sempre» (nessun effetto esterno). */
+    allowAlways: z.boolean().optional(),
   }),
 );
 

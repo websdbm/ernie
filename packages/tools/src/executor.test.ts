@@ -13,6 +13,7 @@ import {
 import { createFirecrawlClient, createWebTools } from './builtins/web.js';
 import { buildSessionTools, createGuardedTool, type ToolContextRef } from './executor.js';
 import { ToolRegistry } from './registry.js';
+import { memoryToolRuleStore } from './rules.js';
 import { defineTool, type ToolContext, ToolError, type ToolSpec } from './types.js';
 
 const logger = createLogger({ level: 'silent', name: 't' });
@@ -260,6 +261,79 @@ describe('createGuardedTool', () => {
         {} as never,
       ),
     ).toEqual({ text: 'y' });
+  });
+});
+
+describe('regole «Consenti sempre»', () => {
+  it('su un ask di scrittura la regola dà il consenso senza scheda; mai per i tool con effetto esterno', async () => {
+    const audit = memoryToolCallRecorder();
+    const rules = memoryToolRuleStore();
+    const write: ToolSpec = {
+      ...echoSpec,
+      id: 'note_add',
+      risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: true },
+    };
+    const send: ToolSpec = {
+      ...echoSpec,
+      id: 'send_mail',
+      risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: true, write: false },
+    };
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('web:https://example.com'); // run contaminata → scritture e invii in ask
+    const events: Array<{ type: EventType; payload: unknown }> = [];
+    const emit = <T extends EventType>(type: T, payload: PayloadInputOf<T>) => {
+      events.push({ type, payload });
+    };
+    const ref: ToolContextRef = { current: ctx(run, emit) };
+    const approvals = { store: memoryApprovalStore(), pending: new PendingApprovals(), ttlMs: 50 };
+    const deps = { policyRules: {}, approvals, audit, rules, logger };
+
+    // Senza regola: scheda di conferma (con «Consenti sempre» offerto) e, senza risposta, rifiuto.
+    const before = (await createGuardedTool(write, deps, ref).execute?.(
+      { text: 'a' },
+      {} as never,
+    )) as { error?: string };
+    expect(before.error).toBe('approval_expired');
+    const asked = events.find((e) => e.type === 'tool.confirmation.requested')?.payload as {
+      allowAlways?: boolean;
+    };
+    expect(asked.allowAlways).toBe(true);
+
+    // Con la regola: eseguito subito, audit `ask` + approved senza id di approvazione.
+    await rules.allow('u', 'note_add', 'card');
+    events.length = 0;
+    expect(await createGuardedTool(write, deps, ref).execute?.({ text: 'b' }, {} as never)).toEqual(
+      {
+        text: 'b',
+      },
+    );
+    expect(events.some((e) => e.type === 'tool.confirmation.requested')).toBe(false);
+    expect(audit.entries.at(-1)).toMatchObject({
+      toolId: 'note_add',
+      verdict: 'ask',
+      approved: true,
+      approvalId: null,
+      ok: true,
+    });
+
+    // Una regola per un tool con effetto esterno non conta: chiede sempre (e non offre «sempre»).
+    await rules.allow('u', 'send_mail', 'card');
+    const mail = (await createGuardedTool(send, deps, ref).execute?.(
+      { text: 'c' },
+      {} as never,
+    )) as { error?: string };
+    expect(mail.error).toBe('approval_expired');
+    const mailAsk = events.filter((e) => e.type === 'tool.confirmation.requested').at(-1)
+      ?.payload as { allowAlways?: boolean };
+    expect(mailAsk.allowAlways).toBeUndefined();
+
+    // Un deny resta un deny anche con la regola.
+    const denied = (await createGuardedTool(
+      write,
+      { ...deps, policyRules: { denyTools: ['note_add'] } },
+      ref,
+    ).execute?.({ text: 'd' }, {} as never)) as { error?: string };
+    expect(denied.error).toBe('denied');
   });
 });
 

@@ -28,6 +28,46 @@ describe('normalizeUsage', () => {
     });
   });
 
+  it('usa raw (del passo) quando i campi di primo livello sono già il totale del turno', () => {
+    // Ultimo step-finish letto in ritardo: Mastra ha sovrascritto il primo livello con il cumulativo.
+    const n = normalizeUsage({
+      inputTokens: 34775,
+      outputTokens: 80,
+      cachedInputTokens: 34514,
+      cacheCreationInputTokens: 255,
+      reasoningTokens: 0,
+      raw: {
+        inputTokens: { total: 17435, noCache: 2, cacheRead: 17336, cacheWrite: 97 },
+        outputTokens: { total: 54, text: 54, reasoning: 0 },
+        raw: { cost: 0.0045202 },
+      },
+    });
+    expect(n).toMatchObject({
+      inputTokens: 17435,
+      cacheReadTokens: 17336,
+      cacheWriteTokens: 97,
+      outputTokens: 54,
+      reasoningTokens: 0,
+    });
+    // Un passo senza lettura dalla cache vale 0 anche se il totale ne ha.
+    expect(
+      normalizeUsage({
+        cachedInputTokens: 500,
+        raw: {
+          inputTokens: { total: 10, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1 },
+        },
+      }).cacheReadTokens,
+    ).toBe(0);
+    // Forma piatta (v2).
+    expect(
+      normalizeUsage({ inputTokens: 300, raw: { inputTokens: 200, outputTokens: 20 } }),
+    ).toMatchObject({
+      inputTokens: 200,
+      outputTokens: 20,
+    });
+  });
+
   it('preferisce il costo in providerMetadata e tollera usage parziale', () => {
     const n = normalizeUsage(
       { inputTokens: 100, outputTokens: 10 },
