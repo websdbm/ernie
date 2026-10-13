@@ -32,6 +32,10 @@ export const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Stessa chiave con il nome usato dall'utente nel .env. */
+  CLAUDE_API_KEY: z.string().min(1).optional(),
+  /** auto: API di Anthropic se c'è la chiave (OpenRouter come riserva), altrimenti OpenRouter. */
+  LLM_PROVIDER: z.enum(['auto', 'anthropic', 'openrouter']).default('auto'),
   FIRECRAWL_API_KEY: z.string().min(1).optional(),
   /** Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin. */
   WS_ALLOWED_ORIGINS: z.string().default(''),
@@ -308,7 +312,10 @@ export function toAppConfig(env: Env): AppConfig {
     providers: {
       openrouterApiKey: env.OPENROUTER_API_KEY,
       openaiApiKey: env.OPENAI_API_KEY,
-      anthropicApiKey: env.ANTHROPIC_API_KEY,
+      anthropicApiKey:
+        env.LLM_PROVIDER === 'openrouter'
+          ? undefined
+          : (env.ANTHROPIC_API_KEY ?? env.CLAUDE_API_KEY),
       firecrawlApiKey: env.FIRECRAWL_API_KEY,
     },
   };

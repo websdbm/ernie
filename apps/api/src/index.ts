@@ -118,15 +118,23 @@ async function main(): Promise<void> {
   const postgres = createPostgres(config, logger);
   const redis = createRedis(config.redis.url, logger);
 
-  const gateway = config.providers.openrouterApiKey
-    ? createModelGateway({
-        openrouterApiKey: config.providers.openrouterApiKey,
-        profiles: buildProfiles(config.llm.models),
-      })
-    : null;
+  const gateway =
+    config.providers.openrouterApiKey || config.providers.anthropicApiKey
+      ? createModelGateway({
+          ...(config.providers.openrouterApiKey
+            ? { openrouterApiKey: config.providers.openrouterApiKey }
+            : {}),
+          ...(config.providers.anthropicApiKey
+            ? { anthropicApiKey: config.providers.anthropicApiKey }
+            : {}),
+          profiles: buildProfiles(config.llm.models),
+          onFallback: (info) =>
+            logger.warn(info, 'API di Anthropic non disponibile: ripiego su OpenRouter'),
+        })
+      : null;
   if (!gateway)
     logger.warn(
-      'OPENROUTER_API_KEY assente: i turni conversazionali risponderanno llm_unavailable',
+      'Né OPENROUTER_API_KEY né la chiave Anthropic: i turni conversazionali risponderanno llm_unavailable',
     );
 
   const storage = createMastraStorage({ connectionString: config.db.url, disableInit: true });

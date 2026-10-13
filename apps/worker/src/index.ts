@@ -61,12 +61,20 @@ async function main(): Promise<void> {
     ? createOpenAIEmbedder(config.providers.openaiApiKey, config.memory.embeddingModel)
     : createFakeEmbedder();
   const repo = createMemoryRepository(pool, embedder, { logger });
-  const gateway = config.providers.openrouterApiKey
-    ? createModelGateway({
-        openrouterApiKey: config.providers.openrouterApiKey,
-        profiles: buildProfiles(config.llm.models),
-      })
-    : null;
+  const gateway =
+    config.providers.openrouterApiKey || config.providers.anthropicApiKey
+      ? createModelGateway({
+          ...(config.providers.openrouterApiKey
+            ? { openrouterApiKey: config.providers.openrouterApiKey }
+            : {}),
+          ...(config.providers.anthropicApiKey
+            ? { anthropicApiKey: config.providers.anthropicApiKey }
+            : {}),
+          profiles: buildProfiles(config.llm.models),
+          onFallback: (info) =>
+            logger.warn(info, 'API di Anthropic non disponibile: ripiego su OpenRouter'),
+        })
+      : null;
   const threads = createConversationMemory(
     createMastraStorage({ connectionString: config.db.url, disableInit: true, max: 2 }),
   );
