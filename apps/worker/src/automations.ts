@@ -36,7 +36,13 @@ import {
 import type { MemoryRepository } from '@ernie/memory';
 import { createBudgetGuard, type LlmCallRecorder, type ModelGateway } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
-import { createReminderSkill, createShoppingListSkill, SkillRegistry } from '@ernie/skills';
+import {
+  createDiarySkill,
+  createPgActivityStore,
+  createReminderSkill,
+  createShoppingListSkill,
+  SkillRegistry,
+} from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
   createDocumentTools,
@@ -115,7 +121,9 @@ export async function startAutomations(
   }
   const skills = new SkillRegistry()
     .register(createShoppingListSkill(shopping))
-    .register(createReminderSkill(null));
+    .register(createReminderSkill(null))
+    // «Ogni sera alle 21 dimmi cosa hai fatto»: il diario funziona anche come automazione deterministica.
+    .register(createDiarySkill(createPgActivityStore(pool)));
 
   let guided: GuidedDeps | null = null;
   if (ctx.gateway) {

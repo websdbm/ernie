@@ -10,23 +10,33 @@ import {
 describe('catalogo delle skill', () => {
   it('senza impostazioni valgono i predefiniti; gli interruttori per utente li sovrascrivono', () => {
     expect([...enabledSkillIds(undefined)].sort()).toEqual([
+      'diario',
       'documenti',
       'ricette',
       'ricordami',
       'shopping_list',
     ]);
     expect([
-      ...enabledSkillIds({ skills: { ricette: false, documenti: false, ricordami: false } }),
+      ...enabledSkillIds({
+        skills: { ricette: false, documenti: false, ricordami: false, diario: false },
+      }),
     ]).toEqual(['shopping_list']);
     expect([
       ...enabledSkillIds({
-        skills: { shopping_list: false, ricette: false, documenti: false, ricordami: false },
+        skills: {
+          shopping_list: false,
+          ricette: false,
+          documenti: false,
+          ricordami: false,
+          diario: false,
+        },
       }),
     ]).toEqual([]);
   });
 
   it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
+      'diario',
       'documenti',
       'ricette',
       'ricordami',
@@ -34,12 +44,12 @@ describe('catalogo delle skill', () => {
     ]);
     expect([
       ...availableSkillIds({
-        skillsAvailable: { ricette: false, documenti: false, ricordami: false },
+        skillsAvailable: { ricette: false, documenti: false, ricordami: false, diario: false },
       }),
     ]).toEqual(['shopping_list']);
     expect([
       ...enabledSkillIds({
-        skillsAvailable: { ricette: false, documenti: false, ricordami: false },
+        skillsAvailable: { ricette: false, documenti: false, ricordami: false, diario: false },
         skills: { ricette: true },
       }),
     ]).toEqual(['shopping_list']);
@@ -47,7 +57,7 @@ describe('catalogo delle skill', () => {
     expect(
       [
         ...enabledSkillIds({
-          skillsAvailable: { ricette: true, documenti: false, ricordami: false },
+          skillsAvailable: { ricette: true, documenti: false, ricordami: false, diario: false },
           skills: { ricette: true },
         }),
       ].sort(),

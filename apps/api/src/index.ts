@@ -39,8 +39,11 @@ import {
 } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
 import {
+  createDiarySkill,
   createDocumentsSkill,
   createLearnedSkillRepository,
+  createMemorySkill,
+  createPgActivityStore,
   createRecipesSkill,
   createReminderSkill,
   createShoppingListSkill,
@@ -224,6 +227,19 @@ async function main(): Promise<void> {
         createRecipesSkill(),
         createDocumentsSkill(),
         createReminderSkill(reminders),
+        createDiarySkill(createPgActivityStore(postgres.pool)),
+        // «Cosa sai di me?», «perché sai che …?», «dimentica che …» (M9 A4): fuori catalogo, sempre attiva.
+        createMemorySkill({
+          search: (userId, query, limit) =>
+            memories.search({ userId, query, kinds: ['semantic'], limit }),
+          listActiveSemantic: (userId, limit) => memories.listActiveSemantic(userId, limit),
+          forget: async (userId, id) => {
+            const ok = await memories.forget(userId, id);
+            // Lo snapshot della memoria sta nel prefisso dell'agente di sessione: va ricostruito.
+            if (ok) companions.invalidateUser(userId);
+            return ok;
+          },
+        }),
       ],
       learned: learnedSkills,
     },

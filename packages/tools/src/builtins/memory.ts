@@ -2,6 +2,19 @@ import type { MemoryRepository } from '@ernie/memory';
 import { z } from 'zod';
 import { defineTool, type ToolSpec } from '../types.js';
 
+/** Provenienza di un ricordo in parole, per il modello. */
+export function sourceLabel(source: string, confidence: number, seenCount: number): string {
+  const base =
+    source === 'assistant' || source === 'user'
+      ? confidence >= 0.85
+        ? "detto dall'utente in una conversazione"
+        : "dedotto da una conversazione con l'utente"
+      : source === 'system'
+        ? "registro delle attività svolte con l'utente"
+        : `fonte esterna (${source}): da verificare`;
+  return seenCount > 1 ? `${base}; confermato ${seenCount} volte` : base;
+}
+
 /** `memory_search` come ToolSpec del registry (legge dati privati, nessun effetto esterno). */
 export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
   return defineTool({
@@ -9,7 +22,7 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
     version: '1',
     category: 'memory',
     description:
-      "Cerca nella memoria personale dell'utente: preferenze, abitudini, fatti, relazioni, progetti ed episodi passati. Usalo prima di chiedere qualcosa che l'utente potrebbe aver già detto.",
+      "Cerca nella memoria personale dell'utente: preferenze, abitudini, fatti, relazioni, progetti ed episodi passati. Usalo prima di chiedere qualcosa che l'utente potrebbe aver già detto, e quando chiede «perché lo sai?»: ogni risultato dice da dove viene (`source`) e quando è stato annotato.",
     risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false },
     timeoutMs: 5_000,
     inputSchema: z.object({
@@ -25,6 +38,8 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
           confidence: z.number(),
           date: z.string(),
           trusted: z.boolean(),
+          /** Provenienza in parole (M9 A4): per rispondere a «perché lo sai?». */
+          source: z.string(),
         }),
       ),
     }),
@@ -42,6 +57,7 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
           confidence: h.confidence,
           date: h.createdAt.toISOString().slice(0, 10),
           trusted: h.provenance.trust >= 0.5,
+          source: sourceLabel(h.provenance.source, h.confidence, h.seenCount),
         })),
       };
     },

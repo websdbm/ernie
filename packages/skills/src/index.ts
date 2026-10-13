@@ -1,5 +1,7 @@
 export * from './catalog.js';
+export * from './diary.js';
 export * from './learned.js';
+export * from './memory.js';
 export * from './proposals.js';
 export * from './registry.js';
 export * from './reminder.js';

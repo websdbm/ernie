@@ -121,6 +121,20 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultAvailable: true,
     defaultEnabled: true,
   },
+  {
+    id: 'diario',
+    title: 'Cosa ho fatto',
+    icon: 'clock.arrow.circlepath',
+    tint: 'teal',
+    summary: 'Resoconto di ciò che Ernie ha fatto per te, dai registri.',
+    description:
+      'Chiedi «cosa hai fatto oggi?», «ieri» o «questa settimana»: Ernie elenca liste, ricette, documenti, ricerche, promemoria, automazioni, ricordi nuovi, azioni fermate per sicurezza e quanto sono costati i modelli. Risposta presa dai registri, senza modello e senza costi.',
+    kind: 'deterministic',
+    tools: [],
+    examples: ['cosa hai fatto oggi?', 'cosa hai fatto ieri?', 'riepilogo della settimana'],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
 ];
 
 export const DOCUMENTS_SKILL_INSTRUCTIONS = [
