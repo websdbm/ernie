@@ -61,12 +61,16 @@ export interface DocumentRepository {
   remove(userId: string, id: string): Promise<boolean>;
 }
 
+/** Etichette nude come «Capitolo 1», «Unità 3», «Pag. 12»: non dicono di cosa parla il documento. */
+const BARE_LABEL =
+  /^(capitolo|cap\.?|unità|unita|lezione|parte|sezione|modulo|pagina|pag\.?)\s*[\dIVXLC]+\.?$/iu;
+
 /** Titolo dal testo: prima riga significativa (≤ 80 caratteri), altrimenti la data. */
 export function deriveTitle(pageTexts: readonly string[], now = new Date()): string {
   for (const page of pageTexts) {
     for (const raw of page.split('\n')) {
       const line = raw.replace(/\s+/g, ' ').trim();
-      if (line.length >= 4 && /\p{L}/u.test(line)) {
+      if (line.length >= 4 && /\p{L}/u.test(line) && !BARE_LABEL.test(line)) {
         return line.length > 80 ? `${line.slice(0, 77).trimEnd()}…` : line;
       }
     }

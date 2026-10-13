@@ -100,6 +100,10 @@ describe('titolo derivato dal testo', () => {
       'La fotosintesi clorofilliana',
     );
     expect(deriveTitle(['x'.repeat(100)]).length).toBe(78);
+    expect(deriveTitle(['Capitolo 1\n\nLa Mesopotamia\n\nLa Mesopotamia è la regione…'])).toBe(
+      'La Mesopotamia',
+    );
+    expect(deriveTitle(['UNITÀ IV\nI Romani'])).toBe('I Romani');
     expect(deriveTitle(['12 34', ''], new Date(2026, 9, 11))).toBe('Documento del 11/10/2026');
   });
 });

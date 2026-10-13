@@ -79,8 +79,11 @@ ws.addEventListener('message', (m) => {
     `${((Date.now() - t0) / 1000).toFixed(1)}s ${e.type} ${payload.length > 1200 ? `${payload.slice(0, 1200)}…` : payload}`,
   );
   if (e.type === 'assistant.completed' || e.type === 'error') {
-    ws.close();
-    process.exit(e.type === 'error' ? 1 : 0);
+    // Alcuni blocchi (la scheda «Fonti») arrivano subito dopo la fine del turno.
+    setTimeout(() => {
+      ws.close();
+      process.exit(e.type === 'error' ? 1 : 0);
+    }, 2500);
   }
 });
 ws.addEventListener('error', (err) => {
