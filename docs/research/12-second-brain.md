@@ -1,75 +1,80 @@
-# 12 — Second brain: proposta da discutere
+# 12 — Second brain
 
-> Stato: **proposta** (13 ottobre 2026). Nessun codice scritto. Richiesta dell'utente: «una seconda memoria esplicita che può comunicare con la memoria di Ernie e travasare da lì contenuti, o posso metterci io contenuti in vari modi, ad es. caricando file; struttura di un wiki, navigabile sia da me che da Ernie».
+> Stato: **progetto v2** (13 ottobre 2026), dopo tre giri di domande con l'utente. Nessun codice scritto.
+> Richiesta iniziale: «una seconda memoria esplicita che può comunicare con la memoria di Ernie e travasare da lì contenuti, o posso metterci io contenuti in vari modi, ad es. caricando file; struttura di un wiki, navigabile sia da me che da Ernie».
 
-## 1. L'idea in una frase
+## 1. Decisioni dell'utente
 
-La memoria di Ernie è **implicita**: fatti estratti in automatico dalle conversazioni, che Ernie usa senza che tu li veda. Il second brain è **esplicito**: pagine di un wiki che tu vedi, scrivi e correggi, e che Ernie legge, cita e propone di arricchire.
+| Tema | Decisione |
+|---|---|
+| Cosa ci va | Qualunque cosa: archivio di casa, note e idee, studio, persone e famiglia. «Può essere qualunque cosa che vado ad annotare in diversi modi.» |
+| Tempo e spazio | Ogni contenuto ha un **quando** e un **dove**. Il dove vale sia come luogo fisico sia come posto nella mappa delle idee. |
+| Richiamo | Diretto (lo chiedo io) e **suggerito** da Ernie in conversazione con un cenno breve, quando ha senso. |
+| Libertà di Ernie | **Libero**: crea, collega, riorganizza e riscrive, con la cronologia per tornare indietro. |
+| Travaso dalla memoria | **Lo propone Ernie** («ho 12 cose su Giorgio, ne faccio una pagina?»), tu accetti o scarti. |
+| Dove si legge e si scrive | App di Ernie e **Obsidian**, tramite un **repository git privato**. |
+| Primi modi di inserimento | **Voce o chat** («annota che…») e **foto e scansioni** con l'OCR sul telefono. |
+| Famiglia | **Solo tuo**: ognuno ha il proprio, Giorgio compreso. |
+| Scheda anagrafica | Diventa la pagina **«Chi sono»**; i familiari diventano pagine-persona. |
+| Note delicate | **Pagine riservate**: usate solo se le chiedi esplicitamente, mai nei suggerimenti. |
+| Nome | **Second brain**. |
 
-| | Memoria di Ernie | Second brain |
-|---|---|---|
-| Chi scrive | Ernie, da solo, dopo ogni turno | Tu; Ernie con le regole del §5 |
-| Forma | Fatti brevi, con date e affidabilità | Pagine con titolo, testo, collegamenti, fonti |
-| Visibilità | «Cosa ricordi di me?» (A4) | Navigabile nell'app come un wiki |
-| Autorità | Può sbagliare, va in dubbio (M1) | È la tua versione dei fatti: vince sui fatti in conflitto |
+## 2. Il modello: note in un grafo, con tempo e luogo
 
-## 2. Struttura del wiki
+Ogni elemento è una **nota** (una pagina markdown). Le note sono di pochi tipi, perché Ernie sappia trattarle e Obsidian le mostri bene:
 
-- **Pagina**: titolo, testo in markdown, sezione, etichette, data, autore (tu o Ernie), stato (bozza o confermata).
-- **Sezioni**: un albero semplice a due livelli, per esempio Persone, Casa, Scuola, Ricette, Salute, Progetti. Ne propongo alcune all'inizio e le puoi rinominare.
-- **Collegamenti** `[[Nome pagina]]` tra pagine, con l'elenco dei rimandi in fondo a ogni pagina («citata da»).
-- **Fonti** attaccate a ogni pagina: file caricato, documento, pagina web, conversazione, fatto della memoria. Ogni affermazione portata da Ernie dice da dove viene.
-- **Versioni**: ogni modifica è una revisione, con «annulla» e confronto. Copre anche la proposta C7 della ricerca 11.
-- **Pagina «Da sistemare»**: dove finisce quello che Ernie non sa dove mettere, da smistare quando vuoi.
+- **nota**: un pensiero, un'idea, un appunto («annota che…»);
+- **documento**: il testo letto da una foto o da un PDF, con le pagine e un riassunto;
+- **persona**, **luogo**, **progetto**, **argomento**: le pagine-concetto a cui le altre si collegano.
 
-## 3. Come entrano i contenuti
+Ogni nota ha in testa i suoi dati (frontmatter YAML, letto anche da Obsidian):
 
-1. **Scrivendo nell'app**: editor markdown semplice, con un pulsante per collegare un'altra pagina.
-2. **A voce o in chat**: «salva nel second brain che la verifica di storia è sul capitolo 3», «aggiungi alla pagina Giorgio che il dentista è il dottor Rossi». Ernie mostra l'anteprima prima di salvare.
-3. **Caricando file**: foto, PDF, scansioni. Si riusa la catena dei documenti già pronta: testo letto sul telefono, pezzi con pagina, citazioni verificate. Il file diventa una pagina con riassunto oppure la fonte di una pagina esistente.
-4. **Da un link**: Ernie legge la pagina web e ne fa un ritaglio con la fonte. Il contenuto web resta marcato come non fidato.
-5. **Travaso dalla memoria di Ernie**: vedi §4.
+```yaml
+tipo: nota
+creata: 2026-10-13T14:05
+riguarda: 2026-10-14          # quando accade o a quando si riferisce (anche un intervallo)
+luogo: Padova                  # nome leggibile
+coordinate: [45.41, 11.88]     # dal telefono, circa 1 km
+collegamenti: ["[[Giorgio]]", "[[Scuola]]"]
+riservata: false
+fonte: chat                    # chat, voce, foto, pdf, memoria
+```
 
-## 4. Il travaso tra le due memorie
+- **Tempo.** Ci sono due date: quando la nota nasce e a quando si riferisce. Si può chiedere «cosa avevo annotato a marzo?» oppure «cosa c'è in programma la settimana prossima?».
+- **Luogo fisico.** Viene preso dalla posizione del telefono al momento dell'annotazione (la stessa della versione 1.10 del protocollo), oppure dal luogo detto. Così si può chiedere «cosa avevo annotato a Verona?» e vedere le note su una mappa.
+- **Mappa delle idee.** I collegamenti `[[…]]` formano il grafo, che Obsidian disegna già. Ernie aggiunge i collegamenti quando riconosce persone, luoghi, progetti e argomenti, e crea la pagina-concetto se manca.
 
-**Dalla memoria al wiki.** Ernie raggruppa i fatti che parlano della stessa cosa (tutti quelli su Giorgio, sulla casa, sulle allergie) e propone una pagina o un'aggiunta: «Ho 12 cose su Giorgio: ne faccio una pagina?». Tu accetti, correggi o scarti. I fatti travasati restano nella memoria con un rimando alla pagina.
+## 3. Dove stanno i dati: git per te, Postgres per Ernie
 
-**Dal wiki a Ernie.** Ernie non copia le pagine nella memoria, le legge quando servono:
-- nel prompt c'è solo l'**indice dei titoli** (poche centinaia di token, nel prefisso che resta in cache);
-- quando la domanda tocca una pagina, Ernie la cerca e la legge con un tool, e cita la pagina come cita le pagine dei documenti;
-- se un fatto della memoria contraddice una pagina confermata, vince la pagina e il fatto va «in dubbio» con il giudice M1 già in esercizio.
+- **Fonte di verità: un repository git privato** con una cartella di file markdown, il vault di Obsidian. Ogni modifica di Ernie è un commit con un messaggio leggibile («Ernie: collegata la nota sulla gita a [[Giorgio]]»). Tornare indietro è un `revert`, ed è questo che rende accettabile la mano libera.
+- **Indice per Ernie in Postgres.** Contiene pezzi con vettori e full-text (la stessa ricerca ibrida dei documenti), date, coordinate e grafo dei collegamenti. È ricostruibile dal repository in qualunque momento.
+- **Sincronizzazione.** Il server fa pull ogni pochi minuti e reindicizza i file cambiati. Scrive e fa push subito dopo ogni sua modifica. Obsidian sul Mac usa il plugin Git. Se tu ed Ernie modificate lo stesso file nello stesso momento, si tengono entrambe le versioni e Ernie te lo segnala.
+- **Allegati.** Gli originali di foto e PDF non vanno sul server, come già oggi: nel vault c'è il testo letto con l'OCR. Se vuoi conservare l'originale, lo metti tu nel vault da Obsidian.
 
-## 5. Cosa può fare Ernie nel wiki
+## 4. Come entrano i contenuti (prima fase)
 
-Propongo questa regola:
-- **Leggere e cercare**: sempre.
-- **Creare bozze e aggiungere in fondo a una pagina**: sì, con revisione visibile e notifica nel diario «Cosa ho fatto».
-- **Riscrivere o cancellare** testo scritto da te: mai senza conferma.
-- **Contenuti da web o file**: entrano come bozza con la fonte, mai mescolati in silenzio al tuo testo. La Rule of Two già attiva impedisce che un testo ostile muova dati privati verso l'esterno.
+1. **Voce o chat.** «Annota che il codice della caldaia è 4471», «metti nel second brain che a Giorgio piacciono i Lego Technic». Ernie decide tipo, data di riferimento, luogo e collegamenti, poi conferma in una riga: «Annotato in [[Casa]], collegato a [[Caldaia]]».
+2. **Foto e scansioni.** Si usa la catena dei documenti già pronta: OCR sul telefono, pezzi con pagina, citazioni verificate. Il documento diventa una nota di tipo documento, con il riassunto e i collegamenti.
+3. **Travaso dalla memoria.** Ernie raggruppa i ricordi sparsi sullo stesso tema e propone una pagina. Dopo il travaso, i ricordi restano con un rimando alla pagina.
 
-## 6. Come si naviga
+Condividi da altre app e inoltro email vengono dopo.
 
-**Tu, nell'app**: una scheda «Second brain» con sezioni, ricerca, pagina con collegamenti e fonti, pulsante «Chiedi a Ernie su questa pagina». Anche il widget potrebbe mostrare una pagina fissata.
+## 5. Come Ernie lo usa
 
-**Ernie, con i tool**: `wiki_search` (ricerca ibrida come per i documenti), `wiki_read`, `wiki_list` per sezione, `wiki_propose` per bozze e aggiunte. Sono tool di sola lettura tranne l'ultimo, che passa dalle regole del §5.
+- **Richiamo diretto.** Strumenti `brain_search`, `brain_read`, `brain_write`, `brain_link`, con filtri per tempo, luogo, tipo e collegamenti. Ernie cita la nota come oggi cita le pagine dei documenti, con una scheda «Fonti».
+- **Suggerimento in contesto.** A ogni turno una ricerca veloce, senza modello, trova le note pertinenti. Se una supera la soglia, nel contesto del turno arriva un cenno, e Ernie lo dice in una riga: «Ho una nota su questo dell'anno scorso, vuoi che la riprenda?». Al massimo una volta per argomento per conversazione. Mai le pagine riservate.
+- **Pagine riservate.** Non entrano nella ricerca dei suggerimenti né nel contesto automatico. Ernie le legge solo se nomini la pagina o chiedi esplicitamente di cercare tra le riservate.
+- **«Chi sono».** È la scheda anagrafica resa come pagina e resta in cima al contesto di Ernie. Una modifica alla pagina in Obsidian aggiorna la scheda, e viceversa. Giorgio, Laura e gli altri familiari diventano pagine-persona a cui collegare note, regali e ricorrenze.
+- **Memoria e second brain.** La memoria resta l'annotazione automatica e veloce. Il second brain è il posto ordinato. In caso di contrasto vale il second brain, come già vale la scheda sui ricordi.
 
-## 7. Dove stanno i dati
+## 6. Fasi
 
-Consiglio Postgres, come il resto: pagine, revisioni e pezzi con vettori, con isolamento per utente già garantito dalla RLS. Così si riusano ricerca ibrida, citazioni e backup. In più, un'**esportazione in cartella markdown** compatibile con Obsidian, per non restare chiusi dentro Ernie.
+1. **B1, il cuore.** Repository git e indice; note con tempo, luogo e collegamenti; «annota che…» da chat e voce; documenti da foto; ricerca e citazioni; pagina «Chi sono»; scheda iOS per sfogliare, cercare e leggere.
+2. **B2, il grafo vivo.** Pagine-concetto create da Ernie, travaso proposto dalla memoria, suggerimenti in conversazione, pagine riservate, mappa dei luoghi e linea del tempo nell'app.
+3. **B3, apertura.** Condividi da altre app, inoltro email, modifica delle note dall'app, riorganizzazioni proposte da Ernie («queste 8 note sulla caldaia: le unisco?»).
 
-L'alternativa è tenere i file markdown in una cartella sincronizzata (Obsidian, iCloud) come fonte primaria. È più aperta ma complica conflitti, ricerca e permessi. La terrei come seconda fase, solo se ti serve modificare da computer.
+## 7. Da confermare prima di partire
 
-## 8. Fasi proposte
-
-1. **B1, il minimo utile**: pagine, sezioni, revisioni; salvataggio da chat e da file; ricerca e citazioni per Ernie; scheda iOS per leggere e modificare.
-2. **B2, il travaso**: proposte dalla memoria, collegamenti e rimandi, pagina «Da sistemare», precedenza del wiki sui fatti in conflitto.
-3. **B3, apertura**: pagine condivise in famiglia, esportazione markdown, eventuale sincronizzazione con Obsidian.
-
-## 9. Decisioni da prendere insieme
-
-1. **Quanta libertà dai a Ernie**: solo bozze da approvare, oppure aggiunte libere con revisione visibile come propongo al §5?
-2. **Travaso**: Ernie propone da solo ogni tanto, oppure solo quando glielo chiedi?
-3. **Struttura**: sezioni proposte da me, oppure parti da zero con sole etichette e collegamenti?
-4. **Famiglia**: le pagine restano solo tue, oppure alcune sezioni (per esempio Casa) si possono condividere con Giorgio?
-5. **Obsidian**: ti serve modificare il wiki anche dal computer? Cambia la scelta del §7.
-6. **Nome nell'app**: «Second brain», «Quaderno», «Wiki» o altro?
+- **Repository.** Va creato un repository GitHub privato sul tuo account `websdbm`, per esempio `ernie-brain`. Il server di staging3 ha bisogno di una chiave di deploy con permesso di scrittura solo su quel repository. Sono azioni sul tuo account: le preparo io, ma servono il tuo via libera e il tuo controllo sulla chiave.
+- **Obsidian sul Mac** con il plugin Git, configurato una volta. Su iPhone il plugin funziona male, ma lì c'è l'app di Ernie.
+- **Il modello vede le note.** Ricerca e citazioni mandano al modello AI i pezzi pertinenti, come oggi con i documenti. Le riservate no, salvo tua richiesta esplicita.
