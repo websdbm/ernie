@@ -12,6 +12,8 @@ export interface MeRoutesOptions {
   readonly version: string;
 }
 
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
 /** Impostazioni modificabili dall'utente (chiavi in allowlist): il resto di `users.settings` resta intatto. */
 const SettingsPatch = z
   .object({
@@ -20,6 +22,10 @@ const SettingsPatch = z
     speakReplies: z.boolean().optional(),
     email: z.string().trim().email().max(120).or(z.literal('')).optional(),
     emailNotifications: z.boolean().optional(),
+    /** Gate della proattività (M9 A3): messaggi spontanei sì/no, ore di quiete, tetto giornaliero. */
+    proactive: z.boolean().optional(),
+    quietHours: z.object({ start: HHMM, end: HHMM }).strict().nullable().optional(),
+    proactiveDailyCap: z.number().int().min(0).max(10).optional(),
   })
   .strict();
 
@@ -72,7 +78,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
       if (!b.success)
         return badRequest(
           reply,
-          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, emailNotifications',
+          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, emailNotifications, proactive, quietHours, proactiveDailyCap',
         );
       const row = await withUser(
         opts.pool,

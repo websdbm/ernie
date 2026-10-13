@@ -138,6 +138,9 @@ struct AvatarGazePayload: Codable, Sendable, Equatable {
     var charOffset: Int?
 }
 
+/// v1.9: nuove notifiche nella casella (es. messaggio spontaneo passato dal gate).
+struct InboxUpdatedPayload: Codable, Sendable, Equatable { var kind: String? }
+
 struct AutomationRunUpdatedPayload: Codable, Sendable, Equatable {
     var automationId: String
     var runId: String
@@ -469,6 +472,7 @@ enum EventPayload: Sendable, Equatable {
     case avatarGesture(AvatarGesturePayload)
     case avatarGaze(AvatarGazePayload)
     case automationRunUpdated(AutomationRunUpdatedPayload)
+    case inboxUpdated(InboxUpdatedPayload)
     case assistantBlock(AssistantBlockPayload)
     case error(ErrorPayload)
     /// Tipo non conosciuto da questa versione del client: ignorato, non è un errore.
@@ -496,6 +500,7 @@ enum EventPayload: Sendable, Equatable {
         case .avatarGesture: "avatar.gesture"
         case .avatarGaze: "avatar.gaze"
         case .automationRunUpdated: "automation.run.updated"
+        case .inboxUpdated: "inbox.updated"
         case .assistantBlock: "assistant.block"
         case .error: "error"
         case .unknown(let type): type
@@ -568,6 +573,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case "avatar.gesture": payload = .avatarGesture(try c.decode(AvatarGesturePayload.self, forKey: .payload))
         case "avatar.gaze": payload = .avatarGaze(try c.decode(AvatarGazePayload.self, forKey: .payload))
         case "automation.run.updated": payload = .automationRunUpdated(try c.decode(AutomationRunUpdatedPayload.self, forKey: .payload))
+        case "inbox.updated": payload = .inboxUpdated(try c.decode(InboxUpdatedPayload.self, forKey: .payload))
         case "assistant.block": payload = .assistantBlock(try c.decode(AssistantBlockPayload.self, forKey: .payload))
         case "error": payload = .error(try c.decode(ErrorPayload.self, forKey: .payload))
         default: payload = .unknown(type: type)
@@ -605,6 +611,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case .avatarGesture(let p): try c.encode(p, forKey: .payload)
         case .avatarGaze(let p): try c.encode(p, forKey: .payload)
         case .automationRunUpdated(let p): try c.encode(p, forKey: .payload)
+        case .inboxUpdated(let p): try c.encode(p, forKey: .payload)
         case .assistantBlock(let p): try c.encode(p, forKey: .payload)
         case .error(let p): try c.encode(p, forKey: .payload)
         }

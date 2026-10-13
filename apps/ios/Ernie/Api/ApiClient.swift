@@ -38,6 +38,7 @@ enum JSONValue: Codable, Sendable, Equatable {
     }
     var stringValue: String? { if case .string(let s) = self { return s }; return nil }
     var boolValue: Bool? { if case .bool(let b) = self { return b }; return nil }
+    var intValue: Int? { if case .number(let n) = self { return Int(n) }; return nil }
     var arrayValue: [JSONValue]? { if case .array(let a) = self { return a }; return nil }
 
     /// Rappresentazione compatta e leggibile (per anteprime degli argomenti).

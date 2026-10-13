@@ -4,6 +4,7 @@ import {
   type AutomationRepository,
   dedupeKeys,
   enqueueRun,
+  type ProactiveCandidate,
 } from '@ernie/automations';
 import type { ContentBlock } from '@ernie/protocol';
 import {
@@ -35,6 +36,12 @@ export interface ReminderStoreDeps {
   readonly family?: FamilyRepository;
   /** Avvisa subito il destinatario (scheda nelle sessioni connesse): la notifica locale parte da lì. */
   readonly notifyRecipient?: (userId: string, block: ContentBlock) => Promise<void>;
+  /**
+   * Gate della proattività (M9 A3): l'avviso «papà ti ha messo un promemoria» è un messaggio spontaneo
+   * per chi lo riceve, quindi rispetta ore di quiete, tetto giornaliero e interruttore. Il promemoria in sé
+   * suona comunque all'ora scelta.
+   */
+  readonly proactive?: (c: ProactiveCandidate) => Promise<unknown>;
 }
 
 const KEY_PREFIX = 'promemoria_';
@@ -150,6 +157,26 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
   };
 
   const announce = async (recipient: string, r: Reminder, fromLabel: string, timezone: string) => {
+    if (deps.proactive) {
+      try {
+        await deps.proactive({
+          userId: recipient,
+          kind: 'family_reminder',
+          dedupeKey: `family_reminder:${r.id}`,
+          title: `${fromLabel} ti ha messo un promemoria`,
+          body: `${r.text} (${formatWhen(r.at, timezone)})`,
+          payload: {
+            reminderId: r.id,
+            at: r.at.toISOString(),
+            block: toRemindersBlock([r], `Promemoria da ${fromLabel}`),
+          },
+          evidence: { source: 'family', refs: [`automations:${r.id}`] },
+        });
+      } catch {
+        /* avviso non riuscito: all'ora stabilita il worker notifica comunque */
+      }
+      return;
+    }
     try {
       await deps.automations.notify(recipient, {
         kind: 'reminder.assigned',

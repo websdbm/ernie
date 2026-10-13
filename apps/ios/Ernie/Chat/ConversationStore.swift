@@ -295,7 +295,7 @@ final class ConversationStore {
             }
         case .avatarEmotion(let p):
             lastAvatarEmotion = p.name
-        case .automationRunUpdated:
+        case .automationRunUpdated, .inboxUpdated:
             inbox.scheduleRefresh()
         case .error(let p):
             if p.code == "busy" {

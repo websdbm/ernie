@@ -109,6 +109,43 @@ const queue = {
 } as unknown as AutomationQueue;
 
 describe('store dei promemoria con Famiglia', () => {
+  it('con il gate della proattività l’avviso a Giorgio passa da lì (non più notifica diretta)', async () => {
+    const fa = fakeAutomations();
+    const offered: Array<{ userId: string; kind: string; dedupeKey: string; source: string }> = [];
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+      family: fakeFamily(),
+      proactive: async (c) => {
+        offered.push({
+          userId: c.userId,
+          kind: c.kind,
+          dedupeKey: c.dedupeKey,
+          source: c.evidence.source,
+        });
+        expect(c.payload?.block).toMatchObject({ kind: 'reminders', title: 'Promemoria da papà' });
+        return 'send';
+      },
+    });
+    const r = await store.create(PAPA, {
+      text: 'chiamarmi',
+      at: future,
+      timezone: 'Europe/Rome',
+      forLabel: 'Giorgio',
+    });
+    expect(offered).toEqual([
+      {
+        userId: GIORGIO,
+        kind: 'family_reminder',
+        dedupeKey: `family_reminder:${r.id}`,
+        source: 'family',
+      },
+    ]);
+    expect(fa.notifications).toEqual([]);
+  });
+
   it('«ricorda a Giorgio»: automazione nell’account di Giorgio, visibile a entrambi con le etichette giuste', async () => {
     const fa = fakeAutomations();
     const pushed: { userId: string; title: string }[] = [];

@@ -3,6 +3,7 @@ export * from './devices.js';
 export * from './email.js';
 export * from './events.js';
 export * from './notify.js';
+export * from './proactive.js';
 export * from './push.js';
 export * from './queue.js';
 export * from './repository.js';

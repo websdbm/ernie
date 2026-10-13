@@ -23,6 +23,8 @@ export interface ActivitySummary {
   readonly memories: readonly string[];
   readonly blocked: readonly { toolId: string; reason: string }[];
   readonly pendingApprovals: number;
+  /** Messaggi mandati di mia iniziativa (gate della proattività), per motivo. */
+  readonly proactive?: readonly string[];
   readonly llm: { readonly calls: number; readonly costUsd: number };
 }
 
@@ -153,6 +155,18 @@ export function formatDiary(
         .map((b) => `${b.toolId} (${b.reason})`)
         .join(', ')}`,
     );
+  if (s.proactive?.length) {
+    const reason: Record<string, string> = {
+      approval_expiring: 'una conferma in scadenza',
+      family_reminder: 'un promemoria da un familiare',
+    };
+    lines.push(
+      `- **Di mia iniziativa**: ti ho scritto ${s.proactive.length} ${s.proactive.length === 1 ? 'volta' : 'volte'} (${list(
+        s.proactive.map((k) => reason[k] ?? k),
+        3,
+      )})`,
+    );
+  }
   if (s.pendingApprovals)
     lines.push(
       `- **Aspetta la tua conferma**: ${s.pendingApprovals} ${s.pendingApprovals === 1 ? 'azione' : 'azioni'}`,
@@ -227,6 +241,7 @@ export function createPgActivityStore(pool: Pool): ActivityStore {
           memories,
           pending,
           llm,
+          proactive,
         ] = await Promise.all([
           q<{ name: string; list: string }>(
             `SELECT i.name, l.name AS list FROM shopping_items i JOIN shopping_lists l ON l.id = i.list_id
@@ -285,6 +300,10 @@ export function createPgActivityStore(pool: Pool): ActivityStore {
             `SELECT count(*)::text AS calls, sum(coalesce(cost_reported_usd, cost_estimated_usd))::text AS cost
                  FROM llm_calls WHERE created_at >= $1 AND created_at < $2`,
           ),
+          q<{ kind: string }>(
+            `SELECT kind FROM proactive_messages WHERE status = 'sent' AND sent_at >= $1 AND sent_at < $2
+              ORDER BY sent_at LIMIT 20`,
+          ),
         ]);
         const reminderText = (title: string) =>
           title.replace(/^Promemoria(?: da [^:]+)?:\s*/u, '').slice(0, 80);
@@ -320,6 +339,7 @@ export function createPgActivityStore(pool: Pool): ActivityStore {
               reason: (t.error ?? 'non autorizzato').slice(0, 80),
             })),
           pendingApprovals: Number(pending[0]?.n ?? 0),
+          proactive: proactive.map((p) => p.kind),
           llm: { calls: Number(llm[0]?.calls ?? 0), costUsd: Number(llm[0]?.cost ?? 0) },
         };
       });

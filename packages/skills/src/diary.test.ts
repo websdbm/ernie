@@ -82,6 +82,7 @@ describe('diario: testo', () => {
         memories: ['Preferisce il tè al caffè'],
         blocked: [{ toolId: 'web_search', reason: 'non autorizzato (expired)' }],
         pendingApprovals: 1,
+        proactive: ['family_reminder'],
         llm: { calls: 14, costUsd: 0.1234 },
       },
       'Europe/Rome',
@@ -99,6 +100,9 @@ describe('diario: testo', () => {
     expect(text).toContain('- **Ho imparato**: Preferisce il tè al caffè');
     expect(text).toContain('- **Fermato per sicurezza**: web_search');
     expect(text).toContain('- **Aspetta la tua conferma**: 1 azione');
+    expect(text).toContain(
+      '- **Di mia iniziativa**: ti ho scritto 1 volta (un promemoria da un familiare)',
+    );
     expect(text).toContain('Spesa dei modelli: 0,12 $ (14 chiamate).');
   });
 

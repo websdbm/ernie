@@ -10,13 +10,16 @@ import {
   createDeviceRepository,
   createPushSender,
   dedupeKeys,
+  deliverDueProactive,
   enqueueRun,
   executeRun,
   type GuidedDeps,
   jitterMs,
   notifyDeadLetter,
   PermanentError,
+  type ProactiveDeps,
   previousOccurrence,
+  produceApprovalReminders,
   type RunJobData,
   type RunnerDeps,
   syncSchedulers,
@@ -273,8 +276,33 @@ export async function startAutomations(
       );
     }
   };
+  // Gate della proattività (M9 A3): a ogni giro consegna i messaggi rimandati (ore di quiete, intervallo
+  // minimo) e propone i promemoria delle conferme in scadenza; il registro evita i doppioni.
+  const proactive: ProactiveDeps = {
+    pool,
+    repo,
+    redis: connection,
+    logger,
+    ...(push ? { push } : {}),
+  };
+  const proactiveTick = async () => {
+    try {
+      const offered = await produceApprovalReminders(proactive);
+      const delivered = await deliverDueProactive(proactive);
+      if (offered || delivered) logger.info({ offered, delivered }, 'giro dei messaggi spontanei');
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'giro dei messaggi spontanei fallito',
+      );
+    }
+  };
   await sync();
-  const timer = setInterval(() => void sync(), config.automations.syncEverySeconds * 1000);
+  await proactiveTick();
+  const timer = setInterval(() => {
+    void sync();
+    void proactiveTick();
+  }, config.automations.syncEverySeconds * 1000);
 
   return {
     async close() {

@@ -12,6 +12,58 @@ struct SettingsView: View {
     @State private var emailError: String?
     @State private var showChangeServer = false
 
+    // Gate della proattività (M9 A3): messaggi spontanei, ore di quiete, tetto giornaliero.
+    @State private var proactive = true
+    @State private var quietOn = true
+    @State private var quietStart = SettingsView.time("22:00")
+    @State private var quietEnd = SettingsView.time("07:30")
+    @State private var dailyCap = 4
+    @State private var proactiveError: String?
+    /// Evita che il caricamento iniziale (che imposta i selettori) salvi di nuovo le impostazioni.
+    @State private var proactiveLoaded = false
+
+    static func time(_ hhmm: String) -> Date {
+        let parts = hhmm.split(separator: ":").compactMap { Int($0) }
+        var c = DateComponents()
+        c.hour = parts.first ?? 0
+        c.minute = parts.count > 1 ? parts[1] : 0
+        return Calendar.current.date(from: c) ?? .now
+    }
+
+    static func hhmm(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+
+    private func loadProactive() {
+        let s = model.profile?.settings
+        proactive = s?["proactive"]?.boolValue ?? true
+        if case .null? = s?["quietHours"] { quietOn = false } else {
+            quietOn = true
+            quietStart = Self.time(s?["quietHours"]?["start"]?.stringValue ?? "22:00")
+            quietEnd = Self.time(s?["quietHours"]?["end"]?.stringValue ?? "07:30")
+        }
+        if let cap = s?["proactiveDailyCap"]?.intValue { dailyCap = cap }
+    }
+
+    private func saveProactive() async {
+        guard proactiveLoaded, let api = model.api else { return }
+        let quiet: JSONValue = quietOn
+            ? .object(["start": .string(Self.hhmm(quietStart)), "end": .string(Self.hhmm(quietEnd))])
+            : .null
+        do {
+            let settings = try await api.updateSettings([
+                "proactive": .bool(proactive),
+                "quietHours": quiet,
+                "proactiveDailyCap": .number(Double(dailyCap)),
+            ])
+            model.applySettings(settings)
+            proactiveError = nil
+        } catch {
+            proactiveError = AppModel.describe(error)
+        }
+    }
+
     private func loadEmail() {
         let s = model.profile?.settings
         email = s?["email"]?.stringValue ?? ""
@@ -89,6 +141,31 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section {
+                    Toggle("Messaggi di Ernie di sua iniziativa", isOn: Binding(
+                        get: { proactive },
+                        set: { proactive = $0; Task { await saveProactive() } }
+                    ))
+                    if proactive {
+                        Toggle("Ore di silenzio", isOn: Binding(
+                            get: { quietOn },
+                            set: { quietOn = $0; Task { await saveProactive() } }
+                        ))
+                        if quietOn {
+                            DatePicker("Dalle", selection: $quietStart, displayedComponents: .hourAndMinute)
+                                .onChange(of: quietStart) { Task { await saveProactive() } }
+                            DatePicker("Alle", selection: $quietEnd, displayedComponents: .hourAndMinute)
+                                .onChange(of: quietEnd) { Task { await saveProactive() } }
+                        }
+                        Stepper("Al massimo \(dailyCap) al giorno", value: $dailyCap, in: 0...10)
+                            .onChange(of: dailyCap) { Task { await saveProactive() } }
+                    }
+                    if let proactiveError { Text(proactiveError).font(.caption).foregroundStyle(.red) }
+                } header: {
+                    Text("Proattività")
+                } footer: {
+                    Text("Ernie ti scrive per primo solo per motivi precisi (una conferma che sta per scadere, un promemoria messo da un familiare), mai nelle ore di silenzio: in quel caso aspetta. I promemoria che chiedi tu suonano sempre all'ora scelta.")
+                }
+                Section {
                     NavigationLink("Persone collegate e inviti") { FamilyView() }
                 } header: {
                     Text("Famiglia")
@@ -130,6 +207,9 @@ struct SettingsView: View {
                 await model.refreshProfile()
                 killSwitch = model.profile?.killSwitch ?? false
                 loadEmail()
+                loadProactive()
+                try? await Task.sleep(for: .milliseconds(300))
+                proactiveLoaded = true
             }
         }
     }

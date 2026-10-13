@@ -10,6 +10,7 @@ import {
   createAutomationQueue,
   createAutomationRepository,
   createEventPublisher,
+  offerProactive,
   publishUserEvent,
   subscribeUserEvents,
 } from '@ernie/automations';
@@ -137,6 +138,8 @@ async function main(): Promise<void> {
         type: 'assistant.block',
         payload: { blockId: randomUUID(), block },
       }),
+    proactive: (c) =>
+      offerProactive({ pool: postgres.pool, repo: automations, redis: redis.client, logger }, c),
   });
 
   // Tool Registry: nucleo (orario, memoria) + lista della spesa + web (solo con chiave Firecrawl).

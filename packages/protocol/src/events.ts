@@ -216,6 +216,12 @@ export const AvatarGesture = event(
 );
 export const AvatarGaze = event('avatar.gaze', z.object({ target: AvatarGazeTarget, charOffset }));
 
+/** v1.9: nuove notifiche nella casella (es. un messaggio spontaneo passato dal gate): il client le rilegge. */
+export const InboxUpdated = event(
+  'inbox.updated',
+  z.object({ kind: z.string().max(80).optional() }),
+);
+
 export const AutomationRunUpdated = event(
   'automation.run.updated',
   z.object({
@@ -477,6 +483,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   AvatarGesture,
   AvatarGaze,
   AutomationRunUpdated,
+  InboxUpdated,
   AssistantBlock,
   ErrorEvent,
 ]);
@@ -520,6 +527,7 @@ export const EVENT_DIRECTION = {
   'avatar.gesture': 'server→client',
   'avatar.gaze': 'server→client',
   'automation.run.updated': 'server→client',
+  'inbox.updated': 'server→client',
   'assistant.block': 'server→client',
   error: 'server→client',
 } as const satisfies Record<EventType, EventDirection>;
@@ -550,6 +558,7 @@ export const EVENT_AUDIENCE = {
   'avatar.gesture': 'runtime',
   'avatar.gaze': 'runtime',
   'automation.run.updated': 'user',
+  'inbox.updated': 'user',
   'assistant.block': 'user',
   error: 'user',
 } as const satisfies Record<EventType, EventAudience>;

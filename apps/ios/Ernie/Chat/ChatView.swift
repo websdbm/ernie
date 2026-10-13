@@ -305,6 +305,8 @@ struct NotificationCardView: View {
         switch card.kind {
         case "automation.approval": "hand.raised"
         case "automation.paused": "pause.circle"
+        case "proactive.approval_expiring": "hourglass"
+        case "proactive.family_reminder": "person.2.fill"
         case "automation.error", "automation.deadletter": "exclamationmark.triangle"
         default: "sparkles"
         }
