@@ -23,6 +23,8 @@ export interface MemoryLookup {
   search(userId: string, query: string, limit: number): Promise<MemoryFact[]>;
   listActiveSemantic(userId: string, limit: number): Promise<MemoryFact[]>;
   forget(userId: string, id: string): Promise<boolean>;
+  /** Righe della scheda anagrafica (nome, età, famiglia…), mostrate per prime: hanno la precedenza sui ricordi. */
+  profileLines?(userId: string): Promise<string[]>;
 }
 
 export type MemoryPlan =
@@ -128,6 +130,15 @@ export function createMemorySkill(
       if (!store) return { text: 'La memoria non è disponibile su questo server.', actions: [] };
       if (p.op === 'list') {
         const facts = await store.listActiveSemantic(ctx.userId, 40);
+        const profile = (await store.profileLines?.(ctx.userId).catch(() => [])) ?? [];
+        const card = profile.length
+          ? `**La tua scheda** (puoi correggerla in Impostazioni › La tua scheda)\n${profile.join('\n')}\n\n`
+          : '';
+        if (facts.length === 0 && card)
+          return {
+            text: `${card}Altri ricordi su di te non ne ho ancora: li annoto quando mi racconti preferenze, abitudini, persone e progetti.`,
+            actions: ['ricordi:list'],
+          };
         if (facts.length === 0)
           return {
             text: 'Non ho ancora ricordi su di te: li annoto quando mi racconti preferenze, abitudini, persone e progetti.',
@@ -145,7 +156,7 @@ export function createMemorySkill(
           )
           .join('\n\n');
         return {
-          text: `Ecco cosa ricordo di te (${facts.length}):\n\n${body}\n\nChiedimi «perché sai che …?» per la provenienza, o «dimentica che …» per cancellare un ricordo.`,
+          text: `${card}Ecco cosa ricordo di te (${facts.length}):\n\n${body}\n\nChiedimi «perché sai che …?» per la provenienza, o «dimentica che …» per cancellare un ricordo.`,
           actions: ['ricordi:list'],
         };
       }

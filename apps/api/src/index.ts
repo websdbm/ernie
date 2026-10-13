@@ -36,10 +36,12 @@ import {
   createMemoryQueue,
   createMemoryRepository,
   createOpenAIEmbedder,
+  createProfileStore,
   createSessionSummaryStore,
   enqueueConsolidation,
   enqueueSessionSummary,
   recordTurnEpisode,
+  renderProfile,
   renderSessionSummary,
 } from '@ernie/memory';
 import {
@@ -135,6 +137,7 @@ async function main(): Promise<void> {
   if (!config.providers.openaiApiKey)
     logger.warn('OPENAI_API_KEY assente: memoria con embedder finto (solo full-text)');
   const memories = createMemoryRepository(postgres.pool, embedder, { logger });
+  const profiles = createProfileStore(postgres.pool);
   const memoryQueue = createMemoryQueue(redis.client);
 
   // Automation Engine (M6): definizioni e run nel database, coda BullMQ condivisa con il worker, eventi interni.
@@ -267,6 +270,7 @@ async function main(): Promise<void> {
     souls: createSoulRepository(postgres.pool),
     logger,
     memories,
+    profiles,
     snapshotMaxChars: config.memory.snapshotMaxChars,
     sessionSummary: async (userId, sessionId) => {
       const s = await sessionSummaries.get(userId, sessionId);
@@ -300,6 +304,10 @@ async function main(): Promise<void> {
           search: (userId, query, limit) =>
             memories.search({ userId, query, kinds: ['semantic'], limit }),
           listActiveSemantic: (userId, limit) => memories.listActiveSemantic(userId, limit),
+          profileLines: async (userId) =>
+            renderProfile(await profiles.get(userId))
+              .split('\n')
+              .slice(1),
           forget: async (userId, id) => {
             const ok = await memories.forget(userId, id);
             // Lo snapshot della memoria sta nel prefisso dell'agente di sessione: va ricostruito.
@@ -416,6 +424,14 @@ async function main(): Promise<void> {
       repo: family,
       onChanged: (userId) => companions.invalidateUser(userId),
     },
+    profile: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      profiles,
+      linked: async (userId) =>
+        (await family.list(userId)).map((l) => ({ label: l.label, relation: l.relation })),
+      onChanged: (userId) => companions.invalidateUser(userId),
+    },
     toolRules: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -446,6 +462,7 @@ async function main(): Promise<void> {
           return items.length ? { kind: 'citations', title: 'Fonti', items } : null;
         },
         intents,
+        profiles,
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,

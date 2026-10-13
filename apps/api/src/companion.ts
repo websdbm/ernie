@@ -4,7 +4,12 @@ import {
   type Memory,
   SessionAgentCache,
 } from '@ernie/agent-core';
-import { buildMemorySnapshot, type MemoryRepository } from '@ernie/memory';
+import {
+  buildMemorySnapshot,
+  type MemoryRepository,
+  type ProfileStore,
+  renderProfile,
+} from '@ernie/memory';
 import type { ModelGateway } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
@@ -31,6 +36,8 @@ export interface CompanionFactoryDeps {
   readonly logger: Logger;
   readonly cache?: SessionAgentCache;
   readonly memories?: MemoryRepository;
+  /** Scheda anagrafica: in cima al prefisso, prevale sulle memorie (richiesta dell'utente, 13 ott 2026). */
+  readonly profiles?: ProfileStore;
   readonly snapshotMaxChars?: number;
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva. */
   readonly compaction?: { readonly minChars: number; readonly historyBudgetChars: number } | false;
@@ -155,6 +162,18 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       });
 
       let memorySnapshot: string | undefined;
+      // Scheda anagrafica prima di tutto il resto: nome, come chiamarlo, età, famiglia.
+      let profileText = '';
+      if (deps.profiles) {
+        try {
+          profileText = renderProfile(await deps.profiles.get(auth.userId));
+        } catch (err) {
+          deps.logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'scheda anagrafica non letta',
+          );
+        }
+      }
       if (deps.memories) {
         const snap = buildMemorySnapshot(await deps.memories.listActiveSemantic(auth.userId), {
           maxChars: deps.snapshotMaxChars ?? 2000,
@@ -168,6 +187,8 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${line}` : line;
         }
       }
+      if (profileText)
+        memorySnapshot = memorySnapshot ? `${profileText}\n\n${memorySnapshot}` : profileText;
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];

@@ -6,6 +6,7 @@ import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
+import { type ProfileRoutesOptions, profileRoutes } from './routes/profile.js';
 import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders.js';
 import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
@@ -28,6 +29,8 @@ export interface BuildServerOptions {
   readonly documents?: DocumentsRoutesOptions;
   readonly shopping?: ShoppingRoutesOptions;
   readonly reminders?: RemindersRoutesOptions;
+  /** Scheda anagrafica dell'utente (13 ott 2026). */
+  readonly profile?: ProfileRoutesOptions;
   /** Famiglia (M7e): collegamenti fra installazioni. */
   readonly family?: FamilyRoutesOptions;
   readonly toolRules?: ToolRulesRoutesOptions;
@@ -98,6 +101,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
   if (opts.family) await app.register(familyRoutes, opts.family);
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);
+  if (opts.profile) await app.register(profileRoutes, opts.profile);
 
   return app;
 }

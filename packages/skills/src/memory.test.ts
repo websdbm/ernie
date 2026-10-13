@@ -106,4 +106,23 @@ describe('ricordi: esecuzione', () => {
     expect(list.text).toContain('**Preferenze**\n- Preferisce il tè');
     expect(list.text).toContain('**Persone**\n- Ha un figlio, Giorgio');
   });
+
+  it('«cosa sai di me?» mostra prima la scheda anagrafica, anche senza altri ricordi', async () => {
+    const { store } = lookup([]);
+    const withCard: MemoryLookup = {
+      ...store,
+      profileLines: async () => [
+        '- Nome: Alessandro; vuole essere chiamato «Ale»',
+        '- Famiglia: Giorgio (figlio)',
+      ],
+    };
+    const empty = await createMemorySkill(withCard).run({ op: 'list' }, ctx);
+    expect(empty.text).toMatch(/^\*\*La tua scheda\*\*/);
+    expect(empty.text).toContain('Giorgio (figlio)');
+    const full = await createMemorySkill({
+      ...withCard,
+      listActiveSemantic: async () => [fact()],
+    }).run({ op: 'list' }, ctx);
+    expect(full.text.indexOf('La tua scheda')).toBeLessThan(full.text.indexOf('Ecco cosa ricordo'));
+  });
 });

@@ -1,0 +1,518 @@
+import { type Pool, withUser } from '@ernie/db';
+import { z } from 'zod';
+
+/**
+ * Scheda anagrafica dell'utente (richiesta dell'utente, 13 ott 2026): nome, come vuole essere chiamato, data di
+ * nascita, genere, dove vive, lavoro, famiglia. Si riempie da sola mentre le informazioni emergono in chat (stessa
+ * chiamata del consolidamento della memoria, nessun costo in più) e si corregge dall'app. Ha un ruolo privilegiato:
+ * sta in cima al prefisso stabile e, in caso di contrasto, prevale sui fatti sparsi della memoria. Quello che
+ * l'utente scrive nell'app non viene mai sovrascritto dalle conversazioni.
+ */
+
+export const PROFILE_FIELDS = [
+  'fullName',
+  'preferredName',
+  'birthDate',
+  'gender',
+  'city',
+  'occupation',
+] as const;
+export type ProfileField = (typeof PROFILE_FIELDS)[number];
+
+export const PROFILE_LIMITS: Record<ProfileField, number> = {
+  fullName: 80,
+  preferredName: 40,
+  birthDate: 10,
+  gender: 30,
+  city: 60,
+  occupation: 80,
+};
+
+export const PROFILE_LABELS: Record<ProfileField, string> = {
+  fullName: 'nome',
+  preferredName: 'come vuole essere chiamato',
+  birthDate: 'data di nascita',
+  gender: 'genere',
+  city: 'dove vive',
+  occupation: 'lavoro',
+};
+
+export type ProfileSource = 'conversation' | 'user';
+
+export const SourceMeta = z.object({
+  source: z.enum(['conversation', 'user']),
+  at: z.string(),
+  /** Parole della persona da cui viene il dato (solo per quelli emersi in chat). */
+  quote: z.string().max(200).optional(),
+});
+export type SourceMeta = z.infer<typeof SourceMeta>;
+
+export const FamilyMember = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().max(60).optional(),
+  relation: z.string().min(1).max(40),
+  birthDate: z.string().max(10).optional(),
+  notes: z.string().max(120).optional(),
+  meta: SourceMeta,
+});
+export type FamilyMember = z.infer<typeof FamilyMember>;
+
+export const UserProfile = z.object({
+  fullName: z.string().max(80).optional(),
+  preferredName: z.string().max(40).optional(),
+  birthDate: z.string().max(10).optional(),
+  gender: z.string().max(30).optional(),
+  city: z.string().max(60).optional(),
+  occupation: z.string().max(80).optional(),
+  family: z.array(FamilyMember).max(20).default([]),
+  meta: z.record(z.string(), SourceMeta).default({}),
+});
+export type UserProfile = z.infer<typeof UserProfile>;
+
+export const emptyProfile = (): UserProfile => ({ family: [], meta: {} });
+
+/** Proposta di aggiornamento (dall'estrattore o dall'app): campi assenti o null = nessuna informazione. */
+export interface ProfileUpdate {
+  readonly fullName?: string | null | undefined;
+  readonly preferredName?: string | null | undefined;
+  readonly birthDate?: string | null | undefined;
+  readonly gender?: string | null | undefined;
+  readonly city?: string | null | undefined;
+  readonly occupation?: string | null | undefined;
+  readonly family?:
+    | ReadonlyArray<{
+        readonly name?: string | null | undefined;
+        readonly relation?: string | null | undefined;
+        readonly birthDate?: string | null | undefined;
+        readonly notes?: string | null | undefined;
+      }>
+    | null
+    | undefined;
+}
+
+export interface ProfileChange {
+  readonly field: string;
+  readonly before: string | null;
+  readonly after: string | null;
+}
+
+const PLACEHOLDER = /^(null|none|nessun[oa]?|sconosciut[oa]|non (lo )?so|n\/?a|-|\?)$/iu;
+
+function clean(v: string | null | undefined, max: number): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const t = v.replace(/\s+/g, ' ').trim();
+  if (!t || PLACEHOLDER.test(t)) return undefined;
+  return t.length > max ? t.slice(0, max).trimEnd() : t;
+}
+
+/**
+ * Data di nascita: `YYYY-MM-DD` (anno tra 1900 e oggi) oppure `--MM-DD` se l'anno non è noto
+ * («compio gli anni il 3 maggio»). Qualunque altra forma viene scartata.
+ */
+export function normalizeBirthDate(
+  v: string | null | undefined,
+  now = new Date(),
+): string | undefined {
+  const t = typeof v === 'string' ? v.trim() : '';
+  const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  const partial = /^--(\d{2})-(\d{2})$/.exec(t);
+  const valid = (y: number, m: number, d: number) => {
+    const date = new Date(Date.UTC(y, m - 1, d));
+    return date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+  };
+  if (full) {
+    const [y, m, d] = [Number(full[1]), Number(full[2]), Number(full[3])];
+    if (y < 1900 || y > now.getUTCFullYear() || !valid(y, m, d)) return undefined;
+    if (new Date(Date.UTC(y, m - 1, d)) > now) return undefined;
+    return t;
+  }
+  if (partial) {
+    const [m, d] = [Number(partial[1]), Number(partial[2])];
+    return valid(2000, m, d) ? t : undefined;
+  }
+  return undefined;
+}
+
+const fold = (s: string | undefined) =>
+  (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+const newId = () => Math.random().toString(36).slice(2, 10);
+
+/** Un dato inserito dall'utente nell'app non si tocca dalle conversazioni. */
+const lockedByUser = (meta: SourceMeta | undefined, source: ProfileSource) =>
+  source === 'conversation' && meta?.source === 'user';
+
+/** La data parziale (`--MM-DD`) non sostituisce una completa compatibile. */
+function birthDateWins(before: string | undefined, after: string): boolean {
+  if (!before) return true;
+  if (after.startsWith('--') && !before.startsWith('--')) return before.slice(4) !== after.slice(1);
+  return before !== after;
+}
+
+/**
+ * Fonde una proposta nella scheda. Deterministico e puro: restituisce la scheda nuova e l'elenco dei cambiamenti.
+ * Regole: i campi vuoti si riempiono; un dato detto in chat sostituisce uno detto in chat (la persona si è corretta);
+ * niente sostituisce dalla chat un dato scritto dall'utente nell'app. Famiglia: si riconosce per nome (senza
+ * accenti e maiuscole) o, senza nome, per relazione; dalla chat si aggiunge o si completa, mai si toglie.
+ */
+export function mergeProfile(
+  current: UserProfile,
+  update: ProfileUpdate,
+  opts: { source: ProfileSource; at: Date; quote?: string; now?: Date },
+): { profile: UserProfile; changes: ProfileChange[] } {
+  const now = opts.now ?? opts.at;
+  const meta: SourceMeta = {
+    source: opts.source,
+    at: opts.at.toISOString(),
+    ...(opts.quote ? { quote: opts.quote.slice(0, 200) } : {}),
+  };
+  const next: UserProfile = {
+    ...current,
+    family: current.family.map((m) => ({ ...m })),
+    meta: { ...current.meta },
+  };
+  const changes: ProfileChange[] = [];
+
+  for (const field of PROFILE_FIELDS) {
+    const raw = update[field];
+    const value =
+      field === 'birthDate' ? normalizeBirthDate(raw, now) : clean(raw, PROFILE_LIMITS[field]);
+    if (value === undefined) continue;
+    const before = current[field];
+    if (lockedByUser(current.meta[field], opts.source)) continue;
+    if (field === 'birthDate' ? !birthDateWins(before, value) : fold(before) === fold(value))
+      continue;
+    next[field] = value;
+    next.meta[field] = meta;
+    changes.push({ field, before: before ?? null, after: value });
+  }
+
+  for (const proposal of update.family ?? []) {
+    const name = clean(proposal.name, 60);
+    const relation = clean(proposal.relation, 40);
+    if (!relation && !name) continue;
+    const birthDate = normalizeBirthDate(proposal.birthDate, now);
+    const notes = clean(proposal.notes, 120);
+    const existing = next.family.find((m) =>
+      name ? fold(m.name) === fold(name) : !m.name && fold(m.relation) === fold(relation),
+    );
+    if (!existing) {
+      if (!relation || next.family.length >= 20) continue;
+      const member: FamilyMember = {
+        id: newId(),
+        relation,
+        ...(name ? { name } : {}),
+        ...(birthDate ? { birthDate } : {}),
+        ...(notes ? { notes } : {}),
+        meta,
+      };
+      next.family.push(member);
+      changes.push({
+        field: 'family',
+        before: null,
+        after: describeMember(member),
+      });
+      continue;
+    }
+    if (lockedByUser(existing.meta, opts.source)) continue;
+    const before = describeMember(existing);
+    let touched = false;
+    if (relation && fold(existing.relation) !== fold(relation)) {
+      existing.relation = relation;
+      touched = true;
+    }
+    if (birthDate && birthDateWins(existing.birthDate, birthDate)) {
+      existing.birthDate = birthDate;
+      touched = true;
+    }
+    if (notes && fold(existing.notes) !== fold(notes)) {
+      existing.notes = notes;
+      touched = true;
+    }
+    if (touched) {
+      existing.meta = meta;
+      changes.push({ field: 'family', before, after: describeMember(existing) });
+    }
+  }
+  return { profile: next, changes };
+}
+
+/**
+ * Scheda modificata dall'utente nell'app: sostituisce tutto (campi e famiglia), con provenienza «user»
+ * solo per ciò che è cambiato; il resto conserva la provenienza che aveva.
+ */
+export function replaceProfileByUser(
+  current: UserProfile,
+  edited: {
+    fields: Partial<Record<ProfileField, string | null | undefined>>;
+    family: ReadonlyArray<{
+      id?: string | undefined;
+      name?: string | null | undefined;
+      relation: string;
+      birthDate?: string | null | undefined;
+      notes?: string | null | undefined;
+    }>;
+  },
+  at: Date,
+): { profile: UserProfile; changes: ProfileChange[] } {
+  const meta: SourceMeta = { source: 'user', at: at.toISOString() };
+  const next: UserProfile = { family: [], meta: {} };
+  const changes: ProfileChange[] = [];
+  for (const field of PROFILE_FIELDS) {
+    const value =
+      field === 'birthDate'
+        ? normalizeBirthDate(edited.fields[field], at)
+        : clean(edited.fields[field], PROFILE_LIMITS[field]);
+    const before = current[field];
+    if (value) next[field] = value;
+    const same = (before ?? '') === (value ?? '');
+    const keptMeta = current.meta[field];
+    if (same) {
+      if (value && keptMeta) next.meta[field] = keptMeta;
+    } else {
+      if (value) next.meta[field] = meta;
+      changes.push({ field, before: before ?? null, after: value ?? null });
+    }
+  }
+  const byId = new Map(current.family.map((m) => [m.id, m]));
+  for (const e of edited.family.slice(0, 20)) {
+    const relation = clean(e.relation, 40);
+    if (!relation) continue;
+    const name = clean(e.name, 60);
+    const birthDate = normalizeBirthDate(e.birthDate, at);
+    const notes = clean(e.notes, 120);
+    const old = e.id ? byId.get(e.id) : undefined;
+    const draft = {
+      id: old?.id ?? newId(),
+      relation,
+      ...(name ? { name } : {}),
+      ...(birthDate ? { birthDate } : {}),
+      ...(notes ? { notes } : {}),
+    };
+    const same =
+      old &&
+      old.relation === draft.relation &&
+      old.name === draft.name &&
+      old.birthDate === draft.birthDate &&
+      old.notes === draft.notes;
+    const member: FamilyMember = { ...draft, meta: same && old ? old.meta : meta };
+    next.family.push(member);
+    if (!same)
+      changes.push({
+        field: 'family',
+        before: old ? describeMember(old) : null,
+        after: describeMember(member),
+      });
+    if (old) byId.delete(old.id);
+  }
+  for (const removed of byId.values())
+    changes.push({ field: 'family', before: describeMember(removed), after: null });
+  return { profile: next, changes };
+}
+
+const MONTHS = [
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
+];
+
+/** «3 maggio 1975 (50 anni)» oppure «3 maggio» se l'anno non è noto. */
+export function describeBirthDate(v: string, now = new Date()): string {
+  const partial = v.startsWith('--');
+  const [y, m, d] = partial
+    ? [null, Number(v.slice(2, 4)), Number(v.slice(5, 7))]
+    : [Number(v.slice(0, 4)), Number(v.slice(5, 7)), Number(v.slice(8, 10))];
+  const day = `${d} ${MONTHS[m - 1] ?? ''}`.trim();
+  if (y === null) return day;
+  let age = now.getUTCFullYear() - y;
+  const birthdayPassed =
+    now.getUTCMonth() + 1 > m || (now.getUTCMonth() + 1 === m && now.getUTCDate() >= d);
+  if (!birthdayPassed) age -= 1;
+  return `${day} ${y} (${age} ${age === 1 ? 'anno' : 'anni'})`;
+}
+
+export function describeMember(
+  m: Pick<FamilyMember, 'name' | 'relation' | 'birthDate' | 'notes'>,
+  now = new Date(),
+): string {
+  const extra = [
+    m.birthDate ? `nato/a il ${describeBirthDate(m.birthDate, now)}` : null,
+    m.notes ?? null,
+  ]
+    .filter(Boolean)
+    .join('; ');
+  const who = m.name ? `${m.name} (${m.relation})` : m.relation;
+  return extra ? `${who}: ${extra}` : who;
+}
+
+/**
+ * Testo della scheda per il prefisso stabile della sessione (cambia solo quando cambia la scheda; l'età al più
+ * una volta al giorno). Vuoto se non c'è ancora nulla.
+ */
+export function renderProfile(profile: UserProfile, now = new Date()): string {
+  const lines: string[] = [];
+  if (profile.fullName || profile.preferredName) {
+    const name = profile.fullName ? `Nome: ${profile.fullName}` : 'Nome: non ancora noto';
+    lines.push(
+      profile.preferredName
+        ? `${name}; vuole essere chiamato «${profile.preferredName}»: usa questo nome quando ti rivolgi a lui o lei`
+        : name,
+    );
+  }
+  if (profile.birthDate) lines.push(`Nato/a il ${describeBirthDate(profile.birthDate, now)}`);
+  if (profile.gender) lines.push(`Genere: ${profile.gender}`);
+  if (profile.city) lines.push(`Vive a: ${profile.city}`);
+  if (profile.occupation) lines.push(`Lavoro: ${profile.occupation}`);
+  if (profile.family.length)
+    lines.push(`Famiglia: ${profile.family.map((m) => describeMember(m, now)).join('; ')}`);
+  if (!lines.length) return '';
+  return [
+    'Scheda dell’utente (dati anagrafici: in caso di contrasto prevalgono sulle memorie):',
+    ...lines.map((l) => `- ${l}`),
+  ].join('\n');
+}
+
+/** Riepilogo dei cambiamenti in una riga, per gli avvisi e per l'app. */
+export function describeChange(c: ProfileChange): string {
+  const label =
+    c.field === 'family' ? 'famiglia' : (PROFILE_LABELS[c.field as ProfileField] ?? c.field);
+  const show = (v: string | null) =>
+    v && c.field === 'birthDate' ? describeBirthDate(v) : (v ?? '');
+  if (c.before && c.after) return `${label}: ${show(c.before)} → ${show(c.after)}`;
+  if (c.after) return `${label}: ${show(c.after)}`;
+  return `${label}: tolto ${show(c.before)}`;
+}
+
+// ---------- archivio ----------
+
+export interface ProfileNotice {
+  readonly id: string;
+  readonly changes: ProfileChange[];
+  readonly at: Date;
+}
+
+export interface ProfileStore {
+  get(userId: string): Promise<UserProfile>;
+  /** Salva scheda e revisione nella stessa transazione; nessun cambiamento = nessuna scrittura. */
+  save(
+    userId: string,
+    profile: UserProfile,
+    changes: readonly ProfileChange[],
+    source: ProfileSource,
+  ): Promise<void>;
+  /** Cambiamenti emersi in chat non ancora comunicati all'utente. */
+  pendingNotices(userId: string, limit?: number): Promise<ProfileNotice[]>;
+  markNotified(userId: string, ids: readonly string[]): Promise<void>;
+}
+
+export function createProfileStore(pool: Pool): ProfileStore {
+  return {
+    async get(userId) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query<{ data: unknown }>(
+          `SELECT data FROM user_profiles WHERE user_id = $1`,
+          [userId],
+        );
+        const parsed = UserProfile.safeParse(r.rows[0]?.data ?? {});
+        return parsed.success ? parsed.data : emptyProfile();
+      });
+    },
+    async save(userId, profile, changes, source) {
+      if (!changes.length) return;
+      const data = UserProfile.parse(profile);
+      await withUser(pool, userId, async (c) => {
+        await c.query(
+          `INSERT INTO user_profiles (user_id, data) VALUES ($1, $2)
+           ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, version = user_profiles.version + 1, updated_at = now()`,
+          [userId, JSON.stringify(data)],
+        );
+        await c.query(
+          `INSERT INTO user_profile_revisions (user_id, changes, source, notified_at)
+           VALUES ($1, $2, $3, CASE WHEN $3 = 'user' THEN now() ELSE NULL END)`,
+          [userId, JSON.stringify(changes), source],
+        );
+      });
+    },
+    async pendingNotices(userId, limit = 5) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query<{ id: string; changes: ProfileChange[]; created_at: Date }>(
+          `SELECT id::text, changes, created_at FROM user_profile_revisions
+            WHERE notified_at IS NULL ORDER BY created_at LIMIT $1`,
+          [limit],
+        );
+        return r.rows.map((row) => ({ id: row.id, changes: row.changes, at: row.created_at }));
+      });
+    },
+    async markNotified(userId, ids) {
+      if (!ids.length) return;
+      await withUser(pool, userId, (c) =>
+        c.query(
+          `UPDATE user_profile_revisions SET notified_at = now() WHERE id = ANY($1::bigint[]) AND notified_at IS NULL`,
+          [ids],
+        ),
+      );
+    },
+  };
+}
+
+/** In memoria, per i test. */
+export function memoryProfileStore(): ProfileStore & {
+  revisions: Array<{
+    userId: string;
+    changes: readonly ProfileChange[];
+    source: ProfileSource;
+    notified: boolean;
+    id: string;
+  }>;
+} {
+  const data = new Map<string, UserProfile>();
+  const revisions: Array<{
+    userId: string;
+    changes: readonly ProfileChange[];
+    source: ProfileSource;
+    notified: boolean;
+    id: string;
+  }> = [];
+  return {
+    revisions,
+    async get(userId) {
+      return structuredClone(data.get(userId) ?? emptyProfile());
+    },
+    async save(userId, profile, changes, source) {
+      if (!changes.length) return;
+      data.set(userId, UserProfile.parse(structuredClone(profile)));
+      revisions.push({
+        userId,
+        changes,
+        source,
+        notified: source === 'user',
+        id: String(revisions.length + 1),
+      });
+    },
+    async pendingNotices(userId, limit = 5) {
+      return revisions
+        .filter((r) => r.userId === userId && !r.notified)
+        .slice(0, limit)
+        .map((r) => ({ id: r.id, changes: [...r.changes], at: new Date() }));
+    },
+    async markNotified(_userId, ids) {
+      for (const r of revisions) if (ids.includes(r.id)) r.notified = true;
+    },
+  };
+}
+
+/** Avvisi dei cambiamenti emersi in chat, da riferire una volta, in breve, al turno successivo. */
+export function formatProfileNotices(notices: readonly ProfileNotice[]): string {
+  const lines = notices.flatMap((n) => n.changes.map((c) => `- ${describeChange(c)}`));
+  if (!lines.length) return '';
+  return `Ho aggiornato la scheda dell'utente con quello che ha detto (diglielo in una riga, alla prima occasione, e che può correggerla in Impostazioni › La tua scheda):\n${lines.join('\n')}`;
+}

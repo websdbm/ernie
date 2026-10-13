@@ -7,6 +7,7 @@ import {
   createLlmSummarizer,
   createMemoryRepository,
   createOpenAIEmbedder,
+  createProfileStore,
   createSessionSummaryStore,
   ensurePurgeSchedule,
   MEMORY_QUEUE,
@@ -90,7 +91,10 @@ async function main(): Promise<void> {
           return { skipped: true };
         }
         const data = job.data as { userId: string; threadId: string; sessionId: string };
-        return consolidateThread({ pool, repo, threads, gateway, recorder, logger }, data);
+        return consolidateThread(
+          { pool, repo, threads, gateway, recorder, logger, profiles: createProfileStore(pool) },
+          data,
+        );
       }
       if (job.name === 'summarize') {
         // Riassunto della conversazione (ricerca 11 C1): senza modello ripiega su un riassunto deterministico.

@@ -10,6 +10,7 @@ import {
   type NewFact,
   normalizeDates,
 } from './judge.js';
+import { mergeProfile, type ProfileStore } from './profile.js';
 import type { MemoryRepository } from './repository.js';
 import type { MemoryCategory } from './types.js';
 
@@ -34,6 +35,8 @@ export interface ConsolidationDeps {
   readonly extractor?: Extractor;
   /** Per i test: giudice sostitutivo; null = nessun giudice (inserimento senza confronto). */
   readonly judge?: Judge | null;
+  /** Scheda anagrafica: i dati anagrafici emersi nel batch la aggiornano (stessa chiamata dell'estrazione). */
+  readonly profiles?: ProfileStore;
 }
 
 export interface ConsolidationResult {
@@ -43,6 +46,7 @@ export interface ConsolidationResult {
   readonly inserted: number;
   readonly deduplicated: number;
   readonly superseded: number;
+  readonly profileChanges?: number;
 }
 
 export const ExtractedFact = z.object({
@@ -57,7 +61,35 @@ export const ExtractedFact = z.object({
   validFrom: z.string().nullable(),
   validTo: z.string().nullable(),
 });
-export const Extraction = z.object({ facts: z.array(ExtractedFact).max(8) });
+/**
+ * Dati anagrafici detti dalla persona (scheda): schema largo, i tagli e le verifiche sono nel codice
+ * (`mergeProfile`). Ogni campo è null se nel batch non se ne parla.
+ */
+export const ExtractedProfile = z.object({
+  fullName: z.string().nullable().optional(),
+  preferredName: z.string().nullable().optional(),
+  birthDate: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  occupation: z.string().nullable().optional(),
+  family: z
+    .array(
+      z.object({
+        name: z.string().nullable().optional(),
+        relation: z.string().nullable().optional(),
+        birthDate: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
+  /** Le parole della persona da cui vengono i dati (breve citazione). */
+  evidence: z.string().nullable().optional(),
+});
+export const Extraction = z.object({
+  facts: z.array(ExtractedFact).max(8),
+  profile: ExtractedProfile.nullable().optional(),
+});
 export type Extraction = z.infer<typeof Extraction>;
 
 export interface TranscriptLine {
@@ -82,7 +114,15 @@ retention: permanent (identità, relazioni), durable (preferenze, abitudini, pro
 una verifica, un appuntamento, una scadenza vicina). kind: state, event o plan.
 validFrom/validTo in formato YYYY-MM-DD calcolati dalla data della conversazione: per un evento validFrom è il giorno
 dell'evento e validTo il giorno dopo; per un piano validFrom è la data della conversazione e la scadenza NON è validTo;
-per uno stato senza fine nota validTo è null. Nessun fatto → lista vuota.`;
+per uno stato senza fine nota validTo è null. Nessun fatto → lista vuota.
+
+SCHEDA ANAGRAFICA (campo profile): compilala solo con dati che la persona dice ESPLICITAMENTE di sé, nelle righe «utente»:
+fullName (nome e cognome), preferredName (come vuole essere chiamata: «chiamami Ale»), birthDate (YYYY-MM-DD; --MM-DD se dice
+solo giorno e mese; un'età NON è una data di nascita), gender (come si descrive: uomo, donna, …), city (dove vive),
+occupation (lavoro). family: persone della sua famiglia (anche animali) con name, relation rispetto a lei (moglie, figlio,
+madre, cane…), birthDate se detta, notes brevissime. evidence: le sue parole, al massimo 160 caratteri.
+Tutto ciò che non è detto è null; se nel batch non ci sono dati anagrafici, profile è null. I dati che metti in profile
+NON vanno ripetuti in facts.`;
 
 const isToolPart = (p: unknown): boolean => {
   const t = p && typeof p === 'object' ? (p as { type?: unknown }).type : null;
@@ -159,9 +199,9 @@ export function createLlmExtractor(
       structuredOutput: {
         schema: Extraction,
         errorStrategy: 'fallback',
-        fallbackValue: { facts: [] },
+        fallbackValue: { facts: [], profile: null },
       },
-      modelSettings: { maxOutputTokens: 1_024 },
+      modelSettings: { maxOutputTokens: 1_536 },
     } as never);
     const r = result as unknown as {
       object?: Extraction;
@@ -269,6 +309,26 @@ export async function consolidateThread(
   );
   const { inserted, deduplicated, superseded } = stats;
 
+  // Scheda anagrafica: i dati detti dalla persona aggiornano la scheda (le correzioni fatte nell'app restano).
+  let profileChanges = 0;
+  if (deps.profiles && extraction.profile) {
+    try {
+      const current = await deps.profiles.get(userId);
+      const { profile, changes } = mergeProfile(current, extraction.profile, {
+        source: 'conversation',
+        at: turnDate,
+        ...(extraction.profile.evidence ? { quote: extraction.profile.evidence } : {}),
+      });
+      await deps.profiles.save(userId, profile, changes, 'conversation');
+      profileChanges = changes.length;
+    } catch (err) {
+      deps.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'scheda anagrafica non aggiornata',
+      );
+    }
+  }
+
   const last = batch.at(-1)?.createdAt ?? new Date();
   await withUser(deps.pool, userId, (c) =>
     c.query(
@@ -285,6 +345,7 @@ export async function consolidateThread(
       inserted,
       deduplicated,
       superseded,
+      profileChanges,
     },
     'consolidamento memoria',
   );
@@ -295,5 +356,6 @@ export async function consolidateThread(
     inserted,
     deduplicated,
     superseded,
+    profileChanges,
   };
 }

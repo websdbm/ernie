@@ -11,7 +11,13 @@ import {
   type TurnInput,
 } from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
-import { formatMemoryNotices, formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
+import {
+  formatMemoryNotices,
+  formatProfileNotices,
+  formatRetrievedMemories,
+  type MemoryRepository,
+  type ProfileStore,
+} from '@ernie/memory';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
@@ -90,6 +96,8 @@ export interface ConnectionDeps {
     /** Chiamato a fine turno: episodio deterministico e consolidamento asincrono. */
     readonly afterTurn: (info: TurnOutcomeInfo) => Promise<void>;
   };
+  /** Scheda anagrafica: i cambiamenti emersi in chat si comunicano una volta, al turno dopo. */
+  readonly profiles?: ProfileStore;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
   readonly tools?: {
     readonly categories: readonly string[];
@@ -587,6 +595,24 @@ export class ClientConnection {
         this.deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           'avvisi della memoria non letti',
+        );
+      }
+    }
+    if (this.deps.profiles) {
+      try {
+        const notices = await this.deps.profiles.pendingNotices(this.auth.userId, 5);
+        const block = formatProfileNotices(notices);
+        if (block) {
+          contextBlocks.push(block);
+          await this.deps.profiles.markNotified(
+            this.auth.userId,
+            notices.map((n) => n.id),
+          );
+        }
+      } catch (err) {
+        this.deps.logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'avvisi della scheda non letti',
         );
       }
     }

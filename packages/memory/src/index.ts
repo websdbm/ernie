@@ -2,6 +2,7 @@ export * from './consolidate.js';
 export * from './embeddings.js';
 export * from './episodes.js';
 export * from './judge.js';
+export * from './profile.js';
 export * from './queue.js';
 export * from './repository.js';
 export * from './rrf.js';
