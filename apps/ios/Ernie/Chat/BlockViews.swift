@@ -2,6 +2,7 @@ import Charts
 import SwiftUI
 
 /// Schede native per i blocchi strutturati del protocollo (v1.2).
+/// Tutte le schede usano lo stesso contenitore («ErnieCard»): icona della skill, etichetta, titolo, azione a destra, poi il contenuto.
 struct BlockView: View {
     let block: ContentBlock
     var conversation: ConversationStore?
@@ -36,6 +37,81 @@ struct BlockView: View {
     }
 }
 
+// MARK: - Elementi comuni delle schede
+
+/// Piccola etichetta maiuscola per le sezioni di una scheda («PUNTI CHIAVE»).
+private struct SectionLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(Theme.eyebrow)
+            .kerning(0.4)
+            .foregroundStyle(Theme.inkSecondary)
+    }
+}
+
+/// Disposizione a flusso: gli elementi scorrono da sinistra a destra e vanno a capo quando finisce lo spazio.
+/// Usata per chip (ingredienti, azioni) che devono restare leggibili su schermi stretti.
+struct ErnieFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: proposal.width ?? widest, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+/// Contenitore a flusso per chip e pulsanti: va a capo da solo.
+struct ErnieFlow<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ErnieFlowLayout(spacing: spacing) {
+            content()
+        }
+    }
+}
+
+// MARK: - Promemoria (v1.5)
+
 /// Promemoria: prossimi scatti con orario parlante; dalla scheda si annulla o si modifica al volo (testo, giorno e ora),
 /// senza passare dalla chat. Lo stato arriva dallo store (server + notifiche locali + widget).
 struct RemindersCard: View {
@@ -59,59 +135,73 @@ struct RemindersCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(block.title, systemImage: "bell.fill").font(.subheadline.weight(.semibold))
-            ForEach(rows) { r in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: r.status == "scheduled" ? "alarm" : r.status == "done" ? "checkmark.circle" : "xmark.circle")
-                            .foregroundStyle(r.status == "scheduled" ? Color.accentColor : Color.secondary)
-                        // Titolo a tutta larghezza; ora e comandi sulla riga sotto (prima il titolo restava schiacciato).
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(r.text)
-                                .font(.callout)
-                                .strikethrough(r.status == "cancelled", color: .secondary)
-                                .foregroundStyle(r.status == "scheduled" ? .primary : .secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            HStack(spacing: 10) {
-                                Text(Self.when(r) + Self.who(r)).font(.caption).foregroundStyle(.secondary)
-                                Spacer(minLength: 0)
-                                if r.status == "scheduled" {
-                                    Button {
-                                        editing = editing == r.id ? nil : r.id
-                                    } label: {
-                                        Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle").foregroundStyle(Color.accentColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Modifica")
-                                    Button("Annulla") { Task { await model.reminders.cancel(r) } }
-                                        .font(.caption).buttonStyle(.bordered).controlSize(.mini)
-                                }
-                            }
-                            if r.status == "scheduled" {
-                                if let rep = r.repeatInfo {
-                                    Label(rep.label, systemImage: "repeat").font(.caption).foregroundStyle(.secondary)
-                                }
-                                ReminderChannelChips(item: r)
-                            }
-                        }
-                    }
-                    if editing == r.id {
-                        ReminderEditForm(item: r) { editing = nil }
-                            .padding(10)
-                            .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                    }
+        ErnieCard(icon: "bell.fill", tint: .reminders, eyebrow: "Promemoria", title: block.title) {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(rows) { r in
+                    reminderRow(r)
+                }
+                if let err = model.reminders.lastError {
+                    Text(err).font(.caption).foregroundStyle(.red)
                 }
             }
-            if let err = model.reminders.lastError {
-                Text(err).font(.caption2).foregroundStyle(.red)
-            }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .animation(.easeInOut(duration: 0.15), value: editing)
         .task { await model.reminders.refresh() }
+    }
+
+    /// Una riga: riquadro data a sinistra, testo e dettagli; sotto canali e comandi, poi il form di modifica se aperto.
+    @ViewBuilder
+    private func reminderRow(_ r: ReminderItem) -> some View {
+        let scheduled = r.status == "scheduled"
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                ReminderDateTile(date: ReminderStore.date(r.at))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(r.text)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(scheduled ? Theme.ink : Theme.inkSecondary)
+                        .strikethrough(r.status == "cancelled", color: Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(Self.when(r) + Self.who(r))
+                        .font(.caption)
+                        .foregroundStyle(Theme.inkSecondary)
+                    if scheduled, let rep = r.repeatInfo {
+                        Label(rep.label, systemImage: "repeat")
+                            .font(.caption)
+                            .foregroundStyle(Theme.inkSecondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if scheduled {
+                HStack(spacing: 8) {
+                    ReminderChannelChips(item: r)
+                    Spacer(minLength: 0)
+                    Button {
+                        editing = editing == r.id ? nil : r.id
+                    } label: {
+                        Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle")
+                            .font(.title3)
+                            .foregroundStyle(Theme.accentText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Modifica")
+                    Button("Annulla") { Task { await model.reminders.cancel(r) } }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.inkSecondary)
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .overlay(Capsule().strokeBorder(Theme.hairline))
+                }
+            }
+            if editing == r.id {
+                ReminderEditForm(item: r) { editing = nil }
+                    .padding(12)
+                    .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+        .opacity(scheduled ? 1 : 0.7)
     }
 
     /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).
@@ -129,6 +219,54 @@ struct RemindersCard: View {
         if cal.isDateInToday(at) { return (at <= .now ? "oggi alle " : "oggi alle ") + time + (at <= .now ? " · scattato" : "") }
         if cal.isDateInTomorrow(at) { return "domani alle \(time)" }
         return at.formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute())
+    }
+}
+
+/// Riquadro della data a sinistra di ogni promemoria: giorno della settimana, numero del giorno e ora, in italiano.
+private struct ReminderDateTile: View {
+    let date: Date?
+
+    var body: some View {
+        let tint = SkillTint.reminders
+        VStack(spacing: 2) {
+            Text(weekday)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(tint.color)
+            Text(day)
+                .font(Theme.title(26))
+                .foregroundStyle(Theme.ink)
+            Text(time)
+                .font(.caption)
+                .foregroundStyle(Theme.inkSecondary)
+        }
+        .frame(width: 64)
+        .padding(.vertical, 8)
+        .background(tint.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(tint.color.opacity(0.25), lineWidth: 1)
+        )
+        // Il testo della riga dice già giorno e ora: il riquadro è solo un colpo d'occhio.
+        .accessibilityHidden(true)
+    }
+
+    /// «VEN» (senza punto finale dell'abbreviazione).
+    private var weekday: String {
+        guard let date else { return "—" }
+        return date.formatted(.dateTime.weekday(.abbreviated).locale(HealthFormat.italian))
+            .replacingOccurrences(of: ".", with: "")
+            .uppercased()
+    }
+
+    private var day: String {
+        guard let date else { return "" }
+        return date.formatted(.dateTime.day().locale(HealthFormat.italian))
+    }
+
+    /// «09:00».
+    private var time: String {
+        guard let date else { return "" }
+        return date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(HealthFormat.italian))
     }
 }
 
@@ -228,6 +366,7 @@ struct ReminderChannelChips: View {
     }
 }
 
+/// Chip di canale: acceso = accento tenue con spunta; spento = superficie con filo sottile.
 private struct ReminderChannelChip: View {
     let title: String
     let symbol: String
@@ -236,17 +375,28 @@ private struct ReminderChannelChip: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.caption)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(on ? Color.accentColor.opacity(0.18) : Color(.tertiarySystemFill), in: Capsule())
-                .foregroundStyle(on ? Color.accentColor : Color.secondary)
+            HStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.caption2.weight(.semibold))
+                Text(title)
+                if on {
+                    Image(systemName: "checkmark")
+                        .font(.caption2.weight(.bold))
+                }
+            }
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(on ? Theme.accentText : Theme.inkSecondary)
+            .background(on ? Theme.accentSoft : Theme.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? Color.clear : Theme.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityValue(on ? "attiva" : "spenta")
     }
 }
+
+// MARK: - Fonti (v1.6)
 
 /// Scelta tra i documenti letti: tocca per riaprirne riassunto e schema (dai prodotti salvati, senza costo).
 /// Fonti: «p. N · capitolo» per ogni pagina citata; un tocco apre il passo originale.
@@ -255,45 +405,57 @@ struct CitationsCard: View {
     @State private var open: Set<String> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(block.title, systemImage: "quote.opening").font(.subheadline.weight(.semibold))
-            ForEach(block.items) { item in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if open.contains(item.id) { open.remove(item.id) } else { open.insert(item.id) }
-                    }
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("p. \(item.page)")
-                                .font(.caption.weight(.semibold).monospacedDigit())
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.15), in: Capsule())
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.heading ?? item.title).font(.callout.weight(.medium)).foregroundStyle(.primary).lineLimit(2)
-                                if item.heading != nil {
-                                    Text(item.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        ErnieCard(icon: "book.closed.fill", tint: .documents, eyebrow: "Fonti", title: block.title) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(block.items) { item in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if open.contains(item.id) { open.remove(item.id) } else { open.insert(item.id) }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top, spacing: 10) {
+                                // Badge pagina: riempito con il colore della skill; il testo usa il colore della superficie
+                                // (bianco di giorno, scuro di sera, quando il blu della skill diventa chiaro).
+                                Text("p. \(item.page)")
+                                    .font(.caption.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(Theme.surface)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(SkillTint.documents.color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.heading ?? item.title)
+                                        .font(.callout.weight(.semibold))
+                                        .foregroundStyle(Theme.ink)
+                                        .lineLimit(2)
+                                    if item.heading != nil {
+                                        Text(item.title)
+                                            .font(.caption)
+                                            .foregroundStyle(Theme.inkSecondary)
+                                            .lineLimit(1)
+                                    }
                                 }
+                                Spacer(minLength: 0)
+                                Image(systemName: open.contains(item.id) ? "chevron.up" : "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.inkSecondary)
                             }
-                            Spacer(minLength: 0)
-                            Image(systemName: open.contains(item.id) ? "chevron.up" : "chevron.down")
-                                .font(.caption).foregroundStyle(.tertiary)
+                            if open.contains(item.id) {
+                                Text("«\(item.excerpt)»")
+                                    .font(.footnote).italic()
+                                    .foregroundStyle(Theme.inkSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
-                        if open.contains(item.id) {
-                            Text("«\(item.excerpt)»")
-                                .font(.footnote).italic().foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.leading, 4)
-                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(SkillTint.documents.soft.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
@@ -324,38 +486,45 @@ struct HealthCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "heart.text.square.fill")
-                    .font(.title3)
-                    .foregroundStyle(.pink)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(block.title).font(.headline).fixedSize(horizontal: false, vertical: true)
-                    if let subtitle = block.subtitle, !subtitle.isEmpty {
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        ErnieCard(icon: "heart.text.square.fill", tint: .health, eyebrow: "Salute", title: block.title, subtitle: block.subtitle, action: { outOfRangeBadge }) {
+            VStack(alignment: .leading, spacing: 12) {
+                if trendPoints.count >= 2 {
+                    HealthTrendChart(points: trendPoints, title: block.title)
+                }
+                if isParameter { parameterTable } else { reportTable }
+                if block.rows.count > Self.collapsedCount {
+                    Button(showAll ? "Mostra meno" : "Mostra tutti (\(block.rows.count))") {
+                        withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
                     }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .buttonStyle(.plain)
                 }
-            }
-            if trendPoints.count >= 2 {
-                HealthTrendChart(points: trendPoints, title: block.title)
-            }
-            if isParameter { parameterTable } else { reportTable }
-            if block.rows.count > Self.collapsedCount {
-                Button(showAll ? "Mostra meno" : "Mostra tutti (\(block.rows.count))") {
-                    withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                if let summary = block.summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.callout)
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.caption)
+                Text("Valori letti dal referto. Ernie non è un medico: per dubbi parlane con il tuo medico.")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if let summary = block.summary, !summary.isEmpty {
-                Text(summary).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Text("Valori letti dal referto. Ernie non è un medico: per dubbi parlane con il tuo medico.")
-                .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Capsula rossa nell'intestazione, solo se almeno un valore è fuori intervallo.
+    @ViewBuilder
+    private var outOfRangeBadge: some View {
+        if block.rows.contains(where: { $0.isOut }) {
+            Text("Fuori intervallo")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.red.opacity(0.12), in: Capsule())
+        }
     }
 
     // MARK: tabelle
@@ -391,7 +560,7 @@ struct HealthCard: View {
             }
             ForEach(Array(shownRows.enumerated()), id: \.offset) { _, row in
                 GridRow {
-                    cell(Text(row.label).font(.callout).lineLimit(1).minimumScaleFactor(0.7),
+                    cell(Text(row.label).font(.callout).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7),
                          highlight: row.isOut ? row.tint.opacity(0.10) : nil,
                          speak: spoken(row))
                     cell(valueView(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
@@ -408,9 +577,9 @@ struct HealthCard: View {
     private func cell<V: View>(_ content: V, highlight: Color? = nil, speak: String? = nil) -> some View {
         let padded = content
             .padding(.horizontal, 5)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(highlight ?? Color.clear)
+            .background(highlight ?? Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         if let speak {
             padded.accessibilityLabel(speak)
         } else {
@@ -419,17 +588,17 @@ struct HealthCard: View {
     }
 
     private func header(_ title: String) -> some View {
-        Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+        Text(title).font(.caption2.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
     }
 
     private func valueView(_ row: HealthBlock.Row) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(HealthFormat.display(row))
                 .font(.callout.weight(row.isOut ? .bold : .regular))
-                .foregroundStyle(row.isOut ? row.tint : Color.primary)
+                .foregroundStyle(row.isOut ? row.tint : Theme.ink)
                 .monospacedDigit()
             if let unit = row.unit, !unit.isEmpty {
-                Text(unit).font(.caption2).foregroundStyle(.secondary)
+                Text(unit).font(.caption2).foregroundStyle(Theme.inkSecondary)
             }
             if row.isOut {
                 Image(systemName: row.flag == "alto" ? "arrow.up" : "arrow.down")
@@ -447,22 +616,22 @@ struct HealthCard: View {
         if let previous = row.previous {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 3) {
-                    Text(HealthFormat.number(previous.value)).font(.callout).monospacedDigit()
+                    Text(HealthFormat.number(previous.value)).font(.callout).monospacedDigit().foregroundStyle(Theme.ink)
                     if let symbol = Self.trendSymbol(row.trend) {
-                        Image(systemName: symbol).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        Image(systemName: symbol).font(.caption2.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
                     }
                 }
                 Text(HealthFormat.shortDay(previous.date))
-                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.caption2).foregroundStyle(Theme.inkSecondary).lineLimit(1)
             }
         } else {
-            Text("—").font(.callout).foregroundStyle(.secondary)
+            Text("—").font(.callout).foregroundStyle(Theme.inkSecondary)
         }
     }
 
     private func referenceText(_ row: HealthBlock.Row) -> some View {
         Text(HealthFormat.reference(row))
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.caption).foregroundStyle(Theme.inkSecondary)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
     }
@@ -518,13 +687,13 @@ struct HealthTrendChart: View {
                     yStart: .value("Minimo di riferimento", band.low),
                     yEnd: .value("Massimo di riferimento", band.high)
                 )
-                .foregroundStyle(Color.green.opacity(0.15))
+                .foregroundStyle(Theme.positive.opacity(0.18))
             }
             ForEach(points) { point in
                 LineMark(x: .value("Data", point.date), y: .value("Valore", point.value))
-                    .foregroundStyle(Color.pink)
+                    .foregroundStyle(SkillTint.health.color)
                 PointMark(x: .value("Data", point.date), y: .value("Valore", point.value))
-                    .foregroundStyle(point.outside ? Color.red : Color.pink)
+                    .foregroundStyle(point.outside ? Color.red : SkillTint.health.color)
             }
         }
         .chartXAxis {
@@ -612,42 +781,50 @@ private extension HealthBlock.Row {
         switch flag {
         case "alto": return Color.red
         case "basso": return Color.orange
-        default: return Color.primary
+        default: return Theme.ink
         }
     }
 }
 
+// MARK: - Documenti (v1.3)
+
+/// Elenco dei documenti letti: un tocco riapre il documento (riassunto e schema salvati).
 struct DocumentsCard: View {
     let block: DocumentsBlock
     var conversation: ConversationStore?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(block.title, systemImage: "doc.text.magnifyingglass").font(.subheadline.weight(.semibold))
-            ForEach(block.documents) { doc in
-                Button {
-                    let template = block.pendingText ?? "riapri il documento «{documento}»"
-                    conversation?.send(template.replacingOccurrences(of: "{documento}", with: doc.title), inputMode: "text")
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: doc.source == "pdf" ? "doc.richtext" : "doc.viewfinder")
-                            .foregroundStyle(Color.accentColor)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(doc.title).font(.callout.weight(.medium)).foregroundStyle(.primary).lineLimit(2)
-                            Text("\(doc.pages) \(doc.pages == 1 ? "pagina" : "pagine") · \(doc.summarized ? "riassunto pronto" : "da riassumere") · \(Self.day(doc.createdAt))")
-                                .font(.caption).foregroundStyle(.secondary)
+        ErnieCard(icon: "doc.text.fill", tint: .documents, eyebrow: "Documenti", title: block.title) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(block.documents) { doc in
+                    Button {
+                        let template = block.pendingText ?? "riapri il documento «{documento}»"
+                        conversation?.send(template.replacingOccurrences(of: "{documento}", with: doc.title), inputMode: "text")
+                    } label: {
+                        HStack(spacing: 12) {
+                            SkillIcon(systemName: doc.source == "pdf" ? "doc.richtext.fill" : "doc.viewfinder", tint: .documents, size: 34)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(doc.title)
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(Theme.ink)
+                                    .lineLimit(2)
+                                Text("\(doc.pages) \(doc.pages == 1 ? "pagina" : "pagine") · \(doc.summarized ? "riassunto pronto" : "da riassumere") · \(Self.day(doc.createdAt))")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.inkSecondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.inkSecondary)
                         }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        .padding(10)
+                        .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     static func day(_ iso: String) -> String {
@@ -713,184 +890,6 @@ struct SchemaPrintView: View {
     }
 }
 
-// MARK: - Liste della spesa (v1.4)
-
-/// Scheda interattiva: tocca una voce per spuntarla (barrata, in fondo), aggiungi dal campo, togli dal menu a tenuta.
-struct ShoppingListCard: View {
-    let block: ShoppingListBlock
-    var conversation: ConversationStore?
-    @Environment(AppModel.self) private var model
-    @State private var newItem = ""
-    @State private var confirmDelete = false
-    @FocusState private var adding: Bool
-
-    private var list: ShoppingListBlock { model.shopping.current(block) }
-    private var open: [ShoppingListItem] { list.items.filter { !$0.checked } }
-    private var bought: [ShoppingListItem] { list.items.filter(\.checked) }
-    private var isBusy: Bool { model.shopping.busy.contains(list.listId) }
-
-    var body: some View {
-        if model.shopping.isDeleted(block.listId) {
-            // Eliminata: la scheda resta in chat come traccia, ma non è più una lista viva.
-            HStack(spacing: 8) {
-                Image(systemName: "trash").foregroundStyle(.secondary)
-                Text("Lista «\(block.name)» eliminata").font(.footnote).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.thinMaterial.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-        } else {
-            liveCard
-        }
-    }
-
-    private var liveCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(list.name, systemImage: "cart.fill").font(.subheadline.weight(.semibold)).lineLimit(1)
-                if list.status == "archived" {
-                    Text("archiviata").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2).background(Color.secondary.opacity(0.15), in: Capsule())
-                }
-                Spacer(minLength: 4)
-                Text(counter).font(.caption).foregroundStyle(.secondary)
-                Menu {
-                    if !bought.isEmpty {
-                        Button("Togli le voci prese", systemImage: "checkmark.circle") { Task { await model.shopping.clearBought(listId: list.listId) } }
-                    }
-                    if list.status == "archived" {
-                        Button("Ripristina", systemImage: "tray.and.arrow.up") { Task { await model.shopping.setArchived(listId: list.listId, false) } }
-                    } else {
-                        Button("Archivia", systemImage: "archivebox") { Task { await model.shopping.setArchived(listId: list.listId, true) } }
-                    }
-                    Button("Elimina la lista", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                } label: {
-                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Azioni sulla lista")
-            }
-            if list.items.isEmpty {
-                Text("Lista vuota: aggiungi qualcosa qui sotto.").font(.footnote).foregroundStyle(.secondary)
-            }
-            ForEach(open + bought) { item in
-                row(item)
-            }
-            HStack(spacing: 8) {
-                Image(systemName: "plus.circle").foregroundStyle(Color.accentColor)
-                TextField("Aggiungi una voce", text: $newItem)
-                    .focused($adding)
-                    .textInputAutocapitalization(.sentences)
-                    .onSubmit(submit)
-                if !newItem.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button("Aggiungi", action: submit).font(.caption.weight(.semibold))
-                }
-            }
-            .font(.callout)
-            .padding(.top, 2)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .animation(.easeInOut(duration: 0.2), value: list)
-        .opacity(isBusy ? 0.85 : 1)
-        .task(id: block.listId) { await model.shopping.refresh(block.listId) }
-        .confirmationDialog("Eliminare la lista «\(list.name)» con tutte le voci?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Elimina", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
-            Button("Annulla", role: .cancel) {}
-        }
-    }
-
-    private var counter: String {
-        let n = open.count
-        if list.items.isEmpty { return "" }
-        if n == 0 { return "tutto preso" }
-        return "\(n) da prendere" + (bought.isEmpty ? "" : " · \(bought.count) \(bought.count == 1 ? "presa" : "prese")")
-    }
-
-    private func row(_ item: ShoppingListItem) -> some View {
-        Button {
-            Task { await model.shopping.toggle(listId: list.listId, item: item) }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(item.checked ? Color.green : Color.secondary)
-                Text(item.name)
-                    .strikethrough(item.checked, color: .secondary)
-                    .foregroundStyle(item.checked ? .secondary : .primary)
-                if let q = item.quantity, !q.isEmpty {
-                    Text(q).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .font(.callout)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(item.checked ? "Rimetti da prendere" : "Segna come presa", systemImage: item.checked ? "arrow.uturn.backward" : "checkmark") {
-                Task { await model.shopping.toggle(listId: list.listId, item: item) }
-            }
-            Button("Togli dalla lista", systemImage: "minus.circle", role: .destructive) {
-                Task { await model.shopping.remove(listId: list.listId, item: item) }
-            }
-        }
-        .accessibilityLabel("\(item.name)\(item.quantity.map { ", \($0)" } ?? ""), \(item.checked ? "presa" : "da prendere")")
-        .accessibilityHint("Tocca per \(item.checked ? "rimettere da prendere" : "segnare come presa")")
-    }
-
-    private func submit() {
-        let text = newItem
-        newItem = ""
-        adding = false
-        Task { await model.shopping.add(listId: list.listId, name: text) }
-    }
-}
-
-/// Scelta tra più liste: tocca una lista per rimandare la richiesta con quel nome (o aprirla).
-struct ShoppingListsCard: View {
-    let block: ShoppingListsBlock
-    var conversation: ConversationStore?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(block.title, systemImage: "list.bullet.rectangle").font(.subheadline.weight(.semibold))
-            ForEach(block.lists) { list in
-                Button {
-                    let template = block.pendingText ?? "mostrami la lista {lista}"
-                    conversation?.send(template.replacingOccurrences(of: "{lista}", with: list.name), inputMode: "text")
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: list.archived ? "archivebox" : "cart")
-                            .foregroundStyle(list.archived ? Color.secondary : Color.accentColor)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(list.name).font(.callout.weight(.medium)).foregroundStyle(.primary)
-                            Text(subtitle(list)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func subtitle(_ l: ShoppingListSummary) -> String {
-        var parts: [String] = []
-        parts.append(l.open == 0 ? "niente da prendere" : "\(l.open) da prendere")
-        if l.bought > 0 { parts.append("\(l.bought) \(l.bought == 1 ? "presa" : "prese")") }
-        if l.archived { parts.append("archiviata") }
-        return parts.joined(separator: " · ")
-    }
-}
-
-// MARK: - Documenti (v1.3)
-
 /// Scheda del documento letto: riassunto da studio, punti chiave, glossario e domande di verifica (risposte a tocco).
 struct DocumentCard: View {
     let block: DocumentBlock
@@ -899,64 +898,102 @@ struct DocumentCard: View {
     @State private var revealed: Set<String> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(block.title, systemImage: "doc.text.viewfinder").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(block.pages) \(block.pages == 1 ? "pagina" : "pagine")").font(.caption).foregroundStyle(.secondary)
-            }
-            Text(block.abstract).font(.callout)
-            if !block.keyPoints.isEmpty {
-                Text("Punti chiave").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(Array(block.keyPoints.enumerated()), id: \.offset) { _, point in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("•")
-                        Text(point)
-                    }
+        ErnieCard(
+            icon: "doc.richtext.fill",
+            tint: .documents,
+            eyebrow: "Documento",
+            title: block.title,
+            action: { pagesLabel }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(block.abstract)
                     .font(.callout)
-                }
-            }
-            if let glossary = block.glossary, !glossary.isEmpty {
-                Button(showGlossary ? "Nascondi il glossario" : "Glossario (\(glossary.count))") { showGlossary.toggle() }.font(.caption)
-                if showGlossary {
-                    ForEach(glossary) { entry in
-                        (Text(entry.term).bold() + Text(": \(entry.definition)")).font(.footnote)
-                    }
-                }
-            }
-            if let questions = block.questions, !questions.isEmpty {
-                Text("Domande di verifica (tocca per la risposta)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(Array(questions.enumerated()), id: \.offset) { index, q in
-                    Button {
-                        if revealed.contains(q.id) { revealed.remove(q.id) } else { revealed.insert(q.id) }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(index + 1). \(q.question)").font(.footnote).foregroundStyle(.primary)
-                            if revealed.contains(q.id) {
-                                Text(q.answer).font(.footnote).foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !block.keyPoints.isEmpty {
+                    SectionLabel("Punti chiave")
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(block.keyPoints.enumerated()), id: \.offset) { _, point in
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle()
+                                    .fill(SkillTint.documents.color)
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 7)
+                                Text(point)
+                                    .font(.callout)
+                                    .foregroundStyle(Theme.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { actions }
-                VStack(alignment: .leading, spacing: 6) { actions }
+                if let glossary = block.glossary, !glossary.isEmpty {
+                    Button(showGlossary ? "Nascondi il glossario" : "Glossario (\(glossary.count))") { showGlossary.toggle() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .buttonStyle(.plain)
+                    if showGlossary {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(glossary) { entry in
+                                (Text(entry.term).bold() + Text(": \(entry.definition)"))
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.ink)
+                            }
+                        }
+                    }
+                }
+                if let questions = block.questions, !questions.isEmpty {
+                    SectionLabel("Domande di verifica (tocca per la risposta)")
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(questions.enumerated()), id: \.offset) { index, q in
+                            Button {
+                                if revealed.contains(q.id) { revealed.remove(q.id) } else { revealed.insert(q.id) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(index + 1). \(q.question)")
+                                        .font(.callout.weight(.medium))
+                                        .foregroundStyle(Theme.ink)
+                                    if revealed.contains(q.id) {
+                                        Text(q.answer)
+                                            .font(.callout)
+                                            .foregroundStyle(Theme.inkSecondary)
+                                    }
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                actions
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    @ViewBuilder
+    private var pagesLabel: some View {
+        Text("\(block.pages) \(block.pages == 1 ? "pagina" : "pagine")")
+            .font(.caption)
+            .foregroundStyle(Theme.inkSecondary)
+    }
+
+    /// Azioni a chip: vanno a capo da sole; l'esportazione resta un menu.
     private var actions: some View {
-        Button("Mappa", systemImage: "point.3.connected.trianglepath.dotted") { ask("mindmap") }
-        Button("Flusso", systemImage: "arrow.down.right.and.arrow.up.left") { ask("flow") }
-        Button("Linea del tempo", systemImage: "calendar.day.timeline.left") { ask("timeline") }
-        ExportMenu(name: "Riassunto \(block.title)") { DocumentPrintView(block: block) }
+        ErnieFlow(spacing: 8) {
+            Button { ask("mindmap") } label: {
+                ErnieChip(text: "Mappa", systemImage: "point.3.connected.trianglepath.dotted", style: .suggestion)
+            }
+            Button { ask("flow") } label: {
+                ErnieChip(text: "Flusso", systemImage: "arrow.down.right.and.arrow.up.left", style: .suggestion)
+            }
+            Button { ask("timeline") } label: {
+                ErnieChip(text: "Linea del tempo", systemImage: "calendar.day.timeline.left", style: .suggestion)
+            }
+            ExportMenu(name: "Riassunto \(block.title)") { DocumentPrintView(block: block) }
+        }
+        .buttonStyle(.plain)
     }
 
     private func ask(_ type: String) {
@@ -991,29 +1028,13 @@ struct SchemaCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                // Tipo in evidenza e titolo del documento intero (niente puntini): le azioni stanno a destra.
-                VStack(alignment: .leading, spacing: 2) {
-                    Label(kindLabel, systemImage: "square.3.layers.3d").font(.subheadline.weight(.semibold))
-                    Text(block.title).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 4)
-                // Altro tipo di schema dello stesso documento: comando deterministico, nessun modello coinvolto.
-                if let conversation {
-                    Menu {
-                        ForEach(otherKinds, id: \.0) { phrase, label, symbol in
-                            Button {
-                                conversation.send("schema «\(block.title)» come \(phrase)", inputMode: "text")
-                            } label: { Label(label, systemImage: symbol) }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Color.accentColor)
-                    }
-                    .accessibilityLabel("Altro tipo di schema")
-                }
-                ExportMenu(name: "\(kindLabel) \(block.title)", width: SchemaPrintView.exportWidth(block)) { SchemaPrintView(block: block) }
-            }
+        ErnieCard(
+            icon: "point.3.connected.trianglepath.dotted",
+            tint: .documents,
+            eyebrow: kindLabel,
+            title: block.title,
+            action: { schemaActions }
+        ) {
             switch block.diagram {
             case .outline(let sections): OutlineDiagramView(sections: sections)
             case .mindmap(let root): MindMapView(root: root)
@@ -1021,9 +1042,27 @@ struct SchemaCard: View {
             case .timeline(let events): TimelineSchemaView(events: events)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Azioni in intestazione: altro tipo di schema (comando deterministico, nessun modello) ed esportazione.
+    private var schemaActions: some View {
+        HStack(spacing: 10) {
+            if let conversation {
+                Menu {
+                    ForEach(otherKinds, id: \.0) { phrase, label, symbol in
+                        Button {
+                            conversation.send("schema «\(block.title)» come \(phrase)", inputMode: "text")
+                        } label: { Label(label, systemImage: symbol) }
+                    }
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.accentText)
+                }
+                .accessibilityLabel("Altro tipo di schema")
+            }
+            ExportMenu(name: "\(kindLabel) \(block.title)", width: SchemaPrintView.exportWidth(block)) { SchemaPrintView(block: block) }
+        }
     }
 }
 
@@ -1036,8 +1075,9 @@ struct MindMapView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(root.label)
                 .font(.callout.weight(.bold))
+                .foregroundStyle(Theme.ink)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.18), in: Capsule())
+                .background(Theme.accentSoft, in: Capsule())
             ForEach(Array((root.children ?? []).enumerated()), id: \.offset) { index, branch in
                 MindBranchView(node: branch, color: Self.palette[index % Self.palette.count], depth: 1)
             }
@@ -1054,9 +1094,9 @@ struct MindBranchView: View {
         HStack(alignment: .top, spacing: 8) {
             RoundedRectangle(cornerRadius: 1.5).fill(color.opacity(depth == 1 ? 0.9 : 0.5)).frame(width: 3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(node.label).font(depth == 1 ? .callout.weight(.semibold) : .footnote)
+                Text(node.label).font(depth == 1 ? .callout.weight(.semibold) : .footnote).foregroundStyle(Theme.ink)
                 if let note = node.note, !note.isEmpty {
-                    Text(note).font(.caption).foregroundStyle(.secondary)
+                    Text(note).font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
                 ForEach(Array((node.children ?? []).enumerated()), id: \.offset) { _, child in
                     MindBranchView(node: child, color: color, depth: depth + 1)
@@ -1088,21 +1128,22 @@ struct FlowView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(index + 1)")
                             .font(.caption.weight(.bold)).monospacedDigit()
+                            .foregroundStyle(Theme.accentText)
                             .frame(width: 22, height: 22)
-                            .background(Color.accentColor.opacity(0.18), in: Circle())
+                            .background(Theme.accentSoft, in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(step.label).font(.callout)
-                            if let note = step.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(.secondary) }
+                            Text(step.label).font(.callout).foregroundStyle(Theme.ink)
+                            if let note = step.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(Theme.inkSecondary) }
                         }
                     }
                     ForEach(Array(outgoing(step, next: next).enumerated()), id: \.offset) { _, link in
                         Text("↳ \(link.label.map { "\($0): " } ?? "")\(label(for: link.to))")
-                            .font(.caption).foregroundStyle(.secondary).padding(.leading, 30)
+                            .font(.caption).foregroundStyle(Theme.inkSecondary).padding(.leading, 30)
                     }
                     if next != nil {
                         let direct = links.isEmpty || links.contains { $0.from == step.id && $0.to == next?.id }
                         if direct {
-                            Image(systemName: "arrow.down").font(.caption).foregroundStyle(.secondary).padding(.leading, 6)
+                            Image(systemName: "arrow.down").font(.caption).foregroundStyle(Theme.inkSecondary).padding(.leading, 6)
                         }
                     }
                 }
@@ -1120,15 +1161,15 @@ struct TimelineSchemaView: View {
             ForEach(Array(events.enumerated()), id: \.offset) { index, event in
                 HStack(alignment: .top, spacing: 10) {
                     VStack(spacing: 0) {
-                        Circle().fill(Color.accentColor).frame(width: 10, height: 10).padding(.top, 5)
+                        Circle().fill(Theme.accent).frame(width: 10, height: 10).padding(.top, 5)
                         if index + 1 < events.count {
-                            Rectangle().fill(Color.accentColor.opacity(0.35)).frame(width: 2).frame(maxHeight: .infinity)
+                            Rectangle().fill(Theme.accent.opacity(0.35)).frame(width: 2).frame(maxHeight: .infinity)
                         }
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(event.when).font(.caption.weight(.bold)).foregroundStyle(Color.accentColor)
-                        Text(event.label).font(.callout)
-                        if let note = event.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(.secondary) }
+                        Text(event.when).font(.caption.weight(.bold)).foregroundStyle(Theme.accentText)
+                        Text(event.label).font(.callout).foregroundStyle(Theme.ink)
+                        if let note = event.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(Theme.inkSecondary) }
                     }
                     .padding(.bottom, index + 1 < events.count ? 12 : 0)
                 }
@@ -1138,70 +1179,76 @@ struct TimelineSchemaView: View {
     }
 }
 
+// MARK: - Web, elenchi, ricette
+
+/// Risultati dal web: scorrimento orizzontale di schede-link (titolo, estratto, sito).
 struct WebResultsCard: View {
     let query: String
     let results: [WebResultItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Dal web: \(query)", systemImage: "globe")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        ErnieCard(icon: "globe", tint: .documents, eyebrow: "Dal web", title: query) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(results) { r in
                         if let url = URL(string: r.url) {
                             Link(destination: url) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(r.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                    Text(r.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Theme.ink)
+                                        .lineLimit(2)
                                     if let snippet = r.snippet, !snippet.isEmpty {
-                                        Text(snippet).font(.caption).foregroundStyle(.secondary).lineLimit(4)
+                                        Text(snippet).font(.caption).foregroundStyle(Theme.inkSecondary).lineLimit(4)
                                     }
-                                    Text(r.site ?? url.host() ?? "").font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                                    Text(r.site ?? url.host() ?? "")
+                                        .font(.caption2)
+                                        .foregroundStyle(Theme.inkSecondary)
+                                        .lineLimit(1)
                                 }
                                 .frame(width: 220, alignment: .leading)
                                 .padding(12)
-                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                                .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(.primary)
                         }
                     }
                 }
             }
         }
-        .padding(.top, 4)
     }
 }
 
+/// Elenco semplice (voci con spunta e quantità).
 struct ListCard: View {
     let title: String
     let items: [ListBlockItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: "cart").font(.subheadline.weight(.semibold))
-            ForEach(items) { item in
-                HStack(spacing: 8) {
-                    Image(systemName: item.checked == true ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(item.checked == true ? .green : .secondary)
-                    Text(item.name)
-                    if let q = item.quantity, !q.isEmpty {
-                        Text(q).foregroundStyle(.secondary)
+        ErnieCard(icon: "list.bullet", tint: .brain, eyebrow: "Elenco", title: title, subtitle: "\(items.count) \(items.count == 1 ? "voce" : "voci")") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(items) { item in
+                    HStack(spacing: 10) {
+                        Image(systemName: item.checked == true ? "checkmark.circle.fill" : "circle")
+                            .font(.body)
+                            .foregroundStyle(item.checked == true ? Theme.positive : Theme.inkSecondary)
+                        Text(item.name)
+                            .font(.callout)
+                            .foregroundStyle(Theme.ink)
+                        if let q = item.quantity, !q.isEmpty {
+                            Text(q)
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.inkSecondary)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
                 }
-                .font(.callout)
             }
-            Text("\(items.count) \(items.count == 1 ? "voce" : "voci")").font(.caption2).foregroundStyle(.tertiary)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
+/// Ricette: una scheda per ricetta; ingredienti a chip, passaggi a tocco, azioni a chip.
 struct RecipesCard: View {
     let recipes: [RecipeItem]
     var conversation: ConversationStore?
@@ -1210,71 +1257,285 @@ struct RecipesCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(recipes) { recipe in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("🍽️ \(recipe.title)").font(.subheadline.weight(.semibold))
-                        Spacer()
-                        if let time = recipe.time {
-                            Label(time, systemImage: "clock").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if let servings = recipe.servings {
-                        Text(servings).font(.caption).foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(recipe.ingredients.enumerated()), id: \.offset) { _, ing in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("•")
-                            Text(ing)
-                        }
-                        .font(.callout)
-                    }
-                    if let steps = recipe.steps, !steps.isEmpty {
-                        if expanded.contains(recipe.id) {
-                            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    Text("\(index + 1).").monospacedDigit()
-                                    Text(step)
-                                }
-                                .font(.callout)
+                ErnieCard(icon: "fork.knife", tint: .recipes, eyebrow: "Ricetta") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(recipe.title)
+                                .font(Theme.title(19))
+                                .foregroundStyle(Theme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let meta = meta(for: recipe) {
+                                Text(meta)
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.inkSecondary)
                             }
                         }
-                        Button(expanded.contains(recipe.id) ? "Nascondi i passaggi" : "Mostra i passaggi") {
-                            if expanded.contains(recipe.id) { expanded.remove(recipe.id) } else { expanded.insert(recipe.id) }
+                        if !recipe.ingredients.isEmpty {
+                            SectionLabel("Ingredienti")
+                            ErnieFlow(spacing: 6) {
+                                ForEach(Array(recipe.ingredients.enumerated()), id: \.offset) { _, ing in
+                                    ErnieChip(text: ing)
+                                }
+                            }
                         }
-                        .font(.caption)
-                    }
-                    ViewThatFits(in: .horizontal) {
+                        if let steps = recipe.steps, !steps.isEmpty {
+                            if expanded.contains(recipe.id) {
+                                SectionLabel("Passaggi")
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                                        HStack(alignment: .top, spacing: 10) {
+                                            Text("\(index + 1)")
+                                                .font(.caption.weight(.bold)).monospacedDigit()
+                                                .foregroundStyle(Theme.accentText)
+                                                .frame(width: 20, alignment: .leading)
+                                            Text(step)
+                                                .font(.callout)
+                                                .foregroundStyle(Theme.ink)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                    }
+                                }
+                            }
+                            Button(expanded.contains(recipe.id) ? "Nascondi i passaggi" : "Mostra i passaggi") {
+                                if expanded.contains(recipe.id) { expanded.remove(recipe.id) } else { expanded.insert(recipe.id) }
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.accentText)
+                            .buttonStyle(.plain)
+                        }
                         actions(for: recipe)
-                        VStack(alignment: .leading, spacing: 6) { actions(for: recipe) }
                     }
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
-        .padding(.top, 4)
+    }
+
+    /// «30 min · 4 porzioni»: tempo e dosi sulla riga sotto il titolo.
+    private func meta(for recipe: RecipeItem) -> String? {
+        let parts = [recipe.time, recipe.servings].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     @ViewBuilder
     private func actions(for recipe: RecipeItem) -> some View {
-        HStack(spacing: 8) {
+        ErnieFlow(spacing: 8) {
             if let conversation {
                 Button {
                     conversation.send("Salva la ricetta «\(recipe.title)» tra le mie ricette, con gli ingredienti e i passaggi mostrati.", inputMode: "text")
-                } label: { Label("Salva", systemImage: "bookmark") }
+                } label: { ErnieChip(text: "Salva", systemImage: "bookmark", style: .suggestion) }
                 Button {
                     conversation.composerSuggestion = "Affina la ricetta «\(recipe.title)»: "
-                } label: { Label("Affina", systemImage: "slider.horizontal.3") }
+                } label: { ErnieChip(text: "Affina", systemImage: "slider.horizontal.3", style: .suggestion) }
                 Button {
                     conversation.send("aggiungi alla lista \(recipe.ingredients.joined(separator: ", "))", inputMode: "text")
-                } label: { Label("Ingredienti", systemImage: "cart.badge.plus") }
+                } label: { ErnieChip(text: "Ingredienti", systemImage: "cart.badge.plus", style: .suggestion) }
             }
             if let raw = recipe.url, let url = URL(string: raw) {
-                Link(destination: url) { Label(recipe.source ?? "Fonte", systemImage: "safari") }
+                Link(destination: url) {
+                    ErnieChip(text: recipe.source ?? "Fonte", systemImage: "safari", style: .suggestion)
+                }
             }
         }
-        .buttonStyle(.bordered)
-        .font(.caption)
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Liste della spesa (v1.4)
+
+/// Scheda interattiva: tocca una voce per spuntarla (barrata, in fondo), aggiungi dal campo, togli dal menu a tenuta.
+struct ShoppingListCard: View {
+    let block: ShoppingListBlock
+    var conversation: ConversationStore?
+    @Environment(AppModel.self) private var model
+    @State private var newItem = ""
+    @State private var confirmDelete = false
+    @FocusState private var adding: Bool
+
+    private var list: ShoppingListBlock { model.shopping.current(block) }
+    private var open: [ShoppingListItem] { list.items.filter { !$0.checked } }
+    private var bought: [ShoppingListItem] { list.items.filter(\.checked) }
+    private var isBusy: Bool { model.shopping.busy.contains(list.listId) }
+
+    var body: some View {
+        if model.shopping.isDeleted(block.listId) {
+            // Eliminata: la scheda resta in chat come traccia, ma non è più una lista viva.
+            ErnieCard(icon: "trash.fill", tint: .neutral, eyebrow: "Lista eliminata", title: block.name) {
+                EmptyView()
+            }
+            .opacity(0.7)
+        } else {
+            liveCard
+        }
+    }
+
+    private var liveCard: some View {
+        ErnieCard(icon: "cart.fill", tint: .shopping, eyebrow: "Lista della spesa", title: list.name, subtitle: subtitleLine, action: { actionsMenu }) {
+            VStack(alignment: .leading, spacing: 8) {
+                if list.items.isEmpty {
+                    Text("Lista vuota: aggiungi qualcosa qui sotto.")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.inkSecondary)
+                }
+                ForEach(open + bought) { item in
+                    row(item)
+                }
+                addField
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: list)
+        .opacity(isBusy ? 0.85 : 1)
+        .task(id: block.listId) { await model.shopping.refresh(block.listId) }
+        .confirmationDialog("Eliminare la lista «\(list.name)» con tutte le voci?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Elimina", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
+            Button("Annulla", role: .cancel) {}
+        }
+    }
+
+    /// Menu a destra dell'intestazione: prese, archivia/ripristina, elimina.
+    private var actionsMenu: some View {
+        Menu {
+            if !bought.isEmpty {
+                Button("Togli le voci prese", systemImage: "checkmark.circle") { Task { await model.shopping.clearBought(listId: list.listId) } }
+            }
+            if list.status == "archived" {
+                Button("Ripristina", systemImage: "tray.and.arrow.up") { Task { await model.shopping.setArchived(listId: list.listId, false) } }
+            } else {
+                Button("Archivia", systemImage: "archivebox") { Task { await model.shopping.setArchived(listId: list.listId, true) } }
+            }
+            Button("Elimina la lista", systemImage: "trash", role: .destructive) { confirmDelete = true }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(Theme.inkSecondary)
+        }
+        .accessibilityLabel("Azioni sulla lista")
+    }
+
+    /// Contatore e stato («2 da prendere · 1 presa · archiviata»).
+    private var subtitleLine: String {
+        var parts: [String] = []
+        if !counter.isEmpty { parts.append(counter) }
+        if list.status == "archived" { parts.append("archiviata") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Campo per aggiungere una voce, in fondo alla lista.
+    private var addField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "plus.circle.fill")
+                .font(.body)
+                .foregroundStyle(Theme.accentText)
+            TextField("Aggiungi una voce", text: $newItem)
+                .focused($adding)
+                .textInputAutocapitalization(.sentences)
+                .onSubmit(submit)
+            if !newItem.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button("Aggiungi", action: submit)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accentText)
+            }
+        }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.top, 2)
+    }
+
+    private var counter: String {
+        let n = open.count
+        if list.items.isEmpty { return "" }
+        if n == 0 { return "tutto preso" }
+        return "\(n) da prendere" + (bought.isEmpty ? "" : " · \(bought.count) \(bought.count == 1 ? "presa" : "prese")")
+    }
+
+    private func row(_ item: ShoppingListItem) -> some View {
+        Button {
+            Task { await model.shopping.toggle(listId: list.listId, item: item) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(item.checked ? Theme.positive : Theme.inkSecondary)
+                Text(item.name)
+                    .foregroundStyle(item.checked ? Theme.inkSecondary : Theme.ink)
+                    .strikethrough(item.checked, color: Theme.inkSecondary)
+                if let q = item.quantity, !q.isEmpty {
+                    Text(q)
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.inkSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.callout)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(item.checked ? "Rimetti da prendere" : "Segna come presa", systemImage: item.checked ? "arrow.uturn.backward" : "checkmark") {
+                Task { await model.shopping.toggle(listId: list.listId, item: item) }
+            }
+            Button("Togli dalla lista", systemImage: "minus.circle", role: .destructive) {
+                Task { await model.shopping.remove(listId: list.listId, item: item) }
+            }
+        }
+        .accessibilityLabel("\(item.name)\(item.quantity.map { ", \($0)" } ?? ""), \(item.checked ? "presa" : "da prendere")")
+        .accessibilityHint("Tocca per \(item.checked ? "rimettere da prendere" : "segnare come presa")")
+    }
+
+    private func submit() {
+        let text = newItem
+        newItem = ""
+        adding = false
+        Task { await model.shopping.add(listId: list.listId, name: text) }
+    }
+}
+
+/// Scelta tra più liste: tocca una lista per rimandare la richiesta con quel nome (o aprirla).
+struct ShoppingListsCard: View {
+    let block: ShoppingListsBlock
+    var conversation: ConversationStore?
+
+    var body: some View {
+        ErnieCard(icon: "cart.fill", tint: .shopping, eyebrow: "Liste", title: block.title) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(block.lists) { list in
+                    Button {
+                        let template = block.pendingText ?? "mostrami la lista {lista}"
+                        conversation?.send(template.replacingOccurrences(of: "{lista}", with: list.name), inputMode: "text")
+                    } label: {
+                        HStack(spacing: 12) {
+                            SkillIcon(systemName: list.archived ? "archivebox.fill" : "cart.fill", tint: .shopping, size: 34)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(list.name)
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(Theme.ink)
+                                Text(subtitle(list))
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.inkSecondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.inkSecondary)
+                        }
+                        .padding(10)
+                        .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .opacity(list.archived ? 0.6 : 1)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func subtitle(_ l: ShoppingListSummary) -> String {
+        var parts: [String] = []
+        parts.append(l.open == 0 ? "niente da prendere" : "\(l.open) da prendere")
+        if l.bought > 0 { parts.append("\(l.bought) \(l.bought == 1 ? "presa" : "prese")") }
+        if l.archived { parts.append("archiviata") }
+        return parts.joined(separator: " · ")
     }
 }

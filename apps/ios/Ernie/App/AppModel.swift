@@ -206,6 +206,9 @@ struct LocalSettings: Codable, Sendable, Equatable {
     var avatarSize: Double = 132
     var avatarCompact = false
     var avatarHidden = false
+    /// Nuova interfaccia: l'orso sta nella capsula in alto durante la conversazione; acceso, torna l'avatar
+    /// galleggiante di prima (trascinabile, ridimensionabile).
+    var avatarFloating = false
 
     static let key = "ernie.localSettings"
 
@@ -220,6 +223,7 @@ struct LocalSettings: Codable, Sendable, Equatable {
         avatarSize = try c.decodeIfPresent(Double.self, forKey: .avatarSize) ?? 132
         avatarCompact = try c.decodeIfPresent(Bool.self, forKey: .avatarCompact) ?? false
         avatarHidden = try c.decodeIfPresent(Bool.self, forKey: .avatarHidden) ?? false
+        avatarFloating = try c.decodeIfPresent(Bool.self, forKey: .avatarFloating) ?? false
     }
 
     static func load() -> LocalSettings {

@@ -1,99 +1,205 @@
 import SwiftUI
 
-/// L'unica schermata: spazio per l'avatar in alto, conversazione, una barra con un solo pulsante.
+/// Schermata principale (nuova interfaccia, bozzetti approvati il 13 ott 2026): barra in alto in vetro (pannello,
+/// capsula con l'orso, voce), «Oggi» quando la conversazione è vuota, poi la conversazione; barra di scrittura in
+/// vetro; in ascolto la schermata dedicata; il pannello laterale raccoglie sezioni e conversazioni passate.
 struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var showBrain = false
     @State private var showReminders = false
     @State private var showSkills = false
+    @State private var showFamily = false
+    @State private var showProfile = false
+    @State private var panelOpen = false
     @State private var debugIcons = false
     @State private var draft = ""
     @FocusState private var composing: Bool
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let conversation = model.conversation, let voice = model.voice {
-                    VStack(spacing: 0) {
-                        // L'avatar galleggia sulla conversazione: i messaggi scorrono sotto e restano visibili
-                        // attorno al cerchio (richiesta dell'utente, 12 ott 2026).
-                        ZStack(alignment: .top) {
-                            MessageList(conversation: conversation, topInset: FloatingAvatar.topInset(model.settings, composing: composing))
-                            FloatingAvatar(
-                                state: conversation.agentState,
-                                name: model.companionName,
-                                connection: conversation.connection,
-                                emotion: conversation.lastAvatarEmotion,
-                                composing: composing,
-                                mouthOpen: model.speaker.mouthOpen
+        ZStack {
+            ChatBackdrop()
+            if let conversation = model.conversation, let voice = model.voice {
+                VStack(spacing: 0) {
+                    topBar(conversation)
+                    ZStack(alignment: .top) {
+                        if conversation.items.isEmpty {
+                            HomeView(conversation: conversation, onOpen: open)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        } else {
+                            MessageList(
+                                conversation: conversation,
+                                topInset: model.settings.avatarFloating ? FloatingAvatar.topInset(model.settings, composing: composing) : 0
                             )
-                        }
-                        InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
-                    }
-                    .background(ChatBackdrop())
-                } else {
-                    ProgressView()
-                }
-            }
-            .navigationTitle(model.companionName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    // Voce accesa/spenta: in giro basta la risposta scritta.
-                    Button { model.setVoiceOutput(!model.settings.voiceOutput) } label: {
-                        Image(systemName: model.settings.voiceOutput ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .foregroundStyle(model.settings.voiceOutput ? Color.accentColor : Color.secondary)
-                    }
-                    .accessibilityLabel(model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla")
-                    Menu {
-                        Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
-                        Button("Second brain", systemImage: "brain.head.profile") { showBrain = true }
-                        Button("Promemoria", systemImage: "alarm") { showReminders = true }
-                        Button(model.settings.avatarHidden ? "Mostra avatar" : "Nascondi avatar", systemImage: model.settings.avatarHidden ? "eye" : "eye.slash") {
-                            withAnimation(.spring(duration: 0.35)) { model.settings.avatarHidden.toggle() }
-                            model.settings.save()
-                        }
-                        Button("Avatar in alto al centro", systemImage: "arrow.up.to.line") {
-                            withAnimation(.spring(duration: 0.35)) {
-                                model.settings.avatarHidden = false
-                                model.settings.avatarAnchor = .top
-                                model.settings.avatarCompact = false
-                                model.settings.avatarSize = 132
+                            // Su richiesta resta l'avatar galleggiante di prima (trascinabile, ridimensionabile).
+                            if model.settings.avatarFloating {
+                                FloatingAvatar(
+                                    state: conversation.agentState,
+                                    name: model.companionName,
+                                    connection: conversation.connection,
+                                    emotion: conversation.lastAvatarEmotion,
+                                    composing: composing,
+                                    mouthOpen: model.speaker.mouthOpen
+                                )
                             }
-                            model.settings.save()
                         }
-                        Button("Impostazioni", systemImage: "gearshape") { showSettings = true }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("Menu")
+                    .frame(maxHeight: .infinity)
+                    .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
+                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
                 }
+                if Self.showsListening(voice.phase) {
+                    ListeningOverlay(voice: voice, conversation: conversation)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .zIndex(1)
+                }
+                SidePanel(isOpen: $panelOpen, onSelect: open)
+                    .zIndex(2)
+            } else {
+                ProgressView()
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showBrain) { SecondBrainView() }
-            .sheet(isPresented: $showReminders) { RemindersView() }
-            .sheet(isPresented: $showSkills) { SkillsSheet() }
-            #if DEBUG
-            .sheet(isPresented: $debugIcons) { IconGalleryView() }
-            .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
-            #endif
+        }
+        .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showBrain) { SecondBrainView() }
+        .sheet(isPresented: $showReminders) { RemindersView() }
+        .sheet(isPresented: $showSkills) { SkillsSheet() }
+        .sheet(isPresented: $showFamily) { ClosableSheet { FamilyView() } }
+        .sheet(isPresented: $showProfile) { ClosableSheet { ProfileView() } }
+        #if DEBUG
+        .sheet(isPresented: $debugIcons) { IconGalleryView() }
+        .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
+        #endif
+    }
+
+    /// La schermata di ascolto copre la chat mentre si parla; quando Ernie risponde torna la conversazione.
+    static func showsListening(_ phase: VoiceController.Phase) -> Bool {
+        switch phase {
+        case .preparing, .downloadingModel, .listening, .finalizing: true
+        case .idle, .waitingReply: false
+        }
+    }
+
+    private func open(_ destination: PanelDestination) {
+        switch destination {
+        case .newConversation: model.newConversation()
+        case .conversation(let id): model.conversation?.resume(sessionId: id)
+        case .reminders: showReminders = true
+        case .brain, .health: showBrain = true
+        case .family: showFamily = true
+        case .profile: showProfile = true
+        case .skills: showSkills = true
+        case .settings: showSettings = true
+        }
+    }
+
+    // MARK: barra in alto
+
+    private func topBar(_ conversation: ConversationStore) -> some View {
+        HStack(spacing: 10) {
+            GlassCircleButton(systemName: "sidebar.leading", label: "Apri il pannello") {
+                withAnimation(.spring(duration: 0.35)) { panelOpen = true }
+            }
+            Spacer(minLength: 0)
+            if !conversation.items.isEmpty {
+                companionCapsule(conversation)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                Spacer(minLength: 0)
+            }
+            GlassCircleButton(
+                systemName: model.settings.voiceOutput ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                tint: model.settings.voiceOutput ? Theme.accentText : Theme.inkSecondary,
+                label: model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla"
+            ) {
+                model.setVoiceOutput(!model.settings.voiceOutput)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+        .animation(.spring(duration: 0.4), value: conversation.items.isEmpty)
+    }
+
+    /// Capsula al centro: l'orso piccolo (animato) con nome e stato. Tenendola premuta: nuova conversazione e avatar.
+    private func companionCapsule(_ conversation: ConversationStore) -> some View {
+        let caption = AvatarCaption.text(connection: conversation.connection, state: conversation.agentState) ?? "pronto"
+        return HStack(spacing: 8) {
+            PixelBearView(state: conversation.agentState, mouthOpen: model.speaker.mouthOpen, size: 32, emotion: conversation.lastAvatarEmotion)
+                .frame(width: 36, height: 36)
+                .background(Theme.accent, in: Circle())
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Self.ring(conversation.agentState), lineWidth: 2))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.companionName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(caption).font(.caption2).foregroundStyle(Self.captionColor(conversation))
+                    .contentTransition(.opacity)
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 14)
+        .padding(.vertical, 4)
+        .ernieGlass(in: Capsule())
+        .contextMenu {
+            Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
+            Button(model.settings.avatarFloating ? "Avatar nella capsula" : "Avatar galleggiante", systemImage: "circle.dashed") {
+                withAnimation(.spring(duration: 0.35)) {
+                    model.settings.avatarFloating.toggle()
+                    model.settings.avatarHidden = false
+                }
+                model.settings.save()
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(model.companionName), \(caption)")
+        .accessibilityHint("Tieni premuto per altre opzioni")
+    }
+
+    private static func ring(_ state: AgentState) -> Color {
+        switch state {
+        case .idle: Theme.accent.opacity(0.4)
+        case .listening: .red
+        case .thinking: .orange
+        case .speaking: Theme.positive
+        }
+    }
+
+    private static func captionColor(_ conversation: ConversationStore) -> Color {
+        if case .connected = conversation.connection {
+            return conversation.agentState == .idle ? Theme.inkSecondary : Theme.positive
+        }
+        return .orange
+    }
+}
+
+/// Foglio con barra di navigazione e «Fine» per le schermate pensate per stare dentro le impostazioni.
+struct ClosableSheet<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            content()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } }
+                }
         }
     }
 }
 
-/// Sfondo della schermata: una velatura dell'accento in alto che sfuma nel colore di sistema.
+/// Sfondo: lilla tenue con un alone viola sfumato in alto (quasi nero viola di sera).
 struct ChatBackdrop: View {
     var body: some View {
-        ZStack {
-            Color(.systemBackground)
-            LinearGradient(
-                colors: [Color.accentColor.opacity(0.14), Color.accentColor.opacity(0.04), .clear],
-                startPoint: .top,
-                endPoint: .center
-            )
+        ZStack(alignment: .top) {
+            Theme.ground
+            Circle()
+                .fill(Theme.glow)
+                .frame(width: 320, height: 320)
+                .blur(radius: 70)
+                .offset(y: -160)
+                .opacity(0.9)
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
@@ -109,26 +215,36 @@ struct MessageList: View {
         return last.id
     }
 
+    @ViewBuilder
+    private var rows: some View {
+        ForEach(conversation.items) { item in
+            switch item {
+            case .message(let m): MessageRow(message: m, conversation: conversation)
+            case .confirmation(let c): ConfirmationCardView(card: c, conversation: conversation)
+            case .notification(let n): NotificationCardView(card: n, conversation: conversation)
+            }
+        }
+        Color.clear.frame(height: 1).id("bottom")
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    if conversation.items.isEmpty {
-                        EmptyHint()
-                    }
-                    ForEach(conversation.items) { item in
-                        switch item {
-                        case .message(let m): MessageRow(message: m, conversation: conversation)
-                        case .confirmation(let c): ConfirmationCardView(card: c, conversation: conversation)
-                        case .notification(let n): NotificationCardView(card: n, conversation: conversation)
-                        }
-                    }
-                    Color.clear.frame(height: 1).id("bottom")
+                // Lista normale per le conversazioni di lunghezza comune: con quella pigra le altezze stimate delle
+                // schede grandi facevano fermare la lista oltre la fine (schermo vuoto all'avvio). Pigra solo oltre i 150.
+                if conversation.items.count <= 150 {
+                    VStack(alignment: .leading, spacing: 14) { rows }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 14) { rows }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
             }
             .contentMargins(.top, topInset, for: .scrollContent)
+            // I messaggi sfumano sotto la barra in alto invece di essere tagliati di netto.
+            .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])
             .scrollIndicators(.hidden)
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
@@ -140,22 +256,10 @@ struct MessageList: View {
             .task {
                 try? await Task.sleep(for: .milliseconds(400))
                 proxy.scrollTo("bottom", anchor: .bottom)
+                try? await Task.sleep(for: .milliseconds(800))
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
-    }
-}
-
-private struct EmptyHint: View {
-    var body: some View {
-        VStack(spacing: 6) {
-            Text("Scrivi, oppure tocca il microfono e parla.")
-            Text("Promemoria, liste e proposte compaiono qui.")
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 24)
     }
 }
 
@@ -186,30 +290,29 @@ struct MessageRow: View {
                 }
                 .foregroundStyle(.white)
                 .opacity(message.queued == true ? 0.75 : 1)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 11)
                 .background(
-                    LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.78)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    Theme.accent,
+                    in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 20, bottomTrailingRadius: 6, topTrailingRadius: 20, style: .continuous)
                 )
-                .shadow(color: Color.accentColor.opacity(0.18), radius: 6, y: 3)
+                .shadow(color: Theme.accent.opacity(0.18), radius: 8, y: 4)
             }
         case .assistant:
             VStack(alignment: .leading, spacing: 6) {
                 if !message.tools.isEmpty {
                     ForEach(message.tools) { tool in
-                        HStack(spacing: 6) {
-                            Image(systemName: tool.ok == nil ? "circle.dotted" : (tool.ok == true ? "checkmark.circle" : "xmark.circle"))
-                            Text(tool.displayName ?? tool.toolId)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        ToolPill(name: tool.displayName ?? tool.toolId, ok: tool.ok)
                     }
                 }
                 if message.text.isEmpty, message.isStreaming, message.blocks.isEmpty {
                     ThinkingDots()
                 } else if !message.text.isEmpty {
+                    // Risposte di Ernie in testo pieno, senza fumetto (bozzetto 2).
                     MarkdownText(text: message.text)
+                        .foregroundStyle(Theme.ink)
+                        .lineSpacing(2)
+                        .padding(.horizontal, 2)
                 }
                 ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
                     BlockView(block: block, conversation: conversation)
@@ -218,7 +321,7 @@ struct MessageRow: View {
                     Text("Interrotto").font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            .padding(.trailing, 20)
+            .padding(.trailing, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .system:
             Text(message.text)
@@ -227,6 +330,36 @@ struct MessageRow: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 4)
         }
+    }
+}
+
+/// Cosa sta facendo Ernie («Cerco nel second brain…»): etichetta discreta con lo stato; in corso, un riflesso animato.
+struct ToolPill: View {
+    let name: String
+    let ok: Bool?
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ZStack {
+                Circle().fill(ok == false ? Color.red.opacity(0.14) : Theme.accentSoft)
+                Image(systemName: ok == nil ? "ellipsis" : (ok == true ? "checkmark" : "xmark"))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(ok == false ? Color.red : Theme.accentText)
+                    .symbolEffect(.variableColor.iterative, isActive: ok == nil)
+            }
+            .frame(width: 20, height: 20)
+            Text(name)
+                .font(.footnote)
+                .foregroundStyle(Theme.inkSecondary)
+                .lineLimit(1)
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
+        .background(Theme.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.hairline))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(ok == nil ? "\(name), in corso" : ok == true ? "\(name), fatto" : "\(name), non riuscito")
     }
 }
 
@@ -255,8 +388,9 @@ struct ConfirmationCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Serve la tua conferma", systemImage: "hand.raised")
+            Label("Serve la tua conferma", systemImage: "hand.raised.fill")
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SkillTint.reminders.color)
             Text(card.displayName ?? card.toolId)
             if let args = card.argsPreview {
                 Text(args).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(4)
@@ -298,7 +432,7 @@ struct ConfirmationCardView: View {
             }
         }
         .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .ernieSurface()
     }
 }
 
@@ -366,6 +500,6 @@ struct NotificationCardView: View {
             }
         }
         .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .ernieSurface()
     }
 }

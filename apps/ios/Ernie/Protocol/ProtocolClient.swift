@@ -62,12 +62,12 @@ actor ProtocolClient {
         emit.yield(.state(.disconnected))
     }
 
-    /// Nuova conversazione: nuova sessione, sequenze azzerate, nuova connessione.
-    func switchSession(to newSessionId: String) {
+    /// Cambio di conversazione: nuova sessione (sequenze azzerate) o ripresa di una passata dall'ultimo evento visto.
+    func switchSession(to newSessionId: String, lastSeq resumeFrom: Int = -1) {
         disconnect()
         sessionId = newSessionId
-        lastSeq = -1
-        tracker = SequenceTracker()
+        lastSeq = resumeFrom
+        tracker = SequenceTracker(start: max(0, resumeFrom + 1))
         outSeq = SequenceSource()
         connect()
     }

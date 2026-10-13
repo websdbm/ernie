@@ -41,7 +41,8 @@ struct InputBar: View {
             if let documents, documents.isActive {
                 attachmentChip(documents)
             }
-            HStack(alignment: .bottom, spacing: 10) {
+            // Barra in vetro che galleggia sul contenuto (bozzetti 1 e 2).
+            HStack(alignment: .bottom, spacing: 8) {
                 if mode == .voice {
                     Button { voice.cancelListening() } label: { icon("xmark", fill: .secondary) }
                         .accessibilityLabel("Annulla")
@@ -49,28 +50,33 @@ struct InputBar: View {
                     voiceButton
                 } else {
                     if documents != nil { attachMenu }
-                    TextField("Scrivi, o tocca il microfono", text: $draft, axis: .vertical)
+                    TextField("Chiedi a \(conversationName)…", text: $draft, axis: .vertical)
                         .lineLimit(1...6)
                         .focused(composing)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
+                        .font(.body)
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 12)
                         .onSubmit(sendDraft)
                     Button(action: onSkills) {
-                        Image(systemName: "bolt.shield.fill")
+                        Image(systemName: "sparkle")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Theme.accentText)
                             .frame(width: 44, height: 44)
-                            .background(.thinMaterial, in: Circle())
+                            .background(Theme.surfaceMuted, in: Circle())
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Skill")
                     actionButton
                 }
             }
+            .padding(6)
+            .ernieGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .shadow(color: Theme.accent.opacity(0.10), radius: 14, y: 6)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
         .animation(.easeInOut(duration: 0.15), value: voice.phase)
         .onChange(of: conversation.composerSuggestion) { _, suggestion in
             guard let suggestion else { return }
@@ -121,9 +127,10 @@ struct InputBar: View {
             Button("File (PDF)", systemImage: "folder") { showFiles = true }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 36, height: 44)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Theme.accentText)
+                .frame(width: 44, height: 44)
+                .background(Theme.surfaceMuted, in: Circle())
         }
         .accessibilityLabel("Allega un documento")
     }
@@ -166,8 +173,8 @@ struct InputBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 8)
+        .ernieSurface(radius: 16)
+        .padding(.horizontal, 4)
     }
 
     /// Stato della voce al posto del campo di testo: cosa sta succedendo, livello del microfono, trascrizione.
@@ -199,9 +206,8 @@ struct InputBar: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -211,7 +217,7 @@ struct InputBar: View {
             Button { voice.finishListening() } label: { icon("arrow.up", fill: .red) }
                 .accessibilityLabel("Invia quello che ho detto")
         case .waitingReply:
-            Button { voice.interrupt() } label: { icon("mic.fill", fill: Color.accentColor) }
+            Button { voice.interrupt() } label: { icon("mic.fill", fill: Theme.accent) }
                 .accessibilityLabel("Interrompi Ernie e parla")
         default:
             ProgressView()
@@ -224,17 +230,17 @@ struct InputBar: View {
     private var actionButton: some View {
         switch mode {
         case .send:
-            Button(action: sendDraft) { icon("arrow.up", fill: Color.accentColor) }
+            Button(action: sendDraft) { icon("arrow.up", fill: Theme.accent) }
                 .accessibilityLabel("Invia")
         case .stop:
-            Button { conversation.bargeIn() } label: { icon("stop.fill", fill: .secondary) }
+            Button { conversation.bargeIn() } label: { icon("stop.fill", fill: Theme.inkSecondary) }
                 .accessibilityLabel("Interrompi")
         case .mic, .voice:
             Button {
                 composing.wrappedValue = false
                 voice.startListening()
             } label: {
-                icon("mic.fill", fill: Color.accentColor)
+                icon("mic.fill", fill: Theme.accent)
             }
             // Pressione lunga: conversazione continua anche senza l'impostazione (il tocco al rilascio è ignorato perché l'ascolto è già partito).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
@@ -247,11 +253,14 @@ struct InputBar: View {
 
     private func icon(_ name: String, fill: some ShapeStyle) -> some View {
         Image(systemName: name)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: 19, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 44, height: 44)
+            .frame(width: 46, height: 46)
             .background(fill, in: Circle())
     }
+
+    @Environment(AppModel.self) private var model
+    private var conversationName: String { model.companionName }
 
     private func sendDraft() {
         let refs = documents?.ready.map { [$0] } ?? []

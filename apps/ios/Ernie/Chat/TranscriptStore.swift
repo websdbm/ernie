@@ -34,6 +34,41 @@ struct TranscriptStore {
         try? data.write(to: fileURL(file.sessionId), options: [.atomic, .completeFileProtection])
     }
 
+    /// Conversazione salvata sul telefono, per lo storico del pannello laterale.
+    struct SessionSummary: Identifiable, Sendable, Equatable {
+        let id: String
+        let title: String
+        let updatedAt: Date
+    }
+
+    /// Conversazioni salvate con almeno un messaggio dell'utente, dalla più recente. Il titolo è la prima domanda.
+    func list(limit: Int = 40) -> [SessionSummary] {
+        let urls = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let recent = urls
+            .filter { $0.pathExtension == "json" }
+            .map { ($0, (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit * 2)
+        var out: [SessionSummary] = []
+        for (url, _) in recent {
+            guard let data = try? Data(contentsOf: url), let file = try? Self.decoder.decode(SessionFile.self, from: data) else { continue }
+            let first = file.items.lazy.compactMap { item -> String? in
+                if case .message(let m) = item, m.role == .user { return m.text }
+                return nil
+            }.first
+            guard let first else { continue }
+            let title = first.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+            let shown = title.prefix(1).uppercased() + title.dropFirst().prefix(59)
+            out.append(SessionSummary(id: file.sessionId, title: shown, updatedAt: file.updatedAt))
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    func delete(_ sessionId: String) {
+        try? FileManager.default.removeItem(at: fileURL(sessionId))
+    }
+
     func clearAll() {
         try? FileManager.default.removeItem(at: directory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

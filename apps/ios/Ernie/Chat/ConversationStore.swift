@@ -114,6 +114,37 @@ final class ConversationStore {
         Task { await client.switchSession(to: sid) }
     }
 
+    /// Conversazioni passate salvate sul telefono (pannello laterale).
+    func pastSessions() -> [TranscriptStore.SessionSummary] { transcript.list() }
+
+    /// Riprende una conversazione passata: messaggi e schede dal telefono, stessa sessione sul server (che ne ricorda
+    /// la memoria), ripresa degli eventi dall'ultimo numero di sequenza visto.
+    func resume(sessionId target: String) {
+        guard target != sessionId, let file = transcript.load(target) else { return }
+        _ = speaker.stop()
+        activeCorrelationId = nil
+        agentState = .idle
+        outbox = []
+        items = file.items.map { item in
+            if case .message(var m) = item, m.isStreaming {
+                m.isStreaming = false
+                return .message(m)
+            }
+            return item
+        }
+        lastSeq = file.lastSeq
+        sessionId = target
+        transcript.setCurrent(target)
+        let seq = file.lastSeq
+        Task { await client.switchSession(to: target, lastSeq: seq) }
+    }
+
+    /// Toglie una conversazione passata dal telefono (non quella aperta).
+    func deleteSession(_ id: String) {
+        guard id != sessionId else { return }
+        transcript.delete(id)
+    }
+
     // MARK: - azioni dell'utente
 
     /// Messaggi scritti o toccati (schede) mentre Ernie sta ancora rispondendo: partono uno alla volta a turno finito.

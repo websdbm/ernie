@@ -274,6 +274,8 @@ final class VoiceController {
             try? await Task.sleep(for: .milliseconds(50))
         }
         stopTask.cancel()
+        // ✕ premuto mentre trascrivevo: cancelListening ha già chiuso tutto, il messaggio non parte.
+        guard phase == .finalizing else { return }
         let text = (lastFinalText ?? liveTranscript).trimmingCharacters(in: .whitespacesAndNewlines)
         conversation.currentTrace?.mark(.transcriptFinal)
         let heard = heardSpeech
