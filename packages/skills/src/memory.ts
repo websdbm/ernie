@@ -15,6 +15,8 @@ export interface MemoryFact {
   readonly createdAt: Date;
   readonly seenCount: number;
   readonly provenance: { readonly source: string; readonly trust: number; readonly note?: string };
+  /** «disputed» = in dubbio: due ricordi in conflitto finché la persona non chiarisce (ricerca 11, M1). */
+  readonly status?: string;
 }
 
 export interface MemoryLookup {
@@ -137,7 +139,10 @@ export function createMemorySkill(
           groups.set(k, [...(groups.get(k) ?? []), f]);
         }
         const body = [...groups.entries()]
-          .map(([k, fs]) => `**${k}**\n${fs.map((f) => `- ${f.content}`).join('\n')}`)
+          .map(
+            ([k, fs]) =>
+              `**${k}**\n${fs.map((f) => `- ${f.content}${f.status === 'disputed' ? ' (in dubbio)' : ''}`).join('\n')}`,
+          )
           .join('\n\n');
         return {
           text: `Ecco cosa ricordo di te (${facts.length}):\n\n${body}\n\nChiedimi «perché sai che …?» per la provenienza, o «dimentica che …» per cancellare un ricordo.`,
@@ -155,8 +160,12 @@ export function createMemorySkill(
             actions: ['ricordi:why:none'],
           };
         const others = hits.slice(1).map((h) => `- ${h.content}`);
+        const doubt =
+          top.status === 'disputed'
+            ? ' È in dubbio: ho anche un ricordo che lo contraddice, dimmi tu quale vale.'
+            : '';
         return {
-          text: `Ricordo che: «${top.content}». L'ho annotato ${provenanceLabel(top, timezone)}.${others.length ? `\n\nRicordi vicini:\n${others.join('\n')}` : ''}\n\nSe non è più vero, dimmi «dimentica che ${p.what}».`,
+          text: `Ricordo che: «${top.content}». L'ho annotato ${provenanceLabel(top, timezone)}.${doubt}${others.length ? `\n\nRicordi vicini:\n${others.join('\n')}` : ''}\n\nSe non è più vero, dimmi «dimentica che ${p.what}».`,
           actions: ['ricordi:why'],
         };
       }

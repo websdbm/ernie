@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { consolidateThread, type Extractor } from './consolidate.js';
 import { createFakeEmbedder } from './embeddings.js';
 import { recordTurnEpisode } from './episodes.js';
+import { applyWithJudge, type Judge } from './judge.js';
 import { createMemoryRepository } from './repository.js';
 import { buildMemorySnapshot } from './snapshot.js';
 
@@ -203,15 +204,31 @@ describe.skipIf(!ready)('Memory Engine su Postgres (ruolo ernie_app, embedder fi
         };
       },
     };
-    const extractor: Extractor = async (_t, candidates) => ({
+    const extractor: Extractor = async () => ({
       facts: [
         {
           content: 'Vive a Venezia dal 2026',
           category: 'fact',
           confidence: 0.9,
-          supersedes: candidates.find((c) => c.content.includes('Mestre'))?.id ?? null,
+          retention: 'permanent',
+          kind: 'state',
+          validFrom: null,
+          validTo: null,
         },
       ],
+    });
+    // Giudice finto: il ricordo su Mestre (unico candidato vicino) è smentito con evidenza esplicita.
+    const judge: Judge = async (input) => ({
+      decisions: input.facts.flatMap((f, i) =>
+        f.candidates.map((c, j) => ({
+          fact: i,
+          candidate: j,
+          reasoning: 'cambio di residenza dichiarato',
+          relation: c.text.includes('Mestre') ? ('contradicts' as const) : ('compatible' as const),
+          evidence: 'non più a Mestre',
+          confidence: 0.9,
+        })),
+      ),
     });
     const deps = {
       pool: app,
@@ -221,6 +238,7 @@ describe.skipIf(!ready)('Memory Engine su Postgres (ruolo ernie_app, embedder fi
       recorder: { record: async () => {} },
       logger,
       extractor,
+      judge,
     };
     const first = await consolidateThread(deps, { userId: userA, threadId, sessionId: null });
     expect(first).toMatchObject({
@@ -235,5 +253,81 @@ describe.skipIf(!ready)('Memory Engine su Postgres (ruolo ernie_app, embedder fi
     expect(active.map((m) => m.content)).not.toContain('Vive a Mestre dal 2026');
     const second = await consolidateThread(deps, { userId: userA, threadId, sessionId: null });
     expect(second.skipped).toBe(true);
+    // L'avviso «ho aggiornato…» è in attesa una sola volta.
+    const notices = await r.pendingNotices(userA);
+    expect(notices).toMatchObject([
+      {
+        event: 'superseded',
+        oldText: 'Vive a Mestre dal 2026',
+        newText: 'Vive a Venezia dal 2026',
+      },
+    ]);
+    await r.markNotified(
+      userA,
+      notices.map((n) => n.id),
+    );
+    expect(await r.pendingNotices(userA)).toEqual([]);
+  });
+
+  it('giudice: prove deboli → entrambi in dubbio; fatto effimero → scade da solo', async () => {
+    const r = repo();
+    const user = userB;
+    await r.remember({
+      userId: user,
+      kind: 'semantic',
+      category: 'preference',
+      content: 'Preferisce il tè la mattina',
+      provenance: { source: 'user', trust: 1 },
+      confidence: 0.9,
+    });
+    const weak: Judge = async (input) => ({
+      decisions: input.facts.flatMap((f, i) =>
+        f.candidates.map((_c, j) => ({
+          fact: i,
+          candidate: j,
+          reasoning: 'forse ha cambiato abitudine, ma non lo dice',
+          relation: 'contradicts' as const,
+          evidence: '',
+          confidence: 0.5,
+        })),
+      ),
+    });
+    const today = new Date('2026-10-13T08:00:00Z');
+    const stats = await applyWithJudge(
+      { repo: r, judge: weak },
+      user,
+      [
+        {
+          content: 'Preferisce il caffè la mattina',
+          category: 'preference',
+          confidence: 0.6,
+          retention: 'durable',
+          temporalKind: 'state',
+          validFrom: today,
+          validTo: null,
+        },
+        {
+          content: 'Ha la verifica di storia oggi',
+          category: 'fact',
+          confidence: 0.9,
+          retention: 'ephemeral',
+          temporalKind: 'event',
+          // già passata: deve uscire dai ricordi validi
+          validFrom: new Date('2026-10-01T00:00:00Z'),
+          validTo: new Date('2026-10-02T00:00:00Z'),
+        },
+      ],
+      { source: 'assistant', trust: 0.8 },
+      '2026-10-13',
+    );
+    expect(stats).toMatchObject({ inserted: 2, disputed: 1, superseded: 0 });
+    const live = await r.listActiveSemantic(user);
+    const tea = live.find((m) => m.content.includes('tè'));
+    const coffee = live.find((m) => m.content.includes('caffè'));
+    expect(tea?.status).toBe('disputed');
+    expect(coffee?.status).toBe('disputed');
+    expect(tea?.conflictGroup).toBe(coffee?.conflictGroup);
+    expect(live.some((m) => m.content.includes('verifica'))).toBe(false);
+    expect((await r.pendingNotices(user)).map((n) => n.event)).toEqual(['disputed']);
   });
 });

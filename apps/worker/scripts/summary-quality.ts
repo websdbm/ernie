@@ -20,7 +20,9 @@ const gateway = createModelGateway({
   profiles: buildProfiles(config.llm.models),
 });
 const recorder = {
-  record: async (r: { usage: unknown }) => console.error('[costo]', JSON.stringify(r.usage)),
+  record: async (r: { usage: unknown }) => {
+    process.stderr.write(`[costo] ${JSON.stringify(r.usage)}\n`);
+  },
 };
 const base = Date.UTC(2026, 9, 12, 16, 0, 0);
 const dialog: Array<[string, string]> = [
@@ -62,7 +64,7 @@ const sections = ensureExactData(
   await summarizer({ previous: null, fold, today }),
   exactData(fold),
 );
-console.log(
+process.stdout.write(
   renderSessionSummary({
     sections,
     coveredUntil: new Date(),

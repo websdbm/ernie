@@ -11,7 +11,7 @@ import {
   type TurnInput,
 } from '@ernie/agent-core';
 import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
-import { formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
+import { formatMemoryNotices, formatRetrievedMemories, type MemoryRepository } from '@ernie/memory';
 import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
@@ -549,6 +549,25 @@ export class ClientConnection {
         this.deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           'recupero memorie fallito',
+        );
+      }
+    }
+    // Ricerca 11, M1: cambiamenti della memoria (sostituzioni, dubbi) comunicati una volta al turno dopo.
+    if (this.deps.memories) {
+      try {
+        const notices = await this.deps.memories.repo.pendingNotices(this.auth.userId, 5);
+        const block = formatMemoryNotices(notices);
+        if (block) {
+          contextBlocks.push(block);
+          await this.deps.memories.repo.markNotified(
+            this.auth.userId,
+            notices.map((n) => n.id),
+          );
+        }
+      } catch (err) {
+        this.deps.logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'avvisi della memoria non letti',
         );
       }
     }
