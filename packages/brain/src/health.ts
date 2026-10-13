@@ -174,6 +174,22 @@ const cleanUnit = (u: string | null | undefined) => {
   return t ? t.slice(0, 30) : null;
 };
 
+/** «< 41» esclude il 41 (e «> 40» il 40): al limite esatto il valore è fuori. «≤» e «fino a» lo includono. */
+function strictFlag(
+  flag: HealthFlag,
+  value: number | null,
+  low: number | null,
+  high: number | null,
+  ref: string | null | undefined,
+): HealthFlag {
+  const t = (ref ?? '').trim();
+  if (flag === 'normale' && value !== null && high !== null && value === high && /^<(?!=)/.test(t))
+    return 'alto';
+  if (flag === 'normale' && value !== null && low !== null && value === low && /^>(?!=)/.test(t))
+    return 'basso';
+  return flag;
+}
+
 const LEUKO = new Set(['neutrofili', 'linfociti', 'monociti', 'eosinofili', 'basofili']);
 
 /** Riga grezza → valore controllato; null se manca il nome o il valore. */
@@ -199,7 +215,7 @@ export function toHealthValue(raw: RawHealthItem): HealthValue | null {
     refLow: low,
     refHigh: high,
     refText: (raw.ref ?? '').trim().slice(0, 60) || null,
-    flag: flagFor(value, low, high),
+    flag: strictFlag(flagFor(value, low, high), value, low, high, raw.ref),
   };
 }
 

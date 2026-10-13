@@ -69,6 +69,9 @@ describe('sezione salute: numeri e intervalli all’italiana', () => {
     expect(flagFor(90, 70, 110)).toBe('normale');
     expect(flagFor(90, null, null)).toBe('n/d');
     expect(flagFor(null, 70, 110)).toBe('n/d');
+    expect(toHealthValue({ name: 'ALT', value: '41', ref: '< 41' })?.flag).toBe('alto');
+    expect(toHealthValue({ name: 'ALT', value: '41', ref: '≤ 41' })?.flag).toBe('normale');
+    expect(toHealthValue({ name: 'HDL', value: '40', ref: '> 40' })?.flag).toBe('basso');
   });
 
   it('riga grezza → valore controllato; percentuali della formula a parte', () => {

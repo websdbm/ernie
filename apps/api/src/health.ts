@@ -163,7 +163,14 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
         return { ok: false, reason: 'nel documento non ho trovato valori di analisi' };
       const takenOn = isoDay(ex.takenOn) ?? todayRome();
       const kind = (ex.kind?.trim().toLowerCase() || 'analisi del sangue').slice(0, 60);
-      const lab = ex.lab?.trim().slice(0, 120) || null;
+      const labRaw = ex.lab?.replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+      // «LABORATORIO SAN MARCO» → «Laboratorio San Marco».
+      const lab =
+        labRaw && labRaw === labRaw.toUpperCase()
+          ? labRaw
+              .toLowerCase()
+              .replace(/(^|[\s'’-])(\p{L})/gu, (_m, p: string, c: string) => p + c.toUpperCase())
+          : labRaw;
       const reportId = await store.saveReport(userId, { takenOn, lab, kind, documentId }, values);
       if (!reportId) return { ok: false, reason: 'questo referto è già nella sezione salute' };
       const out = values.filter((v) => v.flag === 'alto' || v.flag === 'basso');
