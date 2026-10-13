@@ -26,7 +26,7 @@ import {
   PROTOCOL_VERSION,
   parseClientEvent,
 } from '@ernie/protocol';
-import type { SkillRegistry } from '@ernie/skills';
+import { formatFiredIntents, type IntentStore, type SkillRegistry } from '@ernie/skills';
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
@@ -69,6 +69,8 @@ export interface ConnectionDeps {
   readonly invalidateCompanion: (sessionId: string) => void;
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
+  /** Ricerca 11, S1: promemoria a evento che scattano sulle parole del messaggio (senza modello). */
+  readonly intents?: Pick<IntentStore, 'fire'>;
   /** Ricerca 11, C4: esiti silenziosi delle sentinelle, letti una volta dal turno successivo. */
   readonly silentRuns?: (
     userId: string,
@@ -460,12 +462,19 @@ export class ClientConnection {
     // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
     const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
     const match = attachments.length === 0 ? (skills?.match(text) ?? null) : null;
+    // Promemoria a evento: confronto full-text del messaggio, mai sulla frase che ne crea uno.
+    const fired =
+      this.deps.intents && attachments.length === 0 && match?.skill.id !== 'promemoria_evento'
+        ? await this.deps.intents.fire(this.auth.userId, text).catch(() => [])
+        : [];
+    const firedNote = formatFiredIntents(fired);
     if (match) {
-      const reply = await match.skill.run(match.plan, {
+      const raw = await match.skill.run(match.plan, {
         userId: this.auth.userId,
         sessionId,
         requestId: correlationId,
       });
+      const reply = firedNote ? { ...raw, text: `${raw.text}\n\n${firedNote}` } : raw;
       await this.deps.decisions.record(
         this.auth.userId,
         sessionId,
@@ -575,6 +584,10 @@ export class ClientConnection {
         );
       }
     }
+    if (firedNote)
+      contextBlocks.push(
+        `Promemoria a evento appena scattati per quello che l'utente ha detto (riportali in una frase, con naturalezza):\n${firedNote}`,
+      );
     if (this.deps.silentRuns) {
       try {
         const runs = await this.deps.silentRuns(this.auth.userId);

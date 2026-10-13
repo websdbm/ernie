@@ -46,6 +46,7 @@ import { createLogger } from '@ernie/observability';
 import {
   createDiarySkill,
   createDocumentsSkill,
+  createIntentSkill,
   createLearnedSkillRepository,
   createMemorySkill,
   createPgActivityStore,
@@ -78,6 +79,7 @@ import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
+import { createIntentStore } from './intents.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { createSentinelStore } from './sentinels.js';
@@ -134,6 +136,7 @@ async function main(): Promise<void> {
   const events = createEventPublisher({ repo: automations, queue: automationQueue, logger });
   // Famiglia (M7e): collegamenti con etichetta fra installazioni; promemoria «a Giorgio».
   const family = createFamilyRepository(postgres.pool);
+  const intents = createIntentStore(postgres.pool, family);
   // Promemoria («Ricordami»): automazioni una tantum accodate subito; a un familiare → nel suo account,
   // con scheda immediata nelle sue sessioni connesse (da lì partono notifica locale e widget).
   const reminders = createReminderStore({
@@ -264,6 +267,8 @@ async function main(): Promise<void> {
         createRecipesSkill(),
         createDocumentsSkill(),
         createSentinelsSkill(),
+        // Promemoria a evento (ricerca 11, S1): fuori catalogo, viene prima di «Ricordami» nell'ordine.
+        createIntentSkill(intents),
         createReminderSkill(reminders),
         createDiarySkill(createPgActivityStore(postgres.pool)),
         // «Cosa sai di me?», «perché sai che …?», «dimentica che …» (M9 A4): fuori catalogo, sempre attiva.
@@ -402,6 +407,7 @@ async function main(): Promise<void> {
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
         approvals: { ...approvals, rules: toolRules },
         silentRuns: (userId) => automations.takeSilentRuns(userId, 3),
+        intents,
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,
