@@ -70,5 +70,6 @@ export function formatDeviceContext(
     'Contesto dal telefono dell’utente (dato del dispositivo, affidabile):',
     ...lines,
     'Usali quando servono (meteo, luoghi vicini, orari, «qui», «oggi», «stasera») senza chiedere dove si trova o che ore sono e senza chiamare get_time; non citarli se la domanda non c’entra.',
+    'Ora e posizione valgono adesso: se nei turni precedenti erano diverse, l’utente si è spostato o è passato del tempo, non hai sbagliato tu; non correggere né scusarti per le risposte passate.',
   ].join('\n');
 }
