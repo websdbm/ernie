@@ -60,6 +60,7 @@ function fakeRepo(automations: Automation[]) {
     create: async () => {
       throw new Error('non usato');
     },
+    mergeMeta: async () => null,
     setEnabled: async (_u, id, enabled) => {
       const i = automations.findIndex((a) => a.id === id);
       if (i < 0) return null;

@@ -463,6 +463,24 @@ export const RemindersBlock = z.object({
         /** v1.7 (Famiglia): messo da me a «Giorgio» / messo a me da «papà». */
         for: z.string().min(1).max(60).optional(),
         from: z.string().min(1).max(60).optional(),
+        /**
+         * v1.11: canali scelti per questo promemoria (email, sveglia). Assenti = impostazioni generali
+         * (email da Impostazioni › Notifiche, sveglia dall'opzione del telefono).
+         */
+        channels: z
+          .object({ email: z.boolean().optional(), alarm: z.boolean().optional() })
+          .optional(),
+        /** v1.11: promemoria ricorrente; `at` è la prossima occorrenza, `label` la frase («ogni venerdì alle 9»). */
+        repeat: z
+          .object({
+            kind: z.enum(['daily', 'weekly', 'monthly']),
+            weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+            day: z.number().int().min(1).max(31).optional(),
+            hour: z.number().int().min(0).max(23),
+            minute: z.number().int().min(0).max(59),
+            label: z.string().max(100),
+          })
+          .optional(),
       }),
     )
     .max(50),

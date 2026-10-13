@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { AppConfig } from '@ernie/config';
 import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
@@ -87,6 +90,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   app.setNotFoundHandler((req, reply) => {
     reply.code(404).send({ error: 'not_found', message: 'Risorsa non trovata', requestId: req.id });
+  });
+
+  // Immagine dell'orso per le email dei promemoria (pubblica, nessun dato dell'utente).
+  const bearPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'static', 'ernie-bear.png');
+  app.get('/static/ernie-bear.png', async (_req, reply) => {
+    const png = await readFile(bearPath).catch(() => null);
+    if (!png) return reply.code(404).send({ error: 'not_found' });
+    return reply
+      .header('content-type', 'image/png')
+      .header('cache-control', 'public, max-age=86400')
+      .send(png);
   });
 
   await app.register(healthRoutes, {

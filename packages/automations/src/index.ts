@@ -7,6 +7,7 @@ export * from './notify.js';
 export * from './proactive.js';
 export * from './push.js';
 export * from './queue.js';
+export * from './reminder-email.js';
 export * from './repository.js';
 export * from './runner.js';
 export * from './schedule.js';

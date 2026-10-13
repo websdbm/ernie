@@ -166,6 +166,8 @@ export interface AutomationRepository {
   create(userId: string, input: unknown, opts?: CreateOptions): Promise<Automation>;
   /** `enabled = true` è anche la ripresa da una pausa automatica: azzera contatore e motivo. */
   setEnabled(userId: string, id: string, enabled: boolean): Promise<Automation | null>;
+  /** Fonde campi nei metadati (es. canali di un promemoria) senza ricreare l'automazione. */
+  mergeMeta(userId: string, id: string, patch: Record<string, unknown>): Promise<Automation | null>;
   /** Esito definitivo di una run: successo azzera, fallimento incrementa; restituisce il contatore. */
   recordRunOutcome(userId: string, id: string, failed: boolean): Promise<number>;
   /** Stato del controllo economico (hash della pagina, voci viste del feed). */
@@ -268,6 +270,18 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
         if ((err as { code?: string }).code === '23505')
           throw new AutomationValidationError(`esiste già un'automazione con chiave «${a.key}»`);
         throw err;
+      });
+    },
+
+    async mergeMeta(userId, id, patch) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<ARow>(
+          `UPDATE automations SET meta = coalesce(meta, '{}'::jsonb) || $3::jsonb, updated_at = now()
+           WHERE id = $1 AND user_id = $2 RETURNING ${A_COLS}`,
+          [id, userId, JSON.stringify(patch)],
+        );
+        const row = res.rows[0];
+        return row ? toAutomation(row) : null;
       });
     },
 

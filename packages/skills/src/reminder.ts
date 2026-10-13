@@ -1,4 +1,10 @@
 import type { ContentBlock } from '@ernie/protocol';
+import {
+  firstOccurrence,
+  parseRepeat,
+  type ReminderRepeat,
+  repeatLabel,
+} from './reminder-repeat.js';
 import type { DeterministicSkill, SkillReply } from './types.js';
 import { addDays, localParts, zonedToUtc } from './zoned.js';
 
@@ -19,6 +25,15 @@ export interface Reminder {
   readonly for?: string;
   /** Promemoria messo a me da una persona collegata: la sua etichetta («papà»). */
   readonly from?: string;
+  /** Canali scelti per questo promemoria (v1.11); assenti = impostazioni generali. */
+  readonly channels?: ReminderChannels;
+  /** Ricorrenza (v1.11): `at` è la prossima occorrenza. */
+  readonly repeat?: ReminderRepeat;
+}
+
+export interface ReminderChannels {
+  readonly email?: boolean;
+  readonly alarm?: boolean;
 }
 
 /** «Ricorda a Giorgio…» senza un collegamento con quell'etichetta. */
@@ -33,17 +48,35 @@ export interface ReminderStore {
   /** Con `forLabel` il promemoria va a una persona collegata (Famiglia); se non esiste: UnknownPersonError. */
   create(
     userId: string,
-    input: { text: string; at: Date; timezone: string; forLabel?: string },
+    input: {
+      text: string;
+      at: Date;
+      timezone: string;
+      forLabel?: string;
+      /** Ricorrente: `at` è la prima occorrenza. */
+      repeat?: ReminderRepeat;
+    },
   ): Promise<Reminder>;
   /** Promemoria futuri ancora attivi, dal più vicino. */
   list(userId: string): Promise<Reminder[]>;
   remove(userId: string, id: string): Promise<boolean>;
   /** Cambia testo e/o ora (dalla scheda nell'app): restituisce il promemoria aggiornato (può avere un id nuovo). */
-  update(userId: string, id: string, patch: { text?: string; at?: Date }): Promise<Reminder | null>;
+  update(
+    userId: string,
+    id: string,
+    patch: { text?: string; at?: Date; channels?: ReminderChannels },
+  ): Promise<Reminder | null>;
 }
 
 export type ReminderPlan =
-  | { op: 'create'; text: string; at: Date; assumed: string[]; who?: string }
+  | {
+      op: 'create';
+      text: string;
+      at: Date;
+      assumed: string[];
+      who?: string;
+      repeat?: ReminderRepeat;
+    }
   | { op: 'ask_time'; text: string; who?: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
@@ -388,6 +421,17 @@ export function parseReminderCommand(
   const rest =
     `${text.slice(0, anchor.index)} ${text.slice(anchor.index + anchor[0].length)}`.trim();
   if (!rest) return null;
+  // Ricorrenti: «ogni venerdì alle 9», «ogni giorno alle 8», «il 5 di ogni mese».
+  const rep = parseRepeat(rest);
+  if (rep)
+    return {
+      op: 'create',
+      text: rep.text,
+      at: firstOccurrence(rep.repeat, now, tz),
+      assumed: rep.assumed,
+      repeat: rep.repeat,
+      ...(who ? { who } : {}),
+    };
   const parsed = parseWhen(rest, now, tz);
   if (parsed === null) return null;
   if ('needTime' in parsed)
@@ -468,6 +512,21 @@ export function toRemindersBlock(
       status: r.status,
       ...(r.for ? { for: r.for.slice(0, 60) } : {}),
       ...(r.from ? { from: r.from.slice(0, 60) } : {}),
+      ...(r.channels && (r.channels.email !== undefined || r.channels.alarm !== undefined)
+        ? { channels: { ...r.channels } }
+        : {}),
+      ...(r.repeat
+        ? {
+            repeat: {
+              kind: r.repeat.kind,
+              hour: r.repeat.hour,
+              minute: r.repeat.minute,
+              label: repeatLabel(r.repeat),
+              ...(r.repeat.weekdays ? { weekdays: [...r.repeat.weekdays] } : {}),
+              ...(r.repeat.day ? { day: r.repeat.day } : {}),
+            },
+          }
+        : {}),
     })),
   };
 }
@@ -516,6 +575,7 @@ export function createReminderSkill(
               at: p.at,
               timezone,
               ...(p.who ? { forLabel: p.who } : {}),
+              ...(p.repeat ? { repeat: p.repeat } : {}),
             });
           } catch (err) {
             if (err instanceof UnknownPersonError)
@@ -528,6 +588,21 @@ export function createReminderSkill(
           // Le stime dette in una frase a parte, senza parentesi annidate.
           const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
           const what = lowerFirst(r.text);
+          if (r.repeat) {
+            const label = repeatLabel(r.repeat);
+            const first = `La prima volta ${formatWhen(r.at, timezone)}.`;
+            return r.for
+              ? {
+                  text: `🔁 Va bene: ${label} ricordo a ${r.for} di ${what}. ${first}${note} Arriva sul suo telefono.`,
+                  actions: [`create:${r.id}`],
+                  blocks: [toRemindersBlock([r], `Promemoria per ${r.for}`)],
+                }
+              : {
+                  text: `🔁 Va bene: ${label} ti ricordo di ${what}. ${first}${note}`,
+                  actions: [`create:${r.id}`],
+                  blocks: [toRemindersBlock([r], 'Promemoria')],
+                };
+          }
           if (r.for)
             return {
               text: `⏰ Va bene: ricordo a ${r.for} di ${what} ${formatWhen(r.at, timezone)}.${note} Il promemoria arriva sul suo telefono.`,
@@ -546,12 +621,16 @@ export function createReminderSkill(
           const list = await store.list(ctx.userId);
           if (!list.length) return { text: 'Non hai promemoria in programma.', actions: ['list'] };
           return {
-            text: `Hai ${list.length} promemoria: ${list
-              .map(
-                (r) =>
-                  `${r.text}${r.for ? ` (per ${r.for})` : r.from ? ` (da ${r.from})` : ''} (${formatWhen(r.at, timezone)})`,
-              )
-              .join('; ')}.`,
+            // Una riga per promemoria, senza parentesi annidate; i ricorrenti dicono la loro ripetizione.
+            text: `Hai ${list.length} promemoria:\n${list
+              .map((r) => {
+                const who = r.for ? `, per ${r.for}` : r.from ? `, da ${r.from}` : '';
+                const when = r.repeat
+                  ? `${repeatLabel(r.repeat)}, la prossima ${formatWhen(r.at, timezone)}`
+                  : formatWhen(r.at, timezone);
+                return `- ${r.text}${who}: ${when}`;
+              })
+              .join('\n')}`,
             actions: ['list'],
             blocks: [toRemindersBlock(list)],
           };

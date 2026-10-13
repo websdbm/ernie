@@ -1,4 +1,4 @@
-import type { Reminder, ReminderStore } from '@ernie/skills';
+import { type Reminder, type ReminderStore, repeatLabel } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
@@ -24,6 +24,8 @@ const json = (r: Reminder) => ({
   status: r.status,
   ...(r.for ? { for: r.for } : {}),
   ...(r.from ? { from: r.from } : {}),
+  ...(r.channels ? { channels: r.channels } : {}),
+  ...(r.repeat ? { repeat: { ...r.repeat, label: repeatLabel(r.repeat) } } : {}),
 });
 
 /** Promemoria per l'app (scheda e widget): elenco dei prossimi, modifica e annullamento. */
@@ -49,14 +51,34 @@ export async function remindersRoutes(
       if (!z.uuid().safeParse(id).success)
         return reply.code(400).send({ error: 'invalid_id', message: 'id non valido' });
       const b = z
-        .object({ text: z.string().min(1).max(300).optional(), at: z.iso.datetime().optional() })
-        .refine((x) => x.text !== undefined || x.at !== undefined, { message: 'atteso text o at' })
+        .object({
+          text: z.string().min(1).max(300).optional(),
+          at: z.iso.datetime().optional(),
+          /** v1.11: canali del promemoria (email, sveglia); si cambiano senza cambiare l'id. */
+          channels: z
+            .object({ email: z.boolean().optional(), alarm: z.boolean().optional() })
+            .strict()
+            .optional(),
+        })
+        .refine((x) => x.text !== undefined || x.at !== undefined || x.channels !== undefined, {
+          message: 'atteso text, at o channels',
+        })
         .safeParse(req.body);
       if (!b.success)
-        return reply.code(400).send({ error: 'invalid_body', message: 'atteso { text?, at? }' });
+        return reply
+          .code(400)
+          .send({ error: 'invalid_body', message: 'atteso { text?, at?, channels? }' });
       const r = await opts.store.update(auth.userId, id, {
         ...(b.data.text !== undefined ? { text: b.data.text } : {}),
         ...(b.data.at !== undefined ? { at: new Date(b.data.at) } : {}),
+        ...(b.data.channels !== undefined
+          ? {
+              channels: {
+                ...(b.data.channels.email !== undefined ? { email: b.data.channels.email } : {}),
+                ...(b.data.channels.alarm !== undefined ? { alarm: b.data.channels.alarm } : {}),
+              },
+            }
+          : {}),
       });
       if (!r)
         return reply

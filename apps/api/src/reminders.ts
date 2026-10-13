@@ -4,6 +4,7 @@ import {
   type AutomationRepository,
   dedupeKeys,
   enqueueRun,
+  nextOccurrences,
   type ProactiveCandidate,
 } from '@ernie/automations';
 import type { ContentBlock } from '@ernie/protocol';
@@ -11,7 +12,11 @@ import {
   formatWhen,
   REMINDER_FIRE_PREFIX,
   type Reminder,
+  type ReminderChannels,
+  type ReminderRepeat,
   type ReminderStore,
+  repeatCron,
+  repeatLabel,
   tidyReminderText,
   toRemindersBlock,
   UnknownPersonError,
@@ -53,14 +58,53 @@ interface Meta {
   readonly from?: string;
   readonly fromLabel?: string;
   readonly toLabel?: string;
+  /** v1.11: canali scelti per questo promemoria (email, sveglia); assenti = impostazioni generali. */
+  readonly channels?: ReminderChannels;
+  /** Frase detta dall'utente (prima del titolo breve): va nell'email del promemoria. */
+  readonly spoken?: string;
+  /** v1.11: ricorrenza (l'automazione ha un trigger cron) e la sua frase per l'email. */
+  readonly repeat?: ReminderRepeat;
+  readonly repeatLabel?: string;
+}
+
+function repeatOf(v: unknown): ReminderRepeat | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Record<string, unknown>;
+  if (r.kind !== 'daily' && r.kind !== 'weekly' && r.kind !== 'monthly') return undefined;
+  if (typeof r.hour !== 'number' || typeof r.minute !== 'number') return undefined;
+  const weekdays = Array.isArray(r.weekdays)
+    ? r.weekdays.filter((d): d is number => typeof d === 'number' && d >= 0 && d <= 6)
+    : undefined;
+  return {
+    kind: r.kind,
+    hour: r.hour,
+    minute: r.minute,
+    ...(weekdays?.length ? { weekdays } : {}),
+    ...(typeof r.day === 'number' ? { day: r.day } : {}),
+  };
+}
+
+function channelsOf(v: unknown): ReminderChannels | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const c = v as Record<string, unknown>;
+  const out = {
+    ...(typeof c.email === 'boolean' ? { email: c.email } : {}),
+    ...(typeof c.alarm === 'boolean' ? { alarm: c.alarm } : {}),
+  };
+  return Object.keys(out).length ? out : undefined;
 }
 
 const metaOf = (a: Automation): Meta => {
   const m = a.meta as Record<string, unknown>;
+  const channels = channelsOf(m.channels);
   return {
     ...(typeof m.from === 'string' ? { from: m.from } : {}),
     ...(typeof m.fromLabel === 'string' ? { fromLabel: m.fromLabel } : {}),
     ...(typeof m.toLabel === 'string' ? { toLabel: m.toLabel } : {}),
+    ...(channels ? { channels } : {}),
+    ...(typeof m.spoken === 'string' ? { spoken: m.spoken } : {}),
+    ...(repeatOf(m.repeat) ? { repeat: repeatOf(m.repeat) as ReminderRepeat } : {}),
+    ...(typeof m.repeatLabel === 'string' ? { repeatLabel: m.repeatLabel } : {}),
   };
 };
 
@@ -73,17 +117,31 @@ function textOf(a: Automation): string {
 }
 
 const isReminder = (a: Automation): boolean =>
-  a.key.startsWith(KEY_PREFIX) && a.enabled && a.trigger.type === 'once';
+  a.key.startsWith(KEY_PREFIX) &&
+  a.enabled &&
+  (a.trigger.type === 'once' || a.trigger.type === 'cron');
+
+/** Quando suona: l'istante delle una tantum, la prossima occorrenza delle ricorrenti. */
+function nextAt(a: Automation, now = new Date()): Date | null {
+  if (a.trigger.type === 'once') return new Date(a.trigger.at);
+  if (a.trigger.type === 'cron')
+    return nextOccurrences(a.trigger.pattern, a.timezone, now, 1)[0] ?? null;
+  return null;
+}
 
 /** Vista di un'automazione-promemoria per chi guarda: propria (eventualmente «da papà») o messa a un altro. */
 function toReminder(a: Automation, viewer: string, forLabel?: string): Reminder | null {
-  if (!isReminder(a) || a.trigger.type !== 'once') return null;
+  if (!isReminder(a)) return null;
+  const at = nextAt(a);
+  if (!at) return null;
   const meta = metaOf(a);
   const base = {
     id: a.id,
     text: textOf(a),
-    at: new Date(a.trigger.at),
+    at,
     status: 'scheduled' as const,
+    ...(meta.channels ? { channels: meta.channels } : {}),
+    ...(meta.repeat ? { repeat: meta.repeat } : {}),
   };
   if (a.userId === viewer)
     return meta.from && meta.from !== viewer && meta.fromLabel
@@ -93,7 +151,24 @@ function toReminder(a: Automation, viewer: string, forLabel?: string): Reminder 
   return null;
 }
 
+/** Stessa frase a meno di maiuscole e spazi: non serve conservarla a parte. */
+const sameText = (a: string, b: string) =>
+  a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+
 const clean = (text: string): string => text.replace(/\s+/g, ' ').trim().slice(0, 300);
+
+function hourMinute(at: Date, tz: string): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  return {
+    hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0),
+    minute: Number(parts.find((p) => p.type === 'minute')?.value ?? 0),
+  };
+}
 
 export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
   /** Inserisce l'automazione nell'account del destinatario e accoda il job all'ora stabilita. */
@@ -111,12 +186,17 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
     const input = meta.fromLabel
       ? `${REMINDER_FIRE_PREFIX}[da ${meta.fromLabel}] ${text}`
       : `${REMINDER_FIRE_PREFIX}${text}`;
+    // Ricorrente: trigger cron (lo pianifica il worker al prossimo giro); una tantum: job ritardato subito.
+    const trigger = meta.repeat
+      ? { type: 'cron' as const, pattern: repeatCron(meta.repeat) }
+      : { type: 'once' as const, at: at.toISOString() };
+    const fullMeta: Meta = meta.repeat ? { ...meta, repeatLabel: repeatLabel(meta.repeat) } : meta;
     const automation = await deps.automations.create(
       recipient,
       {
         key,
         title: title.slice(0, 120),
-        trigger: { type: 'once', at: at.toISOString() },
+        trigger,
         timezone,
         budgetUsd: 0,
         catchUp: 'latest',
@@ -124,10 +204,11 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
         notify: true,
         enabled: true,
         action: { type: 'skill', skillId: 'ricordami', input },
-        meta,
+        meta: fullMeta,
       },
       { knownTools: deps.knownTools, maxBudgetUsd: deps.maxBudgetUsd },
     );
+    if (meta.repeat) return automation;
     await enqueueRun(
       deps.queue,
       {
@@ -206,14 +287,29 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
         ) || spoken;
       if (!input.forLabel) {
         const text = await titled();
-        const a = await insert(userId, text, at, input.timezone, {});
-        return { id: a.id, text, at, status: 'scheduled' };
+        const a = await insert(userId, text, at, input.timezone, {
+          ...(!sameText(spoken, text) ? { spoken } : {}),
+          ...(input.repeat ? { repeat: input.repeat } : {}),
+        });
+        return {
+          id: a.id,
+          text,
+          at: nextAt(a) ?? at,
+          status: 'scheduled',
+          ...(input.repeat ? { repeat: input.repeat } : {}),
+        };
       }
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
       if (!link) throw new UnknownPersonError(input.forLabel);
       const fromLabel = (await deps.family?.labelFor(link.otherUserId, userId)) ?? 'un familiare';
       const text = await titled(fromLabel);
-      const meta: Meta = { from: userId, fromLabel, toLabel: link.label };
+      const meta: Meta = {
+        from: userId,
+        fromLabel,
+        toLabel: link.label,
+        ...(!sameText(spoken, text) ? { spoken } : {}),
+        ...(input.repeat ? { repeat: input.repeat } : {}),
+      };
       const a = await insert(link.otherUserId, text, at, input.timezone, meta);
       await announce(
         link.otherUserId,
@@ -244,15 +340,36 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       return deps.automations.remove(found.owner, id);
     },
     async update(userId, id, patch) {
-      // Le automazioni una tantum non si modificano: si sostituisce (nuovo id), così il job ritardato è coerente.
       const found = await locate(userId, id);
-      if (found?.automation.trigger.type !== 'once') return null;
+      if (!found) return null;
+      // Solo i canali: si aggiornano i metadati sul posto (stesso id, il job ritardato resta quello).
+      if (patch.channels && patch.text === undefined && patch.at === undefined) {
+        const merged = { ...(metaOf(found.automation).channels ?? {}), ...patch.channels };
+        const a = await deps.automations.mergeMeta(found.owner, id, { channels: merged });
+        if (!a) return null;
+        return toReminder(a, userId, found.forLabel);
+      }
+      // Testo o ora: le automazioni una tantum non si modificano, si sostituiscono (nuovo id), così il job
+      // ritardato è coerente.
       const text = clean(patch.text ?? textOf(found.automation));
+      const old = metaOf(found.automation);
       const at = patch.at
         ? new Date(Math.floor(patch.at.getTime() / 1000) * 1000)
-        : new Date(found.automation.trigger.at);
-      if (!text || at.getTime() <= Date.now()) return null;
-      const meta = metaOf(found.automation);
+        : (nextAt(found.automation) ?? new Date(0));
+      if (!text || (!old.repeat && at.getTime() <= Date.now())) return null;
+      // Ricorrente con nuova ora: stessa ricorrenza, ora e minuti presi dal nuovo istante (nel suo fuso).
+      const repeat =
+        old.repeat && patch.at
+          ? { ...old.repeat, ...hourMinute(at, found.automation.timezone) }
+          : old.repeat;
+      const channels = patch.channels
+        ? { ...(old.channels ?? {}), ...patch.channels }
+        : old.channels;
+      const meta: Meta = {
+        ...old,
+        ...(channels ? { channels } : {}),
+        ...(repeat ? { repeat } : {}),
+      };
       await deps.automations.remove(found.owner, id);
       const a = await insert(found.owner, text, at, found.automation.timezone, meta);
       const r = toReminder(a, userId, found.forLabel);

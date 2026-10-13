@@ -69,6 +69,8 @@ export const envSchema = z.object({
     .default('utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain'),
   /** Second brain: cartella dei vault (uno per utente), remoti git per utente, chiave di deploy (base64). */
   BRAIN_DIR: z.string().default('./.data/brain'),
+  /** URL pubblico del server (immagini nelle email, es. https://ernie.staging3.eklettica.it). */
+  PUBLIC_BASE_URL: z.string().default(''),
   BRAIN_REMOTES: z.string().default(''),
   BRAIN_DEPLOY_KEY_B64: z.string().optional(),
   BRAIN_SYNC_INTERVAL_S: z.coerce.number().int().min(0).max(86_400).default(300),
@@ -134,6 +136,8 @@ export interface AppConfig {
     readonly consolidationDelaySeconds: number;
     readonly retentionDays: number;
   };
+  /** URL pubblico del server senza barra finale; vuoto se non noto. */
+  readonly publicBaseUrl: string;
   readonly brain: {
     readonly dir: string;
     /** [userId, url git] */
@@ -256,6 +260,7 @@ export function toAppConfig(env: Env): AppConfig {
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
       retentionDays: env.MEMORY_RETENTION_DAYS,
     },
+    publicBaseUrl: env.PUBLIC_BASE_URL.replace(/\/+$/, ''),
     brain: {
       dir: env.BRAIN_DIR,
       remotes: csv(env.BRAIN_REMOTES)

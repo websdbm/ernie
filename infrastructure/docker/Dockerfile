@@ -89,6 +89,7 @@ COPY --from=build /app/packages/skills/dist ./packages/skills/dist
 COPY --from=build /app/packages/soul/dist ./packages/soul/dist
 COPY --from=build /app/packages/tools/dist ./packages/tools/dist
 COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY apps/api/static ./apps/api/static
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY infrastructure/migrations ./infrastructure/migrations
 COPY infrastructure/router ./infrastructure/router

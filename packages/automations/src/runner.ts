@@ -30,10 +30,11 @@ import {
 } from '@ernie/tools';
 import type { Redis } from 'ioredis';
 import { CheckSourceError, evaluateCheck } from './checks.js';
-import { emailRecipient, type Mailer } from './email.js';
+import { emailAddress, emailRecipient, type Mailer } from './email.js';
 import { publishUserEvent } from './notify.js';
 import type { PushSender } from './push.js';
 import { RUN_ATTEMPTS } from './queue.js';
+import { reminderEmailHtml, reminderEmailSubject, reminderEmailText } from './reminder-email.js';
 import type { AutomationRepository, RunFinish } from './repository.js';
 import { isTooLate } from './schedule.js';
 import type { Automation, AutomationRun, GuidedAction, RunJobData } from './schema.js';
@@ -97,6 +98,8 @@ export interface RunnerDeps {
   readonly push?: PushSender;
   /** Email (Brevo) per gli utenti che le hanno attivate; assente se non configurato. */
   readonly email?: Mailer;
+  /** URL pubblico dell'immagine dell'orso per l'email HTML dei promemoria. */
+  readonly bearImageUrl?: string;
   readonly logger: Logger;
   readonly redis: Pick<Redis, 'publish' | 'set'>;
   /** Registry delle skill deterministiche dell'utente (nessun modello). */
@@ -326,12 +329,27 @@ async function finish(
     } catch (err) {
       deps.logger.warn({ err, runId: run.id }, 'notifica non salvata o non inviata');
     }
-    // Email, se l'utente l'ha chiesta nelle impostazioni (es. promemoria quando il telefono non è a portata).
+    // Email: per i promemoria vale il canale scelto sulla scheda (v1.11), altrimenti l'impostazione generale.
     if (deps.email) {
       try {
         const settings = await deps.repo.getUserSettings(run.userId);
-        const to = emailRecipient(settings);
-        if (to) await deps.email.send({ to, subject: message.title, text: message.body });
+        const reminder = isReminderAutomation(automation);
+        const choice = reminder ? reminderEmailChoice(automation.meta) : undefined;
+        const to =
+          choice === true
+            ? emailAddress(settings)
+            : choice === false
+              ? null
+              : emailRecipient(settings);
+        if (to && reminder) {
+          const input = reminderEmailInput(automation, run.scheduledAt, deps.bearImageUrl);
+          await deps.email.send({
+            to,
+            subject: reminderEmailSubject(input),
+            text: reminderEmailText(input),
+            html: reminderEmailHtml(input),
+          });
+        } else if (to) await deps.email.send({ to, subject: message.title, text: message.body });
       } catch (err) {
         deps.logger.warn({ err, runId: run.id }, 'email non inviata');
       }
@@ -769,4 +787,54 @@ export async function notifyDeadLetter(
     },
   }).catch(() => {});
   return true;
+}
+
+// ---------- promemoria: canale email e contenuto dell'email ----------
+
+function isReminderAutomation(a: Automation): boolean {
+  return (
+    a.key.startsWith('promemoria_') && a.action.type === 'skill' && a.action.skillId === 'ricordami'
+  );
+}
+
+/** true/false se scelto sulla scheda del promemoria; undefined = impostazione generale. */
+export function reminderEmailChoice(meta: Readonly<Record<string, unknown>>): boolean | undefined {
+  const c = meta.channels as Record<string, unknown> | undefined;
+  return c && typeof c.email === 'boolean' ? c.email : undefined;
+}
+
+const longDate = (d: Date, tz: string) => {
+  try {
+    return new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: tz,
+    }).format(d);
+  } catch {
+    return new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Europe/Rome',
+    }).format(d);
+  }
+};
+
+export function reminderEmailInput(a: Automation, scheduledAt: Date | string, bearUrl?: string) {
+  const meta = a.meta as Record<string, unknown>;
+  const title = a.title.replace(/^Promemoria(?: da [^:]+)?:\s*/u, '').trim() || a.title;
+  const fromLabel = typeof meta.fromLabel === 'string' ? meta.fromLabel : undefined;
+  const spoken = typeof meta.spoken === 'string' && meta.spoken !== title ? meta.spoken : undefined;
+  const repeat = typeof meta.repeatLabel === 'string' ? meta.repeatLabel : undefined;
+  const when = longDate(new Date(scheduledAt), a.timezone);
+  return {
+    title,
+    when: when.replace(/ (\d{1,2}:\d{2})$/u, ' alle $1'),
+    ...(spoken ? { spoken } : {}),
+    ...(fromLabel ? { from: fromLabel } : {}),
+    createdOn: new Intl.DateTimeFormat('it-IT', { dateStyle: 'long', timeZone: a.timezone }).format(
+      a.createdAt,
+    ),
+    ...(repeat ? { repeat } : {}),
+    ...(bearUrl ? { bearUrl } : {}),
+  };
 }

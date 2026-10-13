@@ -202,6 +202,10 @@ export async function startAutomations(
     redis: connection,
     ...(push ? { push } : {}),
     ...(email ? { email } : {}),
+    // Orso nell'email dei promemoria: servito dall'API; senza URL pubblico, dal repository GitHub pubblico.
+    bearImageUrl: config.publicBaseUrl
+      ? `${config.publicBaseUrl}/static/ernie-bear.png`
+      : 'https://raw.githubusercontent.com/websdbm/ernie/main/apps/api/static/ernie-bear.png',
     skillsFor: async () => skills,
     guided,
     catchUpToleranceSeconds: config.automations.catchUpToleranceSeconds,

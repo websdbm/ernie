@@ -49,6 +49,14 @@ function fakeAutomations() {
       rows.splice(i, 1);
       return true;
     }),
+    mergeMeta: vi.fn(async (userId: string, id: string, patch: Record<string, unknown>) => {
+      const i = rows.findIndex((a) => a.userId === userId && a.id === id);
+      const cur = rows[i];
+      if (i < 0 || !cur) return null;
+      const next = { ...cur, meta: { ...cur.meta, ...patch } } as Automation;
+      rows[i] = next;
+      return next;
+    }),
     notify: vi.fn(async (userId: string, n: { title: string }) => {
       notifications.push({ userId, title: n.title });
       return {
@@ -275,5 +283,47 @@ describe('store dei promemoria con Famiglia', () => {
     expect(await store.list(PAPA)).toEqual([]); // non messo da papà: invisibile
     expect(await store.remove(PAPA, r.id)).toBe(false);
     expect(await store.update(PAPA, r.id, { text: 'altro' })).toBeNull();
+  });
+});
+
+describe('promemoria ricorrenti e canali (v1.11)', () => {
+  it('«ogni venerdì alle 9» diventa un cron, l’elenco mostra la prossima occorrenza; i canali non cambiano l’id', async () => {
+    const auto = fakeAutomations();
+    const store = createReminderStore({
+      automations: auto.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    const addsBefore = (queue.add as ReturnType<typeof vi.fn>).mock.calls.length;
+    const r = await store.create(PAPA, {
+      text: 'andare in palestra',
+      at: future,
+      timezone: 'Europe/Rome',
+      repeat: { kind: 'weekly', weekdays: [5], hour: 9, minute: 0 },
+    });
+    const row = auto.rows[0];
+    expect(row?.trigger).toEqual({ type: 'cron', pattern: '0 9 * * 5' });
+    expect(row?.meta).toMatchObject({
+      repeatLabel: 'ogni venerdì alle 9',
+      repeat: { kind: 'weekly' },
+    });
+    // Nessun job ritardato: lo pianifica il worker come ogni cron.
+    expect((queue.add as ReturnType<typeof vi.fn>).mock.calls.length).toBe(addsBefore);
+    const [listed] = await store.list(PAPA);
+    expect(listed?.repeat).toEqual({ kind: 'weekly', weekdays: [5], hour: 9, minute: 0 });
+    expect(listed?.at.getTime()).toBeGreaterThan(Date.now());
+    expect(
+      new Intl.DateTimeFormat('it-IT', { weekday: 'long', timeZone: 'Europe/Rome' }).format(
+        listed?.at,
+      ),
+    ).toBe('venerdì');
+    const updated = await store.update(PAPA, r.id, { channels: { email: true, alarm: false } });
+    expect(updated?.id).toBe(r.id);
+    expect(updated?.channels).toEqual({ email: true, alarm: false });
+    // Nuova ora: stessa ricorrenza, ore e minuti nuovi.
+    const moved = await store.update(PAPA, r.id, { at: new Date('2026-10-23T16:30:00Z') });
+    expect(auto.rows.at(-1)?.trigger).toEqual({ type: 'cron', pattern: '30 18 * * 5' });
+    expect(moved?.channels).toEqual({ email: true, alarm: false });
   });
 });

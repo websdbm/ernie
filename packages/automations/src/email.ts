@@ -5,7 +5,13 @@ import type { Logger } from '@ernie/observability';
  * mittente verificato su Brevo; nessun contenuto oltre il titolo e il corpo della notifica.
  */
 export interface Mailer {
-  send(input: { to: string; subject: string; text: string }): Promise<{ messageId: string | null }>;
+  send(input: {
+    to: string;
+    subject: string;
+    text: string;
+    /** Versione HTML (es. l'email del promemoria con l'orso); il testo resta come alternativa. */
+    html?: string;
+  }): Promise<{ messageId: string | null }>;
 }
 
 export interface BrevoOptions {
@@ -19,7 +25,7 @@ export interface BrevoOptions {
 export function createBrevoMailer(opts: BrevoOptions): Mailer {
   const doFetch = opts.fetch ?? fetch;
   return {
-    async send({ to, subject, text }) {
+    async send({ to, subject, text, html }) {
       const res = await doFetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
@@ -32,6 +38,7 @@ export function createBrevoMailer(opts: BrevoOptions): Mailer {
           to: [{ email: to }],
           subject: subject.slice(0, 200),
           textContent: text.slice(0, 10_000),
+          ...(html ? { htmlContent: html.slice(0, 100_000) } : {}),
         }),
       });
       if (!res.ok) {
@@ -43,6 +50,12 @@ export function createBrevoMailer(opts: BrevoOptions): Mailer {
       return { messageId: json?.messageId ?? null };
     },
   };
+}
+
+/** Indirizzo email valido delle impostazioni, indipendentemente dal consenso generale. */
+export function emailAddress(settings: Readonly<Record<string, unknown>>): string | null {
+  const email = typeof settings.email === 'string' ? settings.email.trim() : '';
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
 
 /** Indirizzo e consenso dell'utente alle notifiche via email (impostazioni: `email`, `emailNotifications`). */
