@@ -39,6 +39,8 @@ export interface WriteInput {
   readonly links?: readonly string[];
   readonly private?: boolean;
   readonly source?: NoteSource;
+  /** Tipo delle pagine collegate (per creare quelle che mancano): es. Emma → persona, Verona → luogo. */
+  readonly concepts?: ReadonlyArray<{ readonly title: string; readonly type: NoteType }>;
 }
 
 export interface WriteResult {
@@ -46,6 +48,8 @@ export interface WriteResult {
   readonly title: string;
   readonly created: boolean;
   readonly links: readonly string[];
+  /** Pagine-concetto create perché collegate e mancanti. */
+  readonly newPages: readonly string[];
 }
 
 export interface ReadResult {
@@ -207,13 +211,42 @@ export function createBrainService(opts: BrainServiceOptions) {
       // I collegamenti scritti nel testo con [[…]] contano già: non si ripetono nel frontmatter.
       const all = [...new Set([...note.links, ...bodyLinks(note.body)])];
       note = { ...note, links: all };
-      const verb = created ? 'nuova nota' : mode === 'replace' ? 'riscritta' : 'aggiunto a';
-      await v.commit(
-        [{ path: note.path, content: serializeNote(note) }],
-        `Ernie: ${verb} «${title}»`,
+      // Pagine-concetto: ogni collegamento senza pagina ne ottiene una, con il tipo indicato e il rimando.
+      const kinds = new Map(
+        (input.concepts ?? []).map((c) => [c.title.trim().toLowerCase(), c.type]),
       );
-      await opts.index.upsert(userId, note);
-      return { path: note.path, title: note.title, created, links: all };
+      const stubs: BrainNote[] = [];
+      for (const link of all.slice(0, 12)) {
+        if (link.toLowerCase() === title.toLowerCase()) continue;
+        if (await opts.index.findByTitle(userId, link)) continue;
+        const type = kinds.get(link.toLowerCase()) ?? 'argomento';
+        const path = pathFor(type, link);
+        if (await v.exists(path)) continue;
+        stubs.push({
+          path,
+          title: link,
+          type: type === 'chi-sono' ? 'argomento' : type,
+          created: nowIso(),
+          links: [title],
+          private: false,
+          source: input.source ?? 'chat',
+          body: `# ${link}\n\nPagina creata da Ernie: compare in [[${title}]].`,
+        });
+      }
+      const verb = created ? 'nuova nota' : mode === 'replace' ? 'riscritta' : 'aggiunto a';
+      const extra = stubs.length ? ` (+ ${stubs.map((p) => `«${p.title}»`).join(', ')})` : '';
+      await v.commit(
+        [note, ...stubs].map((n) => ({ path: n.path, content: serializeNote(n) })),
+        `Ernie: ${verb} «${title}»${extra}`,
+      );
+      for (const n of [note, ...stubs]) await opts.index.upsert(userId, n);
+      return {
+        path: note.path,
+        title: note.title,
+        created,
+        links: all,
+        newPages: stubs.map((p) => p.title),
+      };
     },
 
     async read(userId: string, ref: string): Promise<ReadResult | null> {
@@ -230,6 +263,12 @@ export function createBrainService(opts: BrainServiceOptions) {
     async search(userId: string, q: BrainQuery): Promise<BrainHit[]> {
       await ready(userId);
       return opts.index.search(userId, q);
+    },
+
+    /** Nota da accennare in conversazione (B2), oppure null. */
+    async suggest(userId: string, text: string, exclude: readonly string[] = []) {
+      await ready(userId);
+      return opts.index.suggest(userId, text, exclude);
     },
 
     async list(userId: string, q: BrainQuery = {}): Promise<NoteSummary[]> {

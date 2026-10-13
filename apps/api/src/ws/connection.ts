@@ -116,6 +116,12 @@ export interface ConnectionDeps {
   };
   /** Scheda anagrafica: i cambiamenti emersi in chat si comunicano una volta, al turno dopo. */
   readonly profiles?: ProfileStore;
+  /** Second brain (B2): nota pertinente da accennare in una riga, senza modello; null se non c'è. */
+  readonly brainSuggest?: (
+    userId: string,
+    text: string,
+    exclude: readonly string[],
+  ) => Promise<{ path: string; title: string; when: string; passage: string } | null>;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
   readonly tools?: {
     readonly categories: readonly string[];
@@ -169,6 +175,8 @@ export class ClientConnection {
   private session: SessionRecord | undefined;
   private readonly dedupe = new EventDeduper(2048);
   private readonly activeTurns = new Map<string, AbortController>();
+  /** Note del second brain già accennate in questa conversazione (una volta per nota). */
+  private readonly brainSuggested = new Set<string>();
   /** Barge-in: fino a quale carattere l'utente ha sentito la risposta che ha interrotto (per correlationId). */
   private readonly spokenThrough = new Map<string, number>();
   /** Ultima risposta interrotta dall'utente: ciò che ha sentito e ciò che non ha sentito (per il turno successivo). */
@@ -581,6 +589,25 @@ export class ClientConnection {
     // v1.10: ora locale e posizione del telefono (solo se l'utente ha dato il permesso per la posizione).
     const deviceBlock = formatDeviceContext(event.payload.device);
     if (deviceBlock) contextBlocks.push(deviceBlock);
+    // Second brain (B2): una nota pertinente, una volta per conversazione, mai le riservate.
+    if (
+      this.deps.brainSuggest &&
+      attachments.length === 0 &&
+      decision.skillId !== 'second_brain' &&
+      text.trim().split(/\s+/).length >= 4
+    ) {
+      try {
+        const hit = await this.deps.brainSuggest(this.auth.userId, text, [...this.brainSuggested]);
+        if (hit) {
+          this.brainSuggested.add(hit.path);
+          contextBlocks.push(
+            `Nel second brain dell'utente c'è una nota forse pertinente: «${hit.title}» (${hit.when}): ${hit.passage}\nSe aiuta davvero, accennala in una riga (es. «ho una nota su questo, vuoi che la riprenda?») o usala citandola «(nota: ${hit.title})»; se non c'entra, ignorala senza parlarne.`,
+          );
+        }
+      } catch {
+        /* suggerimento facoltativo */
+      }
+    }
     if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {
       try {
         const hits = await this.deps.memories.repo.search({

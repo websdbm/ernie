@@ -86,6 +86,15 @@ describe.skipIf(!ready)('indice del second brain (Postgres, RLS, filtri)', () =>
     expect((await index.list(user, { linkedTo: 'casa' })).map((n) => n.title)).toEqual(['Caldaia']);
     expect((await index.findByTitle(user, 'gita'))?.path).toBe('Note/Gita.md');
     expect(await index.list(other)).toEqual([]);
+    // Suggerimenti: abbastanza parole in comune o titolo citato; mai le riservate; esclusioni per sessione.
+    expect(
+      (await index.suggest(user, 'domani viene il tecnico per la caldaia, cosa gli dico?'))?.title,
+    ).toBe('Caldaia');
+    expect(await index.suggest(user, 'che tempo fa domani a Roma?')).toBeNull();
+    expect(await index.suggest(user, 'ho fatto le analisi del sangue, colesterolo?')).toBeNull();
+    expect(
+      await index.suggest(user, 'domani viene il tecnico per la caldaia', ['Note/Caldaia.md']),
+    ).toBeNull();
     await index.remove(user, 'Note/Gita.md');
     expect(await index.count(user)).toBe(2);
   });

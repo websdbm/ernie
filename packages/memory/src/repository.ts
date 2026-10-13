@@ -246,7 +246,7 @@ export function createMemoryRepository(
         // ts_rank_cd premia comunque i documenti che ne contengono di più.
         const fts = await client.query<Row>(
           `WITH q AS (
-             SELECT to_tsquery('italian', NULLIF(replace(websearch_to_tsquery('italian', $2)::text, '&', '|'), '')) AS query
+             SELECT to_tsquery('simple', NULLIF(replace(websearch_to_tsquery('italian', $2)::text, '&', '|'), '')) AS query
            )
            SELECT ${COLS}, row_number() OVER (ORDER BY ts_rank_cd(tsv, q.query) DESC, last_seen_at DESC) AS fts_rank
              FROM memories, q

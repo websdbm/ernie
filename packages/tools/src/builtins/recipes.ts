@@ -154,7 +154,7 @@ export function createRecipeRepository(pool: Pool): RecipeRepository {
           ? await client.query<Row>(
               `SELECT ${COLS} FROM recipes
                 WHERE user_id = $1 AND status = 'active'
-                  AND (search @@ to_tsquery('italian', NULLIF(replace(websearch_to_tsquery('italian', $2)::text, '&', '|'), '')) OR title_norm LIKE '%' || $3 || '%')
+                  AND (search @@ to_tsquery('simple', NULLIF(replace(websearch_to_tsquery('italian', $2)::text, '&', '|'), '')) OR title_norm LIKE '%' || $3 || '%')
                 ORDER BY updated_at DESC LIMIT $4`,
               [userId, q, normalizeTitle(q), limit],
             )

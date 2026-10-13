@@ -56,6 +56,25 @@ export interface BrainIndex {
   findByTitle(userId: string, title: string): Promise<NoteSummary | null>;
   count(userId: string): Promise<number>;
   paths(userId: string): Promise<Map<string, string>>;
+  /**
+   * Nota da suggerire in conversazione (fase B2): solo full-text, senza modello. Vale se almeno due parole
+   * significative della frase compaiono nella stessa nota e coprono almeno il 40 % della frase (o se il titolo
+   * della nota è contenuto per intero nella frase). Mai le riservate né «Chi sono».
+   */
+  suggest(
+    userId: string,
+    text: string,
+    exclude?: readonly string[],
+  ): Promise<BrainSuggestion | null>;
+}
+
+export interface BrainSuggestion {
+  readonly path: string;
+  readonly title: string;
+  readonly type: NoteType;
+  readonly when: string;
+  readonly passage: string;
+  readonly matched: number;
 }
 
 const MAX_CHARS = 1_200;
@@ -258,7 +277,7 @@ export function createBrainIndex(pool: Pool, embedder: BrainEmbedder | null): Br
         const fts = await c.query<R>(
           `${base},
              (SELECT CASE WHEN length(to_tsvector('italian', $1)) = 0 THEN NULL
-                     ELSE to_tsquery('italian', array_to_string(tsvector_to_array(to_tsvector('italian', $1)), ' | ')) END AS q) x
+                     ELSE to_tsquery('simple', array_to_string(tsvector_to_array(to_tsvector('italian', $1)), ' | ')) END AS q) x
            WHERE x.q IS NOT NULL AND (k.tsv @@ x.q OR n.title ILIKE '%' || $1 || '%') ${f.sql}
            ORDER BY ts_rank_cd(k.tsv, x.q) DESC LIMIT 30`,
           [query, ...f.params],
@@ -332,6 +351,50 @@ export function createBrainIndex(pool: Pool, embedder: BrainEmbedder | null): Br
       return withUser(pool, userId, async (c) => {
         const r = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM brain_notes`);
         return Number(r.rows[0]?.n ?? 0);
+      });
+    },
+
+    async suggest(userId, text, exclude = []) {
+      const t = text.trim();
+      if (t.length < 12) return null;
+      return withUser(pool, userId, async (c) => {
+        type S = {
+          path: string;
+          title: string;
+          note_type: NoteType;
+          created: Date;
+          refers_from: string | null;
+          content: string;
+          matched: number;
+          total: number;
+          title_hit: boolean;
+        };
+        const r = await c.query<S>(
+          `WITH q AS (SELECT tsvector_to_array(to_tsvector('italian', $1)) AS lex)
+           SELECT n.path, n.title, n.note_type, n.created, to_char(n.refers_from,'YYYY-MM-DD') AS refers_from,
+                  k.content,
+                  cardinality(ARRAY(SELECT unnest(q.lex) INTERSECT SELECT unnest(tsvector_to_array(k.tsv)))) AS matched,
+                  cardinality(q.lex) AS total,
+                  (length(n.title) >= 4 AND lower($1) LIKE '%' || lower(n.title) || '%') AS title_hit
+             FROM brain_chunks k JOIN brain_notes n ON n.user_id = k.user_id AND n.path = k.path, q
+            WHERE n.private = false AND n.note_type <> 'chi-sono' AND NOT (n.path = ANY($2::text[]))
+              AND cardinality(q.lex) >= 2 AND k.tsv @@ to_tsquery('simple', array_to_string(q.lex, ' | '))
+            ORDER BY title_hit DESC, matched DESC, n.created DESC LIMIT 5`,
+          [t, [...exclude]],
+        );
+        const best = r.rows.find(
+          (row) =>
+            row.title_hit || (row.matched >= 2 && row.matched / Math.max(row.total, 1) >= 0.4),
+        );
+        if (!best) return null;
+        return {
+          path: best.path,
+          title: best.title,
+          type: best.note_type,
+          when: best.refers_from ?? best.created.toISOString().slice(0, 10),
+          passage: best.content.replace(/\s+/g, ' ').slice(0, 400),
+          matched: best.matched,
+        };
       });
     },
 

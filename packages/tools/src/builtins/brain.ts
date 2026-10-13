@@ -73,8 +73,15 @@ export interface BrainToolStore {
       links?: readonly string[];
       private?: boolean;
       source?: 'chat' | 'voce';
+      concepts?: ReadonlyArray<{ title: string; type: (typeof BRAIN_NOTE_TYPES)[number] }>;
     },
-  ): Promise<{ path: string; title: string; created: boolean; links: readonly string[] }>;
+  ): Promise<{
+    path: string;
+    title: string;
+    created: boolean;
+    links: readonly string[];
+    newPages: readonly string[];
+  }>;
 }
 
 const day = z
@@ -229,11 +236,19 @@ export function createBrainTools(store: BrainToolStore): ToolSpec[] {
           .optional()
           .describe('Nota riservata (salute, soldi, documenti personali)'),
         spoken: z.boolean().optional().describe("true se l'utente l'ha dettata a voce"),
+        concepts: z
+          .array(z.object({ title: z.string().max(120), type: z.enum(BRAIN_NOTE_TYPES) }))
+          .max(12)
+          .optional()
+          .describe(
+            'Tipo delle pagine collegate, per creare quelle che mancano (es. Emma → persona, Verona → luogo, Caldaia → argomento)',
+          ),
       }),
       outputSchema: z.object({
         title: z.string(),
         created: z.boolean(),
         links: z.array(z.string()),
+        newPages: z.array(z.string()),
       }),
       execute: async (input, ctx) => {
         const here = input.hereAndNow === false ? undefined : ctx.device?.location;
@@ -248,9 +263,15 @@ export function createBrainTools(store: BrainToolStore): ToolSpec[] {
           ...(here && !input.place ? { coords: [here.latitude, here.longitude] as const } : {}),
           ...(input.links ? { links: input.links } : {}),
           ...(input.private !== undefined ? { private: input.private } : {}),
+          ...(input.concepts ? { concepts: input.concepts } : {}),
           source: input.spoken ? 'voce' : 'chat',
         });
-        return { title: r.title, created: r.created, links: [...r.links] };
+        return {
+          title: r.title,
+          created: r.created,
+          links: [...r.links],
+          newPages: [...r.newPages],
+        };
       },
     }),
   ];

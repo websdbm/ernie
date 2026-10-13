@@ -474,6 +474,63 @@ describe('ClientConnection: contesto del telefono (v1.10)', () => {
   });
 });
 
+describe('ClientConnection: suggerimenti del second brain (B2)', () => {
+  it('una nota pertinente arriva nel contesto una volta sola per conversazione', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const contexts: Array<string | undefined> = [];
+    const excluded: string[][] = [];
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          brainSuggest: async (_u: string, _t: string, exclude: readonly string[]) => {
+            excluded.push([...exclude]);
+            return exclude.includes('Note/Caldaia.md')
+              ? null
+              : {
+                  path: 'Note/Caldaia.md',
+                  title: 'Caldaia',
+                  when: '2026-03-02',
+                  passage: 'Codice 4471.',
+                };
+          },
+          runTurn: async (input: TurnInput) => {
+            contexts.push(input.memoryContext);
+            await input.emit('assistant.started', { route: 'llm' });
+            await input.emit('assistant.text.completed', { text: 'ok' });
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+            return {
+              text: 'ok',
+              cancelled: false,
+              llmCalls: 1,
+              toolCalls: 0,
+              latencyMs: 1,
+              costUsd: 0,
+              loopDetected: false,
+            };
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('domani viene il tecnico della caldaia'));
+    await tick();
+    await conn.handleRaw(c.message('e cosa gli devo dire della caldaia?'));
+    await tick();
+    await conn.handleRaw(c.message('ok'));
+    await tick();
+    expect(contexts[0]).toContain('«Caldaia» (2026-03-02): Codice 4471.');
+    expect(contexts[1] ?? '').not.toContain('Caldaia');
+    expect(excluded[1]).toEqual(['Note/Caldaia.md']);
+    // Frasi brevi: nessuna ricerca.
+    expect(excluded).toHaveLength(2);
+  });
+});
+
 describe('ClientConnection: routing', () => {
   it('un comando è risolto senza Jev né modello e viene registrato come deterministico', async () => {
     const st = fakeStore();

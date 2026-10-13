@@ -482,6 +482,7 @@ async function main(): Promise<void> {
         },
         intents,
         profiles,
+        brainSuggest: (userId, text, exclude) => brain.service.suggest(userId, text, exclude),
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,

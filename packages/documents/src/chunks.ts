@@ -178,7 +178,7 @@ export function createChunkStore(pool: Pool, embedder: ChunkEmbedder | null): Ch
           `SELECT k.id, k.document_id, d.title, k.page, k.heading, k.content
              FROM document_chunks k JOIN documents d ON d.id = k.document_id,
                   (SELECT CASE WHEN length(to_tsvector('italian', $1)) = 0 THEN NULL
-                          ELSE to_tsquery('italian', array_to_string(tsvector_to_array(to_tsvector('italian', $1)), ' | ')) END AS q) x
+                          ELSE to_tsquery('simple', array_to_string(tsvector_to_array(to_tsvector('italian', $1)), ' | ')) END AS q) x
             WHERE x.q IS NOT NULL AND k.tsv @@ x.q ${where}
             ORDER BY ts_rank_cd(k.tsv, x.q) DESC LIMIT 30`,
           params,

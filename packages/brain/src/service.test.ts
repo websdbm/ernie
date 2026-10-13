@@ -64,6 +64,9 @@ function memoryIndex(): BrainIndex & { notes: Map<string, BrainNote> } {
     async count() {
       return notes.size;
     },
+    async suggest() {
+      return null;
+    },
     async paths() {
       return new Map([...notes.keys()].map((k) => [k, 'h']));
     },
@@ -108,9 +111,14 @@ describe('second brain: vault git e servizio', () => {
       place: 'Padova',
       coords: [45.41, 11.88],
       source: 'voce',
+      concepts: [{ title: 'Mario Bianchi', type: 'persona' }],
     });
     expect(first).toMatchObject({ path: 'Note/Codice della caldaia.md', created: true });
     expect(first.links).toEqual(['Casa', 'Mario Bianchi']);
+    // Pagine-concetto create insieme alla nota, con il tipo indicato o «argomento».
+    expect(first.newPages).toEqual(['Casa', 'Mario Bianchi']);
+    expect(index.notes.get('Persone/Mario Bianchi.md')?.links).toEqual(['Codice della caldaia']);
+    expect(index.notes.get('Argomenti/Casa.md')?.type).toBe('argomento');
     const again = await brain.write(user, {
       title: 'codice della caldaia',
       body: 'Revisione fatta a ottobre.',
@@ -119,14 +127,19 @@ describe('second brain: vault git e servizio', () => {
     const read = await brain.read(user, 'Codice della caldaia');
     expect(read?.note.body).toContain('4471');
     expect(read?.note.body).toContain('Revisione fatta a ottobre.');
-    await brain.write(user, { title: 'Casa', type: 'argomento', body: 'Tutto sulla casa.' });
+    const casa = await brain.write(user, {
+      title: 'Casa',
+      type: 'argomento',
+      body: 'Tutto sulla casa.',
+    });
+    expect(casa.created).toBe(false);
     expect((await brain.read(user, 'Casa'))?.backlinks).toEqual(['Codice della caldaia']);
 
     // Il remoto ha i commit di Ernie.
     const clone = join(tmp, 'obsidian');
     git(tmp, 'clone', remote, clone);
     expect(git(clone, 'log', '--format=%an %s').split('\n')[0]).toBe(
-      'Ernie Ernie: nuova nota «Casa»',
+      'Ernie Ernie: aggiunto a «Casa»',
     );
 
     // «Obsidian»: la persona aggiunge una nota e corregge «Chi sono».
