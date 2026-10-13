@@ -94,6 +94,30 @@ const today = () =>
 
 const nowIso = () => new Date().toISOString().slice(0, 16);
 
+const MONTHS = [
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
+];
+
+/** «1975-05-03» → «3 maggio 1975», «--06-21» → «21 giugno»; altrimenti com'è. */
+function italianDate(v: string): string {
+  const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  const part = /^--(\d{2})-(\d{2})$/.exec(v);
+  if (full) return `${Number(full[3])} ${MONTHS[Number(full[2]) - 1] ?? ''} ${full[1]}`;
+  if (part) return `${Number(part[2])} ${MONTHS[Number(part[1]) - 1] ?? ''}`;
+  return v;
+}
+
 export function createBrainService(opts: BrainServiceOptions) {
   const vaults = new Map<string, GitVault>();
   const indexed = new Set<string>();
@@ -283,17 +307,37 @@ export function createBrainService(opts: BrainServiceOptions) {
       const files: Array<{ path: string; content: string }> = [];
       const family = p.family.map((m) => {
         const name = m.name?.trim();
-        const extra = [m.birthDate ? `nascita ${m.birthDate}` : null, m.notes ?? null]
+        const extra = [
+          m.birthDate ? `nato/a il ${italianDate(m.birthDate)}` : null,
+          m.notes ?? null,
+        ]
           .filter(Boolean)
           .join(', ');
         return `- ${name ? `[[${name}]]` : m.relation}${name ? ` (${m.relation})` : ''}${extra ? `, ${extra}` : ''}`;
       });
+      // I dati anche nel testo: le proprietà in testa le vede Obsidian, ma l'app e la ricerca leggono il testo.
+      const labels: Array<[keyof ChiSonoFields, string]> = [
+        ['fullName', 'Nome'],
+        ['preferredName', 'Come vuole essere chiamato'],
+        ['birthDate', 'Nascita'],
+        ['gender', 'Genere'],
+        ['city', 'Vive a'],
+        ['occupation', 'Lavoro'],
+      ];
+      const data = labels
+        .filter(([k]) => p[k])
+        .map(
+          ([k, label]) => `- **${label}:** ${k === 'birthDate' ? italianDate(p[k] ?? '') : p[k]}`,
+        );
       const body = [
         '# Chi sono',
         '',
-        'Pagina generata dalla scheda anagrafica di Ernie. I campi qui sopra (nome, chiamami, nascita, genere, citta, lavoro) si possono modificare anche da qui; la famiglia si modifica nell’app, in Impostazioni › La tua scheda.',
+        ...(data.length
+          ? data
+          : ['Ancora nessun dato: Ernie compila la scheda quando ne parlate.']),
         '',
-        ...(family.length ? ['## Famiglia', '', ...family] : []),
+        ...(family.length ? ['## Famiglia', '', ...family, ''] : []),
+        '_Generata dalla scheda anagrafica di Ernie. Nome, chiamami, nascita, genere, città e lavoro si possono correggere anche nelle proprietà in testa a questa pagina; la famiglia nell’app, in Impostazioni › La tua scheda._',
       ].join('\n');
       // Tutti i campi, anche vuoti: in Obsidian si vede cosa si può compilare.
       const extra = CHI_SONO_KEYS.map(([k, label]) => `${label}: ${JSON.stringify(p[k] ?? '')}`);
