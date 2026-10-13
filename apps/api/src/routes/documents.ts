@@ -8,6 +8,8 @@ export interface DocumentsRoutesOptions {
   readonly authenticator: Authenticator;
   readonly allowedOrigins: readonly string[];
   readonly repo: DocumentRepository;
+  /** Dopo il caricamento: indicizzazione a pezzi con pagina (ricerca 11, S2), in background. */
+  readonly onCreated?: (userId: string, documentId: string, pageTexts: readonly string[]) => void;
 }
 
 /** Il telefono invia solo il testo estratto (OCR integrato): niente file, niente originali sul server. */
@@ -54,6 +56,7 @@ export async function documentsRoutes(
         ...(b.data.title ? { title: b.data.title } : {}),
         ...(b.data.language ? { language: b.data.language } : {}),
       });
+      opts.onCreated?.(auth.userId, meta.id, b.data.pages);
       return reply.code(201).send({
         id: meta.id,
         title: meta.title,

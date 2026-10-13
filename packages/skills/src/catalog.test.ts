@@ -127,6 +127,8 @@ describe('skill «Documenti»', () => {
       'document_schema',
       'document_get',
       'document_list',
+      'document_search',
+      'document_focus',
     ]);
     expect(s.instructions).toContain('document_summarize');
     for (const e of SKILL_CATALOG) expect(e.icon.length).toBeGreaterThan(0);

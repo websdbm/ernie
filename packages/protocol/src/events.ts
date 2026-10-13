@@ -443,6 +443,23 @@ export const RemindersBlock = z.object({
     )
     .max(50),
 });
+/** Fonti (v1.9, ricerca 11 S2): pagine dei documenti citate nella risposta e verificate dal server. */
+export const CitationsBlock = z.object({
+  kind: z.literal('citations'),
+  title: z.string().max(100),
+  items: z
+    .array(
+      z.object({
+        documentId: z.uuid(),
+        title: z.string().min(1).max(160),
+        page: z.number().int().min(1),
+        heading: z.string().max(120).nullable(),
+        excerpt: z.string().max(400),
+      }),
+    )
+    .min(1)
+    .max(6),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -453,6 +470,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   ShoppingListsBlock,
   DocumentsBlock,
   RemindersBlock,
+  CitationsBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

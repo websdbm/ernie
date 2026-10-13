@@ -17,7 +17,13 @@ import {
 } from '@ernie/automations';
 import { loadConfig, redactConfig } from '@ernie/config';
 import { withUser } from '@ernie/db';
-import { createDocumentRepository, createSummarizer } from '@ernie/documents';
+import {
+  type ChunkHit,
+  createChunkStore,
+  createDocumentRepository,
+  createSummarizer,
+  verifiedCitations,
+} from '@ernie/documents';
 import {
   createDecisionRouter,
   createHttpJevClient,
@@ -60,6 +66,7 @@ import { createSoulRepository } from '@ernie/soul';
 import {
   createDocumentTools,
   createFirecrawlClient,
+  createMemoryFocusStore,
   createMemorySearchSpec,
   createPgToolRuleStore,
   createRecipeRepository,
@@ -192,7 +199,24 @@ async function main(): Promise<void> {
   const summarizer = gateway
     ? createSummarizer({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger), logger })
     : null;
-  for (const t of createDocumentTools({ repo: documentsRepo, summarizer })) registry.register(t);
+  // Ricerca 11, S2: pezzi con pagina per cercare, citare e studiare per capitoli.
+  const chunkStore = createChunkStore(postgres.pool, embedder);
+  const documentFocus = createMemoryFocusStore();
+  const turnPassages = new Map<string, { at: number; hits: ChunkHit[] }>();
+  const rememberPassages = (requestId: string, hits: readonly ChunkHit[]) => {
+    const now = Date.now();
+    for (const [k, v] of turnPassages) if (now - v.at > 30 * 60_000) turnPassages.delete(k);
+    const cur = turnPassages.get(requestId)?.hits ?? [];
+    turnPassages.set(requestId, { at: now, hits: [...cur, ...hits] });
+  };
+  for (const t of createDocumentTools({
+    repo: documentsRepo,
+    summarizer,
+    chunks: chunkStore,
+    focus: documentFocus,
+    onPassages: rememberPassages,
+  }))
+    registry.register(t);
   // Sentinelle (ricerca 11, C4 + C5): automazioni guidate con controllo economico e avviso a condizione.
   // knownTools è letto al momento della creazione: il web viene registrato più sotto.
   const sentinelStore = createSentinelStore({
@@ -376,6 +400,13 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       repo: documentsRepo,
+      onCreated: (userId, documentId, pages) => {
+        void chunkStore
+          .index(userId, documentId, pages)
+          .catch((err: unknown) =>
+            logger.warn({ err, documentId }, 'indicizzazione del documento fallita'),
+          );
+      },
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
@@ -407,6 +438,13 @@ async function main(): Promise<void> {
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
         approvals: { ...approvals, rules: toolRules },
         silentRuns: (userId) => automations.takeSilentRuns(userId, 3),
+        // Scheda «Fonti»: pagine citate nella risposta e presenti tra i passaggi del turno.
+        citations: (requestId, text) => {
+          const hits = turnPassages.get(requestId)?.hits ?? [];
+          turnPassages.delete(requestId);
+          const items = verifiedCitations(text, hits);
+          return items.length ? { kind: 'citations', title: 'Fonti', items } : null;
+        },
         intents,
         memories: {
           repo: memories,

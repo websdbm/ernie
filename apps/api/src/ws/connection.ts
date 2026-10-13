@@ -69,6 +69,8 @@ export interface ConnectionDeps {
   readonly invalidateCompanion: (sessionId: string) => void;
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
+  /** Ricerca 11, S2: scheda «Fonti» con le pagine citate e verificate a fine turno. */
+  readonly citations?: (requestId: string, text: string) => ContentBlock | null;
   /** Ricerca 11, S1: promemoria a evento che scattano sulle parole del messaggio (senza modello). */
   readonly intents?: Pick<IntentStore, 'fire'>;
   /** Ricerca 11, C4: esiti silenziosi delle sentinelle, letti una volta dal turno successivo. */
@@ -677,6 +679,14 @@ export class ClientConnection {
           | undefined;
         if (r?.cancelled) this.noteInterruption(correlationId, r.text ?? '');
         this.spokenThrough.delete(correlationId);
+        const cites =
+          !r?.cancelled && r?.text ? this.deps.citations?.(correlationId, r.text) : null;
+        if (cites)
+          await this.send(
+            'assistant.block',
+            { blockId: `${correlationId}:fonti`, block: cites },
+            correlationId,
+          );
         await this.sendEmotion(correlationId, {
           userText: text,
           replyText: r?.text ?? '',
