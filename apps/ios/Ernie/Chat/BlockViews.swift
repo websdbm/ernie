@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 /// Schede native per i blocchi strutturati del protocollo (v1.2).
@@ -27,6 +28,8 @@ struct BlockView: View {
             RemindersCard(block: block)
         case .citations(let block):
             CitationsCard(block: block)
+        case .health(let block):
+            HealthCard(block: block)
         case .unknown:
             EmptyView()
         }
@@ -291,6 +294,326 @@ struct CitationsCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Salute (v1.12)
+
+/// La «tabellina» della salute: storico di un parametro (una riga per analisi) o valori di un referto con il
+/// confronto con l'analisi precedente. Fuori intervallo in evidenza; valori e flag li calcola il server.
+struct HealthCard: View {
+    let block: HealthBlock
+    @State private var showAll = false
+
+    private static let collapsedCount = 12
+
+    private var isParameter: Bool { block.mode == "parameter" }
+
+    private var shownRows: [HealthBlock.Row] {
+        showAll || block.rows.count <= Self.collapsedCount ? block.rows : Array(block.rows.prefix(Self.collapsedCount))
+    }
+
+    /// Punti del grafico (solo storico): date con valore, dalla più vecchia alla più recente.
+    private var trendPoints: [HealthTrendPoint] {
+        guard isParameter else { return [] }
+        let points: [HealthTrendPoint] = block.rows.compactMap { row in
+            guard let value = row.value, let date = HealthFormat.day(row.date) else { return nil }
+            return HealthTrendPoint(date: date, value: value, low: row.refLow, high: row.refHigh, outside: row.isOut)
+        }
+        return points.sorted { $0.date < $1.date }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "heart.text.square.fill")
+                    .font(.title3)
+                    .foregroundStyle(.pink)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(block.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                    if let subtitle = block.subtitle, !subtitle.isEmpty {
+                        Text(subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            if trendPoints.count >= 2 {
+                HealthTrendChart(points: trendPoints, title: block.title)
+            }
+            if isParameter { parameterTable } else { reportTable }
+            if block.rows.count > Self.collapsedCount {
+                Button(showAll ? "Mostra meno" : "Mostra tutti (\(block.rows.count))") {
+                    withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                }
+                .font(.caption)
+            }
+            if let summary = block.summary, !summary.isEmpty {
+                Text(summary).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Valori letti dal referto. Ernie non è un medico: per dubbi parlane con il tuo medico.")
+                .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: tabelle
+
+    /// Storico: Data | Valore | Rif.
+    private var parameterTable: some View {
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            GridRow {
+                cell(header("Data"))
+                cell(header("Valore"))
+                cell(header("Rif."))
+            }
+            ForEach(Array(shownRows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    cell(Text(HealthFormat.shortDay(row.date ?? row.label)).font(.callout).monospacedDigit(),
+                         highlight: row.isOut ? row.tint.opacity(0.10) : nil,
+                         speak: spoken(row))
+                    cell(valueView(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
+                    cell(referenceText(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
+                }
+            }
+        }
+    }
+
+    /// Referto: Parametro | Valore | Prima | Rif.
+    private var reportTable: some View {
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            GridRow {
+                cell(header("Parametro"))
+                cell(header("Valore"))
+                cell(header("Prima"))
+                cell(header("Rif."))
+            }
+            ForEach(Array(shownRows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    cell(Text(row.label).font(.callout).lineLimit(1).minimumScaleFactor(0.7),
+                         highlight: row.isOut ? row.tint.opacity(0.10) : nil,
+                         speak: spoken(row))
+                    cell(valueView(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
+                    cell(previousView(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
+                    cell(referenceText(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
+                }
+            }
+        }
+    }
+
+    /// Cella di tabella. La prima colonna di ogni riga porta l'etichetta VoiceOver dell'intera riga;
+    /// le altre sono nascoste allo screen reader per non ripetere la stessa riga.
+    @ViewBuilder
+    private func cell<V: View>(_ content: V, highlight: Color? = nil, speak: String? = nil) -> some View {
+        let padded = content
+            .padding(.horizontal, 5)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(highlight ?? Color.clear)
+        if let speak {
+            padded.accessibilityLabel(speak)
+        } else {
+            padded.accessibilityHidden(true)
+        }
+    }
+
+    private func header(_ title: String) -> some View {
+        Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+    }
+
+    private func valueView(_ row: HealthBlock.Row) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(HealthFormat.display(row))
+                .font(.callout.weight(row.isOut ? .bold : .regular))
+                .foregroundStyle(row.isOut ? row.tint : Color.primary)
+                .monospacedDigit()
+            if let unit = row.unit, !unit.isEmpty {
+                Text(unit).font(.caption2).foregroundStyle(.secondary)
+            }
+            if row.isOut {
+                Image(systemName: row.flag == "alto" ? "arrow.up" : "arrow.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(row.tint)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
+    /// Analisi precedente: valore con la freccia del trend e, sotto, la sua data.
+    @ViewBuilder
+    private func previousView(_ row: HealthBlock.Row) -> some View {
+        if let previous = row.previous {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 3) {
+                    Text(HealthFormat.number(previous.value)).font(.callout).monospacedDigit()
+                    if let symbol = Self.trendSymbol(row.trend) {
+                        Image(systemName: symbol).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                }
+                Text(HealthFormat.shortDay(previous.date))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+        } else {
+            Text("—").font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    private func referenceText(_ row: HealthBlock.Row) -> some View {
+        Text(HealthFormat.reference(row))
+            .font(.caption).foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private static func trendSymbol(_ trend: String?) -> String? {
+        switch trend ?? "" {
+        case "su": return "arrow.up.right"
+        case "giu": return "arrow.down.right"
+        case "stabile": return "arrow.right"
+        default: return nil
+        }
+    }
+
+    /// Etichetta VoiceOver: «Glicemia 118 milligrammi per decilitro, alto, prima 98» (storico: «10 ott 2026, 118 …»).
+    private func spoken(_ row: HealthBlock.Row) -> String {
+        let value = row.value.map { HealthFormat.number($0) } ?? row.valueText ?? "non disponibile"
+        let unit = row.unit.flatMap { $0.isEmpty ? nil : HealthFormat.unitWords($0) }
+        let amount = unit.map { "\(value) \($0)" } ?? value
+        var parts = [isParameter ? "\(HealthFormat.shortDay(row.date ?? row.label)), \(amount)" : "\(row.label) \(amount)"]
+        if let flag = HealthFormat.flagWord(row.flag) { parts.append(flag) }
+        if !isParameter, let previous = row.previous { parts.append("prima \(HealthFormat.number(previous.value))") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// Punto del grafico: data, valore e fascia di riferimento della sua analisi.
+struct HealthTrendPoint: Identifiable {
+    let date: Date
+    let value: Double
+    let low: Double?
+    let high: Double?
+    let outside: Bool
+
+    var id: Date { date }
+}
+
+/// Andamento nel tempo (120 pt): linea con i punti; la fascia verde è il riferimento dell'analisi più recente.
+struct HealthTrendChart: View {
+    let points: [HealthTrendPoint]
+    let title: String
+
+    private var band: (low: Double, high: Double)? {
+        guard let last = points.last, let low = last.low, let high = last.high, low < high else { return nil }
+        return (low, high)
+    }
+
+    var body: some View {
+        Chart {
+            if let band, let first = points.first, let last = points.last {
+                RectangleMark(
+                    xStart: .value("Dal", first.date),
+                    xEnd: .value("Al", last.date),
+                    yStart: .value("Minimo di riferimento", band.low),
+                    yEnd: .value("Massimo di riferimento", band.high)
+                )
+                .foregroundStyle(Color.green.opacity(0.15))
+            }
+            ForEach(points) { point in
+                LineMark(x: .value("Data", point.date), y: .value("Valore", point.value))
+                    .foregroundStyle(Color.pink)
+                PointMark(x: .value("Data", point.date), y: .value("Valore", point.value))
+                    .foregroundStyle(point.outside ? Color.red : Color.pink)
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 3)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.day().month(.abbreviated).locale(HealthFormat.italian))
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
+        .frame(height: 120)
+        .accessibilityLabel("Grafico di \(title), \(points.count) misure")
+    }
+}
+
+/// Formati della tabellina: date in italiano, numeri con la virgola e al massimo due decimali, unità a parole.
+enum HealthFormat {
+    static let italian = Locale(identifier: "it_IT")
+
+    static func day(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: String(iso.prefix(10)))
+    }
+
+    /// «10 ott 2026»; se la data non si legge, la stringa com'è.
+    static func shortDay(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        guard let date = day(iso) else { return iso }
+        return date.formatted(.dateTime.day().month(.abbreviated).year().locale(italian))
+    }
+
+    static func number(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...2)).locale(italian))
+    }
+
+    /// Valore a schermo: il numero, oppure il risultato testuale («negativo»), oppure un trattino.
+    static func display(_ row: HealthBlock.Row) -> String {
+        if let value = row.value { return number(value) }
+        return row.valueText ?? "—"
+    }
+
+    /// Riferimento: il testo del laboratorio, altrimenti «min–max», «≥ min» o «≤ max».
+    static func reference(_ row: HealthBlock.Row) -> String {
+        if let text = row.refText, !text.isEmpty { return text }
+        if let low = row.refLow, let high = row.refHigh { return "\(number(low))–\(number(high))" }
+        if let low = row.refLow { return "≥ \(number(low))" }
+        if let high = row.refHigh { return "≤ \(number(high))" }
+        return "—"
+    }
+
+    static func flagWord(_ flag: String) -> String? {
+        switch flag {
+        case "alto": return "alto"
+        case "basso": return "basso"
+        case "normale": return "nella norma"
+        default: return nil
+        }
+    }
+
+    /// Unità abbreviate → parole per VoiceOver; le altre restano come sono.
+    static func unitWords(_ unit: String) -> String {
+        switch unit.lowercased() {
+        case "mg/dl": return "milligrammi per decilitro"
+        case "g/dl": return "grammi per decilitro"
+        case "mg/l": return "milligrammi per litro"
+        case "mmol/l": return "millimoli per litro"
+        case "ng/ml": return "nanogrammi per millilitro"
+        case "pg/ml": return "picogrammi per millilitro"
+        case "u/l": return "unità per litro"
+        case "%": return "per cento"
+        default: return unit
+        }
+    }
+}
+
+private extension HealthBlock.Row {
+    var isOut: Bool { flag == "alto" || flag == "basso" }
+
+    /// Colore del fuori intervallo: rosso per l'alto, arancio per il basso.
+    var tint: Color {
+        switch flag {
+        case "alto": return Color.red
+        case "basso": return Color.orange
+        default: return Color.primary
+        }
     }
 }
 

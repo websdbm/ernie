@@ -113,6 +113,11 @@ const done = new Promise<void>((resolve) => {
         }
         break;
       }
+      case 'assistant.block':
+        process.stdout.write(
+          `\n[scheda ${e.payload.block.kind}] ${JSON.stringify(e.payload.block).slice(0, 400)}\n`,
+        );
+        break;
       case 'error':
         console.error(`[errore ${e.payload.code}] ${e.payload.message}`);
         ws.close();

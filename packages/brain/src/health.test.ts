@@ -33,6 +33,10 @@ describe('sezione salute: nomi dei parametri', () => {
   });
 
   it('un parametro sconosciuto tiene il suo nome', () => {
+    expect(toHealthValue({ name: 'OMOCISTEINA', value: '9' })?.label).toBe('Omocisteina');
+    expect(toHealthValue({ name: 'PESO SPECIFICO', value: '1.020', section: 'urine' })?.label).toBe(
+      'Peso specifico (urine)',
+    );
     const p = canonicalParameter('omocisteina');
     expect(p).toEqual({ key: 'omocisteina', label: 'Omocisteina' });
   });

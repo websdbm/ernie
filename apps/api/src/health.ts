@@ -174,10 +174,11 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
       if (latest)
         for (const v of values) history.set(v.parameter, await store.series(userId, v.parameter));
       const summary = `Ho letto il referto «${title.slice(0, 80)}» (${kind} del ${italianDay(takenOn)}): ${values.length} valori salvati nella sezione Salute${out.length ? `, ${out.length} fuori intervallo` : ', tutti nell’intervallo'}.`;
-      await store.addNotices(userId, reportId, [
-        summary,
-        ...(latest ? healthNotices(values, history) : []),
-      ]);
+      await store.addNotices(userId, null, [summary]);
+      if (latest) {
+        await store.supersedeNotices(userId, reportId);
+        await store.addNotices(userId, reportId, healthNotices(values, history));
+      }
       await writeNotes(userId, reportId, values).catch((err: unknown) =>
         deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err), reportId },

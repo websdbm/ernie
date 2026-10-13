@@ -412,6 +412,42 @@ struct CitationsBlock: Codable, Sendable, Equatable {
     var items: [CitationItem]
 }
 
+/// Tabellina della salute (v1.12). `mode`: "parameter" (storico di un parametro, una riga per data, la più recente prima)
+/// oppure "report" (valori di un referto con il confronto con l'analisi precedente). Flag e trend restano stringhe:
+/// un valore nuovo del server non fa fallire la decodifica.
+struct HealthBlock: Codable, Sendable, Equatable {
+    struct Previous: Codable, Sendable, Equatable {
+        var value: Double
+        /// YYYY-MM-DD
+        var date: String
+    }
+
+    struct Row: Codable, Sendable, Equatable {
+        var label: String
+        /// YYYY-MM-DD (righe dello storico).
+        var date: String?
+        var value: Double?
+        /// Risultati non numerici, es. "negativo".
+        var valueText: String?
+        var unit: String?
+        var refLow: Double?
+        var refHigh: Double?
+        var refText: String?
+        /// "alto" | "basso" | "normale" | "n/d"
+        var flag: String
+        /// Valore dell'analisi precedente con la stessa unità (righe di un referto).
+        var previous: Previous?
+        /// "su" | "giu" | "stabile"
+        var trend: String?
+    }
+
+    var mode: String
+    var title: String
+    var subtitle: String?
+    var rows: [Row]
+    var summary: String?
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -424,6 +460,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case documents(DocumentsBlock)
     case reminders(RemindersBlock)
     case citations(CitationsBlock)
+    case health(HealthBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -452,6 +489,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .reminders(try RemindersBlock(from: decoder))
         case "citations":
             self = .citations(try CitationsBlock(from: decoder))
+        case "health":
+            self = .health(try HealthBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -491,6 +530,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .citations(let block):
             try c.encode("citations", forKey: .kind)
+            try block.encode(to: encoder)
+        case .health(let block):
+            try c.encode("health", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

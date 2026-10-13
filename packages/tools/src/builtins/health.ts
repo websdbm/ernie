@@ -116,6 +116,9 @@ const blockRows = (rows: readonly z.infer<typeof Row>[]) =>
     ...(r.trend ? { trend: r.trend } : {}),
   }));
 
+const SHOWN =
+  "L'app sta già mostrando all'utente la tabellina con questi valori: non ripeterla e non chiedere se mostrarla.";
+
 const CAUTION =
   'Dati sanitari riservati. Spiega con prudenza e parole semplici, senza diagnosi né terapie; per valori fuori intervallo o dubbi suggerisci di parlarne con il medico.';
 
@@ -136,6 +139,7 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
         trend: z.enum(['su', 'giu', 'stabile']).nullable().optional(),
         rows: z.array(Row).optional(),
         known: z.array(z.string()).optional(),
+        shown: z.string().optional(),
         caution: z.string(),
       }),
       execute: async ({ parameter }, ctx) => {
@@ -148,7 +152,14 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
             caution: CAUTION,
           };
         }
-        return { found: true, label: r.label, trend: r.trend, rows: r.rows, caution: CAUTION };
+        return {
+          found: true,
+          label: r.label,
+          trend: r.trend,
+          rows: r.rows,
+          shown: SHOWN,
+          caution: CAUTION,
+        };
       },
       present: (_i, out): ContentBlock | null =>
         out.found && out.label && out.rows?.length
@@ -187,6 +198,7 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
         againstDate: z.string().nullable().optional(),
         rows: z.array(Row).optional(),
         summary: z.string().optional(),
+        shown: z.string().optional(),
         caution: z.string(),
       }),
       execute: async (input, ctx) => {
@@ -203,6 +215,7 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
           againstDate: r.againstDate,
           rows: r.rows,
           summary: outOfRangeSummary(r.rows),
+          shown: SHOWN,
           caution: CAUTION,
         };
       },

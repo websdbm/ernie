@@ -106,6 +106,8 @@ const PARAMETERS: Array<[string, string, string[]]> = [
   ['albumina', 'Albumina', ['albumina']],
   ['proteine_totali', 'Proteine totali', ['proteine totali', 'protidemia']],
   ['inr', 'INR', ['inr']],
+  ['peso_specifico', 'Peso specifico', ['peso specifico']],
+  ['proteine', 'Proteine', ['proteine', 'proteinuria']],
 ];
 
 const SYNONYMS = new Map<string, [string, string]>();
@@ -124,7 +126,9 @@ export function canonicalParameter(name: string): { key: string; label: string }
     if (syn.length >= 3 && (` ${f} `.includes(` ${syn} `) || f.endsWith(` ${syn}`)))
       return { key, label };
   const slug = f.replace(/\s+/g, '_').slice(0, 60) || 'parametro';
-  const label = name.replace(/\s+/g, ' ').trim().slice(0, 80);
+  let label = name.replace(/\s+/g, ' ').trim().slice(0, 80);
+  // «OMOCISTEINA» → «Omocisteina» (le sigle corte restano maiuscole).
+  if (label.length > 5 && label === label.toUpperCase()) label = label.toLowerCase();
   return { key: slug, label: label.charAt(0).toUpperCase() + label.slice(1) };
 }
 
@@ -422,7 +426,10 @@ export interface HealthStore {
   series(userId: string, parameter: string): Promise<SeriesPoint[]>;
   /** Parametri noti con etichetta e numero di misure. */
   parameters(userId: string): Promise<Array<{ parameter: string; label: string; count: number }>>;
-  addNotices(userId: string, reportId: string, texts: readonly string[]): Promise<void>;
+  /** Avvisi da dire; `reportId` null per i riepiloghi, che non vengono mai superati. */
+  addNotices(userId: string, reportId: string | null, texts: readonly string[]): Promise<void>;
+  /** Un referto più recente rende superati gli avvisi non ancora detti dei referti precedenti. */
+  supersedeNotices(userId: string, keepReportId: string): Promise<void>;
   pendingNotices(userId: string): Promise<Array<{ id: string; text: string }>>;
   markNotified(userId: string, ids: readonly string[]): Promise<void>;
   hasDocument(userId: string, documentId: string): Promise<boolean>;
@@ -558,10 +565,19 @@ export function createHealthStore(pool: Pool): HealthStore {
           ]);
       });
     },
+    async supersedeNotices(userId, keepReportId) {
+      await withUser(pool, userId, (c) =>
+        c.query(
+          `UPDATE health_notices SET notified_at = now()
+            WHERE notified_at IS NULL AND report_id IS NOT NULL AND report_id <> $1`,
+          [keepReportId],
+        ),
+      );
+    },
     async pendingNotices(userId) {
       return withUser(pool, userId, async (c) => {
         const r = await c.query<{ id: string; text: string }>(
-          `SELECT id::text, text FROM health_notices WHERE notified_at IS NULL ORDER BY created_at LIMIT 8`,
+          `SELECT id::text, text FROM health_notices WHERE notified_at IS NULL ORDER BY created_at, id LIMIT 20`,
         );
         return r.rows;
       });

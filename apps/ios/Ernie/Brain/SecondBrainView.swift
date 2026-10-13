@@ -60,7 +60,7 @@ extension ApiClient {
 // MARK: - aspetto per tipo
 
 enum BrainType: String, CaseIterable, Identifiable {
-    case nota, persona, luogo, progetto, argomento, documento
+    case nota, persona, luogo, progetto, argomento, documento, salute
     var id: String { rawValue }
 
     var label: String {
@@ -71,6 +71,7 @@ enum BrainType: String, CaseIterable, Identifiable {
         case .progetto: "Progetti"
         case .argomento: "Argomenti"
         case .documento: "Documenti"
+        case .salute: "Salute"
         }
     }
 
@@ -81,6 +82,7 @@ enum BrainType: String, CaseIterable, Identifiable {
         case "progetto": "hammer.fill"
         case "argomento": "tag.fill"
         case "documento": "doc.text.fill"
+        case "salute": "heart.text.square.fill"
         case "chi-sono": "person.text.rectangle.fill"
         default: "note.text"
         }
