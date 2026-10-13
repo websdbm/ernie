@@ -18,6 +18,15 @@ export interface ToolContext {
   readonly signal?: AbortSignal;
   /** Chiamato quando la run viene contaminata: la connessione lo propaga alla sessione (persistente). */
   readonly onTainted?: (source: string) => void;
+  /** Ora e posizione del telefono per questo turno (protocollo v1.10), solo con il permesso dell'utente. */
+  readonly device?: {
+    readonly timezone?: string;
+    readonly location?: {
+      readonly latitude: number;
+      readonly longitude: number;
+      readonly place?: string;
+    };
+  };
 }
 
 export interface RetryPolicy {

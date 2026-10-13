@@ -27,3 +27,4 @@ apps/ios/**/xcuserdata/
 apps/ios/**/*.xcuserstate
 apps/ios/Ernie.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 apps/ios/build-tests/
+.data/

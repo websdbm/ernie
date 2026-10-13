@@ -19,6 +19,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/automations/package.json packages/automations/
+COPY packages/brain/package.json packages/brain/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/documents/package.json packages/documents/
@@ -50,6 +51,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
 COPY packages/agent-core/package.json packages/agent-core/
 COPY packages/automations/package.json packages/automations/
+COPY packages/brain/package.json packages/brain/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/documents/package.json packages/documents/
@@ -74,6 +76,7 @@ WORKDIR /app
 COPY --from=prod-deps /app ./
 COPY --from=build /app/packages/agent-core/dist ./packages/agent-core/dist
 COPY --from=build /app/packages/automations/dist ./packages/automations/dist
+COPY --from=build /app/packages/brain/dist ./packages/brain/dist
 COPY --from=build /app/packages/config/dist ./packages/config/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/packages/documents/dist ./packages/documents/dist
@@ -89,6 +92,9 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY infrastructure/migrations ./infrastructure/migrations
 COPY infrastructure/router ./infrastructure/router
+# Second brain: git e ssh per i vault (repository locale per utente, remoto facoltativo); il volume /data/brain
+# eredita il proprietario dalla cartella dell'immagine al primo montaggio.
+RUN apk add --no-cache git openssh-client && mkdir -p /data/brain && chown node:node /data/brain
 USER node
 EXPOSE 3000
 CMD ["node", "apps/api/dist/index.js"]

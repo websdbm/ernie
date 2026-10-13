@@ -14,6 +14,7 @@ describe('catalogo delle skill', () => {
       'documenti',
       'ricette',
       'ricordami',
+      'second_brain',
       'sentinelle',
       'shopping_list',
     ]);
@@ -25,6 +26,7 @@ describe('catalogo delle skill', () => {
           ricordami: false,
           diario: false,
           sentinelle: false,
+          second_brain: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -37,6 +39,7 @@ describe('catalogo delle skill', () => {
           ricordami: false,
           diario: false,
           sentinelle: false,
+          second_brain: false,
         },
       }),
     ]).toEqual([]);
@@ -48,6 +51,7 @@ describe('catalogo delle skill', () => {
       'documenti',
       'ricette',
       'ricordami',
+      'second_brain',
       'sentinelle',
       'shopping_list',
     ]);
@@ -59,6 +63,7 @@ describe('catalogo delle skill', () => {
           ricordami: false,
           diario: false,
           sentinelle: false,
+          second_brain: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -70,6 +75,7 @@ describe('catalogo delle skill', () => {
           ricordami: false,
           diario: false,
           sentinelle: false,
+          second_brain: false,
         },
         skills: { ricette: true },
       }),
@@ -84,6 +90,7 @@ describe('catalogo delle skill', () => {
             ricordami: false,
             diario: false,
             sentinelle: false,
+            second_brain: false,
           },
           skills: { ricette: true },
         }),

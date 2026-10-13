@@ -147,6 +147,24 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultEnabled: true,
   },
   {
+    id: 'second_brain',
+    title: 'Second brain',
+    icon: 'brain.head.profile',
+    tint: 'purple',
+    summary: 'Le tue note collegate, con quando e dove: si aprono anche con Obsidian.',
+    description:
+      "Di' «annota che il codice della caldaia è 4471», «metti nel second brain che a Giorgio piacciono i Lego Technic» o «cosa avevo annotato a Verona?». Ernie scrive note in markdown, le collega a persone, luoghi e progetti, ricorda quando e dove sono nate e le ritrova quando servono. Le note riservate restano fuori dai suggerimenti.",
+    kind: 'guided',
+    tools: ['brain_search', 'brain_read', 'brain_write', 'document_get', 'document_list'],
+    examples: [
+      'annota che il codice della caldaia è 4471',
+      'cosa avevo annotato a Verona?',
+      'metti questo documento nel second brain',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
+  {
     id: 'diario',
     title: 'Cosa ho fatto',
     icon: 'clock.arrow.circlepath',
@@ -203,6 +221,32 @@ export const SENTINELS_SKILL_INSTRUCTIONS = [
   '2) Conferma in una frase: cosa controllerai, quando, e che scriverai solo quando la condizione si avvera. Se la richiesta è troppo vaga, chiedi una precisazione prima di crearla.',
   "3) «Quali sentinelle ho?» → sentinel_list; «togli la sentinella …» → sentinel_list e poi sentinel_remove con l'id giusto.",
 ].join('\n');
+
+/** Skill guidata «Second brain» (docs/research/12-second-brain.md). */
+export const SECOND_BRAIN_SKILL_INSTRUCTIONS = [
+  'Procedura «Second brain» (le note dell’utente in markdown, aperte anche con Obsidian).',
+  "1) «Annota che…», «metti nel second brain…», «segnati…»: cerca prima con brain_search se esiste già una nota sullo stesso tema; se sì aggiungi con brain_write mode append, altrimenti crea. Titolo breve e specifico; testo in italiano, conciso, con le parole dell'utente per i dati esatti (codici, numeri, nomi).",
+  '2) Collega sempre: persone, luoghi, progetti e argomenti citati diventano [[Titolo]] nel testo (la pagina si crea da sola se manca; se serve descriverla, crea anche quella con type persona/luogo/progetto/argomento). refersFrom/refersTo per date a cui la nota si riferisce. hereAndNow resta attivo se la nota nasce dove si trova l’utente; se parla di un altro posto usa place.',
+  "3) Salute, soldi, documenti d'identità, password: private true. Non usare includePrivate nelle ricerche salvo richiesta esplicita dell'utente.",
+  '4) Domande su cose annotate («cosa avevo segnato…», «a Verona…», «il mese scorso…», «su Giorgio…»): brain_search con i filtri giusti, poi brain_read se serve il testo intero; cita la nota fra parentesi «(nota: Titolo)». Se non c’è nulla, dillo.',
+  '5) Documento allegato o già caricato da salvare: leggi con document_get e scrivi una nota type documento con titolo, riassunto breve, punti chiave e il testo; collegalo.',
+  '6) Conferma in una riga cosa hai annotato e dove (es. «Annotato in [[Casa]], collegato a [[Caldaia]]»). Hai mano libera nel riorganizzare: ogni modifica resta nella cronologia ed è annullabile.',
+].join('\n');
+
+export function createSecondBrainSkill(): GuidedSkill {
+  const entry = SKILL_CATALOG.find((s) => s.id === 'second_brain');
+  if (!entry) throw new Error('catalogo: skill second_brain mancante');
+  return {
+    id: entry.id,
+    kind: 'guided',
+    category: 'brain',
+    description: entry.description,
+    examples: entry.examples,
+    allowedTools: entry.tools,
+    instructions: SECOND_BRAIN_SKILL_INSTRUCTIONS,
+    riskClass: 'low',
+  };
+}
 
 export function createSentinelsSkill(): GuidedSkill {
   const entry = SKILL_CATALOG.find((s) => s.id === 'sentinelle');

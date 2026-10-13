@@ -41,6 +41,24 @@ import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '..
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 
+/** Ora e posizione del telefono per i tool (es. note del second brain annotate «qui»). */
+function toolDevice(d: NonNullable<ClientEventOf<'user.message'>['payload']['device']>) {
+  return {
+    ...(d.timezone ? { timezone: d.timezone } : {}),
+    ...(d.location
+      ? {
+          location: {
+            latitude: d.location.latitude,
+            longitude: d.location.longitude,
+            ...(d.location.place ? { place: d.location.place } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+type ClientEventOf<T extends ClientEvent['type']> = Extract<ClientEvent, { type: T }>;
+
 export interface SocketLike {
   send(data: string): void;
   close(code?: number, reason?: string): void;
@@ -664,6 +682,7 @@ export class ClientConnection {
       onTainted: (source) => {
         void this.deps.store.markTainted(sessionId, source, taintTtl).catch(() => {});
       },
+      ...(event.payload.device ? { device: toolDevice(event.payload.device) } : {}),
     });
     const clearToolContext = () => {
       // Solo se il contesto corrente è ancora di questo turno: un turno successivo potrebbe averlo già sostituito.

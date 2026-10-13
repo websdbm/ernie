@@ -32,6 +32,9 @@ importers:
       '@ernie/automations':
         specifier: workspace:*
         version: link:../../packages/automations
+      '@ernie/brain':
+        specifier: workspace:*
+        version: link:../../packages/brain
       '@ernie/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -209,6 +212,22 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/brain:
+    dependencies:
+      '@ernie/db':
+        specifier: workspace:*
+        version: link:../db
+      '@ernie/observability':
+        specifier: workspace:*
+        version: link:../observability
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
 
   packages/config:
     dependencies:

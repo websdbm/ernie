@@ -73,6 +73,9 @@ services:
       REDIS_URL: redis://redis:6379
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-}
       LLM_DAILY_BUDGET_USD: ${LLM_DAILY_BUDGET_USD:-2}
+      BRAIN_DIR: /data/brain
+    volumes:
+      - brain:/data/brain
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -117,3 +120,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  brain:

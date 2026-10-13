@@ -60,12 +60,14 @@ import {
   createPgActivityStore,
   createRecipesSkill,
   createReminderSkill,
+  createSecondBrainSkill,
   createSentinelsSkill,
   createShoppingListSkill,
   tidyReminderText,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
+  createBrainTools,
   createDocumentTools,
   createFirecrawlClient,
   createMemoryFocusStore,
@@ -83,6 +85,7 @@ import {
   ToolRegistry,
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
+import { createBrainRuntime } from './brain.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
@@ -230,6 +233,17 @@ async function main(): Promise<void> {
     maxBudgetUsd: config.automations.maxRunBudgetUsd,
   });
   for (const t of createSentinelTools(sentinelStore)) registry.register(t);
+  // Second brain: vault git per utente (remoto facoltativo, es. il repository aperto con Obsidian) + indice.
+  const brain = await createBrainRuntime({
+    config,
+    pool: postgres.pool,
+    embedder,
+    profiles,
+    logger,
+    // Chiamato più tardi (sincronizzazione), quando la fabbrica degli agenti esiste già.
+    onProfileChanged: (userId) => companions.invalidateUser(userId),
+  });
+  for (const t of createBrainTools(brain.tools)) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
@@ -295,6 +309,7 @@ async function main(): Promise<void> {
         createRecipesSkill(),
         createDocumentsSkill(),
         createSentinelsSkill(),
+        createSecondBrainSkill(),
         // Promemoria a evento (ricerca 11, S1): fuori catalogo, viene prima di «Ricordami» nell'ordine.
         createIntentSkill(intents),
         createReminderSkill(reminders),
@@ -430,8 +445,12 @@ async function main(): Promise<void> {
       profiles,
       linked: async (userId) =>
         (await family.list(userId)).map((l) => ({ label: l.label, relation: l.relation })),
-      onChanged: (userId) => companions.invalidateUser(userId),
+      onChanged: (userId) => {
+        companions.invalidateUser(userId);
+        void brain.refreshChiSono(userId);
+      },
     },
+    brain: { authenticator, allowedOrigins: config.ws.allowedOrigins, brain: brain.service },
     toolRules: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -503,10 +522,12 @@ async function main(): Promise<void> {
     },
   });
 
+  brain.start();
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    brain.stop();
     logger.info({ signal }, 'arresto in corso');
     clearInterval(evict);
     const timer = setTimeout(() => {

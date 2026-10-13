@@ -62,7 +62,14 @@ export const envSchema = z.object({
   /** Categorie di tool abilitate per le sessioni (CSV). */
   TOOL_CATEGORIES: z
     .string()
-    .default('utility,memory,shopping_list,web,presentation,recipes,documents,sentinels'),
+    .default('utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain'),
+  /** Second brain: cartella dei vault (uno per utente), remoti git per utente, chiave di deploy (base64). */
+  BRAIN_DIR: z.string().default('./.data/brain'),
+  BRAIN_REMOTES: z.string().default(''),
+  BRAIN_DEPLOY_KEY_B64: z.string().optional(),
+  BRAIN_SYNC_INTERVAL_S: z.coerce.number().int().min(0).max(86_400).default(300),
+  BRAIN_GIT_NAME: z.string().default('Ernie'),
+  BRAIN_GIT_EMAIL: z.string().default('ernie@eklettica.it'),
   TOOL_APPROVAL_TTL_S: z.coerce.number().int().min(10).max(3600).default(120),
   POLICY_RISK_ASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
   WEB_ALLOWED_DOMAINS: z.string().default(''),
@@ -122,6 +129,14 @@ export interface AppConfig {
     readonly retrievalLimit: number;
     readonly consolidationDelaySeconds: number;
     readonly retentionDays: number;
+  };
+  readonly brain: {
+    readonly dir: string;
+    /** [userId, url git] */
+    readonly remotes: ReadonlyArray<readonly [string, string]>;
+    readonly deployKeyB64?: string;
+    readonly syncIntervalSeconds: number;
+    readonly author: { readonly name: string; readonly email: string };
   };
   readonly tools: {
     readonly categories: readonly string[];
@@ -237,6 +252,20 @@ export function toAppConfig(env: Env): AppConfig {
       consolidationDelaySeconds: env.MEMORY_CONSOLIDATION_DELAY_S,
       retentionDays: env.MEMORY_RETENTION_DAYS,
     },
+    brain: {
+      dir: env.BRAIN_DIR,
+      remotes: csv(env.BRAIN_REMOTES)
+        .map((pair) => {
+          const i = pair.indexOf('=');
+          return i > 0 ? ([pair.slice(0, i).trim(), pair.slice(i + 1).trim()] as const) : null;
+        })
+        .filter(
+          (x): x is readonly [string, string] => x !== null && Boolean(x[0]) && Boolean(x[1]),
+        ),
+      ...(env.BRAIN_DEPLOY_KEY_B64 ? { deployKeyB64: env.BRAIN_DEPLOY_KEY_B64 } : {}),
+      syncIntervalSeconds: env.BRAIN_SYNC_INTERVAL_S,
+      author: { name: env.BRAIN_GIT_NAME, email: env.BRAIN_GIT_EMAIL },
+    },
     tools: {
       categories: csv(env.TOOL_CATEGORIES),
       approvalTtlSeconds: env.TOOL_APPROVAL_TTL_S,
@@ -321,6 +350,12 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     router: config.router,
     memory: config.memory,
     tools: config.tools,
+    brain: {
+      dir: config.brain.dir,
+      remotes: config.brain.remotes.map(([u, url]) => [u, url]),
+      deployKey: present(config.brain.deployKeyB64),
+      syncIntervalSeconds: config.brain.syncIntervalSeconds,
+    },
     automations: config.automations,
     push: {
       apns: config.push.apns

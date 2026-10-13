@@ -2,6 +2,7 @@ import type { AppConfig } from '@ernie/config';
 import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
+import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
@@ -31,6 +32,8 @@ export interface BuildServerOptions {
   readonly reminders?: RemindersRoutesOptions;
   /** Scheda anagrafica dell'utente (13 ott 2026). */
   readonly profile?: ProfileRoutesOptions;
+  /** Second brain (docs/research/12-second-brain.md). */
+  readonly brain?: BrainRoutesOptions;
   /** Famiglia (M7e): collegamenti fra installazioni. */
   readonly family?: FamilyRoutesOptions;
   readonly toolRules?: ToolRulesRoutesOptions;
@@ -102,6 +105,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.family) await app.register(familyRoutes, opts.family);
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);
   if (opts.profile) await app.register(profileRoutes, opts.profile);
+  if (opts.brain) await app.register(brainRoutes, opts.brain);
 
   return app;
 }
