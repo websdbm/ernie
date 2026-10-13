@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Impostazioni → Sicurezza: regole «Consenti sempre» (M9). Ogni regola dice al server di non chiedere
+/// Impostazioni → Conferme: regole «Consenti sempre» (M9). Ogni regola dice al server di non chiedere
 /// conferma per quel tool; si revoca scorrendo a sinistra. Gli invii verso l'esterno non sono mai ammessi.
 struct SecurityView: View {
     @Environment(AppModel.self) private var model
@@ -30,7 +30,7 @@ struct SecurityView: View {
             }
             if let error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
         }
-        .navigationTitle("Sicurezza")
+        .navigationTitle("Azioni consentite")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }

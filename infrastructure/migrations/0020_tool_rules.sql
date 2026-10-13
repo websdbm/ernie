@@ -1,6 +1,6 @@
 -- M9: regole «Consenti sempre» per utente (decisione dall'analisi di Open Dots, 11 ott 2026).
 -- Una regola trasforma la richiesta di conferma (ask) di un tool in un consenso già dato: mai un deny,
--- mai per i tool con effetto esterno (invii, messaggi). Revoca da Impostazioni → Sicurezza.
+-- mai per i tool con effetto esterno (invii, messaggi). Revoca da Impostazioni → Conferme.
 CREATE TABLE tool_rules (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

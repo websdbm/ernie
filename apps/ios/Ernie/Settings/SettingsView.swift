@@ -178,7 +178,7 @@ struct SettingsView: View {
                 Section {
                     NavigationLink("Azioni consentite sempre") { SecurityView() }
                 } header: {
-                    Text("Sicurezza")
+                    Text("Conferme")
                 } footer: {
                     Text("Le azioni per cui hai scelto «Consenti sempre». Gli invii verso l'esterno chiedono sempre conferma.")
                 }

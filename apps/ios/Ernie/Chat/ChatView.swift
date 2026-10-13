@@ -286,7 +286,7 @@ struct ConfirmationCardView: View {
                     }
                     .font(.caption)
                     .buttonStyle(.borderless)
-                    Text("Revocabile in Impostazioni → Sicurezza.")
+                    Text("Revocabile in Impostazioni → Conferme.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }

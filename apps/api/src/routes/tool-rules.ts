@@ -21,7 +21,7 @@ function requireAuth(req: FastifyRequest): AuthContext {
 const IdParams = z.object({ id: z.uuid() });
 const CreateBody = z.object({ toolId: z.string().min(1).max(80) }).strict();
 
-/** Regole «Consenti sempre» (M9): elenco con descrizione del tool, creazione e revoca (Impostazioni → Sicurezza). */
+/** Regole «Consenti sempre» (M9): elenco con descrizione del tool, creazione e revoca (Impostazioni → Conferme). */
 export async function toolRulesRoutes(
   app: FastifyInstance,
   opts: ToolRulesRoutesOptions,
