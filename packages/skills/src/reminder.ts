@@ -93,6 +93,26 @@ interface Parsed {
   readonly assumed: string[];
 }
 
+/** «Prendere Giorgio» → «prendere Giorgio» dentro una frase (i nomi propri restano maiuscoli). */
+export const lowerFirst = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+/**
+ * Titolo deterministico del promemoria (ripiego quando il modello leggero non c'è): via i giri di parole
+ * più comuni del parlato («uscire per andare a prendere…» → «Prendere…»), maiuscola iniziale.
+ */
+export function tidyReminderText(raw: string): string {
+  let t = raw.replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(?:devo\s+|dovrei\s+|bisogna\s+|ricordarmi\s+di\s+)/iu, '');
+  // «uscire per andare a prendere», «uscire per prendere», «andare a prendere»: resta il verbo che conta.
+  t = t.replace(
+    /^(?:uscire\s+(?:per\s+)?)?(?:(?:per\s+)?andare\s+a\s+)?(?=\p{L}+(?:are|ere|ire)\b)/iu,
+    '',
+  );
+  t = t.replace(/^uscire\s+per\s+/iu, '');
+  t = t.replace(/\ba\s+lavoro\b/iu, 'al lavoro');
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
 const clean = (s: string) =>
   s
     .replace(/\s+/g, ' ')
@@ -247,25 +267,29 @@ export function parseWhen(
     text = text.replace(tm[0], ' ');
   } else if (periodHour !== null) {
     hour = periodHour;
-    assumed.push(
-      `ora ${String(hour).padStart(2, '0')}:00 (${periodHour === 9 ? 'mattina' : periodHour === 15 ? 'pomeriggio' : periodHour === 20 ? 'sera' : 'come detto'})`,
-    );
+    // Mezzogiorno e mezzanotte sono orari esatti; mattina, pomeriggio, sera e notte sono stime da dichiarare.
+    const label: Record<number, string> = {
+      9: 'mattina',
+      15: 'pomeriggio',
+      20: 'sera',
+      23: 'notte',
+    };
+    if (label[periodHour]) assumed.push(`le ${periodHour} per «${label[periodHour]}»`);
     timeGiven = true;
   }
   if (hour === null || hour > 23 || minute > 59) {
     if (dayGiven) {
       hour = 9;
-      assumed.push('ora 09:00');
+      assumed.push('le 9, perché non hai detto l’ora');
     } else {
       return { needTime: clean(text) };
     }
   }
-  if (!dayGiven) assumed.push('oggi');
   let at = zonedToUtc(tz, y, m, d, hour, minute);
   if (at.getTime() <= now.getTime() + 30_000 && !dayGiven) {
     [y, m, d] = addDays(y, m, d, 1);
     at = zonedToUtc(tz, y, m, d, hour, minute);
-    assumed[assumed.indexOf('oggi')] = 'domani (oggi l’ora è già passata)';
+    assumed.push('domani, perché oggi quell’ora è già passata');
   }
   if (at.getTime() <= now.getTime()) return null;
   return { text: clean(text), at, assumed, timeGiven } as Parsed;
@@ -415,15 +439,17 @@ export function createReminderSkill(
               };
             throw err;
           }
-          const note = p.assumed.length ? ` (ho inteso: ${p.assumed.join(', ')})` : '';
+          // Le stime dette in una frase a parte, senza parentesi annidate.
+          const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
+          const what = lowerFirst(r.text);
           if (r.for)
             return {
-              text: `⏰ Va bene: ricordo a ${r.for} di ${r.text} ${formatWhen(r.at, timezone)}${note}. Il promemoria arriva sul suo telefono.`,
+              text: `⏰ Va bene: ricordo a ${r.for} di ${what} ${formatWhen(r.at, timezone)}.${note} Il promemoria arriva sul suo telefono.`,
               actions: [`create:${r.id}`],
               blocks: [toRemindersBlock([r], `Promemoria per ${r.for}`)],
             };
           return {
-            text: `⏰ Va bene: ti ricordo di ${r.text} ${formatWhen(r.at, timezone)}${note}.`,
+            text: `⏰ Va bene: ti ricordo di ${what} ${formatWhen(r.at, timezone)}.${note}`,
             actions: [`create:${r.id}`],
             blocks: [toRemindersBlock([r], 'Promemoria')],
           };

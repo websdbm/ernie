@@ -12,6 +12,7 @@ import {
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderStore,
+  tidyReminderText,
   toRemindersBlock,
   UnknownPersonError,
 } from '@ernie/skills';
@@ -42,6 +43,8 @@ export interface ReminderStoreDeps {
    * suona comunque all'ora scelta.
    */
   readonly proactive?: (c: ProactiveCandidate) => Promise<unknown>;
+  /** Titolo breve dalla frase detta (modello leggero con ripiego deterministico); senza, pulizia deterministica. */
+  readonly title?: (text: string, ctx: { userId: string; fromLabel?: string }) => Promise<string>;
 }
 
 const KEY_PREFIX = 'promemoria_';
@@ -192,15 +195,24 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
 
   return {
     async create(userId, input) {
-      const text = clean(input.text);
+      const spoken = clean(input.text);
       const at = new Date(Math.floor(input.at.getTime() / 1000) * 1000);
+      // Titolo breve dalla frase detta; dal punto di vista di chi lo riceve («chiamarmi» → «Chiamare papà»).
+      const titled = async (fromLabel?: string) =>
+        clean(
+          deps.title
+            ? await deps.title(spoken, { userId, ...(fromLabel ? { fromLabel } : {}) })
+            : tidyReminderText(spoken),
+        ) || spoken;
       if (!input.forLabel) {
+        const text = await titled();
         const a = await insert(userId, text, at, input.timezone, {});
         return { id: a.id, text, at, status: 'scheduled' };
       }
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
       if (!link) throw new UnknownPersonError(input.forLabel);
       const fromLabel = (await deps.family?.labelFor(link.otherUserId, userId)) ?? 'un familiare';
+      const text = await titled(fromLabel);
       const meta: Meta = { from: userId, fromLabel, toLabel: link.label };
       const a = await insert(link.otherUserId, text, at, input.timezone, meta);
       await announce(

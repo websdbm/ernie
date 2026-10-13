@@ -6,6 +6,7 @@ export * from './compact.js';
 export * from './emotion.js';
 export * from './loop.js';
 export * from './policy.js';
+export * from './reminder-title.js';
 export * from './session-summary.js';
 export * from './storage.js';
 export * from './turn.js';

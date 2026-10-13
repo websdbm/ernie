@@ -4,6 +4,7 @@ import {
   createConversationMemory,
   createMastraStorage,
   createPgApprovalStore,
+  createReminderTitler,
   PendingApprovals,
 } from '@ernie/agent-core';
 import {
@@ -51,6 +52,7 @@ import {
   createRecipesSkill,
   createReminderSkill,
   createShoppingListSkill,
+  tidyReminderText,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
@@ -137,6 +139,16 @@ async function main(): Promise<void> {
     knownTools: [],
     maxBudgetUsd: config.automations.maxRunBudgetUsd,
     family,
+    // Titolo breve dei promemoria con il modello leggero (ripiego deterministico senza provider).
+    ...(gateway
+      ? {
+          title: createReminderTitler({
+            gateway,
+            recorder: createLlmCallRecorder(postgres.pool, logger),
+            fallback: tidyReminderText,
+          }),
+        }
+      : {}),
     notifyRecipient: (userId, block) =>
       publishUserEvent(redis.client, {
         userId,

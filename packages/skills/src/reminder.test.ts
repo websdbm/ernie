@@ -26,7 +26,7 @@ describe('parseReminderCommand', () => {
     if (p?.op !== 'create') return;
     expect(p.text).toBe('uscire dal lavoro');
     expect(local(p.at)).toBe('2026-10-11 17:00');
-    expect(p.assumed).toEqual(['oggi']);
+    expect(p.assumed).toEqual([]); // «oggi» lo dice già la data
   });
 
   it('ora già passata → domani; orari con minuti, mezza, sera', () => {
@@ -199,5 +199,42 @@ describe('skill ricordami', () => {
     expect((await f?.skill.run(f.plan, ctx))?.text).toBe('⏰ Promemoria: uscire');
     const fire = createReminderSkill(null, TZ);
     expect((await fire.run({ op: 'fire', text: 'bere' }, ctx)).text).toBe('⏰ Promemoria: bere');
+  });
+});
+
+describe('titolo e frase di conferma dei promemoria', () => {
+  it('pulizia deterministica dei giri di parole del parlato', async () => {
+    const { tidyReminderText } = await import('./reminder.js');
+    expect(tidyReminderText('uscire per andare a prendere Giorgio e portare la visita')).toBe(
+      'Prendere Giorgio e portare la visita',
+    );
+    expect(tidyReminderText('andare a lavoro')).toBe('Andare al lavoro');
+    expect(tidyReminderText('devo chiamare il dentista')).toBe('Chiamare il dentista');
+    expect(tidyReminderText('uscire')).toBe('Uscire');
+  });
+
+  it('nessuna parentesi annidata: le stime in una frase a parte', async () => {
+    const { createReminderSkill } = await import('./reminder.js');
+    const store = {
+      create: async (_u: string, i: { text: string; at: Date }) => ({
+        id: 'r1',
+        text: 'Prendere Giorgio e portarlo alla visita',
+        at: i.at,
+        status: 'scheduled' as const,
+      }),
+      list: async () => [],
+      remove: async () => true,
+      update: async () => null,
+    };
+    const skill = createReminderSkill(store, TZ);
+    const exact = parseReminderCommand('ricordami a mezzogiorno di prendere Giorgio', NOW, TZ);
+    const r1 = await skill.run(exact, { userId: 'u', sessionId: null, requestId: 'x' });
+    expect(r1.text).toContain('⏰ Va bene: ti ricordo di prendere Giorgio e portarlo alla visita ');
+    expect(r1.text).toContain(' alle 12:00.');
+    expect(r1.text).not.toContain('(');
+    const guess = parseReminderCommand('ricordami stasera di prendere Giorgio', NOW, TZ);
+    const r2 = await skill.run(guess, { userId: 'u', sessionId: null, requestId: 'x' });
+    expect(r2.text).toContain('Ho inteso le 20 per «sera».');
+    expect(r2.text).not.toContain('(');
   });
 });

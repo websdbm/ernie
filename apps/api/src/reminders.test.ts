@@ -109,6 +109,51 @@ const queue = {
 } as unknown as AutomationQueue;
 
 describe('store dei promemoria con Famiglia', () => {
+  it('titolo breve dal punto di vista di chi lo riceve; senza modello, pulizia deterministica', async () => {
+    const fa = fakeAutomations();
+    const seen: Array<{ text: string; fromLabel?: string }> = [];
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+      family: fakeFamily(),
+      title: async (text, ctx) => {
+        seen.push({ text, ...(ctx.fromLabel ? { fromLabel: ctx.fromLabel } : {}) });
+        return ctx.fromLabel
+          ? `Chiamare ${ctx.fromLabel}`
+          : 'Prendere Giorgio e portarlo alla visita';
+      },
+    });
+    const mine = await store.create(PAPA, {
+      text: 'uscire per andare a prendere Giorgio e portare la visita',
+      at: future,
+      timezone: 'Europe/Rome',
+    });
+    expect(mine.text).toBe('Prendere Giorgio e portarlo alla visita');
+    const his = await store.create(PAPA, {
+      text: 'chiamarmi',
+      at: future,
+      timezone: 'Europe/Rome',
+      forLabel: 'Giorgio',
+    });
+    expect(his.text).toBe('Chiamare papà');
+    expect(seen).toEqual([
+      { text: 'uscire per andare a prendere Giorgio e portare la visita' },
+      { text: 'chiamarmi', fromLabel: 'papà' },
+    ]);
+    const plain = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    expect(
+      (await plain.create(PAPA, { text: 'andare a lavoro', at: future, timezone: 'Europe/Rome' }))
+        .text,
+    ).toBe('Andare al lavoro');
+  });
+
   it('con il gate della proattività l’avviso a Giorgio passa da lì (non più notifica diretta)', async () => {
     const fa = fakeAutomations();
     const offered: Array<{ userId: string; kind: string; dedupeKey: string; source: string }> = [];
@@ -167,8 +212,8 @@ describe('store dei promemoria con Famiglia', () => {
     });
     expect(r.for).toBe('Giorgio');
     expect(fa.rows[0]?.userId).toBe(GIORGIO);
-    expect(fa.rows[0]?.title).toBe('Promemoria da papà: chiamarmi');
-    expect(fa.rows[0]?.action).toMatchObject({ input: '__promemoria__ [da papà] chiamarmi' });
+    expect(fa.rows[0]?.title).toBe('Promemoria da papà: Chiamarmi'); // senza modello: pulizia deterministica
+    expect(fa.rows[0]?.action).toMatchObject({ input: '__promemoria__ [da papà] Chiamarmi' });
     expect(fa.rows[0]?.meta).toEqual({ from: PAPA, fromLabel: 'papà', toLabel: 'Giorgio' });
     // Avviso immediato a Giorgio: notifica salvata + scheda nelle sessioni connesse.
     expect(fa.notifications).toEqual([
@@ -177,10 +222,10 @@ describe('store dei promemoria con Famiglia', () => {
     expect(pushed).toEqual([{ userId: GIORGIO, title: 'Promemoria da papà' }]);
     // Elenchi: papà lo vede «per Giorgio», Giorgio «da papà».
     expect((await store.list(PAPA)).map((x) => [x.text, x.for, x.from])).toEqual([
-      ['chiamarmi', 'Giorgio', undefined],
+      ['Chiamarmi', 'Giorgio', undefined],
     ]);
     expect((await store.list(GIORGIO)).map((x) => [x.text, x.for, x.from])).toEqual([
-      ['chiamarmi', undefined, 'papà'],
+      ['Chiamarmi', undefined, 'papà'],
     ]);
     // Papà lo modifica (nuovo id, sempre nell’account di Giorgio) e poi lo annulla.
     const u = await store.update(PAPA, r.id, { text: 'chiamare papà' });

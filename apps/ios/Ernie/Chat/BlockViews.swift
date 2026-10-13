@@ -64,24 +64,28 @@ struct RemindersCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: r.status == "scheduled" ? "alarm" : r.status == "done" ? "checkmark.circle" : "xmark.circle")
                             .foregroundStyle(r.status == "scheduled" ? Color.accentColor : Color.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
+                        // Titolo a tutta larghezza; ora e comandi sulla riga sotto (prima il titolo restava schiacciato).
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(r.text)
                                 .font(.callout)
                                 .strikethrough(r.status == "cancelled", color: .secondary)
                                 .foregroundStyle(r.status == "scheduled" ? .primary : .secondary)
-                            Text(Self.when(r) + Self.who(r)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        if r.status == "scheduled" {
-                            Button {
-                                if editing == r.id { editing = nil } else { startEditing(r) }
-                            } label: {
-                                Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle").foregroundStyle(Color.accentColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(spacing: 10) {
+                                Text(Self.when(r) + Self.who(r)).font(.caption).foregroundStyle(.secondary)
+                                Spacer(minLength: 0)
+                                if r.status == "scheduled" {
+                                    Button {
+                                        if editing == r.id { editing = nil } else { startEditing(r) }
+                                    } label: {
+                                        Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle").foregroundStyle(Color.accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Modifica")
+                                    Button("Annulla") { Task { await model.reminders.cancel(r) } }
+                                        .font(.caption).buttonStyle(.bordered).controlSize(.mini)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Modifica")
-                            Button("Annulla") { Task { await model.reminders.cancel(r) } }
-                                .font(.caption).buttonStyle(.bordered).controlSize(.mini)
                         }
                     }
                     if editing == r.id {
