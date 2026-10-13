@@ -11,6 +11,8 @@ import WidgetKit
 final class ReminderStore {
     private(set) var items: [ReminderItem] = []
     private(set) var lastError: String?
+    /// Promemoria a cui l'utente ha acceso l'email senza un indirizzo nella scheda: la vista chiede l'indirizzo.
+    private(set) var needsEmailFor: String? = nil
     private var api: ApiClient?
 
     func configure(api: ApiClient?) { self.api = api }
@@ -96,10 +98,29 @@ final class ReminderStore {
     func setChannels(_ r: ReminderItem, email: Bool?, alarm: Bool?) async -> Bool {
         guard let api else { return false }
         do {
-            let updated = try await api.updateReminderChannels(id: resolve(r.id), email: email, alarm: alarm)
+            let (updated, needsEmail) = try await api.updateReminderChannels(id: resolve(r.id), email: email, alarm: alarm)
             if let i = items.firstIndex(where: { $0.id == updated.id }) { items[i] = updated } else { items.append(updated) }
+            needsEmailFor = needsEmail ? updated.id : nil
             lastError = nil
             sync()
+            return true
+        } catch {
+            lastError = AppModel.describe(error)
+            return false
+        }
+    }
+
+    /// Chiude la richiesta dell'indirizzo email (annullata dall'utente).
+    func dismissEmailPrompt() { needsEmailFor = nil }
+
+    /// Salva l'email nelle impostazioni: il server la copia anche nella scheda anagrafica.
+    func saveEmail(_ email: String) async -> Bool {
+        guard let api else { return false }
+        let clean = email.trimmingCharacters(in: .whitespaces)
+        do {
+            _ = try await api.updateSettings(["email": .string(clean)])
+            needsEmailFor = nil
+            lastError = nil
             return true
         } catch {
             lastError = AppModel.describe(error)

@@ -176,10 +176,22 @@ struct ReminderEditForm: View {
 struct ReminderChannelChips: View {
     let item: ReminderItem
     @Environment(AppModel.self) private var model
+    /// Indirizzo digitato nell'invito «Qual è la tua email?».
+    @State private var emailDraft = ""
 
     /// Predefinito: l'impostazione generale della sveglia.
     private var alarmOn: Bool { item.channels?.alarm ?? ReminderAlarms.enabled }
     private var emailOn: Bool { item.channels?.email ?? false }
+
+    /// Invito a dare l'indirizzo: compare quando lo store segnala «needsEmail» per questo promemoria.
+    private var askingEmail: Binding<Bool> {
+        Binding(
+            get: { model.reminders.needsEmailFor == model.reminders.resolve(item.id) },
+            set: { if !$0 { model.reminders.dismissEmailPrompt() } }
+        )
+    }
+
+    private var draftLooksLikeEmail: Bool { emailDraft.contains("@") && emailDraft.contains(".") }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -192,6 +204,23 @@ struct ReminderChannelChips: View {
             ReminderChannelChip(title: "Email", symbol: "envelope.fill", on: emailOn) {
                 Task { _ = await model.reminders.setChannels(item, email: !emailOn, alarm: nil) }
             }
+        }
+        .alert("Qual è la tua email?", isPresented: askingEmail) {
+            TextField("nome@esempio.it", text: $emailDraft)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Salva") {
+                let address = emailDraft
+                Task {
+                    // Salvata nelle impostazioni (e quindi nella scheda): ricarica il profilo locale.
+                    if await model.reminders.saveEmail(address) { await model.refreshProfile() }
+                }
+            }
+            .disabled(!draftLooksLikeEmail)
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text("La salvo nella tua scheda e la uso per le email dei promemoria.")
         }
     }
 }

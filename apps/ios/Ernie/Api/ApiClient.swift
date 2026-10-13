@@ -288,12 +288,13 @@ struct ApiClient: Sendable {
     }
 
     /// Canali di un promemoria (v1.11): si invia solo il campo cambiato; il server risponde con lo stesso id.
-    func updateReminderChannels(id: String, email: Bool?, alarm: Bool?) async throws -> ReminderItem {
+    /// `needsEmail` è true quando l'email è accesa ma nella scheda anagrafica manca l'indirizzo.
+    func updateReminderChannels(id: String, email: Bool?, alarm: Bool?) async throws -> (reminder: ReminderItem, needsEmail: Bool) {
         struct Channels: Encodable, Sendable { var email: Bool?; var alarm: Bool? }
         struct Body: Encodable, Sendable { var channels: Channels }
-        struct Out: Decodable { var reminder: ReminderItem }
+        struct Out: Decodable { var reminder: ReminderItem; var needsEmail: Bool? }
         let out: Out = try await request("PATCH", "/v1/reminders/\(id)", body: Body(channels: Channels(email: email, alarm: alarm)))
-        return out.reminder
+        return (out.reminder, out.needsEmail ?? false)
     }
 
     // MARK: Famiglia (M7e)

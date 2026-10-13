@@ -136,7 +136,7 @@ struct SettingsView: View {
                     Text("Con l'interruttore attivo le automazioni non vengono eseguite finché non lo disattivi. La modifica richiede Face ID o il codice.")
                 }
                 Section("Notifiche") {
-                    TextField("Email per i promemoria", text: $email)
+                    TextField("Email (anche nella tua scheda)", text: $email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -148,6 +148,8 @@ struct SettingsView: View {
                     ))
                     .disabled(email.trimmingCharacters(in: .whitespaces).isEmpty)
                     if let emailError { Text(emailError).font(.caption).foregroundStyle(.red) }
+                    Text("È la stessa email della tua scheda anagrafica: cambiandola qui si aggiorna anche lì.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Toggle("Promemoria come sveglia", isOn: Binding(
                         get: { alarmReminders },
                         set: { value in

@@ -30,6 +30,7 @@ struct UserProfileData: Codable, Sendable, Equatable {
     var gender: String?
     var city: String?
     var occupation: String?
+    var email: String?
     var family: [ProfileFamilyMember] = []
     var sources: [String: ProfileSource] = [:]
 }
@@ -61,6 +62,7 @@ struct ProfilePutBody: Encodable, Sendable {
     var gender: String?
     var city: String?
     var occupation: String?
+    var email: String?
     var family: [Member]
 }
 
@@ -135,6 +137,7 @@ struct ProfileView: View {
                 genderRow
                 field("Città dove vivi", \.city, key: "city")
                 field("Lavoro", \.occupation, key: "occupation")
+                emailRow
             } header: {
                 Text("Chi sei")
             } footer: {
@@ -236,6 +239,24 @@ struct ProfileView: View {
         }
     }
 
+    /// Email della scheda: la stessa delle impostazioni (Notifiche); serve ai promemoria via email.
+    /// Il campo non passa dall'aiuto `field` perché ha bisogno dei modificatori di tastiera.
+    private var emailRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            TextField("Email", text: Binding(
+                get: { data.email ?? "" },
+                set: { data.email = $0.isEmpty ? nil : $0 }
+            ))
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .textContentType(.emailAddress)
+            Text("Serve per i promemoria via email; Ernie te la chiede quando manca.")
+                .font(.caption).foregroundStyle(.secondary)
+            sourceCaption("email")
+        }
+    }
+
     private var birthDateRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let parsed = BirthDate.parse(data.birthDate) {
@@ -308,7 +329,7 @@ struct ProfileView: View {
         defer { saving = false }
         let body = ProfilePutBody(
             fullName: data.fullName, preferredName: data.preferredName, birthDate: data.birthDate,
-            gender: data.gender, city: data.city, occupation: data.occupation,
+            gender: data.gender, city: data.city, occupation: data.occupation, email: data.email,
             family: data.family.map { .init(id: $0.id, name: $0.name, relation: $0.relation, birthDate: $0.birthDate, notes: $0.notes) }
         )
         do {
