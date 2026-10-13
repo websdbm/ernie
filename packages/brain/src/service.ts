@@ -256,9 +256,8 @@ export function createBrainService(opts: BrainServiceOptions) {
         '',
         ...(family.length ? ['## Famiglia', '', ...family] : []),
       ].join('\n');
-      const extra = CHI_SONO_KEYS.filter(([k]) => p[k]).map(
-        ([k, label]) => `${label}: ${JSON.stringify(p[k])}`,
-      );
+      // Tutti i campi, anche vuoti: in Obsidian si vede cosa si può compilare.
+      const extra = CHI_SONO_KEYS.map(([k, label]) => `${label}: ${JSON.stringify(p[k] ?? '')}`);
       const old = await v.read('Chi sono.md');
       const created = old ? parseNote('Chi sono.md', old).created : nowIso();
       const note: BrainNote = {

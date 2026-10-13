@@ -1,6 +1,6 @@
 # 12 — Second brain
 
-> Stato: **progetto v2** (13 ottobre 2026), dopo tre giri di domande con l'utente. Nessun codice scritto.
+> Stato: **B1 realizzata** (13 ottobre 2026): `packages/brain`, migrazione 0028, tool `brain_*`, menu ⋯ › Second brain nell'app. Repository privato `websdbm/ernie-brain`, aperto con Obsidian sul Mac in `~/Documents/Obsidian/ernie-brain`. B2 e B3 da fare.
 > Richiesta iniziale: «una seconda memoria esplicita che può comunicare con la memoria di Ernie e travasare da lì contenuti, o posso metterci io contenuti in vari modi, ad es. caricando file; struttura di un wiki, navigabile sia da me che da Ernie».
 
 ## 1. Decisioni dell'utente
@@ -73,7 +73,15 @@ Condividi da altre app e inoltro email vengono dopo.
 2. **B2, il grafo vivo.** Pagine-concetto create da Ernie, travaso proposto dalla memoria, suggerimenti in conversazione, pagine riservate, mappa dei luoghi e linea del tempo nell'app.
 3. **B3, apertura.** Condividi da altre app, inoltro email, modifica delle note dall'app, riorganizzazioni proposte da Ernie («queste 8 note sulla caldaia: le unisco?»).
 
-## 7. Da confermare prima di partire
+## 7. Obsidian sul Mac
+
+1. In Obsidian: «Apri cartella come vault» → `~/Documents/Obsidian/ernie-brain`.
+2. Impostazioni › Plugin della community › Sfoglia → «Git» (Vinzent03) → Installa e Attiva.
+3. Nelle opzioni del plugin: «Auto pull interval» e «Auto commit-and-sync interval» a 5 minuti, «Pull on startup» attivo.
+
+Il server sincronizza ogni 5 minuti; in caso di modifiche contemporanee allo stesso file vince la versione di Obsidian e quella di Ernie resta nella cronologia git.
+
+## 8. Decisioni prese prima di partire (13 ott 2026)
 
 - **Repository.** Va creato un repository GitHub privato sul tuo account `websdbm`, per esempio `ernie-brain`. Il server di staging3 ha bisogno di una chiave di deploy con permesso di scrittura solo su quel repository. Sono azioni sul tuo account: le preparo io, ma servono il tuo via libera e il tuo controllo sulla chiave.
 - **Obsidian sul Mac** con il plugin Git, configurato una volta. Su iPhone il plugin funziona male, ma lì c'è l'app di Ernie.
