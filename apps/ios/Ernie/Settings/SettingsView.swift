@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var emailNotifications = false
     @State private var emailError: String?
     @State private var showChangeServer = false
+    @State private var alarmReminders = ReminderAlarms.enabled
 
     // Gate della proattività (M9 A3): messaggi spontanei, ore di quiete, tetto giornaliero.
     @State private var proactive = true
@@ -137,7 +138,19 @@ struct SettingsView: View {
                     ))
                     .disabled(email.trimmingCharacters(in: .whitespaces).isEmpty)
                     if let emailError { Text(emailError).font(.caption).foregroundStyle(.red) }
-                    Text("Le notifiche arrivano sempre sul telefono (schermata di blocco e widget); l'email è un'aggiunta per quando il telefono non è a portata.")
+                    Toggle("Promemoria come sveglia", isOn: Binding(
+                        get: { alarmReminders },
+                        set: { value in
+                            alarmReminders = value
+                            ReminderAlarms.enabled = value
+                            model.reminders.sync()
+                        }
+                    ))
+                    if alarmReminders, ReminderAlarms.authorization == .denied {
+                        Text("Permesso sveglie negato: attivalo in Impostazioni › Ernie › Sveglie. Intanto arriva una notifica normale.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
+                    Text("Come sveglia, il promemoria suona anche con il telefono in silenzioso, con «Posticipa» di \(ReminderAlarmConfig.snoozeMinutes) minuti. Le notifiche arrivano comunque sul telefono (schermata di blocco e widget); l'email è un'aggiunta per quando il telefono non è a portata.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section {

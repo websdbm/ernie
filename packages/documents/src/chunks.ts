@@ -185,12 +185,13 @@ export function createChunkStore(pool: Pool, embedder: ChunkEmbedder | null): Ch
         );
         let vecRows: R[] = [];
         if (v) {
+          // $1 (la domanda) qui non serve, ma i filtri sono numerati da $2: va citato con il suo tipo.
           const p2 = [...params, vec(v)];
           vecRows = (
             await c.query<R>(
               `SELECT k.id, k.document_id, d.title, k.page, k.heading, k.content
                  FROM document_chunks k JOIN documents d ON d.id = k.document_id
-                WHERE k.embedding IS NOT NULL ${where}
+                WHERE k.embedding IS NOT NULL AND $1::text IS NOT NULL ${where}
                 ORDER BY k.embedding <=> $${p2.length}::vector LIMIT 30`,
               p2,
             )

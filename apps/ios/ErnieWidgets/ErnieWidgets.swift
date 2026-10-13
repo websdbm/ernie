@@ -1,3 +1,5 @@
+import ActivityKit
+import AlarmKit
 import SwiftUI
 import WidgetKit
 
@@ -122,5 +124,62 @@ struct ErnieReminderWidget: Widget {
 struct ErnieWidgetsBundle: WidgetBundle {
     var body: some Widget {
         ErnieReminderWidget()
+        ReminderAlarmActivity()
+    }
+}
+
+/// Live Activity delle sveglie dei promemoria: durante il posticipo mostra il conto alla rovescia sulla
+/// schermata di blocco e nella Dynamic Island; allo scadere AlarmKit suona di nuovo.
+struct ReminderAlarmActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: AlarmAttributes<ReminderAlarmMetadata>.self) { context in
+            HStack(spacing: 12) {
+                Image(systemName: "bell.fill").font(.title2).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(context.attributes.metadata?.text ?? "Promemoria").font(.headline).lineLimit(2)
+                    if let from = context.attributes.metadata?.from {
+                        Text("da \(from)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+                AlarmCountdownText(state: context.state).font(.title3.monospacedDigit().weight(.semibold))
+            }
+            .padding()
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image(systemName: "bell.fill").foregroundStyle(.orange)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    AlarmCountdownText(state: context.state).monospacedDigit()
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    Text(context.attributes.metadata?.text ?? "Promemoria").lineLimit(2)
+                }
+            } compactLeading: {
+                Image(systemName: "bell.fill").foregroundStyle(.orange)
+            } compactTrailing: {
+                AlarmCountdownText(state: context.state).monospacedDigit().frame(maxWidth: 52)
+            } minimal: {
+                Image(systemName: "bell.fill").foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
+struct AlarmCountdownText: View {
+    let state: AlarmPresentationState
+
+    var body: some View {
+        switch state.mode {
+        case .countdown(let c):
+            Text(timerInterval: Date.now...max(Date.now, c.fireDate), countsDown: true)
+        case .paused:
+            Text("In pausa")
+        case .alert:
+            Text("Adesso")
+        @unknown default:
+            Text("")
+        }
     }
 }

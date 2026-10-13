@@ -25,6 +25,8 @@ struct BlockView: View {
             DocumentsCard(block: block, conversation: conversation)
         case .reminders(let block):
             RemindersCard(block: block)
+        case .citations(let block):
+            CitationsCard(block: block)
         case .unknown:
             EmptyView()
         }
@@ -153,6 +155,54 @@ struct RemindersCard: View {
 }
 
 /// Scelta tra i documenti letti: tocca per riaprirne riassunto e schema (dai prodotti salvati, senza costo).
+/// Fonti: «p. N · capitolo» per ogni pagina citata; un tocco apre il passo originale.
+struct CitationsCard: View {
+    let block: CitationsBlock
+    @State private var open: Set<String> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(block.title, systemImage: "quote.opening").font(.subheadline.weight(.semibold))
+            ForEach(block.items) { item in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if open.contains(item.id) { open.remove(item.id) } else { open.insert(item.id) }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("p. \(item.page)")
+                                .font(.caption.weight(.semibold).monospacedDigit())
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.heading ?? item.title).font(.callout.weight(.medium)).foregroundStyle(.primary).lineLimit(2)
+                                if item.heading != nil {
+                                    Text(item.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: open.contains(item.id) ? "chevron.up" : "chevron.down")
+                                .font(.caption).foregroundStyle(.tertiary)
+                        }
+                        if open.contains(item.id) {
+                            Text("«\(item.excerpt)»")
+                                .font(.footnote).italic().foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, 4)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
 struct DocumentsCard: View {
     let block: DocumentsBlock
     var conversation: ConversationStore?

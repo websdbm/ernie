@@ -26,6 +26,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>I promemoria suonano come una sveglia, anche con il telefono in silenzioso, e puoi posticiparli.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
@@ -43,6 +45,8 @@
 	<string>Per salvare nella galleria gli schemi e i riassunti che esporti.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

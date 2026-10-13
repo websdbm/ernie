@@ -61,4 +61,39 @@ describe.skipIf(!ready)('pezzi dei documenti (Postgres, full-text italiano, RLS)
     expect(scoped).toEqual([]);
     expect(await store.search(other, { query: 'Lugal' })).toEqual([]);
   });
+
+  it('con gli embedding la ricerca vettoriale si fonde con il full-text (parametri tipizzati)', async () => {
+    const repo = createDocumentRepository(app);
+    const pages = [
+      'Capitolo 1\nI Sumeri\nInventarono la scrittura cuneiforme.',
+      'Gli Assiri avevano capitale Ninive.',
+    ];
+    const doc = await repo.create(user, { source: 'scan', pageTexts: pages, title: 'Vettori' });
+    // Vettore finto: una dimensione accesa per parola chiave, così «Ninive» punta alla pagina 2.
+    const embedder = {
+      model: 'fake',
+      embed: async (texts: string[]) => ({
+        vectors: texts.map((t) => {
+          const v = new Array(1536).fill(0.001);
+          if (/ninive/i.test(t)) v[0] = 1;
+          if (/cuneiforme/i.test(t)) v[1] = 1;
+          return v;
+        }),
+      }),
+    };
+    const store = createChunkStore(app, embedder);
+    await store.index(user, doc.id, pages);
+    const hits = await store.search(user, {
+      query: 'dov’era la capitale Ninive?',
+      documentId: doc.id,
+    });
+    expect(hits[0]).toMatchObject({ page: 2, title: 'Vettori' });
+    const ranged = await store.search(user, {
+      query: 'cuneiforme',
+      documentId: doc.id,
+      fromPage: 1,
+      toPage: 1,
+    });
+    expect(ranged.map((h) => h.page)).toEqual([1]);
+  });
 });

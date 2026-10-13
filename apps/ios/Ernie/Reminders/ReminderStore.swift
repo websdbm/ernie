@@ -100,7 +100,8 @@ final class ReminderStore {
 
     // MARK: - notifiche locali e widget
 
-    private func sync() {
+    /// Riallinea notifiche, sveglie e widget (anche dopo il cambio dell'opzione «come sveglia»).
+    func sync() {
         let future = items.compactMap { r -> ReminderSnapshot.Item? in
             guard let at = Self.date(r.at), at > .now else { return nil }
             return ReminderSnapshot.Item(id: r.id, text: r.text, at: at, from: r.fromLabel)
@@ -108,7 +109,13 @@ final class ReminderStore {
         .sorted { $0.at < $1.at }
         ReminderSnapshot(items: future, updatedAt: .now).save()
         WidgetCenter.shared.reloadAllTimelines()
-        Task { await Self.scheduleLocalNotifications(future) }
+        // Suonano solo i miei: quelli messi a un familiare suonano sul suo telefono.
+        let mine = Set(items.filter { $0.forLabel == nil }.map(\.id))
+        let own = future.filter { mine.contains($0.id) }
+        Task {
+            let alarmed = await ReminderAlarms.sync(own)
+            await Self.scheduleLocalNotifications(own.filter { !alarmed.contains($0.id) })
+        }
     }
 
     private static func scheduleLocalNotifications(_ items: [ReminderSnapshot.Item]) async {

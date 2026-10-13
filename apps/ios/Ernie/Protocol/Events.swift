@@ -359,6 +359,22 @@ struct RemindersBlock: Codable, Sendable, Equatable {
     var reminders: [ReminderItem]
 }
 
+/// Fonti (v1.9): pagine dei documenti davvero usate e citate nella risposta, con il passo originale.
+struct CitationItem: Codable, Sendable, Equatable, Identifiable {
+    var documentId: String
+    var title: String
+    var page: Int
+    var heading: String?
+    var excerpt: String
+
+    var id: String { "\(documentId):\(page)" }
+}
+
+struct CitationsBlock: Codable, Sendable, Equatable {
+    var title: String
+    var items: [CitationItem]
+}
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -370,6 +386,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case shoppingLists(ShoppingListsBlock)
     case documents(DocumentsBlock)
     case reminders(RemindersBlock)
+    case citations(CitationsBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -396,6 +413,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .documents(try DocumentsBlock(from: decoder))
         case "reminders":
             self = .reminders(try RemindersBlock(from: decoder))
+        case "citations":
+            self = .citations(try CitationsBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -432,6 +451,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .reminders(let block):
             try c.encode("reminders", forKey: .kind)
+            try block.encode(to: encoder)
+        case .citations(let block):
+            try c.encode("citations", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)
