@@ -331,6 +331,14 @@ Lettura onesta: −26 % di token al primo passo, ma a cache calda il turno è co
 - [x] **A4 — «Perché lo sai?»** (13 ott 2026, `packages/skills/src/memory.ts`): skill deterministica fuori catalogo (sempre attiva): «cosa sai di me?» per categoria, «perché sai che …?» con data e provenienza in parole, «dimentica che …» solo su un ricordo plausibile (poi lo snapshot di sessione si ricostruisce); `memory_search` porta il campo `source` per le domande che passano dal modello. Catena di supersessione non mostrata (rinviata).
 - [ ] Giudice delle contraddizioni, intenzione-prima-dell'effetto, lavoro durevole: proposte.
 
+Proposte dallo studio di OpenClaw, Hermes Agent, Letta, mem0 + Graphiti, Khoj + nanobot (13 ott 2026, `docs/research/11-agenti-personali.md`, **da decidere con l'utente**), in ordine consigliato:
+- [ ] **C1 — Compattazione della conversazione**: riassunto ricorsivo a sezioni fisse con isteresi (la finestra fissa di 20 messaggi perde ciò che esce), identificatori verificati dal codice, azioni passate datate, ultimo messaggio dell'utente prevalente, generazione asincrona con il modello leggero.
+- [ ] **M1 + M2 — Giudice delle contraddizioni e validità temporale** (chiude B1): date e tipo nell'estrazione, giudice sui candidati con coseno ≥ 0,55 (misurato: le smentite italiane stanno tra 0,59 e 0,83, la deduplica a 0,92 non le fonde), applicazione deterministica sulle date, stato `in_dubbio` invece del ritiro silenzioso; fatti effimeri con scadenza.
+- [ ] **C4 + C5 — Automazioni che non disturbano e non spendono a vuoto**: esito silenzioso letto dal turno successivo, sentinelle «avvisami quando…», controllo economico (hash o predicato tipizzato) prima di chiamare il modello.
+- [ ] **S1 — Promemoria a evento** («quando si parla di X, ricordami Y»), confronto full-text senza modello e freni strutturali.
+- [ ] **S2 — Documenti a pezzi con ancora di pagina e citazioni verificate** (scuola).
+- [ ] Altre: avviso prima dello stop nei loop (C6), revisioni della memoria con «annulla» (C7), snapshot a sezioni e prefisso congelato con aggiornamenti accodati (M3, M4), revisione dopo il turno e ciclo di vita delle skill (C2, C8), ricerca nelle conversazioni (S3), rinvio a sessione occupata (S4).
+
 ## M10 — Avatar ⏳
 
 Aggiornamento (11–13 ott 2026): l'utente ha scelto un **orso in pixel art** animato da sprite sheet al posto del 3D (vedi M7c e M7f); l'ambito three.js/TalkingHead qui sotto resta come riferimento storico.
