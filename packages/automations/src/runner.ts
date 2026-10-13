@@ -13,6 +13,7 @@ import { buildMemorySnapshot, formatRetrievedMemories, type MemoryRepository } f
 import {
   BudgetExceededError,
   type BudgetGuard,
+  callCostUsd,
   type LlmCallRecorder,
   type ModelGateway,
 } from '@ernie/model-gateway';
@@ -641,7 +642,8 @@ async function runGuided(
   const recorder: LlmCallRecorder = {
     record: async (call) => {
       await g.recorder.record(call);
-      spentUsd += call.usage.costReportedUsd ?? 0;
+      // Con l'API di Anthropic il costo non arriva dal provider: senza la stima il tetto non scatterebbe mai.
+      spentUsd += callCostUsd(call.usage, call.model);
       if (automation.budgetUsd > 0 && spentUsd > automation.budgetUsd && !budgetTripped) {
         budgetTripped = true;
         ac.abort();

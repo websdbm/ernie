@@ -136,3 +136,21 @@ describe('buildProfiles', () => {
     expect(p.standard.modelId).toBe('b');
   });
 });
+
+describe('costo per chiamata', () => {
+  it('usa il costo riportato se c’è, altrimenti la stima da listino', async () => {
+    const { callCostUsd } = await import('./usage.js');
+    const base = {
+      inputTokens: 10_000,
+      cacheReadTokens: 9_000,
+      cacheWriteTokens: 0,
+      outputTokens: 300,
+      reasoningTokens: 0,
+    };
+    expect(callCostUsd({ ...base, costReportedUsd: 0.5 }, 'anthropic/claude-sonnet-5.5')).toBe(0.5);
+    // 1.000 non in cache a 2 $/M + 9.000 in cache a 0,1 $/M + 300 in uscita a 10 $/M = 0,0059 $
+    expect(
+      callCostUsd({ ...base, costReportedUsd: undefined }, 'anthropic/claude-sonnet-5.5'),
+    ).toBeCloseTo(0.0059, 6);
+  });
+});

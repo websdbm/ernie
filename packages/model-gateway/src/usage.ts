@@ -77,3 +77,11 @@ export function estimateCostUsd(u: NormalizedUsage, price: ModelPrice | undefine
 export function estimateCostForModel(u: NormalizedUsage, modelId: string): number {
   return estimateCostUsd(u, priceFor(modelId));
 }
+
+/**
+ * Costo di una chiamata: quello riportato dal provider se c'è (OpenRouter), altrimenti la stima da listino
+ * (API di Anthropic diretta, che non riporta il costo). Va usato per i totali dei turni e per i tetti di spesa.
+ */
+export function callCostUsd(u: NormalizedUsage, modelId: string): number {
+  return u.costReportedUsd ?? estimateCostForModel(u, modelId);
+}

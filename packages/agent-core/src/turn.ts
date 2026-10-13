@@ -1,4 +1,4 @@
-import { type LlmCallRecorder, normalizeUsage } from '@ernie/model-gateway';
+import { callCostUsd, type LlmCallRecorder, normalizeUsage } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import type { EventType, PayloadInputOf, RouteKind } from '@ernie/protocol';
 import type { z } from 'zod';
@@ -152,7 +152,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
           break;
         case 'step': {
           const usage = normalizeUsage(signal.usage, signal.providerMetadata);
-          costUsd += usage.costReportedUsd ?? 0;
+          costUsd += callCostUsd(usage, companion.profile.modelId);
           totals.inputTokens += usage.inputTokens;
           totals.outputTokens += usage.outputTokens;
           totals.cachedInputTokens += usage.cacheReadTokens;
