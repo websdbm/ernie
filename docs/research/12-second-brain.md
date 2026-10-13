@@ -1,6 +1,6 @@
 # 12 — Second brain
 
-> Stato: **B1 realizzata** (13 ottobre 2026): `packages/brain`, migrazione 0028, tool `brain_*`, menu ⋯ › Second brain nell'app. Repository privato `websdbm/ernie-brain`, aperto con Obsidian sul Mac in `~/Documents/Obsidian/ernie-brain`. B2 e B3 da fare.
+> Stato: **B1 e B2 realizzate** (13 ottobre 2026): `packages/brain`, migrazione 0028, tool `brain_*`, pagine-concetto, suggerimenti e travaso dalla memoria, viste Elenco, Tempo e Mappa, menu ⋯ › Second brain nell'app. Repository privato `websdbm/ernie-brain`, aperto con Obsidian sul Mac in `~/Documents/Obsidian/ernie-brain`. Resta B3.
 > Richiesta iniziale: «una seconda memoria esplicita che può comunicare con la memoria di Ernie e travasare da lì contenuti, o posso metterci io contenuti in vari modi, ad es. caricando file; struttura di un wiki, navigabile sia da me che da Ernie».
 
 ## 1. Decisioni dell'utente
@@ -69,8 +69,8 @@ Condividi da altre app e inoltro email vengono dopo.
 
 ## 6. Fasi
 
-1. **B1, il cuore.** Repository git e indice; note con tempo, luogo e collegamenti; «annota che…» da chat e voce; documenti da foto; ricerca e citazioni; pagina «Chi sono»; scheda iOS per sfogliare, cercare e leggere.
-2. **B2, il grafo vivo.** Pagine-concetto create da Ernie, travaso proposto dalla memoria, suggerimenti in conversazione, pagine riservate, mappa dei luoghi e linea del tempo nell'app.
+1. **B1, il cuore.** (fatta) Repository git e indice; note con tempo, luogo e collegamenti; «annota che…» da chat e voce; documenti da foto; ricerca e citazioni; pagina «Chi sono»; scheda iOS per sfogliare, cercare e leggere.
+2. **B2, il grafo vivo.** (fatta) Pagine-concetto create da Ernie, travaso proposto dalla memoria, suggerimenti in conversazione, pagine riservate, mappa dei luoghi e linea del tempo nell'app.
 3. **B3, apertura.** Condividi da altre app, inoltro email, modifica delle note dall'app, riorganizzazioni proposte da Ernie («queste 8 note sulla caldaia: le unisco?»).
 
 ## 7. Obsidian sul Mac

@@ -91,6 +91,12 @@ for (const c of cases) {
   console.log(
     `${results.every(([, p]) => p) ? 'OK ' : 'NO '} «${c.said}» → ${results.map(([n, p]) => `${p ? '✓' : '✗'} ${n}`).join(', ')}`,
   );
-  if (!results.every(([, p]) => p)) console.log('   estratto:', JSON.stringify(extraction.profile), '| fatti:', extraction.facts.map((f) => f.content));
+  if (!results.every(([, p]) => p))
+    console.log(
+      '   estratto:',
+      JSON.stringify(extraction.profile),
+      '| fatti:',
+      extraction.facts.map((f) => f.content),
+    );
 }
 console.log(`\n${ok}/${total} controlli; costo ${cost.toFixed(5)} $`);
