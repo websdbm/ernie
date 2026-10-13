@@ -67,6 +67,7 @@ import {
   createSecondBrainSkill,
   createSentinelsSkill,
   createShoppingListSkill,
+  enabledSkillIds,
   tidyReminderText,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
@@ -295,8 +296,23 @@ async function main(): Promise<void> {
     onProfileChanged: (userId) => companions.invalidateUser(userId),
   });
   for (const t of createBrainTools(brain.tools)) registry.register(t);
+  // Impostazioni dell'utente (interruttori delle skill) lette dal database.
+  const loadUserSettings = (userId: string) =>
+    withUser(
+      postgres.pool,
+      userId,
+      async (c) =>
+        (
+          await c.query<{ settings: Record<string, unknown> }>(
+            `SELECT settings FROM users WHERE id = $1`,
+            [userId],
+          )
+        ).rows[0]?.settings ?? {},
+    );
   // Sezione salute: valori dei referti letti al caricamento, storico e confronti, note riservate nel vault.
+  // Tutto dietro la skill «Salute»: spenta, niente tool, niente lettura dei referti, niente avvisi.
   const health = createHealthRuntime({
+    isEnabled: async (userId) => enabledSkillIds(await loadUserSettings(userId)).has('salute'),
     pool: postgres.pool,
     extractor: gateway
       ? createHealthExtractor({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger) })
@@ -398,18 +414,7 @@ async function main(): Promise<void> {
     },
     family,
     // Interruttori delle skill letti dal database a ogni invalidazione: valgono nella conversazione in corso.
-    loadSettings: (userId) =>
-      withUser(
-        postgres.pool,
-        userId,
-        async (c) =>
-          (
-            await c.query<{ settings: Record<string, unknown> }>(
-              `SELECT settings FROM users WHERE id = $1`,
-              [userId],
-            )
-          ).rows[0]?.settings ?? {},
-      ),
+    loadSettings: loadUserSettings,
   });
   const evict = setInterval(() => companions.cache.evictIdle(), 5 * 60_000);
   logger.info(

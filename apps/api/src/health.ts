@@ -31,6 +31,8 @@ import type { HealthToolRow, HealthToolStore } from '@ernie/tools';
  * tabellina; spiegazioni prudenti; avvisi detti di iniziativa una volta, al turno successivo.
  */
 export interface HealthRuntimeDeps {
+  /** Skill «Salute» accesa per l'utente: se è spenta la sezione non legge referti e non dà avvisi. */
+  readonly isEnabled: (userId: string) => Promise<boolean>;
   readonly pool: Pool;
   readonly extractor: HealthExtractor | null;
   readonly brain: BrainService | null;
@@ -299,14 +301,18 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
     tools,
     onDocumentCreated(userId, documentId, title, pages) {
       if (!looksLikeLabReport(pages.join('\n\n'))) return;
-      void ingest(userId, documentId, title, pages, false).catch((err: unknown) =>
-        deps.logger.warn(
-          { err: err instanceof Error ? err.message : String(err), documentId },
-          'salute: lettura del referto fallita',
-        ),
-      );
+      void deps
+        .isEnabled(userId)
+        .then((on) => (on ? ingest(userId, documentId, title, pages, false) : null))
+        .catch((err: unknown) =>
+          deps.logger.warn(
+            { err: err instanceof Error ? err.message : String(err), documentId },
+            'salute: lettura del referto fallita',
+          ),
+        );
     },
     async takeNotices(userId) {
+      if (!(await deps.isEnabled(userId))) return null;
       const pending = await store.pendingNotices(userId);
       if (!pending.length) return null;
       await store.markNotified(

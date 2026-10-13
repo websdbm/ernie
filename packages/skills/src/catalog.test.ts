@@ -14,7 +14,6 @@ describe('catalogo delle skill', () => {
       'documenti',
       'ricette',
       'ricordami',
-      'salute',
       'second_brain',
       'sentinelle',
       'shopping_list',
@@ -116,7 +115,14 @@ describe('catalogo delle skill', () => {
     expect(disabledToolIds({ skills: { shopping_list: false } }).has('shopping_list_add')).toBe(
       true,
     );
-    expect(disabledToolIds(undefined).size).toBe(0);
+    // Di partenza è spenta solo «Salute» (dati sanitari): i suoi tool non arrivano al modello.
+    expect([...disabledToolIds(undefined)].sort()).toEqual([
+      'health_import',
+      'health_overview',
+      'health_parameter',
+      'health_report',
+    ]);
+    expect(disabledToolIds({ skills: { salute: true } }).size).toBe(0);
   });
 
   it('la skill guidata «Ricette» porta istruzioni e tool coerenti con il catalogo', () => {

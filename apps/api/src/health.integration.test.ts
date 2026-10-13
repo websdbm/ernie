@@ -77,6 +77,7 @@ describe.skipIf(!ready)('sezione salute (Postgres + vault, estrattore finto)', (
     const documents = createDocumentRepository(app);
     const brain = createBrainService({ baseDir: dir, index: createBrainIndex(app, null) });
     const health = createHealthRuntime({
+      isEnabled: async () => true,
       pool: app,
       extractor: async (text) => {
         const key = text.includes('Glicemia 118') ? '2026-10-10' : '2026-03-02';
@@ -146,9 +147,33 @@ describe.skipIf(!ready)('sezione salute (Postgres + vault, estrattore finto)', (
     expect(await health.tools.importDocument(other, d1.id)).toMatchObject({ ok: false });
   });
 
+  it('skill spenta: nessuna lettura al caricamento e nessun avviso', async () => {
+    let calls = 0;
+    const health = createHealthRuntime({
+      isEnabled: async () => false,
+      pool: app,
+      extractor: async () => {
+        calls++;
+        return null;
+      },
+      brain: null,
+      documents: createDocumentRepository(app),
+      logger: silent,
+    });
+    health.onDocumentCreated(user, randomUUID(), 'Analisi', [referto('118', '24')]);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls).toBe(0);
+    await owner.query(
+      `INSERT INTO health_notices (user_id, text) VALUES ($1, 'avviso in sospeso')`,
+      [user],
+    );
+    expect(await health.takeNotices(user)).toBeNull();
+  });
+
   it('al caricamento legge solo ciò che sembra un referto', async () => {
     let calls = 0;
     const health = createHealthRuntime({
+      isEnabled: async () => true,
       pool: app,
       extractor: async () => {
         calls++;

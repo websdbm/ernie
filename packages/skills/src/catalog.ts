@@ -189,7 +189,8 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
       'aggiungi questo referto alle mie analisi',
     ],
     defaultAvailable: true,
-    defaultEnabled: true,
+    // Dati sanitari: si accende solo se serve (richiesta dell'utente); spenta, Ernie non vede né legge nulla.
+    defaultEnabled: false,
   },
   {
     id: 'diario',
