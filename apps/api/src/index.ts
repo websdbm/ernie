@@ -305,9 +305,9 @@ async function main(): Promise<void> {
             memories.search({ userId, query, kinds: ['semantic'], limit }),
           listActiveSemantic: (userId, limit) => memories.listActiveSemantic(userId, limit),
           profileLines: async (userId) =>
-            renderProfile(await profiles.get(userId))
+            renderProfile(await profiles.get(userId), new Date(), 'user')
               .split('\n')
-              .slice(1),
+              .filter(Boolean),
           forget: async (userId, id) => {
             const ok = await memories.forget(userId, id);
             // Lo snapshot della memoria sta nel prefisso dell'agente di sessione: va ricostruito.

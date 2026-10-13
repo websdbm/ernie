@@ -94,6 +94,8 @@ export interface ProfileChange {
   readonly field: string;
   readonly before: string | null;
   readonly after: string | null;
+  /** Detto in chat ma non applicato: il dato nella scheda l'ha scritto l'utente nell'app. Si chiede a lui. */
+  readonly conflict?: true;
 }
 
 const PLACEHOLDER = /^(null|none|nessun[oa]?|sconosciut[oa]|non (lo )?so|n\/?a|-|\?)$/iu;
@@ -159,7 +161,7 @@ export function mergeProfile(
   current: UserProfile,
   update: ProfileUpdate,
   opts: { source: ProfileSource; at: Date; quote?: string; now?: Date },
-): { profile: UserProfile; changes: ProfileChange[] } {
+): { profile: UserProfile; changes: ProfileChange[]; conflicts: ProfileChange[] } {
   const now = opts.now ?? opts.at;
   const meta: SourceMeta = {
     source: opts.source,
@@ -172,6 +174,7 @@ export function mergeProfile(
     meta: { ...current.meta },
   };
   const changes: ProfileChange[] = [];
+  const conflicts: ProfileChange[] = [];
 
   for (const field of PROFILE_FIELDS) {
     const raw = update[field];
@@ -179,9 +182,13 @@ export function mergeProfile(
       field === 'birthDate' ? normalizeBirthDate(raw, now) : clean(raw, PROFILE_LIMITS[field]);
     if (value === undefined) continue;
     const before = current[field];
-    if (lockedByUser(current.meta[field], opts.source)) continue;
-    if (field === 'birthDate' ? !birthDateWins(before, value) : fold(before) === fold(value))
+    const differs =
+      field === 'birthDate' ? birthDateWins(before, value) : fold(before) !== fold(value);
+    if (!differs) continue;
+    if (lockedByUser(current.meta[field], opts.source)) {
+      conflicts.push({ field, before: before ?? null, after: value, conflict: true });
       continue;
+    }
     next[field] = value;
     next.meta[field] = meta;
     changes.push({ field, before: before ?? null, after: value });
@@ -234,7 +241,7 @@ export function mergeProfile(
       changes.push({ field: 'family', before, after: describeMember(existing) });
     }
   }
-  return { profile: next, changes };
+  return { profile: next, changes, conflicts };
 }
 
 /**
@@ -340,41 +347,65 @@ export function describeBirthDate(v: string, now = new Date()): string {
   return `${day} ${y} (${age} ${age === 1 ? 'anno' : 'anni'})`;
 }
 
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+/** «Nato», «Nata» o «Nato/a» dal genere dichiarato o dalla relazione (figlia, moglie, madre…). */
+export function bornWord(hint: string | undefined): string {
+  const h = fold(hint);
+  if (
+    /\b(donna|femmin|figlia|moglie|madre|mamma|sorella|nonna|compagna|zia|cugina|nipote femmina)\b/.test(
+      h,
+    )
+  )
+    return 'Nata';
+  if (/\b(uomo|maschi|figlio|marito|padre|papa|fratello|nonno|compagno|zio|cugino)\b/.test(h))
+    return 'Nato';
+  return 'Nato/a';
+}
+
 export function describeMember(
   m: Pick<FamilyMember, 'name' | 'relation' | 'birthDate' | 'notes'>,
   now = new Date(),
 ): string {
+  const born = `${bornWord(m.relation).toLowerCase()} il`;
   const extra = [
-    m.birthDate ? `nato/a il ${describeBirthDate(m.birthDate, now)}` : null,
-    m.notes ?? null,
+    m.birthDate ? `${born} ${describeBirthDate(m.birthDate, now)}` : null,
+    m.notes ? lowerFirst(m.notes) : null,
   ]
     .filter(Boolean)
-    .join('; ');
+    .join(', ');
   const who = m.name ? `${m.name} (${m.relation})` : m.relation;
-  return extra ? `${who}: ${extra}` : who;
+  return extra ? `${who}, ${extra}` : who;
 }
 
 /**
  * Testo della scheda per il prefisso stabile della sessione (cambia solo quando cambia la scheda; l'età al più
  * una volta al giorno). Vuoto se non c'è ancora nulla.
  */
-export function renderProfile(profile: UserProfile, now = new Date()): string {
+export function renderProfile(
+  profile: UserProfile,
+  now = new Date(),
+  audience: 'agent' | 'user' = 'agent',
+): string {
   const lines: string[] = [];
   if (profile.fullName || profile.preferredName) {
     const name = profile.fullName ? `Nome: ${profile.fullName}` : 'Nome: non ancora noto';
-    lines.push(
-      profile.preferredName
-        ? `${name}; vuole essere chiamato «${profile.preferredName}»: usa questo nome quando ti rivolgi a lui o lei`
-        : name,
-    );
+    const call = profile.preferredName
+      ? audience === 'agent'
+        ? `; vuole essere chiamato «${profile.preferredName}»: usa questo nome quando ti rivolgi a questa persona`
+        : ` (ti chiamo «${profile.preferredName}»)`
+      : '';
+    lines.push(`${name}${call}`);
   }
-  if (profile.birthDate) lines.push(`Nato/a il ${describeBirthDate(profile.birthDate, now)}`);
+  if (profile.birthDate)
+    lines.push(`${bornWord(profile.gender)} il ${describeBirthDate(profile.birthDate, now)}`);
   if (profile.gender) lines.push(`Genere: ${profile.gender}`);
   if (profile.city) lines.push(`Vive a: ${profile.city}`);
   if (profile.occupation) lines.push(`Lavoro: ${profile.occupation}`);
   if (profile.family.length)
     lines.push(`Famiglia: ${profile.family.map((m) => describeMember(m, now)).join('; ')}`);
   if (!lines.length) return '';
+  if (audience === 'user') return lines.map((l) => `- ${l}`).join('\n');
   return [
     'Scheda dell’utente (dati anagrafici: in caso di contrasto prevalgono sulle memorie):',
     ...lines.map((l) => `- ${l}`),
@@ -387,6 +418,8 @@ export function describeChange(c: ProfileChange): string {
     c.field === 'family' ? 'famiglia' : (PROFILE_LABELS[c.field as ProfileField] ?? c.field);
   const show = (v: string | null) =>
     v && c.field === 'birthDate' ? describeBirthDate(v) : (v ?? '');
+  if (c.conflict)
+    return `${label}: in chat ha detto «${show(c.after)}», ma nella scheda c'è «${show(c.before)}» scritto da lui nell'app`;
   if (c.before && c.after) return `${label}: ${show(c.before)} → ${show(c.after)}`;
   if (c.after) return `${label}: ${show(c.after)}`;
   return `${label}: tolto ${show(c.before)}`;
@@ -409,6 +442,8 @@ export interface ProfileStore {
     changes: readonly ProfileChange[],
     source: ProfileSource,
   ): Promise<void>;
+  /** Dati detti in chat che contrastano con quelli scritti dall'utente: solo un avviso, la scheda non cambia. */
+  recordConflicts(userId: string, conflicts: readonly ProfileChange[]): Promise<void>;
   /** Cambiamenti emersi in chat non ancora comunicati all'utente. */
   pendingNotices(userId: string, limit?: number): Promise<ProfileNotice[]>;
   markNotified(userId: string, ids: readonly string[]): Promise<void>;
@@ -441,6 +476,15 @@ export function createProfileStore(pool: Pool): ProfileStore {
           [userId, JSON.stringify(changes), source],
         );
       });
+    },
+    async recordConflicts(userId, conflicts) {
+      if (!conflicts.length) return;
+      await withUser(pool, userId, (c) =>
+        c.query(
+          `INSERT INTO user_profile_revisions (user_id, changes, source) VALUES ($1, $2, 'conversation')`,
+          [userId, JSON.stringify(conflicts)],
+        ),
+      );
     },
     async pendingNotices(userId, limit = 5) {
       return withUser(pool, userId, async (c) => {
@@ -498,6 +542,16 @@ export function memoryProfileStore(): ProfileStore & {
         id: String(revisions.length + 1),
       });
     },
+    async recordConflicts(userId, conflicts) {
+      if (!conflicts.length) return;
+      revisions.push({
+        userId,
+        changes: conflicts,
+        source: 'conversation',
+        notified: false,
+        id: String(revisions.length + 1),
+      });
+    },
     async pendingNotices(userId, limit = 5) {
       return revisions
         .filter((r) => r.userId === userId && !r.notified)
@@ -512,7 +566,17 @@ export function memoryProfileStore(): ProfileStore & {
 
 /** Avvisi dei cambiamenti emersi in chat, da riferire una volta, in breve, al turno successivo. */
 export function formatProfileNotices(notices: readonly ProfileNotice[]): string {
-  const lines = notices.flatMap((n) => n.changes.map((c) => `- ${describeChange(c)}`));
-  if (!lines.length) return '';
-  return `Ho aggiornato la scheda dell'utente con quello che ha detto (diglielo in una riga, alla prima occasione, e che può correggerla in Impostazioni › La tua scheda):\n${lines.join('\n')}`;
+  const all = notices.flatMap((n) => n.changes);
+  const applied = all.filter((c) => !c.conflict).map((c) => `- ${describeChange(c)}`);
+  const asked = all.filter((c) => c.conflict).map((c) => `- ${describeChange(c)}`);
+  const parts: string[] = [];
+  if (applied.length)
+    parts.push(
+      `Ho aggiornato la scheda dell'utente con quello che ha detto (diglielo in una riga, alla prima occasione, e che può correggerla in Impostazioni › La tua scheda):\n${applied.join('\n')}`,
+    );
+  if (asked.length)
+    parts.push(
+      `Non ho cambiato la scheda perché quei dati li ha scritti l'utente nell'app: chiedigli in una riga se vuole aggiornarla lui in Impostazioni › La tua scheda (non dire di averla aggiornata):\n${asked.join('\n')}`,
+    );
+  return parts.join('\n\n');
 }

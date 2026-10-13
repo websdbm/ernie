@@ -314,12 +314,13 @@ export async function consolidateThread(
   if (deps.profiles && extraction.profile) {
     try {
       const current = await deps.profiles.get(userId);
-      const { profile, changes } = mergeProfile(current, extraction.profile, {
+      const { profile, changes, conflicts } = mergeProfile(current, extraction.profile, {
         source: 'conversation',
         at: turnDate,
         ...(extraction.profile.evidence ? { quote: extraction.profile.evidence } : {}),
       });
       await deps.profiles.save(userId, profile, changes, 'conversation');
+      await deps.profiles.recordConflicts(userId, conflicts);
       profileChanges = changes.length;
     } catch (err) {
       deps.logger.warn(

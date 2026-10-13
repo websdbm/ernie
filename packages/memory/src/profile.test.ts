@@ -70,6 +70,13 @@ describe('scheda anagrafica: fusione', () => {
     const again = mergeProfile(edited, { city: 'Treviso', preferredName: 'Alessandro' }, chat);
     expect(again.profile.city).toBe('Venezia');
     expect(again.profile.preferredName).toBe('Alessandro');
+    // Il contrasto con un dato scritto nell'app non cambia la scheda: diventa una domanda per l'utente.
+    expect(again.conflicts).toEqual([
+      { field: 'city', before: 'Venezia', after: 'Treviso', conflict: true },
+    ]);
+    const notice = formatProfileNotices([{ id: '9', at, changes: again.conflicts }]);
+    expect(notice).toContain('Non ho cambiato la scheda');
+    expect(notice).toContain("in chat ha detto «Treviso», ma nella scheda c'è «Venezia»");
   });
 
   it('famiglia: riconosce per nome senza accenti, completa, non duplica; senza nome per relazione', () => {
@@ -129,7 +136,7 @@ describe('scheda anagrafica: fusione', () => {
     expect(profile.family).toHaveLength(1);
     expect(profile.family[0]?.meta.source).toBe('user');
     expect(changes.map((c) => [c.before, c.after])).toEqual([
-      ['Giorgio (figlio)', 'Giorgio (figlio): nato/a il 10 febbraio 2013 (13 anni)'],
+      ['Giorgio (figlio)', 'Giorgio (figlio), nato il 10 febbraio 2013 (13 anni)'],
       ['Laura (moglie)', null],
     ]);
   });
@@ -163,7 +170,11 @@ describe('scheda anagrafica: date e testo', () => {
     expect(text).toContain('prevalgono sulle memorie');
     expect(text).toContain('Nome: Alessandro Grassi; vuole essere chiamato «Ale»');
     expect(text).toContain('Nato/a il 3 maggio 1975 (51 anni)');
-    expect(text).toContain('Famiglia: Giorgio (figlio): nato/a il 10 febbraio 2013 (13 anni)');
+    expect(text).toContain('Famiglia: Giorgio (figlio), nato il 10 febbraio 2013 (13 anni)');
+    const forUser = renderProfile(p, at, 'user');
+    expect(forUser).toContain('- Nome: Alessandro Grassi (ti chiamo «Ale»)');
+    expect(forUser).not.toContain('usa questo nome');
+    expect(forUser).not.toContain('prevalgono');
     expect(
       formatProfileNotices([
         { id: '1', at, changes: [{ field: 'birthDate', before: null, after: '1975-05-03' }] },
