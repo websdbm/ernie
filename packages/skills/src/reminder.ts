@@ -84,8 +84,10 @@ export type ReminderPlan =
       repeat?: ReminderRepeat;
       /** «…e mandamelo per email»: canale email acceso su questo promemoria. */
       email?: boolean;
+      /** «Svegliami alle 6»: suona come una sveglia sul telefono, senza email. */
+      alarm?: boolean;
     }
-  | { op: 'ask_time'; text: string; who?: string; email?: boolean }
+  | { op: 'ask_time'; text: string; who?: string; email?: boolean; alarm?: boolean }
   | { op: 'set_email'; email: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
@@ -172,6 +174,47 @@ const NUM_WORDS: Record<string, number> = {
   sessanta: 60,
 };
 
+/** Ore in lettere dopo «alle», «per le», «verso le»: «per le sei» → «per le 6», «all'una» → «all'1». */
+const HOUR_WORDS: Record<string, number> = {
+  una: 1,
+  due: 2,
+  tre: 3,
+  quattro: 4,
+  cinque: 5,
+  sei: 6,
+  sette: 7,
+  otto: 8,
+  nove: 9,
+  dieci: 10,
+  undici: 11,
+  dodici: 12,
+  tredici: 13,
+  quattordici: 14,
+  quindici: 15,
+  sedici: 16,
+  diciassette: 17,
+  diciotto: 18,
+  diciannove: 19,
+  venti: 20,
+  ventuno: 21,
+  ventidue: 22,
+  ventitré: 23,
+  ventitre: 23,
+};
+const HOUR_WORDS_RE = Object.keys(HOUR_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
+
+export function normalizeHourWords(text: string): string {
+  return text.replace(
+    new RegExp(
+      `(?<pre>(?:^|\\s)(?:alle|all'|per\\s+le|verso\\s+le|entro\\s+le|le\\s+ore|ore))\\s*(?<w>${HOUR_WORDS_RE})(?=[\\s,.;!?]|$)`,
+      'giu',
+    ),
+    (_m, pre: string, w: string) => `${pre} ${HOUR_WORDS[w.toLowerCase()] ?? w}`,
+  );
+}
+
 interface Parsed {
   readonly text: string;
   readonly at: Date;
@@ -212,7 +255,7 @@ export function parseWhen(
   now: Date,
   tz: string,
 ): Parsed | { needTime: string } | null {
-  let text = ` ${rest.replace(/[‘’´`]/gu, "'")} `;
+  let text = ` ${normalizeHourWords(rest.replace(/[‘’´`]/gu, "'"))} `;
   const assumed: string[] = [];
   const today = localParts(now, tz);
   let [y, m, d] = [today.year, today.month, today.day];
@@ -410,6 +453,8 @@ export function parseReminderCommand(
   const saidAs = /usa\s+(?<e>\S+@\S+)\s+come\s+(?:(?:la\s+)?mia\s+)?(?:e-?mail|mail)/iu.exec(text);
   const stated = normalizeEmailAddress(said?.groups?.e ?? saidAs?.groups?.e);
   if (stated) return { op: 'set_email', email: stated };
+  const wake = parseWakeUp(text, now, tz);
+  if (wake) return wake;
   if (!/ricorda|promemoria/u.test(lower)) return null;
   if (
     /^(?:che|quali|quanti)\s+promemoria|^(?:i\s+miei|mostra(?:mi)?(?:\s+i)?|elenca(?:mi)?(?:\s+i)?|dimmi\s+i|vedi(?:\s+i)?)\s+(?:miei\s+)?promemoria|^promemoria$|^cosa\s+(?:mi\s+)?devi\s+ricordar/iu.test(
@@ -474,6 +519,59 @@ export function parseReminderCommand(
   };
 }
 
+/**
+ * Sveglia (richiesta dell'utente, 13 ott 2026): «svegliami domani alle 6», «senti, svegliami per le sei», «metti la
+ * sveglia alle 7 e mezza», «ogni giorno svegliami alle 7», «svegliami tra 20 minuti». Diventa un promemoria con la
+ * sveglia accesa e l'email spenta (suona sul telefono con Posticipa). Null se non è una richiesta di sveglia.
+ */
+export function parseWakeUp(text: string, now: Date, tz: string): ReminderPlan | null {
+  const trigger =
+    /(?:^|\s)(?:svegliami|risvegliami|(?:mi\s+)?(?:mett(?:i|ere|imi)|impost(?:a|i|are|ami)|punt(?:a|i|are|ami)|programm(?:a|i|are|ami))\s+(?:la\s+|una\s+)?sveglia|^sveglia(?=\s+(?:domani|dopodomani|alle|all'|per|tra|fra|ogni|oggi|stamattina|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)))(?=[\s,.;:!?]|$)/iu.exec(
+      text,
+    );
+  if (!trigger) return null;
+  let rest = `${text.slice(0, trigger.index)} ${text.slice(trigger.index + trigger[0].length)}`;
+  // Parole di contorno del parlato: «senti», «ehi Ernie», «per favore», «mi raccomando».
+  rest = ` ${rest.replace(/[,;]|:(?!\d)/g, ' ')} `
+    .replace(
+      /[\s,;:]+(?:senti|ascolta|ehi|ernie|ok|okay|allora|per\s+favore|grazie|mi\s+raccomando|dai)(?=[\s,;:.!?])/giu,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[,;:]+|[,;:]+$/g, '')
+    .trim();
+  const note = (residue: string) => {
+    const r = clean(residue.replace(/^[,;:\s]+|[,;:\s]+$/g, ''))
+      .replace(/^(?:perché|che|così)\s+/iu, '')
+      .trim();
+    return r ? `Sveglia: ${r.charAt(0).toUpperCase()}${r.slice(1)}` : 'Sveglia';
+  };
+  const normalized = normalizeHourWords(rest);
+  // Ricorrente: «ogni giorno», «nei giorni feriali», «ogni lunedì e giovedì».
+  const rep = parseRepeat(`${normalized} sveglia`);
+  if (rep)
+    return {
+      op: 'create',
+      text: note(rep.text.replace(/\s*sveglia$/iu, '')),
+      at: firstOccurrence(rep.repeat, now, tz),
+      assumed: rep.assumed,
+      repeat: rep.repeat,
+      alarm: true,
+    };
+  const parsed = parseWhen(normalized, now, tz);
+  if (parsed === null) return null;
+  if ('needTime' in parsed) return { op: 'ask_time', text: note(parsed.needTime), alarm: true };
+  return {
+    op: 'create',
+    text: note(parsed.text),
+    at: parsed.at,
+    // «Domani, perché oggi quell'ora è già passata» per una sveglia è ovvio: non lo si dice.
+    assumed: parsed.assumed.filter((a) => !a.startsWith('domani')),
+    alarm: true,
+  };
+}
+
 /** Email valida in minuscolo (dalla frase dell'utente), altrimenti undefined. */
 export function normalizeEmailAddress(v: string | null | undefined): string | undefined {
   const t = (v ?? '')
@@ -495,7 +593,13 @@ export function reminderFollowUp(
   now = new Date(),
   tz = 'Europe/Rome',
 ): ReminderPlan | null {
-  const a = awaiting as { kind?: unknown; text?: unknown; who?: unknown; email?: unknown } | null;
+  const a = awaiting as {
+    kind?: unknown;
+    text?: unknown;
+    who?: unknown;
+    email?: unknown;
+    alarm?: unknown;
+  } | null;
   // Risposta a «qual è la tua email?»: basta che nel messaggio ci sia un indirizzo valido.
   if (a?.kind === 'email') {
     const found = /\S+@\S+/u.exec(input);
@@ -507,7 +611,7 @@ export function reminderFollowUp(
     .replace(/[‘’´`]/gu, "'")
     .replace(/[.!?]+$/gu, '')
     .trim();
-  if (!t || t.split(/\s+/).length > 8 || /ricorda|promemoria/iu.test(t)) return null;
+  if (!t || t.split(/\s+/).length > 8 || /ricorda|promemoria|svegli/iu.test(t)) return null;
   const parsed = parseWhen(t, now, tz);
   if (!parsed || 'needTime' in parsed) return null;
   const residue = ` ${parsed.text.replace(/[,;:]+/gu, ' ')} `
@@ -525,6 +629,7 @@ export function reminderFollowUp(
     assumed: parsed.assumed,
     ...(typeof a.who === 'string' && a.who ? { who: a.who } : {}),
     ...(a.email === true ? { email: true } : {}),
+    ...(a.alarm === true ? { alarm: true } : {}),
   };
 }
 
@@ -586,11 +691,12 @@ export function createReminderSkill(
     kind: 'deterministic',
     category: 'reminders',
     description:
-      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
+      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; sveglie («svegliami domani alle 6», suonano sul telefono); anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
     examples: [
       'ricordami di uscire alle 17',
       'ricordami domani alle 9 di chiamare il dentista',
       'tra 20 minuti ricordami di spegnere il forno',
+      'svegliami domani alle 6',
       'ricorda a Giorgio di chiamarmi domani alle 17',
       'che promemoria ho?',
     ],
@@ -606,7 +712,9 @@ export function createReminderSkill(
           };
         case 'ask_time':
           return {
-            text: `A che ora ${p.who ? `lo ricordo a ${p.who}` : 'te lo ricordo'}? Il promemoria è «${tidyReminderText(p.text)}». Dimmi per esempio «alle 17», «domani alle 9» o «tra 30 minuti».`,
+            text: p.alarm
+              ? 'A che ora ti sveglio? Dimmi per esempio «alle 6», «domani alle 7 e mezza» o «tra 20 minuti».'
+              : `A che ora ${p.who ? `lo ricordo a ${p.who}` : 'te lo ricordo'}? Il promemoria è «${tidyReminderText(p.text)}». Dimmi per esempio «alle 17», «domani alle 9» o «tra 30 minuti».`,
             actions: [],
             // Il messaggio successivo («alle 9») completa questo promemoria.
             awaiting: {
@@ -614,6 +722,7 @@ export function createReminderSkill(
               text: p.text,
               ...(p.who ? { who: p.who } : {}),
               ...(p.email ? { email: true } : {}),
+              ...(p.alarm ? { alarm: true } : {}),
             },
           };
         case 'create': {
@@ -627,7 +736,12 @@ export function createReminderSkill(
               timezone,
               ...(p.who ? { forLabel: p.who } : {}),
               ...(p.repeat ? { repeat: p.repeat } : {}),
-              ...(p.email ? { channels: { email: true } } : {}),
+              // Sveglia: suona sul telefono e niente email, anche se le email dei promemoria sono accese.
+              ...(p.alarm
+                ? { channels: { alarm: true, email: false } }
+                : p.email
+                  ? { channels: { email: true } }
+                  : {}),
             });
           } catch (err) {
             if (err instanceof UnknownPersonError)
@@ -641,6 +755,17 @@ export function createReminderSkill(
           const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
           const what = lowerFirst(r.text);
           let reply: SkillReply;
+          if (p.alarm) {
+            const why = r.text.startsWith('Sveglia: ') ? ` (${lowerFirst(r.text.slice(9))})` : '';
+            const when = r.repeat
+              ? `${repeatLabel(r.repeat)}, la prima volta ${formatWhen(r.at, timezone)}`
+              : formatWhen(r.at, timezone);
+            return {
+              text: `⏰ Sveglia ${when}${why}.${note} Suona sul telefono come una sveglia, con Posticipa; niente email.`,
+              actions: [`create:${r.id}`],
+              blocks: [toRemindersBlock([r], 'Sveglia')],
+            };
+          }
           if (r.repeat) {
             const label = repeatLabel(r.repeat);
             const first = `La prima volta ${formatWhen(r.at, timezone)}.`;

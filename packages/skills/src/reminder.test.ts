@@ -360,3 +360,80 @@ describe('promemoria: email nella scheda', () => {
     expect(changed.text).toContain('ho sostituito ale@example.com con nuova@example.com');
   });
 });
+
+describe('sveglia: promemoria che suona sul telefono, senza email', () => {
+  // Martedì 13 ottobre 2026, 22:44 a Roma (come nello screenshot dell'utente).
+  const LATE = zonedToUtc(TZ, 2026, 10, 13, 22, 44);
+
+  it('«Senti domani, svegliami per le sei» → domani alle 6, sveglia accesa', () => {
+    const p = parseReminderCommand('Senti domani, svegliami per le sei.', LATE, TZ);
+    expect(p).toMatchObject({ op: 'create', text: 'Sveglia', alarm: true });
+    if (p?.op !== 'create') throw new Error('piano');
+    expect(local(p.at)).toBe('2026-10-14 06:00');
+  });
+
+  it('riconosce le forme comuni e capisce le ore in lettere', () => {
+    const at = (t: string) => {
+      const p = parseReminderCommand(t, LATE, TZ);
+      return p?.op === 'create' ? `${local(p.at)}${p.alarm ? ' ⏰' : ''}` : p?.op;
+    };
+    expect(at('svegliami alle 6')).toBe('2026-10-14 06:00 ⏰');
+    expect(at('metti la sveglia alle 7 e mezza')).toBe('2026-10-14 07:30 ⏰');
+    expect(at('mi imposti una sveglia per le sette')).toBe('2026-10-14 07:00 ⏰');
+    expect(at('sveglia domani alle 5:45')).toBe('2026-10-14 05:45 ⏰');
+    expect(at('svegliami tra 20 minuti')).toBe('2026-10-13 23:04 ⏰');
+    expect(at('svegliami')).toBe('ask_time');
+    // «sveglia» come nome in altre frasi non è una richiesta di sveglia.
+    expect(parseReminderCommand('la sveglia non ha suonato', LATE, TZ)).toBeNull();
+    // Le ore in lettere valgono anche per i promemoria.
+    expect(at('ricordami domani alle otto di chiamare Luca')).toBe('2026-10-14 08:00');
+  });
+
+  it('sveglia ricorrente e motivo tenuto nel titolo', () => {
+    const r = parseReminderCommand('ogni giorno svegliami alle 7', LATE, TZ);
+    expect(r).toMatchObject({
+      op: 'create',
+      alarm: true,
+      repeat: { kind: 'daily', hour: 7, minute: 0 },
+    });
+    const why = parseReminderCommand('svegliami alle 5 che devo prendere il treno', LATE, TZ);
+    expect(why).toMatchObject({
+      op: 'create',
+      text: 'Sveglia: Devo prendere il treno',
+      alarm: true,
+    });
+  });
+
+  it('la skill crea il promemoria con sveglia accesa ed email spenta, e lo dice', async () => {
+    const create = vi.fn(async (_u: string, input: { text: string; at: Date }) => ({
+      id: '00000000-0000-4000-8000-000000000009',
+      text: input.text,
+      at: input.at,
+      status: 'scheduled' as const,
+    }));
+    const store: ReminderStore = {
+      create,
+      list: vi.fn(async () => []),
+      remove: vi.fn(async () => false),
+      update: vi.fn(async () => null),
+    };
+    const skill = createReminderSkill(store, TZ);
+    const plan = parseReminderCommand('svegliami domani alle 6', LATE, TZ);
+    const reply = await skill.run(plan, { userId: 'u', sessionId: null, requestId: 'r' });
+    expect(create.mock.calls[0]?.[1]).toMatchObject({ channels: { alarm: true, email: false } });
+    expect(reply.text).toMatch(
+      /^⏰ Sveglia domani alle 06:00\. Suona sul telefono come una sveglia/,
+    );
+    expect(reply.blocks?.[0]).toMatchObject({ kind: 'reminders', title: 'Sveglia' });
+  });
+
+  it('«a che ora ti sveglio?» → la risposta «alle 6» completa la sveglia', () => {
+    const p = reminderFollowUp(
+      { kind: 'time', text: 'Sveglia', alarm: true },
+      'alle sei',
+      LATE,
+      TZ,
+    );
+    expect(p).toMatchObject({ op: 'create', text: 'Sveglia', alarm: true });
+  });
+});

@@ -195,6 +195,10 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           'Come funziona la tua memoria: dopo ogni scambio quello che la persona racconta di sé viene annotato da solo (dati anagrafici e famiglia nella sua scheda, il resto tra i ricordi) e lo ritrovi nelle conversazioni successive. Non dire che non puoi ricordare o che ti manca uno strumento per salvarlo; se ti chiede cosa sai, rispondi da qui. Può vedere e correggere la scheda in Impostazioni › La tua scheda.';
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
       }
+      // Il modello diceva «non ho uno strumento per la sveglia»: promemoria e sveglie passano dalla skill Ricordami.
+      const remindersNote =
+        'Promemoria e sveglie: li imposta da sola la skill Ricordami quando la persona dice «ricordami di … alle …» o «svegliami domani alle 6» (la sveglia suona sul telefono, con Posticipa, senza email). Se una richiesta del genere arriva a te, non dire che non puoi: chiedi di ripeterla così, con giorno e ora.';
+      memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${remindersNote}` : remindersNote;
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];
