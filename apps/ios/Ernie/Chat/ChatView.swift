@@ -312,11 +312,22 @@ struct NotificationCardView: View {
         }
     }
 
+    /// Il promemoria scattato ha corpo «⏰ Promemoria: X» e titolo «Promemoria: X»: una riga basta.
+    private var bodyRepeatsTitle: Bool {
+        let norm = { (s: String) in
+            s.drop { !$0.isLetter }.lowercased().trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        }
+        return norm(card.body) == norm(card.title)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(card.title, systemImage: icon).font(.subheadline.weight(.semibold))
-            MarkdownText(text: expanded ? card.body : String(card.body.prefix(420)) + (card.body.count > 420 ? "…" : ""), font: .callout)
-                .onTapGesture { expanded.toggle() }
+            Label(card.title, systemImage: bodyRepeatsTitle && card.title.hasPrefix("Promemoria") ? "alarm" : icon)
+                .font(.subheadline.weight(.semibold))
+            if !bodyRepeatsTitle {
+                MarkdownText(text: expanded ? card.body : String(card.body.prefix(420)) + (card.body.count > 420 ? "…" : ""), font: .callout)
+                    .onTapGesture { expanded.toggle() }
+            }
             ForEach(card.pendingActions) { action in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(action.summary).font(.caption)

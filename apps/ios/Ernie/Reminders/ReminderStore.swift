@@ -112,11 +112,17 @@ final class ReminderStore {
         // Suonano solo i miei: quelli messi a un familiare suonano sul suo telefono.
         let mine = Set(items.filter { $0.forLabel == nil }.map(\.id))
         let own = future.filter { mine.contains($0.id) }
-        Task {
+        // In fila: all'avvio arrivano insieme la rilettura e i blocchi della chat; in parallelo chiederebbero
+        // il permesso più volte e potrebbero programmare due volte la stessa sveglia.
+        let previous = pendingSync
+        pendingSync = Task {
+            await previous?.value
             let alarmed = await ReminderAlarms.sync(own)
             await Self.scheduleLocalNotifications(own.filter { !alarmed.contains($0.id) })
         }
     }
+
+    private var pendingSync: Task<Void, Never>?
 
     private static func scheduleLocalNotifications(_ items: [ReminderSnapshot.Item]) async {
         let center = UNUserNotificationCenter.current()
