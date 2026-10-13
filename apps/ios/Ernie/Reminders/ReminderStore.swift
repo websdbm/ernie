@@ -92,6 +92,21 @@ final class ReminderStore {
         }
     }
 
+    /// Canali di un promemoria (sveglia, email): si passa solo il valore cambiato; il server risponde con il promemoria.
+    func setChannels(_ r: ReminderItem, email: Bool?, alarm: Bool?) async -> Bool {
+        guard let api else { return false }
+        do {
+            let updated = try await api.updateReminderChannels(id: resolve(r.id), email: email, alarm: alarm)
+            if let i = items.firstIndex(where: { $0.id == updated.id }) { items[i] = updated } else { items.append(updated) }
+            lastError = nil
+            sync()
+            return true
+        } catch {
+            lastError = AppModel.describe(error)
+            return false
+        }
+    }
+
     static func date(_ iso: String) -> Date? {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -104,7 +119,18 @@ final class ReminderStore {
     func sync() {
         let future = items.compactMap { r -> ReminderSnapshot.Item? in
             guard let at = Self.date(r.at), at > .now else { return nil }
-            return ReminderSnapshot.Item(id: r.id, text: r.text, at: at, from: r.fromLabel)
+            // Ricorrenti settimanali e giornalieri: giorni, ora e minuti per la sveglia e la notifica ripetute.
+            let rep = r.repeatInfo
+            let days: [Int]? = switch rep?.kind {
+            case "weekly": rep?.weekdays
+            case "daily": Array(0...6)
+            default: nil
+            }
+            return ReminderSnapshot.Item(
+                id: r.id, text: r.text, at: at, from: r.fromLabel,
+                alarm: r.channels?.alarm,
+                weekdays: days, hour: days == nil ? nil : rep?.hour, minute: days == nil ? nil : rep?.minute
+            )
         }
         .sorted { $0.at < $1.at }
         ReminderSnapshot(items: future, updatedAt: .now).save()
@@ -117,6 +143,7 @@ final class ReminderStore {
         let previous = pendingSync
         pendingSync = Task {
             await previous?.value
+            // Le sveglie scelgono da sole: canale del promemoria, altrimenti l'opzione generale.
             let alarmed = await ReminderAlarms.sync(own)
             await Self.scheduleLocalNotifications(own.filter { !alarmed.contains($0.id) })
         }
@@ -127,19 +154,34 @@ final class ReminderStore {
     private static func scheduleLocalNotifications(_ items: [ReminderSnapshot.Item]) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("reminder-") }
-        let wanted = Set(items.map { "reminder-\($0.id)" })
+        // Una richiesta per le una tantum; per i ricorrenti una richiesta ripetuta per ogni giorno della settimana.
+        var requests: [(id: String, item: ReminderSnapshot.Item, comps: DateComponents, repeats: Bool)] = []
+        for item in items {
+            if let days = item.weekdays, let hour = item.hour, let minute = item.minute {
+                for d in days {
+                    var c = DateComponents()
+                    c.weekday = d + 1 // Calendar: 1 = domenica
+                    c.hour = hour
+                    c.minute = minute
+                    requests.append(("reminder-\(item.id)-w\(d)", item, c, true))
+                }
+            } else {
+                let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.at)
+                requests.append(("reminder-\(item.id)", item, c, false))
+            }
+        }
+        let wanted = Set(requests.map(\.id))
         let stale = pending.filter { !wanted.contains($0) }
         if !stale.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stale) }
-        for item in items where !pending.contains("reminder-\(item.id)") {
+        for r in requests where !pending.contains(r.id) {
             let content = UNMutableNotificationContent()
-            content.title = item.from.map { "Promemoria da \($0)" } ?? "Promemoria"
-            content.body = item.text
+            content.title = r.item.from.map { "Promemoria da \($0)" } ?? "Promemoria"
+            content.body = r.item.text
             content.sound = .default
             content.threadIdentifier = "reminders"
             content.interruptionLevel = .timeSensitive
-            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: item.at)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            try? await center.add(UNNotificationRequest(identifier: "reminder-\(item.id)", content: content, trigger: trigger))
+            let trigger = UNCalendarNotificationTrigger(dateMatching: r.comps, repeats: r.repeats)
+            try? await center.add(UNNotificationRequest(identifier: r.id, content: content, trigger: trigger))
         }
     }
 }

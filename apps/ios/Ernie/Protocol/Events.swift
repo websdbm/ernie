@@ -362,12 +362,33 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     /// Famiglia (v1.7): messo da me a «Giorgio» / messo a me da «papà».
     var forLabel: String? = nil
     var fromLabel: String? = nil
+    /// v1.11: canali (email, sveglia) del singolo promemoria; assente = impostazione generale.
+    var channels: ReminderChannels? = nil
+    /// v1.11: ricorrenza («ogni venerdì alle 9»); in quel caso `at` è la prossima occorrenza.
+    var repeatInfo: ReminderRepeatInfo? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, text, at, status
+        case id, text, at, status, channels
         case forLabel = "for"
         case fromLabel = "from"
+        case repeatInfo = "repeat"
     }
+}
+
+/// Canali di un promemoria: `nil` = impostazione generale.
+struct ReminderChannels: Codable, Sendable, Equatable {
+    var email: Bool?
+    var alarm: Bool?
+}
+
+/// Ricorrenza di un promemoria (v1.11). `weekdays`: 0 = domenica … 6 = sabato.
+struct ReminderRepeatInfo: Codable, Sendable, Equatable {
+    var kind: String
+    var weekdays: [Int]?
+    var day: Int?
+    var hour: Int
+    var minute: Int
+    var label: String
 }
 
 struct RemindersBlock: Codable, Sendable, Equatable {

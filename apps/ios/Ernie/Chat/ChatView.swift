@@ -5,6 +5,7 @@ struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var showBrain = false
+    @State private var showReminders = false
     @State private var showSkills = false
     @State private var debugIcons = false
     @State private var draft = ""
@@ -48,6 +49,7 @@ struct ChatView: View {
                     Menu {
                         Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
                         Button("Second brain", systemImage: "brain.head.profile") { showBrain = true }
+                        Button("Promemoria", systemImage: "alarm") { showReminders = true }
                         Button(model.settings.avatarHidden ? "Mostra avatar" : "Nascondi avatar", systemImage: model.settings.avatarHidden ? "eye" : "eye.slash") {
                             withAnimation(.spring(duration: 0.35)) { model.settings.avatarHidden.toggle() }
                             model.settings.save()
@@ -70,6 +72,7 @@ struct ChatView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showBrain) { SecondBrainView() }
+            .sheet(isPresented: $showReminders) { RemindersView() }
             .sheet(isPresented: $showSkills) { SkillsSheet() }
             #if DEBUG
             .sheet(isPresented: $debugIcons) { IconGalleryView() }

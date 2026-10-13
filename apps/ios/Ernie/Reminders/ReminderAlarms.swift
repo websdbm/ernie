@@ -17,21 +17,24 @@ enum ReminderAlarms {
     static var authorization: AlarmManager.AuthorizationState { AlarmManager.shared.authorizationState }
 
     /// Allinea le sveglie ai promemoria futuri; restituisce gli id coperti da una sveglia (niente notifica doppia).
+    /// Ogni promemoria può scegliere (v1.11): `alarm == true` suona anche con l'opzione generale spenta,
+    /// `alarm == false` resta una notifica anche con l'opzione accesa.
     static func sync(_ items: [ReminderSnapshot.Item]) async -> Set<String> {
         let manager = AlarmManager.shared
         let existing = (try? manager.alarms) ?? []
-        guard enabled else {
+        let ringing = items.filter { $0.alarm ?? enabled }
+        if ringing.isEmpty {
             for alarm in existing where alarm.state == .scheduled { try? manager.cancel(id: alarm.id) }
             return []
         }
         var state = manager.authorizationState
-        if state == .notDetermined, !items.isEmpty {
+        if state == .notDetermined {
             state = (try? await manager.requestAuthorization()) ?? .denied
         }
         guard state == .authorized else { return [] }
 
         var wanted: [UUID: ReminderSnapshot.Item] = [:]
-        for item in items { if let id = UUID(uuidString: item.id) { wanted[id] = item } }
+        for item in ringing { if let id = UUID(uuidString: item.id) { wanted[id] = item } }
         // Solo quelle ancora in attesa: una sveglia che sta suonando o è posticipata non si tocca.
         for alarm in existing where alarm.state == .scheduled && wanted[alarm.id] == nil {
             try? manager.cancel(id: alarm.id)
@@ -76,8 +79,19 @@ enum ReminderAlarms {
         )
         return AlarmManager.AlarmConfiguration(
             countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(ReminderAlarmConfig.snoozeMinutes * 60)),
-            schedule: .fixed(item.at),
+            schedule: schedule(for: item),
             attributes: attributes
         )
+    }
+
+    /// Ricorrenti settimanali e giornalieri: sveglia ricorrente di sistema (suona ogni settimana anche senza
+    /// aprire l'app); gli altri: l'istante preciso.
+    nonisolated static func schedule(for item: ReminderSnapshot.Item) -> Alarm.Schedule {
+        guard let days = item.weekdays, !days.isEmpty, let hour = item.hour, let minute = item.minute else {
+            return .fixed(item.at)
+        }
+        let names: [Locale.Weekday] = [.sunday, .monday, .tuesday, .wednesday, .thursday, .friday, .saturday]
+        let weekdays = days.compactMap { $0 >= 0 && $0 < names.count ? names[$0] : nil }
+        return .relative(.init(time: .init(hour: hour, minute: minute), repeats: .weekly(weekdays)))
     }
 }

@@ -39,9 +39,6 @@ struct RemindersCard: View {
     let block: RemindersBlock
     @Environment(AppModel.self) private var model
     @State private var editing: String?
-    @State private var draftText = ""
-    @State private var draftDate = Date.now
-    @State private var saving = false
 
     /// Righe aggiornate: un promemoria modificato ha un id nuovo, la scheda lo segue.
     private var rows: [ReminderItem] {
@@ -78,7 +75,7 @@ struct RemindersCard: View {
                                 Spacer(minLength: 0)
                                 if r.status == "scheduled" {
                                     Button {
-                                        if editing == r.id { editing = nil } else { startEditing(r) }
+                                        editing = editing == r.id ? nil : r.id
                                     } label: {
                                         Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle").foregroundStyle(Color.accentColor)
                                     }
@@ -88,24 +85,18 @@ struct RemindersCard: View {
                                         .font(.caption).buttonStyle(.bordered).controlSize(.mini)
                                 }
                             }
+                            if r.status == "scheduled" {
+                                if let rep = r.repeatInfo {
+                                    Label(rep.label, systemImage: "repeat").font(.caption).foregroundStyle(.secondary)
+                                }
+                                ReminderChannelChips(item: r)
+                            }
                         }
                     }
                     if editing == r.id {
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField("Cosa ti ricordo", text: $draftText)
-                                .textFieldStyle(.roundedBorder)
-                            DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
-                                .datePickerStyle(.compact)
-                                .environment(\.locale, Locale(identifier: "it_IT"))
-                            HStack {
-                                Button("Salva") { Task { await save(r) } }
-                                    .buttonStyle(.borderedProminent).controlSize(.small)
-                                    .disabled(saving || draftText.trimmingCharacters(in: .whitespaces).isEmpty)
-                                Button("Lascia così") { editing = nil }.controlSize(.small)
-                            }
-                        }
-                        .padding(10)
-                        .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                        ReminderEditForm(item: r) { editing = nil }
+                            .padding(10)
+                            .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
             }
@@ -118,22 +109,6 @@ struct RemindersCard: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .animation(.easeInOut(duration: 0.15), value: editing)
         .task { await model.reminders.refresh() }
-    }
-
-    private func startEditing(_ r: ReminderItem) {
-        draftText = r.text
-        draftDate = ReminderStore.date(r.at) ?? .now.addingTimeInterval(3600)
-        editing = r.id
-    }
-
-    private func save(_ r: ReminderItem) async {
-        saving = true
-        defer { saving = false }
-        let text = draftText.trimmingCharacters(in: .whitespaces)
-        let changedText = text != r.text ? text : nil
-        let changedDate = abs((ReminderStore.date(r.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
-        if changedText == nil && changedDate == nil { editing = nil; return }
-        if await model.reminders.update(r, text: changedText, at: changedDate) { editing = nil }
     }
 
     /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).
@@ -151,6 +126,93 @@ struct RemindersCard: View {
         if cal.isDateInToday(at) { return (at <= .now ? "oggi alle " : "oggi alle ") + time + (at <= .now ? " · scattato" : "") }
         if cal.isDateInTomorrow(at) { return "domani alle \(time)" }
         return at.formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute())
+    }
+}
+
+/// Modifica di un promemoria (testo, giorno e ora): usata dalla scheda in chat e dalla schermata Promemoria.
+struct ReminderEditForm: View {
+    let item: ReminderItem
+    var onDone: () -> Void
+    @Environment(AppModel.self) private var model
+    @State private var draftText: String
+    @State private var draftDate: Date
+    @State private var saving = false
+
+    init(item: ReminderItem, onDone: @escaping () -> Void) {
+        self.item = item
+        self.onDone = onDone
+        _draftText = State(initialValue: item.text)
+        _draftDate = State(initialValue: ReminderStore.date(item.at) ?? .now.addingTimeInterval(3600))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Cosa ti ricordo", text: $draftText)
+                .textFieldStyle(.roundedBorder)
+            DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact)
+                .environment(\.locale, Locale(identifier: "it_IT"))
+            HStack {
+                Button("Salva") { Task { await save() } }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .disabled(saving || draftText.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Lascia così") { onDone() }.controlSize(.small)
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        let text = draftText.trimmingCharacters(in: .whitespaces)
+        let changedText = text != item.text ? text : nil
+        let changedDate = abs((ReminderStore.date(item.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
+        if changedText == nil && changedDate == nil { onDone(); return }
+        if await model.reminders.update(item, text: changedText, at: changedDate) { onDone() }
+    }
+}
+
+/// Interruttori «Sveglia» ed «Email» di un promemoria in programma (valori dallo store, invio solo del campo cambiato).
+struct ReminderChannelChips: View {
+    let item: ReminderItem
+    @Environment(AppModel.self) private var model
+
+    /// Predefinito: l'impostazione generale della sveglia.
+    private var alarmOn: Bool { item.channels?.alarm ?? ReminderAlarms.enabled }
+    private var emailOn: Bool { item.channels?.email ?? false }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Ai promemoria messi a un familiare la sveglia non serve: suona sul suo telefono.
+            if item.forLabel == nil {
+                ReminderChannelChip(title: "Sveglia", symbol: "alarm.fill", on: alarmOn) {
+                    Task { _ = await model.reminders.setChannels(item, email: nil, alarm: !alarmOn) }
+                }
+            }
+            ReminderChannelChip(title: "Email", symbol: "envelope.fill", on: emailOn) {
+                Task { _ = await model.reminders.setChannels(item, email: !emailOn, alarm: nil) }
+            }
+        }
+    }
+}
+
+private struct ReminderChannelChip: View {
+    let title: String
+    let symbol: String
+    let on: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.caption)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(on ? Color.accentColor.opacity(0.18) : Color(.tertiarySystemFill), in: Capsule())
+                .foregroundStyle(on ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(on ? "attiva" : "spenta")
     }
 }
 

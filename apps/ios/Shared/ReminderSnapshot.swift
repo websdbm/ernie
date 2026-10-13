@@ -9,6 +9,13 @@ struct ReminderSnapshot: Codable, Sendable, Equatable {
         var at: Date
         /// Messo da un familiare («papà»): assente per i promemoria propri.
         var from: String? = nil
+        /// Sveglia scelta per questo promemoria (v1.11): nil = opzione generale «Promemoria come sveglia».
+        var alarm: Bool? = nil
+        /// Ricorrente settimanale o giornaliero (0 = domenica … 6 = sabato) con ora e minuti: la sveglia e la
+        /// notifica si ripetono da sole. I mensili restano sulla prossima occorrenza (`at`).
+        var weekdays: [Int]? = nil
+        var hour: Int? = nil
+        var minute: Int? = nil
     }
 
     var items: [Item]
