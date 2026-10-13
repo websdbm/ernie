@@ -30,6 +30,7 @@ import { formatFiredIntents, type IntentStore, type SkillRegistry } from '@ernie
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
+import { formatDeviceContext } from '../device-context.js';
 import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '../documents-flow.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
@@ -551,6 +552,9 @@ export class ClientConnection {
 
     // Contesto del turno (fuori dal prefisso): memorie pertinenti e, se Jev indica una skill guidata, la sua procedura.
     const contextBlocks: string[] = [];
+    // v1.10: ora locale e posizione del telefono (solo se l'utente ha dato il permesso per la posizione).
+    const deviceBlock = formatDeviceContext(event.payload.device);
+    if (deviceBlock) contextBlocks.push(deviceBlock);
     if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {
       try {
         const hits = await this.deps.memories.repo.search({

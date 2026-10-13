@@ -149,6 +149,8 @@ final class AppModel {
         store.connect()
         await inbox.refresh()
         await requestPushAuthorization()
+        // Ora e posizione per il contesto dei turni: il permesso si chiede una volta, dopo quello delle notifiche.
+        DeviceContextProvider.shared.start()
         #if DEBUG
         // Test automatici: invia un messaggio appena connesso (SIMCTL_CHILD_ERNIE_DEBUG_SEND="…").
         if let text = ProcessInfo.processInfo.environment["ERNIE_DEBUG_SEND"], !text.isEmpty {

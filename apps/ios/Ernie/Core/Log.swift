@@ -5,4 +5,5 @@ enum Log {
     static let chat = Logger(subsystem: "com.websdbm.ernie", category: "chat")
     static let speech = Logger(subsystem: "com.websdbm.ernie", category: "speech")
     static let push = Logger(subsystem: "com.websdbm.ernie", category: "push")
+    static let app = Logger(subsystem: "com.websdbm.ernie", category: "app")
 }

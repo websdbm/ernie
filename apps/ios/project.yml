@@ -44,6 +44,7 @@ targets:
         NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
         NSCameraUsageDescription: "Per scansionare documenti con la fotocamera: il testo viene letto sul telefono, l'immagine non viene conservata."
         NSPhotoLibraryAddUsageDescription: "Per salvare nella galleria gli schemi e i riassunti che esporti."
+        NSLocationWhenInUseUsageDescription: "Ernie usa la tua posizione approssimata, solo mentre usi l'app, per rispondere su meteo, luoghi vicini e orari senza chiederti dove sei."
         NSAlarmKitUsageDescription: "I promemoria suonano come una sveglia, anche con il telefono in silenzioso, e puoi posticiparli."
         NSSupportsLiveActivities: true
         NSLocalNetworkUsageDescription: "Per raggiungere il tuo server Ernie quando è sulla stessa rete Wi-Fi."

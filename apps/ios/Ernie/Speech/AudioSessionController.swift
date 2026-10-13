@@ -5,7 +5,10 @@ import AVFoundation
 enum AudioSessionController {
     static func activateForVoice() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+        // `.duckOthers` (che include la miscelazione): mentre Ernie ascolta o parla, musica, video e podcast si
+        // abbassano invece di interromperlo; prima la sessione non era miscelabile e qualunque app che partiva con
+        // il proprio audio fermava l'ascolto. Chiamate, Siri e sveglie interrompono comunque (regola di iOS).
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
         try session.setActive(true)
     }
 

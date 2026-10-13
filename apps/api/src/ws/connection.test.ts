@@ -168,9 +168,13 @@ const client = (sessionId: string) => {
           seq: seq.next(),
         }),
       ),
-    message: (text: string, correlationId = randomUUID()) =>
+    message: (text: string, correlationId = randomUUID(), extra: Record<string, unknown> = {}) =>
       JSON.stringify(
-        createEvent('user.message', { text }, { sessionId, correlationId, seq: seq.next() }),
+        createEvent(
+          'user.message',
+          { text, ...extra },
+          { sessionId, correlationId, seq: seq.next() },
+        ),
       ),
     cancel: (target: string, spokenThroughIndex?: number) =>
       JSON.stringify(
@@ -406,6 +410,67 @@ describe('ClientConnection', () => {
     await conn.handleRaw(c.message('altro'));
     await tick();
     expect(contexts[2]).toBeUndefined();
+  });
+});
+
+describe('ClientConnection: contesto del telefono (v1.10)', () => {
+  it('ora locale e posizione arrivano al modello nel contesto del turno, non nel testo', async () => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const seen: Array<{ text: string; context?: string }> = [];
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          runTurn: async (input: TurnInput) => {
+            seen.push({
+              text: input.text,
+              ...(input.memoryContext ? { context: input.memoryContext } : {}),
+            });
+            await input.emit('assistant.started', { route: 'llm' });
+            await input.emit('assistant.text.completed', { text: 'ok' });
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+            return {
+              text: 'ok',
+              cancelled: false,
+              llmCalls: 1,
+              toolCalls: 0,
+              latencyMs: 1,
+              costUsd: 0,
+              loopDetected: false,
+            };
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(
+      c.message('che tempo fa qui?', randomUUID(), {
+        device: {
+          timezone: 'Europe/Rome',
+          location: {
+            latitude: 45.4064,
+            longitude: 11.8768,
+            accuracyM: 900,
+            place: 'Padova, Veneto, Italia',
+            at: new Date().toISOString(),
+          },
+        },
+      }),
+    );
+    await tick();
+    expect(seen[0]?.text).toBe('che tempo fa qui?');
+    expect(seen[0]?.context).toContain(
+      'Posizione attuale dal telefono: Padova, Veneto, Italia (45.41, 11.88',
+    );
+    expect(seen[0]?.context).toContain('fuso Europe/Rome');
+    // Senza permesso il telefono non manda nulla: nessun blocco.
+    await conn.handleRaw(c.message('ciao'));
+    await tick();
+    expect(seen[1]?.context ?? '').not.toContain('telefono');
   });
 });
 

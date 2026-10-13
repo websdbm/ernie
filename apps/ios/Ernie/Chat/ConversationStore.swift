@@ -160,7 +160,8 @@ final class ConversationStore {
             do {
                 let payload = UserMessagePayload(
                     text: out.text, inputMode: out.inputMode, locale: "it-IT",
-                    attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) }
+                    attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) },
+                    device: DeviceContextProvider.shared.context()
                 )
                 try await client.send(.userMessage(payload), correlationId: correlationId)
             } catch {

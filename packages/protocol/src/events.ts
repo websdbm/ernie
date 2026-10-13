@@ -64,6 +64,25 @@ export const SessionStart = event(
   }),
 );
 
+export const DeviceContext = z.object({
+  /** Fuso IANA del telefono (es. «Europe/Rome»). */
+  timezone: z.string().min(1).max(64).optional(),
+  /** Ora locale del telefono, ISO 8601 con scostamento. */
+  localTime: z.string().max(40).optional(),
+  location: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      accuracyM: z.number().min(0).max(1_000_000).optional(),
+      /** Luogo leggibile, es. «Padova, Veneto, Italia». */
+      place: z.string().max(160).optional(),
+      /** Quando è stata rilevata (ISO 8601). */
+      at: z.string().max(40).optional(),
+    })
+    .optional(),
+});
+export type DeviceContext = z.infer<typeof DeviceContext>;
+
 export const UserMessage = event(
   'user.message',
   z.object({
@@ -75,6 +94,11 @@ export const UserMessage = event(
       .array(z.object({ kind: z.literal('document'), id: z.uuid() }))
       .max(3)
       .optional(),
+    /**
+     * v1.10: contesto del telefono, solo con il permesso dell'utente per la posizione. Ora locale e fuso
+     * sempre; posizione approssimata (circa 1 km) con il nome del luogo letto sul telefono.
+     */
+    device: DeviceContext.optional(),
   }),
 );
 

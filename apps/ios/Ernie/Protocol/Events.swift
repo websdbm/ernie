@@ -30,6 +30,22 @@ struct UserMessagePayload: Codable, Sendable, Equatable {
     var locale: String?
     /// v1.3: documenti già caricati con `POST /v1/documents`.
     var attachments: [DocumentAttachment]?
+    /// v1.10: ora locale, fuso e (con permesso) posizione approssimata del telefono.
+    var device: DeviceContextPayload? = nil
+}
+
+struct DeviceContextPayload: Codable, Sendable, Equatable {
+    struct Location: Codable, Sendable, Equatable {
+        var latitude: Double
+        var longitude: Double
+        var accuracyM: Double?
+        var place: String?
+        var at: String?
+    }
+
+    var timezone: String?
+    var localTime: String?
+    var location: Location?
 }
 
 struct UserCancelPayload: Codable, Sendable, Equatable {

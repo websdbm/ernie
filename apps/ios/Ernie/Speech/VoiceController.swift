@@ -335,8 +335,13 @@ final class VoiceController {
             let typeRaw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let optionsRaw = n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let shouldResume = AVAudioSession.InterruptionOptions(rawValue: optionsRaw).contains(.shouldResume)
+            let reasonRaw = n.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
             Task { @MainActor [weak self] in
-                self?.handleInterruption(typeRaw.flatMap { AVAudioSession.InterruptionType(rawValue: $0) }, shouldResume: shouldResume)
+                self?.handleInterruption(
+                    typeRaw.flatMap { AVAudioSession.InterruptionType(rawValue: $0) },
+                    reason: reasonRaw.flatMap { AVAudioSession.InterruptionReason(rawValue: $0) },
+                    shouldResume: shouldResume
+                )
             }
         })
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
@@ -350,16 +355,23 @@ final class VoiceController {
         })
     }
 
-    private func handleInterruption(_ type: AVAudioSession.InterruptionType?, shouldResume: Bool) {
+    private func handleInterruption(_ type: AVAudioSession.InterruptionType?, reason: AVAudioSession.InterruptionReason?, shouldResume: Bool) {
         switch type {
         case .began:
-            lastAudioEvent = AudioEvent(description: "Audio interrotto (chiamata o altra app)", at: .now)
-            Log.speech.warning("interruzione audio iniziata")
+            let why: String = switch reason {
+            case .appWasSuspended: "l'app è passata in secondo piano"
+            case .builtInMicMuted: "il microfono è stato disattivato"
+            case .routeDisconnected: "il dispositivo audio si è scollegato"
+            default: "una chiamata, Siri o una sveglia"
+            }
+            lastAudioEvent = AudioEvent(description: "Audio interrotto: \(why)", at: .now)
+            Log.speech.warning("interruzione audio iniziata: \(why, privacy: .public)")
             let wasContinuous = continuous
             if speaker.isSpeaking { conversation.muteSpeech() }
             if phase == .listening || phase == .preparing {
                 cancelListening()
-                lastError = "Ascolto interrotto da una chiamata o da un'altra app."
+                // Tornando nell'app non serve un errore rosso: basta toccare di nuovo il microfono.
+                lastError = reason == .appWasSuspended ? nil : "Ascolto interrotto: \(why)."
             }
             // Resta segnato per riprendere a mani libere se il sistema lo consente.
             resumeAfterInterruption = wasContinuous

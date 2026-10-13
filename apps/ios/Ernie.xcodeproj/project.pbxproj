@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D938C458270FB5964436CBF8 /* BlockViews.swift */; };
 		022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */; };
+		0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
 		0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */; };
 		0F23035C5EE3AF3D3E2F004F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */; };
@@ -149,6 +150,7 @@
 		B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlineDiagram.swift; sourceTree = "<group>"; };
 		BB6A663AAF174530467149DD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
+		C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceContextProvider.swift; sourceTree = "<group>"; };
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStore.swift; sourceTree = "<group>"; };
@@ -339,6 +341,7 @@
 			children = (
 				88B910048AA5B7CF4CF88553 /* AppDelegate.swift */,
 				ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */,
+				C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */,
 				1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */,
 			);
 			path = App;
@@ -497,6 +500,7 @@
 				C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */,
 				25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */,
 				7C22E2BCE2575F83EA89E592 /* Credentials.swift in Sources */,
+				0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */,
 				A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */,
 				C325109281E152FF2237FE4E /* DocumentComposer.swift in Sources */,
 				57CF0DA18B43EAD53CA6D4E8 /* DocumentReader.swift in Sources */,

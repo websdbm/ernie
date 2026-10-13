@@ -3,7 +3,7 @@ import { createLogger } from '@ernie/observability';
 import type { EventType, PayloadInputOf } from '@ernie/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { CompanionAgent } from './agent.js';
-import { formatUserTurn, runTurn } from './turn.js';
+import { formatUserTurn, runTurn, turnContext } from './turn.js';
 
 function fakeCompanion(
   chunks: Array<Record<string, unknown>>,
@@ -147,7 +147,8 @@ describe('runTurn', () => {
   it('formatUserTurn marca la modalità vocale fuori dal prefisso', () => {
     expect(formatUserTurn('ciao', 'voice')).toBe('[voce] ciao');
     expect(formatUserTurn('ciao', 'text')).toBe('ciao');
-    expect(formatUserTurn('ciao', 'text', 'Memorie:\n- x')).toBe('Memorie:\n- x\n\nciao');
+    expect(turnContext()).toBeUndefined();
+    expect(turnContext('Memorie:\n- x')?.[0]?.content).toContain('non scritto dall');
   });
 });
 

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var emailError: String?
     @State private var showChangeServer = false
     @State private var alarmReminders = ReminderAlarms.enabled
+    @State private var useLocation = DeviceContextProvider.locationEnabled
 
     // Gate della proattività (M9 A3): messaggi spontanei, ore di quiete, tetto giornaliero.
     @State private var proactive = true
@@ -152,6 +153,26 @@ struct SettingsView: View {
                     }
                     Text("Come sveglia, il promemoria suona anche con il telefono in silenzioso, con «Posticipa» di \(ReminderAlarmConfig.snoozeMinutes) minuti. Le notifiche arrivano comunque sul telefono (schermata di blocco e widget); l'email è un'aggiunta per quando il telefono non è a portata.")
                         .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section {
+                    Toggle("Usa la mia posizione", isOn: Binding(
+                        get: { useLocation },
+                        set: { value in
+                            useLocation = value
+                            DeviceContextProvider.locationEnabled = value
+                            if value { DeviceContextProvider.shared.start() } else { DeviceContextProvider.shared.forget() }
+                        }
+                    ))
+                    if useLocation, [.denied, .restricted].contains(DeviceContextProvider.shared.authorization) {
+                        Button("Permesso negato: apri le Impostazioni di iOS") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                        }
+                        .font(.caption)
+                    }
+                } header: {
+                    Text("Posizione")
+                } footer: {
+                    Text("Ernie riceve l'ora del telefono e, se lo consenti, la città e una posizione approssimata (circa 1 km), solo mentre usi l'app. Servono per meteo, luoghi vicini e orari. Non finiscono nella cronologia né nella memoria.")
                 }
                 Section {
                     Toggle("Messaggi di Ernie di sua iniziativa", isOn: Binding(
