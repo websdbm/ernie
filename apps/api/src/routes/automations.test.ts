@@ -57,6 +57,10 @@ function fakeRepo() {
         catchUp: a.catchUp,
         jitterSeconds: a.jitterSeconds,
         notify: a.notify,
+        notifyPolicy: a.notifyPolicy,
+        condition: a.condition ?? null,
+        check: a.check ?? null,
+        checkState: null,
         enabled: a.enabled,
         version: 1,
         meta: {},
@@ -80,6 +84,9 @@ function fakeRepo() {
       return automations[i] as Automation;
     },
     recordRunOutcome: async () => 0,
+    saveCheckState: async () => {},
+    recentlyNotified: async () => false,
+    takeSilentRuns: async () => [],
     pause: async (u, id, reason) => {
       const i = automations.findIndex((a) => a.id === id && a.userId === u);
       if (i < 0) return null;

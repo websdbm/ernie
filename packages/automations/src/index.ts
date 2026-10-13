@@ -1,4 +1,5 @@
 export * from './approvals.js';
+export * from './checks.js';
 export * from './devices.js';
 export * from './email.js';
 export * from './events.js';

@@ -69,6 +69,10 @@ export interface ConnectionDeps {
   readonly invalidateCompanion: (sessionId: string) => void;
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
+  /** Ricerca 11, C4: esiti silenziosi delle sentinelle, letti una volta dal turno successivo. */
+  readonly silentRuns?: (
+    userId: string,
+  ) => Promise<Array<{ title: string; summary: string; at: Date }>>;
   readonly approvals?: {
     store: ApprovalStore;
     pending: PendingApprovals;
@@ -569,6 +573,19 @@ export class ClientConnection {
           { err: err instanceof Error ? err.message : String(err) },
           'avvisi della memoria non letti',
         );
+      }
+    }
+    if (this.deps.silentRuns) {
+      try {
+        const runs = await this.deps.silentRuns(this.auth.userId);
+        if (runs.length)
+          contextBlocks.push(
+            `Controlli fatti in silenzio dall'ultima volta (non hai avvisato l'utente perché non serviva; citali solo se chiede):\n${runs
+              .map((r) => `- «${r.title}»: ${r.summary.slice(0, 160) || 'nessun cambiamento'}`)
+              .join('\n')}`,
+          );
+      } catch {
+        /* contesto facoltativo */
       }
     }
     const guided =

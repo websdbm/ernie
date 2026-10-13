@@ -37,6 +37,18 @@ export type GuidedAction = z.infer<typeof GuidedAction>;
 export const Action = z.discriminatedUnion('type', [DeterministicAction, GuidedAction]);
 export type Action = z.infer<typeof Action>;
 
+/**
+ * Controllo economico prima del modello (ricerca 11, C5): insieme CHIUSO, mai script dell'utente.
+ * Se la fonte non cambia la run finisce senza chiamare il modello; un errore della fonte è un errore.
+ */
+export const PageChangedCheck = z.object({ type: z.literal('page_changed'), url: z.url() });
+export const FeedNewItemsCheck = z.object({ type: z.literal('feed_new_items'), url: z.url() });
+export const Check = z.discriminatedUnion('type', [PageChangedCheck, FeedNewItemsCheck]);
+export type Check = z.infer<typeof Check>;
+
+export const NotifyPolicy = z.enum(['always', 'if_condition', 'never']);
+export type NotifyPolicy = z.infer<typeof NotifyPolicy>;
+
 export const AutomationInput = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_-]{1,63}$/),
   title: z.string().min(1).max(120),
@@ -47,6 +59,10 @@ export const AutomationInput = z.object({
   catchUp: z.enum(['none', 'latest']).default('none'),
   jitterSeconds: z.number().int().min(0).max(900).default(0),
   notify: z.boolean().default(true),
+  /** Ricerca 11, C4: «if_condition» = la run avvisa solo se `condition` è vera (sentinelle). */
+  notifyPolicy: NotifyPolicy.default('always'),
+  condition: z.string().min(3).max(300).optional(),
+  check: Check.optional(),
   enabled: z.boolean().default(true),
   /** Metadati liberi (es. promemoria da un familiare: chi lo ha messo e con quale etichetta). */
   meta: z.record(z.string(), z.unknown()).default({}),
@@ -78,6 +94,10 @@ export interface Automation {
   readonly catchUp: 'none' | 'latest';
   readonly jitterSeconds: number;
   readonly notify: boolean;
+  readonly notifyPolicy: NotifyPolicy;
+  readonly condition: string | null;
+  readonly check: Check | null;
+  readonly checkState: Readonly<Record<string, unknown>> | null;
   readonly enabled: boolean;
   readonly version: number;
   readonly meta: Readonly<Record<string, unknown>>;
@@ -148,6 +168,8 @@ export interface RunJobData {
 export interface RunOutcome {
   readonly summary: string;
   readonly data?: unknown;
+  /** Ricerca 11, C4: controllato senza avvisare (condizione falsa o nessun cambiamento). */
+  readonly silent?: boolean;
   /** Azioni sospese in attesa dell'approvazione dell'utente (azioni sensibili in run headless). */
   readonly pendingActions?: readonly PendingAction[];
 }

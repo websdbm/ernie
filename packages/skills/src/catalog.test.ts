@@ -14,11 +14,18 @@ describe('catalogo delle skill', () => {
       'documenti',
       'ricette',
       'ricordami',
+      'sentinelle',
       'shopping_list',
     ]);
     expect([
       ...enabledSkillIds({
-        skills: { ricette: false, documenti: false, ricordami: false, diario: false },
+        skills: {
+          ricette: false,
+          documenti: false,
+          ricordami: false,
+          diario: false,
+          sentinelle: false,
+        },
       }),
     ]).toEqual(['shopping_list']);
     expect([
@@ -29,6 +36,7 @@ describe('catalogo delle skill', () => {
           documenti: false,
           ricordami: false,
           diario: false,
+          sentinelle: false,
         },
       }),
     ]).toEqual([]);
@@ -40,16 +48,29 @@ describe('catalogo delle skill', () => {
       'documenti',
       'ricette',
       'ricordami',
+      'sentinelle',
       'shopping_list',
     ]);
     expect([
       ...availableSkillIds({
-        skillsAvailable: { ricette: false, documenti: false, ricordami: false, diario: false },
+        skillsAvailable: {
+          ricette: false,
+          documenti: false,
+          ricordami: false,
+          diario: false,
+          sentinelle: false,
+        },
       }),
     ]).toEqual(['shopping_list']);
     expect([
       ...enabledSkillIds({
-        skillsAvailable: { ricette: false, documenti: false, ricordami: false, diario: false },
+        skillsAvailable: {
+          ricette: false,
+          documenti: false,
+          ricordami: false,
+          diario: false,
+          sentinelle: false,
+        },
         skills: { ricette: true },
       }),
     ]).toEqual(['shopping_list']);
@@ -57,7 +78,13 @@ describe('catalogo delle skill', () => {
     expect(
       [
         ...enabledSkillIds({
-          skillsAvailable: { ricette: true, documenti: false, ricordami: false, diario: false },
+          skillsAvailable: {
+            ricette: true,
+            documenti: false,
+            ricordami: false,
+            diario: false,
+            sentinelle: false,
+          },
           skills: { ricette: true },
         }),
       ].sort(),

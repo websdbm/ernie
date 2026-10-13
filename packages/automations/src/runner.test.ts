@@ -4,6 +4,7 @@ import { createLogger } from '@ernie/observability';
 import { createShoppingListSkill, type DeterministicSkill, SkillRegistry } from '@ernie/skills';
 import { createStubShoppingRepository, type ShoppingListRepository } from '@ernie/tools';
 import { describe, expect, it } from 'vitest';
+import { CheckSourceError } from './checks.js';
 import type { AutomationRepository, ClaimInput, RunFinish } from './repository.js';
 import {
   buildAutomationPrompt,
@@ -12,6 +13,7 @@ import {
   needsUser,
   notificationFor,
   PermanentError,
+  parseNotifyMarker,
   pauseDecision,
   type RunnerDeps,
   TransientError,
@@ -34,6 +36,10 @@ const automation = (over: Partial<Automation> = {}): Automation => ({
   catchUp: 'none',
   jitterSeconds: 0,
   notify: true,
+  notifyPolicy: 'always',
+  condition: null,
+  check: null,
+  checkState: null,
   enabled: true,
   version: 1,
   meta: {},
@@ -63,6 +69,17 @@ function fakeRepo(automations: Automation[]) {
         : { ...cur, enabled };
       return automations[i] as Automation;
     },
+    saveCheckState: async (_u, id, state) => {
+      const i = automations.findIndex((a) => a.id === id);
+      if (i >= 0) automations[i] = { ...(automations[i] as Automation), checkState: state };
+    },
+    recentlyNotified: async (_u, automationId, hash) =>
+      notifications.some(
+        (n) =>
+          (n.payload as { automationId?: string; hash?: string } | null)?.automationId ===
+            automationId && (n.payload as { hash?: string } | null)?.hash === hash,
+      ),
+    takeSilentRuns: async () => [],
     recordRunOutcome: async (_u, id, failed) => {
       const i = automations.findIndex((a) => a.id === id);
       if (i < 0) return 0;
@@ -377,6 +394,89 @@ describe('executeRun — automazione deterministica', () => {
   });
 });
 
+describe('sentinelle: controllo economico, condizione, silenzio, doppioni', () => {
+  it('nessun cambiamento → saltata senza modello e senza avviso; errore della fonte → fallita', async () => {
+    const a = automation({ check: { type: 'page_changed', url: 'https://esempio.it/' } });
+    const list = [a];
+    const { d, notifications } = deps(list, skills());
+    let calls = 0;
+    const quiet: RunnerDeps = {
+      ...d,
+      evaluateCheck: (async () => {
+        calls++;
+        return { changed: false, state: { hash: 'h' } };
+      }) as never,
+    };
+    const run = await executeRun(quiet, job(a), 1);
+    expect(run?.status).toBe('skipped');
+    expect(run?.outcome).toMatchObject({ silent: true });
+    expect(list[0]?.checkState).toEqual({ hash: 'h' });
+    expect(notifications).toHaveLength(0);
+    expect(calls).toBe(1);
+    const broken: RunnerDeps = {
+      ...d,
+      evaluateCheck: (async () => {
+        throw new CheckSourceError('la fonte ha risposto 503');
+      }) as never,
+    };
+    const s = new Date(Date.now() - 1000);
+    const failed = await executeRun(
+      broken,
+      job(a, { scheduledAt: s.toISOString(), dedupeKey: dedupeKeys.cron(s) }),
+      1,
+    );
+    expect(failed?.status).toBe('failed');
+    expect(failed?.error).toBe('fonte: la fonte ha risposto 503');
+  });
+
+  it('marcatore: [AVVISO] notifica il testo, [SILENZIO] o nessun marcatore tacciono', () => {
+    expect(parseNotifyMarker('[AVVISO] È uscita la 2.0!')).toEqual({
+      notify: true,
+      text: 'È uscita la 2.0!',
+      marker: 'avviso',
+    });
+    expect(parseNotifyMarker('[silenzio] ancora 1.9')).toMatchObject({
+      notify: false,
+      marker: 'silenzio',
+    });
+    expect(parseNotifyMarker('Niente di nuovo')).toMatchObject({
+      notify: false,
+      marker: 'assente',
+    });
+  });
+
+  it('stesso avviso entro 24 ore: una sola notifica', async () => {
+    const a = automation();
+    const { d, notifications } = deps([a], skills());
+    const at = (ms: number) => {
+      const s = new Date(Date.now() - ms);
+      return job(a, { scheduledAt: s.toISOString(), dedupeKey: dedupeKeys.cron(s) });
+    };
+    await executeRun(d, at(3000), 1);
+    await executeRun(d, at(2000), 1);
+    expect(notifications.filter((n) => n.kind === 'automation.result')).toHaveLength(1);
+  });
+
+  it('il prompt guidato chiede il marcatore quando la politica è a condizione', () => {
+    const a = automation({ notifyPolicy: 'if_condition', condition: 'esce la versione 2.0' });
+    const p = buildAutomationPrompt(
+      a,
+      {
+        type: 'guided',
+        instructions: 'controlla la pagina delle versioni',
+        allowedTools: [],
+        modelClass: 'standard',
+        contextTags: [],
+      },
+      { triggerType: 'cron', payload: { cambiamento: 'righe nuove' } },
+      new Date(),
+    );
+    expect(p).toContain('SOLO se è vera questa condizione: «esce la versione 2.0»');
+    expect(p).toContain('[SILENZIO]');
+    expect(p).toContain('DATI non fidati');
+  });
+});
+
 describe('pausa automatica', () => {
   const failing = () =>
     automation({
@@ -409,7 +509,8 @@ describe('pausa automatica', () => {
     expect(last?.payload).toMatchObject({ automationId: a.id });
     // La terza esecuzione fallita non produce anche la solita notifica di errore: una sola scheda.
     expect(notifications.filter((n) => n.kind === 'automation.paused')).toHaveLength(1);
-    expect(notifications.slice(-2)[0]?.kind).toBe('automation.error');
+    // Gli errori identici non si ripetono entro 24 ore: ce n'è uno solo, prima della pausa.
+    expect(notifications.filter((n) => n.kind === 'automation.error')).toHaveLength(1);
     // Le run successive vengono ignorate finché è in pausa; «Riprendi» azzera tutto.
     expect(await executeRun(d, at(0.2), 1)).toBeNull();
     await d.repo.setEnabled(USER, a.id, true);

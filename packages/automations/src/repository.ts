@@ -29,6 +29,10 @@ interface ARow {
   catch_up: Automation['catchUp'];
   jitter_s: number;
   notify: boolean;
+  notify_policy: Automation['notifyPolicy'];
+  condition: string | null;
+  check: Automation['check'];
+  check_state: Record<string, unknown> | null;
   enabled: boolean;
   version: number;
   meta: Record<string, unknown> | null;
@@ -70,7 +74,7 @@ interface NRow {
   created_at: Date;
 }
 
-const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, version, meta, webhook_secret, consecutive_failures, paused_reason, paused_at, created_at, updated_at`;
+const A_COLS = `id, user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, notify_policy, condition, "check", check_state, enabled, version, meta, webhook_secret, consecutive_failures, paused_reason, paused_at, created_at, updated_at`;
 const R_COLS = `id, automation_id, user_id, scheduled_at, dedupe_key, trigger_type, trigger_payload, status, outcome, error, cost_usd, llm_calls, tool_calls, attempt, session_id, started_at, finished_at, created_at`;
 const N_COLS = `id, user_id, kind, title, body, payload, read_at, created_at`;
 
@@ -87,6 +91,10 @@ const toAutomation = (r: ARow): Automation => ({
   catchUp: r.catch_up,
   jitterSeconds: r.jitter_s,
   notify: r.notify,
+  notifyPolicy: r.notify_policy ?? 'always',
+  condition: r.condition ?? null,
+  check: r.check ?? null,
+  checkState: r.check_state ?? null,
   enabled: r.enabled,
   version: r.version,
   meta: r.meta ?? {},
@@ -160,6 +168,15 @@ export interface AutomationRepository {
   setEnabled(userId: string, id: string, enabled: boolean): Promise<Automation | null>;
   /** Esito definitivo di una run: successo azzera, fallimento incrementa; restituisce il contatore. */
   recordRunOutcome(userId: string, id: string, failed: boolean): Promise<number>;
+  /** Stato del controllo economico (hash della pagina, voci viste del feed). */
+  saveCheckState(userId: string, id: string, state: Record<string, unknown>): Promise<void>;
+  /** C'è già una notifica con lo stesso contenuto per questa automazione nelle ultime 24 ore? */
+  recentlyNotified(userId: string, automationId: string, hash: string): Promise<boolean>;
+  /** Esiti silenziosi non ancora letti dal turno dell'utente (ultime 24 ore), poi segnati come letti. */
+  takeSilentRuns(
+    userId: string,
+    limit?: number,
+  ): Promise<Array<{ title: string; summary: string; at: Date }>>;
   /** Pausa automatica: disabilita con un motivo leggibile. */
   pause(userId: string, id: string, reason: string): Promise<Automation | null>;
   remove(userId: string, id: string): Promise<boolean>;
@@ -221,8 +238,9 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
       const secret = a.trigger.type === 'webhook' ? randomBytes(24).toString('base64url') : null;
       return withUser(pool, userId, async (client) => {
         const res = await client.query<ARow>(
-          `INSERT INTO automations (user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, webhook_secret, meta)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${A_COLS}`,
+          `INSERT INTO automations (user_id, key, title, kind, trigger, timezone, action, budget_usd, catch_up, jitter_s, notify, enabled, webhook_secret, meta,
+                                    notify_policy, condition, "check")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING ${A_COLS}`,
           [
             userId,
             a.key,
@@ -238,6 +256,9 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
             a.enabled,
             secret,
             JSON.stringify(a.meta),
+            a.notifyPolicy,
+            a.condition ?? null,
+            a.check ? JSON.stringify(a.check) : null,
           ],
         );
         const row = res.rows[0];
@@ -263,6 +284,44 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
         );
         const row = res.rows[0];
         return row ? toAutomation(row) : null;
+      });
+    },
+
+    async saveCheckState(userId, id, state) {
+      await withUser(pool, userId, (c) =>
+        c.query(
+          `UPDATE automations SET check_state = $3, updated_at = now() WHERE id = $1 AND user_id = $2`,
+          [id, userId, JSON.stringify(state)],
+        ),
+      );
+    },
+
+    async recentlyNotified(userId, automationId, hash) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query(
+          `SELECT 1 FROM notifications WHERE payload->>'automationId' = $1 AND payload->>'hash' = $2
+             AND created_at > now() - interval '24 hours' LIMIT 1`,
+          [automationId, hash],
+        );
+        return (r.rowCount ?? 0) > 0;
+      });
+    },
+
+    async takeSilentRuns(userId, limit = 3) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query<{ title: string; summary: string | null; finished_at: Date }>(
+          `UPDATE automation_runs r SET silent_seen_at = now()
+             FROM automations a
+            WHERE r.id IN (
+                    SELECT r2.id FROM automation_runs r2
+                     WHERE r2.silent_seen_at IS NULL AND (r2.outcome->>'silent') = 'true'
+                       AND r2.finished_at > now() - interval '24 hours'
+                     ORDER BY r2.finished_at DESC LIMIT $1)
+              AND a.id = r.automation_id
+            RETURNING a.title, r.outcome->>'summary' AS summary, r.finished_at`,
+          [limit],
+        );
+        return r.rows.map((x) => ({ title: x.title, summary: x.summary ?? '', at: x.finished_at }));
       });
     },
 

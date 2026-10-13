@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   type ApprovalStore,
   createCompanionAgent,
@@ -28,6 +28,7 @@ import {
   type ToolRegistry,
 } from '@ernie/tools';
 import type { Redis } from 'ioredis';
+import { CheckSourceError, evaluateCheck } from './checks.js';
 import { emailRecipient, type Mailer } from './email.js';
 import { publishUserEvent } from './notify.js';
 import type { PushSender } from './push.js';
@@ -103,6 +104,8 @@ export interface RunnerDeps {
   readonly guided: GuidedDeps | null;
   readonly catchUpToleranceSeconds: number;
   readonly now?: () => Date;
+  /** Per i test: controllo economico sostitutivo (ricerca 11, C5). */
+  readonly evaluateCheck?: typeof evaluateCheck;
 }
 
 type RunResult = RunFinish & { readonly transient?: boolean };
@@ -200,12 +203,34 @@ export async function executeRun(
     });
   }
 
+  // Controllo economico prima del modello (ricerca 11, C5): nessun cambiamento → nessuna chiamata, nessun avviso.
+  let runData = data;
+  if (automation.check) {
+    try {
+      const c = await (deps.evaluateCheck ?? evaluateCheck)(
+        automation.check,
+        automation.checkState,
+      );
+      await deps.repo.saveCheckState(run.userId, automation.id, c.state);
+      if (!c.changed)
+        return finish(deps, automation, run, {
+          status: 'skipped',
+          outcome: { summary: 'Controllato: nessun cambiamento.', silent: true },
+        });
+      // Il cambiamento arriva da una fonte esterna: entra come dato non fidato (run contaminata).
+      runData = { ...data, payload: { cambiamento: c.diff ?? '' } };
+    } catch (err) {
+      const message = err instanceof CheckSourceError ? `fonte: ${err.message}` : String(err);
+      return finish(deps, automation, run, { status: 'failed', error: message.slice(0, 500) });
+    }
+  }
+
   let result: RunResult;
   try {
     result =
       automation.kind === 'deterministic'
         ? await runDeterministic(deps, automation, run)
-        : await runGuided(deps, automation, run, data, t0);
+        : await runGuided(deps, automation, run, runData, t0);
   } catch (err) {
     const transient = isTransientError(err);
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
@@ -266,10 +291,23 @@ async function finish(
   );
   if (opts.silent) return updated;
   const pausedReason = await applyFailurePolicy(deps, automation, updated);
-  if ((automation.notify || pausedReason) && f.status !== 'skipped') {
-    const message = pausedReason
-      ? pausedNotification(automation, pausedReason)
-      : notificationFor(automation, updated);
+  // Ricerca 11, C4: esito silenzioso (condizione falsa) o politica «never» → nessun avviso; stesso testo
+  // già inviato nelle ultime 24 ore → nessun doppione. La pausa si comunica sempre.
+  const silent =
+    !pausedReason && (updated.outcome?.silent === true || automation.notifyPolicy === 'never');
+  let message = pausedReason
+    ? pausedNotification(automation, pausedReason)
+    : notificationFor(automation, updated);
+  const hash = createHash('sha256')
+    .update(`${message.title}\n${message.body}`)
+    .digest('hex')
+    .slice(0, 32);
+  message = { ...message, payload: { ...(message.payload as object), hash } };
+  const duplicate =
+    !pausedReason &&
+    !silent &&
+    (await deps.repo.recentlyNotified(run.userId, automation.id, hash).catch(() => false));
+  if ((automation.notify || pausedReason) && f.status !== 'skipped' && !silent && !duplicate) {
     try {
       const n = await deps.repo.notify(run.userId, message);
       await deps.push?.notifyUser(run.userId, {
@@ -451,6 +489,11 @@ export function buildAutomationPrompt(
     `[Esecuzione automatica «${automation.title}», ${when}. Nessun utente è connesso: lavora in autonomia con i soli tool disponibili e termina con un riepilogo breve in italiano, adatto a una notifica.]`,
     action.instructions,
   ];
+  if (automation.notifyPolicy === 'if_condition' && automation.condition) {
+    parts.push(
+      `Avvisa l'utente SOLO se è vera questa condizione: «${automation.condition}». Se non è vera o non puoi verificarla, rispondi soltanto con [SILENZIO] seguito da una riga di motivo. Se è vera, comincia con [AVVISO] e poi scrivi il messaggio per l'utente.`,
+    );
+  }
   if (data.payload !== undefined) {
     let json = JSON.stringify(data.payload, null, 1);
     if (json.length > 4_000) json = `${json.slice(0, 4_000)}…`;
@@ -664,11 +707,36 @@ async function runGuided(
       status: 'awaiting_approval',
       outcome: { summary, pendingActions: pending.map((p) => ({ ...p })) },
     };
+  if (automation.notifyPolicy === 'if_condition') {
+    const gate = parseNotifyMarker(text);
+    return {
+      ...base,
+      status: 'succeeded',
+      outcome: {
+        summary: gate.text.slice(0, 2000),
+        silent: !gate.notify,
+        data: { model: companion.profile.modelId, modelClass, gate: gate.marker },
+      },
+    };
+  }
   return {
     ...base,
     status: 'succeeded',
     outcome: { summary, data: { model: companion.profile.modelId, modelClass } },
   };
+}
+
+/**
+ * Marcatore di avviso (ricerca 11, C4): [AVVISO] → si notifica il testo dopo il marcatore; [SILENZIO] o
+ * nessun marcatore → silenzio (per una sentinella è meglio tacere nel dubbio che disturbare).
+ */
+export function parseNotifyMarker(text: string): { notify: boolean; text: string; marker: string } {
+  const t = text.trim();
+  const m = /^\[(AVVISO|SILENZIO)\]\s*/i.exec(t);
+  if (m?.[1]?.toUpperCase() === 'AVVISO')
+    return { notify: true, text: t.slice(m[0].length).trim(), marker: 'avviso' };
+  if (m) return { notify: false, text: t.slice(m[0].length).trim(), marker: 'silenzio' };
+  return { notify: false, text: t, marker: 'assente' };
 }
 
 /** Dead-letter: a tentativi esauriti, una sola notifica per automazione e giorno (deduplicata su Redis). */

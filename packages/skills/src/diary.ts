@@ -136,6 +136,7 @@ export function formatDiary(
       failed: 'fallita',
       budget_exceeded: 'fermata dal budget',
       awaiting_approval: 'in attesa della tua approvazione',
+      silent: 'controllata, niente da segnalare',
       skipped: 'saltata',
     };
     lines.push(
@@ -281,7 +282,7 @@ export function createPgActivityStore(pool: Pool): ActivityStore {
                 WHERE key LIKE 'promemoria\\_%' AND created_at >= $1 AND created_at < $2 ORDER BY created_at LIMIT 30`,
           ),
           q<{ title: string; status: string; finished_at: Date }>(
-            `SELECT a.title, r.status, r.finished_at FROM automation_runs r JOIN automations a ON a.id = r.automation_id
+            `SELECT a.title, CASE WHEN (r.outcome->>'silent') = 'true' THEN 'silent' ELSE r.status END AS status, r.finished_at FROM automation_runs r JOIN automations a ON a.id = r.automation_id
                 WHERE a.key NOT LIKE 'promemoria\\_%' AND r.status <> 'skipped'
                   AND r.finished_at >= $1 AND r.finished_at < $2 ORDER BY r.finished_at LIMIT 30`,
           ),

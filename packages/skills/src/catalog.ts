@@ -122,6 +122,24 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultEnabled: true,
   },
   {
+    id: 'sentinelle',
+    title: 'Sentinelle',
+    icon: 'binoculars.fill',
+    tint: 'indigo',
+    summary: 'Controlli ricorrenti che avvisano solo quando succede qualcosa.',
+    description:
+      "Di' «avvisami quando esce la versione 2.0», «dimmi se cambia il menu della mensa» o «tienimi d'occhio questo feed»: Ernie controlla con regolarità e ti scrive solo quando la condizione si avvera. Se la pagina non cambia non chiama nemmeno il modello, quindi non costa.",
+    kind: 'guided',
+    tools: ['sentinel_create', 'sentinel_list', 'sentinel_remove'],
+    examples: [
+      'avvisami quando esce la versione 2.0',
+      'quali sentinelle ho?',
+      'togli la sentinella della mensa',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
+  {
     id: 'diario',
     title: 'Cosa ho fatto',
     icon: 'clock.arrow.circlepath',
@@ -170,6 +188,28 @@ export const RECIPES_SKILL_INSTRUCTIONS = [
 ].join('\n');
 
 /** Skill guidata «Ricette»: istruzioni nel turno quando il router la indica. */
+export const SENTINELS_SKILL_INSTRUCTIONS = [
+  'Procedura «Sentinelle».',
+  "1) Per «avvisami quando…», «dimmi se…», «tienimi d'occhio…» crea una sentinella con sentinel_create: titolo breve, cosa controllare, una condizione chiara e verificabile (non vaga), url se l'utente lo dà o se esiste una pagina ufficiale ovvia (source «feed» per RSS/Atom), frequenza (predefinita ogni giorno alle 09:00; ogni ora solo se serve davvero).",
+  '2) Conferma in una frase: cosa controllerai, quando, e che scriverai solo quando la condizione si avvera. Se la richiesta è troppo vaga, chiedi una precisazione prima di crearla.',
+  "3) «Quali sentinelle ho?» → sentinel_list; «togli la sentinella …» → sentinel_list e poi sentinel_remove con l'id giusto.",
+].join('\n');
+
+export function createSentinelsSkill(): GuidedSkill {
+  const entry = SKILL_CATALOG.find((s) => s.id === 'sentinelle');
+  if (!entry) throw new Error('catalogo: skill sentinelle mancante');
+  return {
+    id: entry.id,
+    kind: 'guided',
+    category: 'sentinels',
+    description: entry.description,
+    examples: entry.examples,
+    allowedTools: entry.tools,
+    instructions: SENTINELS_SKILL_INSTRUCTIONS,
+    riskClass: 'low',
+  };
+}
+
 export function createRecipesSkill(): GuidedSkill {
   const entry = SKILL_CATALOG.find((s) => s.id === 'ricette');
   if (!entry) throw new Error('catalogo: skill ricette mancante');

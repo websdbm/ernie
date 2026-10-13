@@ -51,6 +51,7 @@ import {
   createPgActivityStore,
   createRecipesSkill,
   createReminderSkill,
+  createSentinelsSkill,
   createShoppingListSkill,
   tidyReminderText,
 } from '@ernie/skills';
@@ -62,6 +63,7 @@ import {
   createPgToolRuleStore,
   createRecipeRepository,
   createRecipeTools,
+  createSentinelTools,
   createShoppingListRepository,
   createShoppingTools,
   createToolCallRecorder,
@@ -78,6 +80,7 @@ import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
+import { createSentinelStore } from './sentinels.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
 import { ConnectionRegistry } from './ws/plugin.js';
@@ -187,6 +190,16 @@ async function main(): Promise<void> {
     ? createSummarizer({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger), logger })
     : null;
   for (const t of createDocumentTools({ repo: documentsRepo, summarizer })) registry.register(t);
+  // Sentinelle (ricerca 11, C4 + C5): automazioni guidate con controllo economico e avviso a condizione.
+  // knownTools è letto al momento della creazione: il web viene registrato più sotto.
+  const sentinelStore = createSentinelStore({
+    automations,
+    get knownTools() {
+      return registry.list().map((t) => t.id);
+    },
+    maxBudgetUsd: config.automations.maxRunBudgetUsd,
+  });
+  for (const t of createSentinelTools(sentinelStore)) registry.register(t);
   if (config.providers.firecrawlApiKey) {
     const web = createWebTools(
       createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
@@ -250,6 +263,7 @@ async function main(): Promise<void> {
         createShoppingListSkill(shopping),
         createRecipesSkill(),
         createDocumentsSkill(),
+        createSentinelsSkill(),
         createReminderSkill(reminders),
         createDiarySkill(createPgActivityStore(postgres.pool)),
         // «Cosa sai di me?», «perché sai che …?», «dimentica che …» (M9 A4): fuori catalogo, sempre attiva.
@@ -387,6 +401,7 @@ async function main(): Promise<void> {
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
         approvals: { ...approvals, rules: toolRules },
+        silentRuns: (userId) => automations.takeSilentRuns(userId, 3),
         memories: {
           repo: memories,
           retrievalLimit: config.memory.retrievalLimit,
