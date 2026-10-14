@@ -82,3 +82,12 @@ export function formatTransferProposal(c: TransferCandidate): string {
     ...c.facts.map((f) => `- ${f}`),
   ].join('\n');
 }
+
+/** Proposta di riordino (B3): più note collegate alla stessa pagina, da riunire solo se l'utente dice di sì. */
+export function formatReorganizationProposal(c: {
+  title: string;
+  notes: readonly string[];
+}): string {
+  const list = c.notes.slice(0, 10).join(', ') + (c.notes.length > 10 ? ', …' : '');
+  return `Riordino proposto dal second brain: ${c.notes.length} note sono collegate a «${c.title}» (${list}). Se la conversazione lo permette, proponi in una riga di riunirle nella pagina «${c.title}» (es. «Ho ${c.notes.length} note su ${c.title}: le unisco in un'unica pagina? Le originali restano nella cronologia»). Se accetta, chiama brain_merge con into «${c.title}» e questi titoli in notes; se dice di no, lascia stare e non riproporlo.`;
+}

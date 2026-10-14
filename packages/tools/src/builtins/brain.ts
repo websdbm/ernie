@@ -82,6 +82,11 @@ export interface BrainToolStore {
     links: readonly string[];
     newPages: readonly string[];
   }>;
+  /** B3: unisce più note in una pagina (una sezione per nota); le originali restano nella cronologia. */
+  merge(
+    userId: string,
+    input: { into: string; notes: readonly string[]; type?: (typeof BRAIN_NOTE_TYPES)[number] },
+  ): Promise<{ path: string; title: string; merged: string[]; skipped: string[] }>;
 }
 
 const day = z
@@ -272,6 +277,40 @@ export function createBrainTools(store: BrainToolStore): ToolSpec[] {
           links: [...r.links],
           newPages: [...r.newPages],
         };
+      },
+    }),
+    defineTool({
+      id: 'brain_merge',
+      version: '1',
+      category: 'brain',
+      description:
+        "Riordina il second brain: unisce più note in una pagina (into), una sezione per nota con la sua data; le note originali spariscono (restano nella cronologia git) e le note che le citavano ora citano la pagina. Usalo SOLO dopo che l'utente ha detto di sì alla proposta.",
+      risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: true },
+      timeoutMs: 60_000,
+      inputSchema: z.object({
+        into: z.string().min(2).max(120).describe('Pagina di destinazione (esistente o nuova)'),
+        notes: z
+          .array(z.string().min(1).max(160))
+          .min(1)
+          .max(30)
+          .describe('Titoli delle note da unire'),
+        type: z
+          .enum(BRAIN_NOTE_TYPES)
+          .optional()
+          .describe('Tipo della pagina se nuova (predefinito argomento)'),
+      }),
+      outputSchema: z.object({
+        title: z.string(),
+        merged: z.array(z.string()),
+        skipped: z.array(z.string()),
+      }),
+      execute: async (input, ctx) => {
+        const r = await store.merge(ctx.userId, {
+          into: input.into,
+          notes: input.notes,
+          ...(input.type ? { type: input.type } : {}),
+        });
+        return { title: r.title, merged: r.merged, skipped: r.skipped };
       },
     }),
   ];

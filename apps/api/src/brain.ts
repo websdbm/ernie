@@ -153,6 +153,9 @@ export async function createBrainRuntime(deps: BrainRuntimeDeps): Promise<BrainR
     async write(userId, input) {
       return service.write(userId, input);
     },
+    async merge(userId, input) {
+      return service.merge(userId, input);
+    },
   };
 
   let timer: NodeJS.Timeout | null = null;

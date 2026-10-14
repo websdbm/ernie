@@ -427,6 +427,175 @@ export function createBrainService(opts: BrainServiceOptions) {
       for (const n of files) await opts.index.upsert(userId, n);
     },
 
+    /** Modifica dall'app (B3): testo e riservatezza di una nota esistente; null se non c'è. */
+    async update(
+      userId: string,
+      ref: string,
+      patch: { body?: string; private?: boolean; source?: NoteSource },
+    ): Promise<ReadResult | null> {
+      const existing = await readNote(userId, ref);
+      if (!existing) return null;
+      const body = (patch.body ?? existing.body).trim();
+      const note: BrainNote = {
+        ...existing,
+        links: [...new Set([...existing.links, ...bodyLinks(body)])],
+        private: patch.private ?? existing.private,
+        ...(patch.source ? { source: patch.source } : {}),
+        body,
+      };
+      await vault(userId).commit(
+        [{ path: note.path, content: serializeNote(note) }],
+        `Ernie: modificata «${note.title}» dall'app`,
+      );
+      await opts.index.upsert(userId, note);
+      return service.read(userId, note.path);
+    },
+
+    /** Cancella una nota (B3): resta nella cronologia git. False se non esiste. */
+    async remove(userId: string, ref: string): Promise<boolean> {
+      const existing = await readNote(userId, ref);
+      if (!existing) return false;
+      await vault(userId).commit(
+        [{ path: existing.path, content: null }],
+        `Ernie: eliminata «${existing.title}»`,
+      );
+      await opts.index.remove(userId, existing.path);
+      return true;
+    },
+
+    /**
+     * Riordino (B3, «queste 8 note sulla caldaia: le unisco?»): unisce più note in una pagina, una sezione per
+     * nota con la sua data; le note originali spariscono (restano nella cronologia) e chi le citava ora cita la
+     * pagina. Tutto in un commit.
+     */
+    async merge(
+      userId: string,
+      input: { into: string; notes: readonly string[]; type?: NoteType },
+    ): Promise<{ path: string; title: string; merged: string[]; skipped: string[] }> {
+      await ready(userId);
+      const v = vault(userId);
+      const targetTitle = input.into.replace(/\s+/g, ' ').trim().slice(0, 120);
+      const target = await readNote(userId, targetTitle);
+      const sources: BrainNote[] = [];
+      const skipped: string[] = [];
+      for (const t of input.notes) {
+        const n = await readNote(userId, t);
+        if (
+          !n ||
+          n.type === 'chi-sono' ||
+          n.type === 'salute' ||
+          n.path === target?.path ||
+          sources.some((s) => s.path === n.path)
+        ) {
+          skipped.push(t);
+          continue;
+        }
+        sources.push(n);
+      }
+      if (!sources.length) throw new Error('nessuna nota da unire');
+      const stub = /^Pagina creata da Ernie: compare in \[\[[^\]]*\]\]\.?\s*$/m;
+      const base = (target ? target.body.replace(stub, '') : `# ${targetTitle}`).replace(
+        /\s+$/,
+        '',
+      );
+      // Dentro la pagina il rimando a se stessa non serve: «[[Caldaia]]» diventa «Caldaia».
+      const selfLink = new RegExp(
+        `\\[\\[${targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\|([^\\]]*))?\\]\\]`,
+        'gi',
+      );
+      const sections = sources.map((n) => {
+        const text = n.body
+          .replace(/^#\s+[^\n]*\n?/, '')
+          .replace(selfLink, (_m, alias?: string) => alias || targetTitle)
+          .trim();
+        const when = n.refersFrom ?? n.created.slice(0, 10);
+        return `## ${n.title} (${italianDate(when)})\n\n${text}`;
+      });
+      const gone = new Set(sources.map((n) => n.title.toLowerCase()));
+      const links = [
+        ...new Set([...(target?.links ?? []), ...sources.flatMap((n) => n.links)]),
+      ].filter((l) => l.toLowerCase() !== targetTitle.toLowerCase() && !gone.has(l.toLowerCase()));
+      const type = target?.type ?? input.type ?? 'argomento';
+      const note: BrainNote = target
+        ? {
+            ...target,
+            links,
+            private: target.private || sources.some((n) => n.private),
+            body: `${base}\n\n${sections.join('\n\n')}`,
+          }
+        : {
+            path: pathFor(type === 'chi-sono' ? 'argomento' : type, targetTitle),
+            title: targetTitle,
+            type: type === 'chi-sono' ? 'argomento' : type,
+            created: nowIso(),
+            links,
+            private: sources.some((n) => n.private),
+            source: 'chat',
+            body: `${base}\n\n${sections.join('\n\n')}`,
+          };
+      // Chi citava una nota unita ora cita la pagina: il grafo resta intero (anche in Obsidian).
+      const rewritten = new Map<string, BrainNote>();
+      for (const n of sources) {
+        const citing = await opts.index.list(userId, {
+          linkedTo: n.title,
+          includePrivate: true,
+          limit: 100,
+        });
+        for (const c of citing) {
+          if (c.path === note.path || sources.some((s) => s.path === c.path)) continue;
+          const cur = rewritten.get(c.path) ?? (await readNote(userId, c.path));
+          if (!cur) continue;
+          const re = new RegExp(
+            `\\[\\[${n.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\|[^\\]]*)?\\]\\]`,
+            'gi',
+          );
+          const body = cur.body.replace(re, `[[${note.title}]]`);
+          const curLinks = [
+            ...new Set(
+              cur.links.map((l) => (l.toLowerCase() === n.title.toLowerCase() ? note.title : l)),
+            ),
+          ];
+          rewritten.set(c.path, { ...cur, links: curLinks, body });
+        }
+      }
+      const files = [
+        { path: note.path, content: serializeNote(note) },
+        ...sources.map((n) => ({ path: n.path, content: null })),
+        ...[...rewritten.values()].map((n) => ({ path: n.path, content: serializeNote(n) })),
+      ];
+      await v.commit(files, `Ernie: unite ${sources.length} note in «${note.title}»`);
+      await opts.index.upsert(userId, note);
+      for (const n of sources) await opts.index.remove(userId, n.path);
+      for (const n of rewritten.values()) await opts.index.upsert(userId, n);
+      return { path: note.path, title: note.title, merged: sources.map((n) => n.title), skipped };
+    },
+
+    /**
+     * Candidati al riordino (B3): pagine-concetto (persona, luogo, progetto, argomento) con almeno `minNotes`
+     * note collegate. Ernie le propone in conversazione; l'unione avviene solo se l'utente dice di sì.
+     */
+    async reorganizeCandidates(
+      userId: string,
+      o: { minNotes?: number; max?: number } = {},
+    ): Promise<Array<{ title: string; type: NoteType; notes: string[] }>> {
+      await ready(userId);
+      const minNotes = o.minNotes ?? 5;
+      const max = o.max ?? 3;
+      const pages = (await opts.index.list(userId, { includePrivate: false, limit: 300 })).filter(
+        (n) => ['persona', 'luogo', 'progetto', 'argomento'].includes(n.type),
+      );
+      const out: Array<{ title: string; type: NoteType; notes: string[] }> = [];
+      for (const page of pages) {
+        const linked = (
+          await opts.index.list(userId, { linkedTo: page.title, includePrivate: false, limit: 100 })
+        ).filter((n) => n.type === 'nota' && n.path !== page.path);
+        if (linked.length >= minNotes)
+          out.push({ title: page.title, type: page.type, notes: linked.map((n) => n.title) });
+        if (out.length >= max) break;
+      }
+      return out;
+    },
+
     /** Sincronizza i vault con remoto: reindicizza i file cambiati e riporta in scheda le modifiche a «Chi sono». */
     async syncAll(): Promise<Array<{ userId: string; changed: number; conflict: boolean }>> {
       const out: Array<{ userId: string; changed: number; conflict: boolean }> = [];

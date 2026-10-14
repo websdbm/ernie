@@ -78,6 +78,9 @@ export const envSchema = z.object({
   BRAIN_SYNC_INTERVAL_S: z.coerce.number().int().min(0).max(86_400).default(300),
   BRAIN_GIT_NAME: z.string().default('Ernie'),
   BRAIN_GIT_EMAIL: z.string().default('ernie@eklettica.it'),
+  /** Inoltro email al second brain (B3): segreto del webhook di Brevo e dominio di ricezione (record MX). */
+  BRAIN_INBOUND_SECRET: z.string().min(16).optional(),
+  BRAIN_INBOUND_DOMAIN: z.string().min(3).optional(),
   TOOL_APPROVAL_TTL_S: z.coerce.number().int().min(10).max(3600).default(120),
   POLICY_RISK_ASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
   WEB_ALLOWED_DOMAINS: z.string().default(''),
@@ -147,6 +150,7 @@ export interface AppConfig {
     readonly deployKeyB64?: string;
     readonly syncIntervalSeconds: number;
     readonly author: { readonly name: string; readonly email: string };
+    readonly inbound?: { readonly secret: string; readonly domain: string };
   };
   readonly tools: {
     readonly categories: readonly string[];
@@ -275,6 +279,14 @@ export function toAppConfig(env: Env): AppConfig {
         ),
       ...(env.BRAIN_DEPLOY_KEY_B64 ? { deployKeyB64: env.BRAIN_DEPLOY_KEY_B64 } : {}),
       syncIntervalSeconds: env.BRAIN_SYNC_INTERVAL_S,
+      ...(env.BRAIN_INBOUND_SECRET && env.BRAIN_INBOUND_DOMAIN
+        ? {
+            inbound: {
+              secret: env.BRAIN_INBOUND_SECRET,
+              domain: env.BRAIN_INBOUND_DOMAIN.toLowerCase(),
+            },
+          }
+        : {}),
       author: { name: env.BRAIN_GIT_NAME, email: env.BRAIN_GIT_EMAIL },
     },
     tools: {

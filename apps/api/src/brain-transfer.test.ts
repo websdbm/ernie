@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { entitiesIn, formatTransferProposal, transferCandidate } from './brain-transfer.js';
+import {
+  entitiesIn,
+  formatReorganizationProposal,
+  formatTransferProposal,
+  transferCandidate,
+} from './brain-transfer.js';
 
 const facts = [
   'Ha un figlio di nome Giorgio, di 13 anni.',
@@ -26,5 +31,14 @@ describe('travaso dalla memoria', () => {
     const text = formatTransferProposal({ entity: 'Giorgio', facts: facts.slice(0, 4) });
     expect(text).toContain('ce ne sono 4 su «Giorgio»');
     expect(text).toContain('- Giorgio gioca a calcio il martedì.');
+  });
+});
+
+describe('proposta di riordino (B3)', () => {
+  it('spiega al modello cosa proporre e come unire solo dopo il sì', () => {
+    const p = formatReorganizationProposal({ title: 'Caldaia', notes: ['a', 'b', 'c', 'd', 'e'] });
+    expect(p).toContain('5 note sono collegate a «Caldaia»');
+    expect(p).toContain('brain_merge con into «Caldaia»');
+    expect(p).toContain('se dice di no, lascia stare');
   });
 });

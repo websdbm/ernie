@@ -180,3 +180,82 @@ describe('second brain: vault git e servizio', () => {
     expect(fields).toMatchObject({ fullName: 'Marco Rossi', birthDate: '1980-04-12', city: null });
   });
 });
+
+describe('second brain B3: modifica, cancellazione, riordino', () => {
+  it('unisce le note in una pagina, aggiorna chi le citava, modifica e cancella dall’app', async () => {
+    const index = memoryIndex();
+    const base = join(tmp, 'b3');
+    const service = createBrainService({ baseDir: base, index });
+    for (const [title, body] of [
+      ['Caldaia bloccata', 'La caldaia si è bloccata, errore E2. Vedi [[Caldaia]].'],
+      ['Numero del tecnico', 'Il tecnico della [[Caldaia]] è Mario, 333 1234567.'],
+      ['Revisione caldaia', 'Revisione della [[Caldaia]] fatta a settembre.'],
+    ] as const)
+      await service.write(user, {
+        title,
+        body,
+        concepts: [{ title: 'Caldaia', type: 'argomento' }],
+      });
+    await service.write(user, {
+      title: 'Spese di casa',
+      body: 'Quest’anno: [[Numero del tecnico]] chiamato due volte, [[Caldaia bloccata]] a gennaio.',
+    });
+    expect(await service.reorganizeCandidates(user, { minNotes: 3 })).toEqual([
+      {
+        title: 'Caldaia',
+        type: 'argomento',
+        notes: ['Caldaia bloccata', 'Numero del tecnico', 'Revisione caldaia'],
+      },
+    ]);
+    expect(await service.reorganizeCandidates(user, { minNotes: 4 })).toEqual([]);
+
+    const merged = await service.merge(user, {
+      into: 'Caldaia',
+      notes: [
+        'Caldaia bloccata',
+        'Numero del tecnico',
+        'Revisione caldaia',
+        'Inesistente',
+        'Chi sono',
+      ],
+    });
+    expect(merged).toMatchObject({
+      path: 'Argomenti/Caldaia.md',
+      title: 'Caldaia',
+      merged: ['Caldaia bloccata', 'Numero del tecnico', 'Revisione caldaia'],
+      skipped: ['Inesistente', 'Chi sono'],
+    });
+    const page = await service.read(user, 'Caldaia');
+    expect(page?.note.body).toContain('## Numero del tecnico (');
+    expect(page?.note.body).toContain('Mario, 333 1234567');
+    expect(page?.note.body).not.toContain('Pagina creata da Ernie');
+    expect(page?.note.body).not.toContain('[[Caldaia]]');
+    expect(await service.read(user, 'Caldaia bloccata')).toBeNull();
+    expect(index.notes.has('Note/Caldaia bloccata.md')).toBe(false);
+    // Chi citava le note unite ora cita la pagina.
+    const spese = await service.read(user, 'Spese di casa');
+    expect(spese?.note.body).toBe(
+      'Quest’anno: [[Caldaia]] chiamato due volte, [[Caldaia]] a gennaio.',
+    );
+    expect(spese?.note.links).toEqual(['Caldaia']);
+    expect(page?.backlinks).toContain('Spese di casa');
+    expect(git(base + '/' + user, 'log', '--format=%s', '-1')).toContain(
+      'unite 3 note in «Caldaia»',
+    );
+
+    const updated = await service.update(user, 'Spese di casa', {
+      body: 'Riscritta dall’app. Vedi [[Caldaia]] e [[Bollette]].',
+      private: true,
+      source: 'app',
+    });
+    expect(updated?.note).toMatchObject({
+      private: true,
+      source: 'app',
+      links: ['Caldaia', 'Bollette'],
+    });
+    expect(await service.update(user, 'Non esiste', { body: 'x' })).toBeNull();
+    expect(await service.remove(user, 'Spese di casa')).toBe(true);
+    expect(await service.remove(user, 'Spese di casa')).toBe(false);
+    expect(await service.read(user, 'Spese di casa')).toBeNull();
+  });
+});

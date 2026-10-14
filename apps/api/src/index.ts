@@ -92,7 +92,11 @@ import {
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createBrainRuntime } from './brain.js';
-import { formatTransferProposal, transferCandidate } from './brain-transfer.js';
+import {
+  formatReorganizationProposal,
+  formatTransferProposal,
+  transferCandidate,
+} from './brain-transfer.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
@@ -330,16 +334,17 @@ async function main(): Promise<void> {
     logger,
   });
   for (const t of createHealthTools(health.tools)) registry.register(t);
-  if (config.providers.firecrawlApiKey) {
-    const web = createWebTools(
-      createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey }),
-      {
-        allowedDomains: config.tools.webAllowedDomains,
-        blockedDomains: config.tools.webBlockedDomains,
-        maxResults: 5,
-        maxCharsPerResult: 3_000,
-      },
-    );
+  // Firecrawl: ricerca e lettura web per i tool, e lettura dei link condivisi nel second brain (B3).
+  const firecrawl = config.providers.firecrawlApiKey
+    ? createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey })
+    : null;
+  if (firecrawl) {
+    const web = createWebTools(firecrawl, {
+      allowedDomains: config.tools.webAllowedDomains,
+      blockedDomains: config.tools.webBlockedDomains,
+      maxResults: 5,
+      maxCharsPerResult: 3_000,
+    });
     for (const t of web) registry.register(t);
   } else {
     logger.warn('FIRECRAWL_API_KEY assente: tool web non registrati');
@@ -538,7 +543,23 @@ async function main(): Promise<void> {
         void brain.refreshChiSono(userId);
       },
     },
-    brain: { authenticator, allowedOrigins: config.ws.allowedOrigins, brain: brain.service },
+    brain: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      brain: brain.service,
+      pool: postgres.pool,
+      ...(firecrawl
+        ? {
+            fetchPage: async (url: string) => {
+              const r = await firecrawl.scrape(url, 6_000);
+              return { title: r.title, content: r.content };
+            },
+          }
+        : {}),
+      ...(config.brain.inbound ? { inbound: config.brain.inbound } : {}),
+      firstSeen: async (key, ttl) => (await redis.client.set(key, '1', 'EX', ttl, 'NX')) === 'OK',
+      logger,
+    },
     toolRules: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -610,7 +631,7 @@ async function main(): Promise<void> {
               known,
               { skip },
             );
-            if (!c) return null;
+            if (!c) break;
             const fresh = await redis.client.set(
               `brain:transfer:${userId}:${c.entity.toLowerCase()}`,
               '1',
@@ -620,6 +641,20 @@ async function main(): Promise<void> {
             );
             if (fresh === 'OK') return formatTransferProposal(c);
             skip.add(c.entity.toLowerCase());
+          }
+          // Fase B3: nessun travaso da proporre → forse un riordino (note sparse sulla stessa pagina).
+          for (const c of await brain.service.reorganizeCandidates(userId, {
+            minNotes: 5,
+            max: 3,
+          })) {
+            const fresh = await redis.client.set(
+              `brain:reorg:${userId}:${c.title.toLowerCase()}`,
+              '1',
+              'EX',
+              30 * 86_400,
+              'NX',
+            );
+            if (fresh === 'OK') return formatReorganizationProposal(c);
           }
           return null;
         },

@@ -155,7 +155,14 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     description:
       "Di' «annota che il codice della caldaia è 4471», «metti nel second brain che a Giorgio piacciono i Lego Technic» o «cosa avevo annotato a Verona?». Ernie scrive note in markdown, le collega a persone, luoghi e progetti, ricorda quando e dove sono nate e le ritrova quando servono. Le note riservate restano fuori dai suggerimenti.",
     kind: 'guided',
-    tools: ['brain_search', 'brain_read', 'brain_write', 'document_get', 'document_list'],
+    tools: [
+      'brain_search',
+      'brain_read',
+      'brain_write',
+      'brain_merge',
+      'document_get',
+      'document_list',
+    ],
     examples: [
       'annota che il codice della caldaia è 4471',
       'cosa avevo annotato a Verona?',
@@ -260,6 +267,8 @@ export const SECOND_BRAIN_SKILL_INSTRUCTIONS = [
   '4) Domande su cose annotate («cosa avevo segnato…», «a Verona…», «il mese scorso…», «su Giorgio…»): brain_search con i filtri giusti, poi brain_read se serve il testo intero; cita la nota fra parentesi «(nota: Titolo)». Se non c’è nulla, dillo.',
   '5) Documento allegato o già caricato da salvare: leggi con document_get e scrivi una nota type documento con titolo, riassunto breve, punti chiave e il testo; collegalo.',
   '6) Conferma in una riga cosa hai annotato e dove (es. «Annotato in [[Casa]], collegato a [[Caldaia]]»). Hai mano libera nel riorganizzare: ogni modifica resta nella cronologia ed è annullabile.',
+  "7) Riordino: se il contesto propone di riunire più note in una pagina, o l'utente chiede di unire/riorganizzare, proponilo in una riga e aspetta il sì; poi brain_merge con into (la pagina) e notes (i titoli) e conferma cosa hai unito. Mai unire senza il sì.",
+  '8) Le note con fonte «condiviso» (da altre app), «email» (inoltro) o «app» (scritte a mano) sono appunti dell’utente come gli altri: cercale e citale normalmente.',
 ].join('\n');
 
 /** Skill guidata «Salute» (sezione salute del second brain, 13 ott 2026). */

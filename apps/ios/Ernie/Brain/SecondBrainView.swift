@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 // MARK: - modelli (REST /v1/brain)
 
@@ -54,6 +55,48 @@ extension ApiClient {
         var c = URLComponents()
         c.queryItems = [URLQueryItem(name: "title", value: title)]
         return try await request("GET", "/v1/brain/note?\(c.percentEncodedQuery ?? "")")
+    }
+
+    /// Crea una pagina (POST /v1/brain/notes): il server risponde 201 con la nota e i backlink.
+    func brainCreateNote(title: String, body: String, type: String? = nil, isPrivate: Bool? = nil) async throws -> BrainNoteResponse {
+        struct Body: Encodable, Sendable {
+            var title: String
+            var body: String
+            var type: String?
+            var isPrivate: Bool?
+            enum CodingKeys: String, CodingKey { case title, body, type, isPrivate = "private" }
+        }
+        return try await request("POST", "/v1/brain/notes", body: Body(title: title, body: body, type: type, isPrivate: isPrivate))
+    }
+
+    /// Modifica il testo e/o la riservatezza di una pagina (PATCH /v1/brain/note): il percorso va nel corpo.
+    func brainUpdateNote(path: String, body: String? = nil, isPrivate: Bool? = nil) async throws -> BrainNoteResponse {
+        struct Body: Encodable, Sendable {
+            var path: String
+            var body: String?
+            var isPrivate: Bool?
+            enum CodingKeys: String, CodingKey { case path, body, isPrivate = "private" }
+        }
+        return try await request("PATCH", "/v1/brain/note", body: Body(path: path, body: body, isPrivate: isPrivate))
+    }
+
+    /// Elimina una pagina (DELETE /v1/brain/note?path=…): risponde 204 e la nota resta nella cronologia di Ernie.
+    func brainDeleteNote(path: String) async throws {
+        let _: EmptyResponse = try await request("DELETE", "/v1/brain/note?path=\(Self.encodeQueryValue(path))")
+    }
+
+    /// Indirizzo al quale inoltrare le email; `nil` se il server non ha la posta in arrivo configurata.
+    func brainInboxAddress() async throws -> String? {
+        struct Out: Decodable { var address: String? }
+        let out: Out = try await request("GET", "/v1/brain/inbox-address")
+        return out.address
+    }
+
+    /// Codifica un valore da mettere nella query: anche `/`, `+`, `&` e `=` diventano sequenze di escape.
+    private static func encodeQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 }
 
@@ -170,6 +213,12 @@ struct SecondBrainView: View {
     @State private var path: [String] = []
     @State private var mode: BrainViewMode = .elenco
     @State private var camera: MapCameraPosition = .automatic
+    /// Foglio «Nuova nota» aperto.
+    @State private var creating = false
+    /// Foglio «Inoltra email al second brain» aperto.
+    @State private var showInbox = false
+    /// Titolo della nota appena creata: si apre quando il foglio «Nuova nota» si chiude.
+    @State private var openAfterCreate: String?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -249,8 +298,30 @@ struct SecondBrainView: View {
             .onSubmit(of: .search) { Task { await load() } }
             .onChange(of: query) { if query.isEmpty { Task { await load() } } }
             .onChange(of: type) { Task { await load() } }
+            .onChange(of: path) { _, newPath in if newPath.isEmpty { Task { await load() } } }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { creating = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Nuova nota")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { showInbox = true } label: { Label("Inoltra email al second brain", systemImage: "envelope") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Altre azioni")
+                }
                 ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } }
+            }
+            .sheet(isPresented: $creating, onDismiss: { openCreatedNote() }) {
+                BrainNewNoteSheet { title in
+                    openAfterCreate = title
+                    Task { await load() }
+                }
+            }
+            .sheet(isPresented: $showInbox) {
+                BrainInboxSheet()
             }
             .navigationDestination(for: String.self) { title in
                 BrainNoteView(title: title, path: $path)
@@ -328,6 +399,13 @@ struct SecondBrainView: View {
             .replacingOccurrences(of: #"(^|\s)[-*]\s"#, with: "$1", options: .regularExpression)
     }
 
+    /// Dopo il foglio «Nuova nota»: apre la pagina appena creata (se il foglio ha salvato).
+    private func openCreatedNote() {
+        guard let title = openAfterCreate else { return }
+        openAfterCreate = nil
+        path.append(title)
+    }
+
     private func load() async {
         guard let api = model.api else { return }
         loading = true
@@ -343,12 +421,25 @@ struct SecondBrainView: View {
 
 // MARK: - nota
 
+extension BrainNoteDetail {
+    /// Pagine che Ernie aggiorna da sola (anagrafica e saluto): non si modificano né si eliminano a mano.
+    var isGenerated: Bool { type == "chi-sono" || type == "salute" }
+
+    /// Si può modificare o eliminare: la pagina esiste sul disco (ha un percorso) e non è generata da Ernie.
+    var isEditable: Bool { !path.isEmpty && !isGenerated }
+}
+
 struct BrainNoteView: View {
     let title: String
     @Binding var path: [String]
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var data: BrainNoteResponse?
     @State private var error: String?
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
+    @State private var actionError: String?
 
     var body: some View {
         ScrollView {
@@ -373,6 +464,13 @@ struct BrainNoteView: View {
                             path.append(t)
                             return .handled
                         })
+                    if n.isGenerated {
+                        Text("Pagina generata da Ernie: si aggiorna da sola.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let actionError {
+                        Text(actionError).font(.footnote).foregroundStyle(.red)
+                    }
                     if !(data?.backlinks ?? []).isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Citata da").font(.subheadline.weight(.semibold))
@@ -395,6 +493,33 @@ struct BrainNoteView: View {
         }
         .navigationTitle(data?.note.title ?? title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let n = data?.note, n.isEditable {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { editing = true } label: { Label("Modifica", systemImage: "pencil") }
+                        Button(role: .destructive) { confirmDelete = true } label: { Label("Elimina", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .disabled(deleting)
+                    .accessibilityLabel("Altre azioni sulla pagina")
+                }
+            }
+        }
+        .sheet(isPresented: $editing) {
+            if let n = data?.note {
+                BrainNoteEditor(note: n) { updated in data = updated }
+            }
+        }
+        .confirmationDialog("Eliminare «\(data?.note.title ?? title)»?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Elimina", role: .destructive) {
+                if let n = data?.note { Task { await delete(n) } }
+            }
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text("Resta nella cronologia di Ernie e si può recuperare.")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -407,5 +532,279 @@ struct BrainNoteView: View {
         } catch {
             self.error = "La pagina «\(title)» non esiste ancora: Ernie la crea quando ne parlate."
         }
+    }
+
+    /// Elimina la pagina (resta nella cronologia di Ernie) e torna alla lista.
+    private func delete(_ n: BrainNoteDetail) async {
+        guard let api = model.api else { return }
+        deleting = true
+        do {
+            try await api.brainDeleteNote(path: n.path)
+            dismiss()
+        } catch {
+            actionError = AppModel.describe(error)
+        }
+        deleting = false
+    }
+}
+
+/// Foglio «Modifica»: testo markdown e riservatezza. Il titolo si mostra soltanto: rinominare le pagine non è ancora previsto.
+struct BrainNoteEditor: View {
+    let note: BrainNoteDetail
+    /// Chiamato con la pagina aggiornata dal server, prima che il foglio si chiuda.
+    let onSaved: (BrainNoteResponse) -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+    @State private var isPrivate: Bool
+    @State private var saving = false
+    @State private var error: String?
+
+    init(note: BrainNoteDetail, onSaved: @escaping (BrainNoteResponse) -> Void) {
+        self.note = note
+        self.onSaved = onSaved
+        _text = State(initialValue: note.body)
+        _isPrivate = State(initialValue: note.private)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Titolo") {
+                    Text(note.title).foregroundStyle(.secondary)
+                }
+                Section("Testo") {
+                    TextEditor(text: $text)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 240)
+                        .scrollContentBackground(.hidden)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .accessibilityLabel("Testo della pagina")
+                }
+                Section {
+                    Toggle("Riservata", isOn: $isPrivate)
+                }
+                if let error {
+                    Section { Text(error).font(.footnote).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Modifica")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annulla") { dismiss() }
+                        .disabled(saving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { Task { await save() } } label: {
+                        if saving {
+                            ProgressView().accessibilityLabel("Salvataggio in corso")
+                        } else {
+                            Text("Salva")
+                        }
+                    }
+                    .disabled(saving)
+                }
+            }
+            .interactiveDismissDisabled(saving)
+        }
+    }
+
+    /// Salva il testo e, se è cambiata, la riservatezza: il server risponde con la pagina aggiornata.
+    private func save() async {
+        guard let api = model.api else { return }
+        saving = true
+        do {
+            let updated = try await api.brainUpdateNote(
+                path: note.path,
+                body: text,
+                isPrivate: isPrivate == note.private ? nil : isPrivate
+            )
+            onSaved(updated)
+            dismiss()
+        } catch {
+            self.error = AppModel.describe(error)
+        }
+        saving = false
+    }
+}
+
+/// Tipi che si creano a mano (chi-sono e salute sono pagine che Ernie genera da sola).
+private enum BrainNewType: String, CaseIterable, Identifiable {
+    case nota, persona, luogo, progetto, argomento
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .nota: "Nota"
+        case .persona: "Persona"
+        case .luogo: "Luogo"
+        case .progetto: "Progetto"
+        case .argomento: "Argomento"
+        }
+    }
+}
+
+/// Foglio «Nuova nota»: titolo, tipo, testo e riservatezza. Dopo il salvataggio chiama `onCreated` con il titolo.
+struct BrainNewNoteSheet: View {
+    /// Chiamato con il titolo della nota creata, prima che il foglio si chiuda.
+    let onCreated: (String) -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var kind: BrainNewType = .nota
+    @State private var text = ""
+    @State private var isPrivate = false
+    @State private var saving = false
+    @State private var error: String?
+
+    /// Titolo di almeno due caratteri e testo non vuoto.
+    private var valid: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+            && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Titolo", text: $title)
+                } footer: {
+                    Text("Almeno due caratteri.")
+                }
+                Section {
+                    Picker("Tipo", selection: $kind) {
+                        ForEach(BrainNewType.allCases) { k in
+                            Label(k.label, systemImage: BrainType.icon(k.rawValue)).tag(k)
+                        }
+                    }
+                }
+                Section("Testo") {
+                    ZStack(alignment: .topLeading) {
+                        if text.isEmpty {
+                            Text(verbatim: "Scrivi qui. Collega altre pagine con [[Titolo]].")
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                        TextEditor(text: $text)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 200)
+                            .scrollContentBackground(.hidden)
+                            .accessibilityLabel("Testo della nota")
+                    }
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                Section {
+                    Toggle("Riservata", isOn: $isPrivate)
+                }
+                if let error {
+                    Section { Text(error).font(.footnote).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Nuova nota")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annulla") { dismiss() }
+                        .disabled(saving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { Task { await save() } } label: {
+                        if saving {
+                            ProgressView().accessibilityLabel("Salvataggio in corso")
+                        } else {
+                            Text("Salva")
+                        }
+                    }
+                    .disabled(!valid || saving)
+                }
+            }
+            .interactiveDismissDisabled(saving)
+        }
+    }
+
+    /// Crea la pagina sul server, poi chiude il foglio: la schermata apre la nota nuova.
+    private func save() async {
+        guard let api = model.api else { return }
+        saving = true
+        do {
+            let created = try await api.brainCreateNote(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                body: text,
+                type: kind.rawValue,
+                isPrivate: isPrivate
+            )
+            onCreated(created.note.title)
+            dismiss()
+        } catch {
+            self.error = AppModel.describe(error)
+        }
+        saving = false
+    }
+}
+
+/// Foglio «Inoltra email al second brain»: l'indirizzo si legge dal server quando il foglio si apre.
+struct BrainInboxSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var address: String?
+    @State private var loading = true
+    @State private var error: String?
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Inoltra un'email a questo indirizzo dal tuo indirizzo registrato nella scheda: diventa una nota nel second brain.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    if loading {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else if let address, !address.isEmpty {
+                        Text(address)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            UIPasteboard.general.string = address
+                            copied = true
+                        } label: {
+                            Label(copied ? "Copiato" : "Copia", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        }
+                    } else if error == nil {
+                        Text("Non ancora configurato sul server.")
+                            .foregroundStyle(.secondary)
+                    }
+                    if let error {
+                        Text(error).font(.footnote).foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Inoltra email")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } }
+            }
+            .task { await load() }
+        }
+    }
+
+    /// Legge l'indirizzo dal server (GET /v1/brain/inbox-address).
+    private func load() async {
+        guard let api = model.api else { loading = false; return }
+        loading = true
+        do {
+            address = try await api.brainInboxAddress()
+            error = nil
+        } catch {
+            self.error = AppModel.describe(error)
+        }
+        loading = false
     }
 }

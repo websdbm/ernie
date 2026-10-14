@@ -27,7 +27,18 @@ export const FOLDERS: Record<NoteType, string> = {
   salute: 'Salute',
 };
 
-export type NoteSource = 'chat' | 'voce' | 'foto' | 'pdf' | 'memoria' | 'obsidian' | 'scheda';
+/** Da dove viene la nota (B3: «condiviso» da altre app, «email» dall'inoltro, «app» scritta a mano nell'app). */
+export type NoteSource =
+  | 'chat'
+  | 'voce'
+  | 'foto'
+  | 'pdf'
+  | 'memoria'
+  | 'obsidian'
+  | 'scheda'
+  | 'condiviso'
+  | 'email'
+  | 'app';
 
 export interface BrainNote {
   /** Percorso relativo nel vault, es. «Note/Codice della caldaia.md». */
