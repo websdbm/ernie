@@ -70,6 +70,64 @@ struct FamilyInvite: Codable, Sendable, Equatable, Identifiable {
     var relation: String
     var myLabel: String
     var expiresAt: String
+    /// Controllo genitori: accettando, il figlio è seguito da chi invita (server ≥ 0030).
+    var supervised: Bool? = nil
+}
+
+/// Anteprima di un codice d'invito (prima di accettare): chi invita, come, e se c'è il controllo genitori.
+struct FamilyInvitePreview: Codable, Sendable, Equatable {
+    var label: String
+    var myLabel: String
+    var relation: String
+    var supervised: Bool
+}
+
+/// Skill (o capacità come la ricerca sul web) che il genitore concede o nega al figlio.
+struct GuardianSkill: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var icon: String
+    var summary: String
+    var allowed: Bool
+}
+
+/// Figlio seguito con il controllo genitori.
+struct SupervisedChild: Codable, Sendable, Equatable, Identifiable {
+    var id: String { childId }
+    var childId: String
+    var label: String
+    var since: String
+    var lastReviewAt: String?
+    var skills: [GuardianSkill]
+}
+
+/// Conversazione del figlio (registro per il genitore).
+struct ChildSession: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var startedAt: String
+    var lastAt: String
+    var userMessages: Int
+}
+
+struct ChildMessage: Codable, Sendable, Equatable {
+    var role: String
+    var text: String
+    var at: String
+    var voice: Bool
+    var tools: [String]
+}
+
+/// Vista del figlio: chi lo segue e quando ha consultato le conversazioni.
+struct Supervision: Codable, Sendable, Equatable {
+    struct Guardian: Codable, Sendable, Equatable {
+        var label: String
+        var since: String
+        var lastReviewAt: String?
+    }
+    var supervised: Bool
+    var guardians: [Guardian]
+    var allowed: [String]?
 }
 
 struct FamilyOverview: Codable, Sendable, Equatable {
@@ -143,6 +201,8 @@ struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var available: Bool
     /// Interruttore del pannello ✦: attiva adesso (vale solo se disponibile).
     var enabled: Bool
+    /// Controllo genitori: non concessa dal genitore, non si può accendere.
+    var locked: Bool? = nil
     /// Lavora davvero: disponibile e accesa.
     var active: Bool
 }
@@ -313,11 +373,53 @@ struct ApiClient: Sendable {
         try await requestNoContent("DELETE", "/v1/tool-rules/\(id)")
     }
 
-    func createFamilyInvite(label: String, relation: String, myLabel: String) async throws -> FamilyInvite {
-        struct Body: Encodable { var label: String; var relation: String; var myLabel: String }
+    func createFamilyInvite(label: String, relation: String, myLabel: String, supervised: Bool = false) async throws -> FamilyInvite {
+        struct Body: Encodable { var label: String; var relation: String; var myLabel: String; var supervised: Bool }
         struct Out: Decodable { var invite: FamilyInvite }
-        let out: Out = try await request("POST", "/v1/family/invites", body: Body(label: label, relation: relation, myLabel: myLabel))
+        let out: Out = try await request("POST", "/v1/family/invites", body: Body(label: label, relation: relation, myLabel: myLabel, supervised: supervised))
         return out.invite
+    }
+
+    func previewFamilyInvite(code: String) async throws -> FamilyInvitePreview {
+        struct Out: Decodable { var invite: FamilyInvitePreview }
+        let safe = code.trimmingCharacters(in: .whitespacesAndNewlines).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code
+        let out: Out = try await request("GET", "/v1/family/invites/\(safe)/preview")
+        return out.invite
+    }
+
+    // MARK: controllo genitori
+
+    func supervisedChildren() async throws -> [SupervisedChild] {
+        struct Out: Decodable { var children: [SupervisedChild] }
+        let out: Out = try await request("GET", "/v1/family/children")
+        return out.children
+    }
+
+    func setChildSkills(childId: String, allowed: [String]) async throws -> [GuardianSkill] {
+        struct Body: Encodable { var allowed: [String] }
+        struct Out: Decodable { var skills: [GuardianSkill] }
+        let out: Out = try await request("PUT", "/v1/family/children/\(childId)/skills", body: Body(allowed: allowed))
+        return out.skills
+    }
+
+    func releaseChild(childId: String) async throws {
+        try await requestNoContent("DELETE", "/v1/family/children/\(childId)")
+    }
+
+    func childSessions(childId: String) async throws -> [ChildSession] {
+        struct Out: Decodable { var sessions: [ChildSession] }
+        let out: Out = try await request("GET", "/v1/family/children/\(childId)/sessions")
+        return out.sessions
+    }
+
+    func childSession(childId: String, sessionId: String) async throws -> [ChildMessage] {
+        struct Out: Decodable { var messages: [ChildMessage] }
+        let out: Out = try await request("GET", "/v1/family/children/\(childId)/sessions/\(sessionId)")
+        return out.messages
+    }
+
+    func supervision() async throws -> Supervision {
+        try await request("GET", "/v1/family/supervision")
     }
 
     func deleteFamilyInvite(code: String) async throws {

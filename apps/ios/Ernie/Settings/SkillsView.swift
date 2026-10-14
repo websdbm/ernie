@@ -42,6 +42,16 @@ struct SkillsView: View {
 
     var body: some View {
         List {
+            // Se il genitore ha concesso o negato qualche skill, il figlio vede subito chi lo segue.
+            if skills.contains(where: { $0.locked == true }) {
+                Section {
+                    SupervisionNotice(compact: true)
+                        .listRowBackground(Color.clear)
+                }
+            }
+            if let error {
+                Section { Text(error).font(.footnote).foregroundStyle(.red) }
+            }
             Section {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -82,18 +92,16 @@ struct SkillsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(skill.title).font(.body.weight(.semibold))
                                 Text(skill.summary ?? skill.description).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                                lockCaption(skill)
                             }
                             Spacer(minLength: 4)
                             Button("Attiva") { Task { await activate(skill) } }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
-                                .disabled(busy.contains(skill.id))
+                                .disabled(busy.contains(skill.id) || skill.locked == true)
                         }
                     }
                 }
-            }
-            if let error {
-                Section { Text(error).font(.footnote).foregroundStyle(.red) }
             }
         }
         .listSectionSpacing(.compact)
@@ -102,9 +110,20 @@ struct SkillsView: View {
         .task { await load() }
     }
 
+    /// Didascalia delle skill che il genitore ha concesso o negato: il figlio non può cambiarle.
+    @ViewBuilder
+    private func lockCaption(_ skill: SkillInfo) -> some View {
+        if skill.locked == true {
+            Label("La sceglie il genitore", systemImage: "lock.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder
     private func row(_ skill: SkillInfo) -> some View {
         let isOn = mode == .available ? skill.available : skill.enabled
+        let locked = skill.locked == true
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -112,6 +131,7 @@ struct SkillsView: View {
                     Text(skill.summary ?? skill.description)
                         .font(.footnote).foregroundStyle(.secondary)
                         .lineLimit(expanded.contains(skill.id) ? nil : 1)
+                    lockCaption(skill)
                 }
                 Spacer(minLength: 4)
                 Button {
@@ -129,7 +149,8 @@ struct SkillsView: View {
                     set: { value in Task { await toggle(skill, value) } }
                 ))
                 .labelsHidden()
-                .disabled(busy.contains(skill.id))
+                .disabled(locked || busy.contains(skill.id))
+                .accessibilityHint(locked ? "La sceglie il genitore" : "")
             }
             if expanded.contains(skill.id) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -164,7 +185,8 @@ struct SkillsView: View {
     }
 
     private func toggle(_ skill: SkillInfo, _ value: Bool) async {
-        guard let api = model.api else { return }
+        // Skill scelta dal genitore: il server la rifiuterebbe (403), qui non si chiama nemmeno.
+        guard skill.locked != true, let api = model.api else { return }
         busy.insert(skill.id)
         defer { busy.remove(skill.id) }
         do {
@@ -179,7 +201,7 @@ struct SkillsView: View {
 
     /// Dal cerca del pannello ✦: rende la skill disponibile e la accende in un colpo.
     private func activate(_ skill: SkillInfo) async {
-        guard let api = model.api else { return }
+        guard skill.locked != true, let api = model.api else { return }
         busy.insert(skill.id)
         defer { busy.remove(skill.id) }
         do {

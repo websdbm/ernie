@@ -71,7 +71,11 @@ struct SidePanel: View {
     private func panel(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            newConversationButton
+            // Il pulsante e l'avviso di controllo genitori sono in un gruppo senza spazio: se l'avviso è vuoto non resta un vuoto.
+            VStack(alignment: .leading, spacing: 0) {
+                newConversationButton
+                SupervisionNotice(compact: false)
+            }
             sectionRows
             Rectangle()
                 .fill(Theme.hairline)
@@ -149,11 +153,13 @@ struct SidePanel: View {
 
     // MARK: - sezioni
 
-    /// Promemoria, Second brain, (Salute se attiva), Skill, Famiglia, Novità.
+    /// Promemoria, Second brain (se attiva), Salute (se attiva), Skill, Famiglia, Novità.
     private var sectionRows: some View {
         VStack(spacing: 2) {
             sectionRow("Promemoria", icon: "bell.fill", tint: .reminders, badge: upcomingReminders, destination: .reminders)
-            sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)
+            if showsBrain {
+                sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)
+            }
             if isHealthActive {
                 sectionRow("Salute", icon: "heart.text.square.fill", tint: .health, locked: true, destination: .health)
             }
@@ -220,6 +226,13 @@ struct SidePanel: View {
     /// La skill «Salute» compare nel pannello solo quando è attiva.
     private var isHealthActive: Bool {
         skills.contains { $0.id == "salute" && $0.active }
+    }
+
+    /// Second brain: nascosto solo quando la skill è spenta (es. non concessa dal controllo genitori); finché le
+    /// skill non sono caricate resta visibile.
+    private var showsBrain: Bool {
+        guard let brain = skills.first(where: { $0.id == "second_brain" }) else { return true }
+        return brain.active
     }
 
     // MARK: - storico

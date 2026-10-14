@@ -1,5 +1,36 @@
 [
   {
+    "build": 47,
+    "date": "2026-10-14",
+    "title": "Controllo genitori",
+    "items": [
+      {
+        "icon": "shield.lefthalf.filled",
+        "title": "Controllo genitori",
+        "detail": "Invitando un figlio puoi attivare «Con controllo genitori»: scegli tu quali skill può usare (all’inizio promemoria, liste e documenti; la ricerca sul web è a parte) e puoi leggere le sue conversazioni con Ernie. Solo tu puoi toglierlo.",
+        "test": "Famiglia › Invita un familiare › Figlio/a con «Con controllo genitori», poi accetta il codice dal telefono del figlio."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Conversazioni del figlio",
+        "detail": "Da Famiglia › Controllo genitori › nome del figlio: interruttori delle skill (valgono subito) e «Leggi le conversazioni», con orari e strumenti usati.",
+        "test": "Apri una conversazione del figlio e controlla che compaiano anche i promemoria."
+      },
+      {
+        "icon": "eye",
+        "title": "Trasparenza per il figlio",
+        "detail": "Nell’app del figlio, nel pannello laterale, c’è sempre l’avviso «Account seguito da …» con la data dell’ultima consultazione; le skill non concesse mostrano il lucchetto. Prima di accettare l’invito vede cosa comporta.",
+        "test": "Sul telefono del figlio apri il pannello laterale e la lista Skill."
+      },
+      {
+        "icon": "brain.head.profile",
+        "title": "Second brain nel pannello solo se attivo",
+        "detail": "La voce «Second brain» del pannello laterale compare solo quando la skill è accesa.",
+        "test": "Spegni la skill Second brain e riapri il pannello."
+      }
+    ]
+  },
+  {
     "build": 46,
     "date": "2026-10-14",
     "title": "Novità a ogni versione",

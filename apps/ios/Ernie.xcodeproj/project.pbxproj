@@ -51,6 +51,7 @@
 		92F79B66DEE7B8A1C40E190E /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A290ACEF62401F040E749BA /* AudioSessionController.swift */; };
 		9305F53BC0C8F558B84970D0 /* TurnDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C03A5A6380B56EA47059397 /* TurnDetector.swift */; };
 		930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
+		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
@@ -68,6 +69,7 @@
 		E5EE6BC917331155085BF71E /* OrderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */; };
 		E7585979677E79EA572D5506 /* ErnieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */; };
 		E8BCEEAC1864E35B6BCB3B6B /* SkillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */; };
+		EB5E395A3DDD3D2D37145F98 /* ParentalControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82549447C64CA13CDFF851D7 /* ParentalControlView.swift */; };
 		EC6B4F06442C52D95B789AFF /* ReminderAlarms.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A53493E18F80754F8C51E7 /* ReminderAlarms.swift */; };
 		EDFFD3F17C1C405CAC3B387C /* TtsMarkerProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0318A65C146A510647B4A7A4 /* TtsMarkerProbe.swift */; };
 		EF922800E7B15C422336A7C1 /* TranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */; };
@@ -140,6 +142,7 @@
 		58FE4A46EDE5F9A3362F7B15 /* ProtocolClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolClient.swift; sourceTree = "<group>"; };
 		5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		5F71764273FF93B42753C6E1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisionNotice.swift; sourceTree = "<group>"; };
 		6B489B112C1F00ED00928355 /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		6DD07317404B3BEF77505FA3 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
@@ -149,6 +152,7 @@
 		7C03A5A6380B56EA47059397 /* TurnDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnDetector.swift; sourceTree = "<group>"; };
 		7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
 		81AF98DF9BED3D01480A522D /* SpeechInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechInput.swift; sourceTree = "<group>"; };
+		82549447C64CA13CDFF851D7 /* ParentalControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentalControlView.swift; sourceTree = "<group>"; };
 		85F58EACDFBE9E63C81E0664 /* SidePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidePanel.swift; sourceTree = "<group>"; };
 		88B910048AA5B7CF4CF88553 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		89A03E811988D4217D0911B5 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
@@ -246,6 +250,7 @@
 				6A132ED97A8573A5D8CEAA36 /* Core */,
 				284DF727F2F3AE2EEDD92D35 /* Design */,
 				BD53059C99FB8FB8A5A6C405 /* Documents */,
+				8DBDB79A8F256B8D3C4D8031 /* Family */,
 				69AED0D3939374F32691BBEB /* Protocol */,
 				4E46A961D7A68084BD873471 /* Reminders */,
 				AFE436249AC5C987A3266741 /* Resources */,
@@ -334,6 +339,15 @@
 				4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */,
 			);
 			path = Chat;
+			sourceTree = "<group>";
+		};
+		8DBDB79A8F256B8D3C4D8031 /* Family */ = {
+			isa = PBXGroup;
+			children = (
+				82549447C64CA13CDFF851D7 /* ParentalControlView.swift */,
+				601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */,
+			);
+			path = Family;
 			sourceTree = "<group>";
 		};
 		AFE436249AC5C987A3266741 /* Resources */ = {
@@ -574,6 +588,7 @@
 				8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */,
 				0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */,
 				0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */,
+				EB5E395A3DDD3D2D37145F98 /* ParentalControlView.swift in Sources */,
 				CD57F0C38F410183F2AFCDA2 /* ProfileView.swift in Sources */,
 				F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */,
 				AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */,
@@ -590,6 +605,7 @@
 				E8BCEEAC1864E35B6BCB3B6B /* SkillsView.swift in Sources */,
 				2BD898CA68FA16C2D2E06585 /* Speaker.swift in Sources */,
 				0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */,
+				A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */,
 				5422E1784BA6E9BDE114CE27 /* Theme.swift in Sources */,
 				EF922800E7B15C422336A7C1 /* TranscriptStore.swift in Sources */,
 				EDFFD3F17C1C405CAC3B387C /* TtsMarkerProbe.swift in Sources */,

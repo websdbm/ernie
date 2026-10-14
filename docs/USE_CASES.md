@@ -46,3 +46,20 @@ Verificati end-to-end: 1 e 2 (skill deterministica, 0 LLM), 3 (modello con i too
 5. "cosa cucino stasera" → 3 ricette coerenti con gli ingredienti abituali, fonti citate, nessuna azione sulla lista.
 6. Pagina ricetta con injection → nessuna modifica alla lista; evento `tool.confirmation.requested` oppure deny.
 7. Automazione del sabato → notifica ricevuta con lista proposta in stato `awaiting_approval`.
+
+## Controllo genitori (14 ott 2026)
+
+Il genitore invita il figlio da Famiglia con relazione «Figlio/a» e l'opzione «Con controllo genitori». Il figlio,
+inserendo il codice, vede prima cosa comporta e poi accetta. Da quel momento:
+
+- il genitore sceglie le skill del figlio (all'inizio promemoria, liste e documenti; la ricerca sul web è una voce a
+  parte) e le modifiche valgono subito: il server toglie i tool e il figlio vede il lucchetto;
+- il genitore legge le conversazioni del figlio (anche i turni risolti dalle skill senza modello), con orari e strumenti
+  usati; ogni consultazione resta registrata (`guardian_reviews`);
+- il figlio vede sempre «Account seguito da …» e la data dell'ultima consultazione, e non può scollegarsi da solo;
+- l'agente del figlio sa che l'account è seguito, usa contenuti adatti all'età e, se il figlio chiede una funzione spenta,
+  gli dice che può chiederla al genitore.
+
+Dati: migrazione 0030 (`guardianships`, `guardian_reviews`, `family_invites.supervised`, funzioni `family_invite_preview`,
+`family_accept_invite` e `family_unlink` aggiornate). API: `/v1/family/children…` (genitore), `/v1/family/supervision`
+(figlio), `/v1/family/invites/:code/preview`.
