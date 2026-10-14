@@ -1,5 +1,42 @@
 [
   {
+    "build": 48,
+    "date": "2026-10-14",
+    "title": "Second brain aperto: condividi, modifica, inoltra",
+    "items": [
+      {
+        "icon": "square.and.arrow.up",
+        "title": "Condividi con Ernie",
+        "detail": "Da Safari, Note, Foto, File e altre app: Condividi › Ernie. Link e testi finiscono subito nel second brain (i link con titolo e testo della pagina); foto e PDF li ritrovi pronti nella chat alla riapertura, con la frase «Metti questo documento nel second brain».",
+        "test": "In Safari condividi una pagina con Ernie, poi cercala nel second brain."
+      },
+      {
+        "icon": "square.and.pencil",
+        "title": "Modifica le note dall’app",
+        "detail": "Nella scheda di una nota: ⋯ › Modifica (testo e riservatezza) o Elimina; «+» nell’elenco per scrivere una nota nuova. Tutto resta nella cronologia.",
+        "test": "Second brain › + › scrivi una nota, poi aprila e modificala."
+      },
+      {
+        "icon": "envelope.arrow.triangle.branch",
+        "title": "Inoltra email al second brain",
+        "detail": "Second brain › ⋯ › Inoltra email: un indirizzo personale a cui inoltrare le email dal tuo indirizzo della scheda; diventano note. Richiede che i DNS del sottodominio siano configurati.",
+        "test": "Copia l’indirizzo dall’app (l’inoltro funziona dopo la configurazione dei DNS)."
+      },
+      {
+        "icon": "arrow.triangle.merge",
+        "title": "Riordino proposto da Ernie",
+        "detail": "Quando molte note parlano della stessa cosa, Ernie propone di riunirle in una pagina; lo fa solo se dici di sì e le originali restano nella cronologia.",
+        "test": "Con almeno 5 note collegate a «Caldaia», nella conversazione successiva Ernie propone di unirle."
+      },
+      {
+        "icon": "alarm.fill",
+        "title": "Le sveglie si chiamano «Sveglia»",
+        "detail": "Il titolo non viene più riscritto dal modello.",
+        "test": "Di’ «svegliami tra 5 minuti»: nella scheda compare «Sveglia»."
+      }
+    ]
+  },
+  {
     "build": 47,
     "date": "2026-10-14",
     "title": "Controllo genitori",

@@ -21,6 +21,8 @@ final class AppModel {
     /// Promemoria («Ricordami»): copia dei prossimi, notifiche locali, istantanea per il widget.
     let reminders = ReminderStore()
     var settings = LocalSettings.load()
+    /// Coda delle condivisioni in elaborazione: una passata alla volta.
+    @ObservationIgnored private var isProcessingShares = false
 
     var api: ApiClient? { credentials.map { ApiClient(credentials: $0) } }
     var companionName: String { profile?.companionName ?? "Ernie" }
@@ -126,6 +128,80 @@ final class AppModel {
         }
     }
 
+    // MARK: - condivisioni
+
+    /// Elabora la coda del foglio «Condividi con Ernie»: link e testi vanno al server; al più un'immagine o un PDF
+    /// per volta entra nel documento della barra di scrittura, con la richiesta già pronta da inviare.
+    /// Gli elementi non riusciti restano in coda per la prossima apertura.
+    func processShareInbox() async {
+        guard !isProcessingShares, let credentials, let conversation else { return }
+        isProcessingShares = true
+        defer { isProcessingShares = false }
+        var startedDocument = false
+        for item in ShareInbox.pending() {
+            switch item.kind {
+            case .link(let url, let title, let note):
+                if await deliverShare(url: url, text: nil, title: title, note: note, credentials: credentials) {
+                    ShareInbox.remove(item)
+                }
+            case .text(let text, let note):
+                if await deliverShare(url: nil, text: text, title: nil, note: note, credentials: credentials) {
+                    ShareInbox.remove(item)
+                }
+            case .images(let urls, let note):
+                guard !startedDocument, !documents.isActive else { continue }
+                startedDocument = true
+                let images = urls.compactMap { UIImage(contentsOfFile: $0.path) }
+                guard !images.isEmpty else {
+                    ShareInbox.remove(item)
+                    continue
+                }
+                documents.importImages(images, source: "photo")
+                await attachSharedDocument(item, note: note, conversation: conversation)
+            case .pdf(let url, let note):
+                guard !startedDocument, !documents.isActive else { continue }
+                startedDocument = true
+                documents.importPDF(url)
+                await attachSharedDocument(item, note: note, conversation: conversation)
+            }
+        }
+    }
+
+    /// Invia link o testo: `true` se il server l'ha salvato (l'elemento va tolto dalla coda).
+    private func deliverShare(url: URL?, text: String?, title: String?, note: String?, credentials: Credentials) async -> Bool {
+        do {
+            _ = try await ShareUpload.post(url: url, text: text, title: title, note: note,
+                                           serverURL: credentials.serverURL, apiKey: credentials.apiKey)
+            Log.app.info("condivisione salvata nel second brain")
+            return true
+        } catch {
+            Log.app.warning("condivisione ancora in coda: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Attende la lettura del documento condiviso; se è pronto lo lascia nella barra con la richiesta di metterlo
+    /// nel second brain. Se la lettura fallisce l'elemento resta in coda.
+    private func attachSharedDocument(_ item: ShareInbox.Item, note: String?, conversation: ConversationStore) async {
+        guard await documentReady() else { return }
+        ShareInbox.remove(item)
+        let request = "Metti questo documento nel second brain"
+        conversation.composerSuggestion = note.map { "\(request): \($0)" } ?? request
+    }
+
+    /// Aspetta che il documento in lettura sia pronto (`true`) o fallito/annullato (`false`); al massimo dieci minuti.
+    private func documentReady() async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(600))
+        while ContinuousClock.now < deadline {
+            switch documents.phase {
+            case .ready: return true
+            case .failed, .idle: return false
+            case .reading, .uploading: try? await Task.sleep(for: .milliseconds(200))
+            }
+        }
+        return false
+    }
+
     // MARK: - privato
 
     private func activate(_ creds: Credentials) async {
@@ -151,6 +227,8 @@ final class AppModel {
         await requestPushAuthorization()
         // Ora e posizione per il contesto dei turni: il permesso si chiede una volta, dopo quello delle notifiche.
         DeviceContextProvider.shared.start()
+        // Condivisioni fatte dal foglio «Ernie» mentre l'app era chiusa o in secondo piano.
+        Task { await self.processShareInbox() }
         #if DEBUG
         // Test automatici: invia un messaggio appena connesso (SIMCTL_CHILD_ERNIE_DEBUG_SEND="…").
         if let text = ProcessInfo.processInfo.environment["ERNIE_DEBUG_SEND"], !text.isEmpty {

@@ -1,6 +1,6 @@
 # 12 — Second brain
 
-> Stato: **B1 e B2 realizzate** (13 ottobre 2026): `packages/brain`, migrazione 0028, tool `brain_*`, pagine-concetto, suggerimenti e travaso dalla memoria, viste Elenco, Tempo e Mappa, menu ⋯ › Second brain nell'app. Repository privato `websdbm/ernie-brain`, aperto con Obsidian sul Mac in `~/Documents/Obsidian/ernie-brain`. Resta B3.
+> Stato: **B1, B2 e B3 realizzate** (13–14 ottobre 2026): `packages/brain`, migrazione 0028, tool `brain_*`, pagine-concetto, suggerimenti e travaso dalla memoria, viste Elenco, Tempo e Mappa, menu ⋯ › Second brain nell'app. Repository privato `websdbm/ernie-brain`, aperto con Obsidian sul Mac in `~/Documents/Obsidian/ernie-brain` (plugin Git: pull e commit ogni 5 minuti). B3: vedi §10.
 > Richiesta iniziale: «una seconda memoria esplicita che può comunicare con la memoria di Ernie e travasare da lì contenuti, o posso metterci io contenuti in vari modi, ad es. caricando file; struttura di un wiki, navigabile sia da me che da Ernie».
 
 ## 1. Decisioni dell'utente
@@ -110,3 +110,23 @@ andamenti, spiegazioni prudenti, avvisi spontanei e una «tabellina» riconoscib
 - **Avvisi**: dopo un referto, un riepilogo («Ho letto il referto…») e, se è l'analisi più recente, i fuori intervallo
   con i valori precedenti e i peggioramenti da tre analisi vicino al limite; detti una volta al turno successivo. Un
   referto più recente rende superati gli avvisi non ancora detti dei precedenti.
+
+## 10. B3, apertura (14 ottobre 2026)
+
+- **Modifica dall'app.** Nella scheda di una nota: Modifica (testo e riservatezza) ed Elimina; «+» per una nota nuova
+  (titolo, tipo, testo). Le pagine generate («Chi sono», Salute) non si toccano. API: `POST /v1/brain/notes`,
+  `PATCH /v1/brain/note`, `DELETE /v1/brain/note`. Fonte `app`.
+- **Condividi da altre app.** Estensione «Ernie» nel foglio di condivisione di iOS: link e testi arrivano subito
+  (`POST /v1/brain/share`; i link vengono letti con Firecrawl e la nota ha titolo, fonte e testo della pagina); foto e
+  PDF finiscono in una cassetta dell'App Group e l'app, alla riapertura, li prepara come documento con la frase
+  «Metti questo documento nel second brain» già pronta. Fonte `condiviso`. L'estensione legge le credenziali dal
+  Keychain condiviso (`76X78MBPR3.com.websdbm.ernie`, con migrazione dal vecchio elemento).
+- **Inoltro email.** Indirizzo personale `<token>@brain.ernie.staging3.eklettica.it` (Second brain › ⋯ › Inoltra email);
+  Brevo riceve la posta del sottodominio (record MX `inbound1.sendinblue.com` 10 e `inbound2.sendinblue.com` 20,
+  dominio verificato in Brevo) e chiama `POST /v1/brain/inbound/email?key=…`. Si accettano solo messaggi il cui
+  mittente è l'email della scheda; il token → utente passa da `brain_inbox_user` (migrazione 0031). Fonte `email`;
+  allegati elencati, non scaricati. Variabili: `BRAIN_INBOUND_SECRET`, `BRAIN_INBOUND_DOMAIN`.
+- **Riordino proposto da Ernie.** Se almeno 5 note sono collegate alla stessa pagina-concetto, al turno successivo
+  Ernie propone in una riga di riunirle («Ho 8 note sulla caldaia: le unisco?»), una volta ogni 30 giorni per pagina.
+  Solo dopo il sì chiama `brain_merge`: una sezione per nota con la data, le originali spariscono (restano nella
+  cronologia git) e le note che le citavano ora citano la pagina.

@@ -19,6 +19,7 @@ struct ErnieApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -29,5 +30,9 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.credentials == nil)
+        .onChange(of: scenePhase) { _, phase in
+            // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.
+            if phase == .active { Task { await model.processShareInbox() } }
+        }
     }
 }

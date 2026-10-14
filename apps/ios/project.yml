@@ -28,6 +28,8 @@ targets:
     dependencies:
       - target: ErnieWidgets
         embed: true
+      - target: ErnieShare
+        embed: true
     info:
       path: Ernie/Info.plist
       properties:
@@ -58,6 +60,8 @@ targets:
         aps-environment: development
         # Gruppo app condiviso con il widget dei promemoria (istantanea JSON).
         com.apple.security.application-groups: [group.com.websdbm.ernie]
+        # Credenziali nel Keychain condiviso con il foglio «Condividi con Ernie» (vedi Keychain.swift).
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie
@@ -96,6 +100,45 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
+  ErnieShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ErnieShare
+      # Codice condiviso con l'app: coda delle condivisioni, Keychain (credenziali), tema visivo, modello delle credenziali.
+      - path: Shared/ShareInbox.swift
+      - path: Ernie/Core/Keychain.swift
+      - path: Ernie/Core/Credentials.swift
+      - path: Ernie/Design/Theme.swift
+    info:
+      path: ErnieShare/Info.plist
+      properties:
+        CFBundleDisplayName: Ernie
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsFileWithMaxCount: 1
+    entitlements:
+      path: ErnieShare/ErnieShare.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.websdbm.ernie]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.share
+        PRODUCT_NAME: ErnieShare
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
   ErnieTests:
     type: bundle.unit-test
     platform: iOS
@@ -113,6 +156,7 @@ schemes:
       targets:
         Ernie: all
         ErnieWidgets: all
+        ErnieShare: all
         ErnieTests: [test]
     run:
       config: Debug

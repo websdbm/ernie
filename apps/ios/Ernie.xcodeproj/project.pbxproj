@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D938C458270FB5964436CBF8 /* BlockViews.swift */; };
 		022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */; };
+		064BA644DFD42668E74976B1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F71764273FF93B42753C6E1 /* Theme.swift */; };
+		072027F14DC8984C8D8DFD0E /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
 		0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
 		0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */; };
@@ -17,7 +19,9 @@
 		0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AF98DF9BED3D01480A522D /* SpeechInput.swift */; };
 		107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2871104CD6C4917C76FAA0 /* FloatingAvatar.swift */; };
 		1124F7AC9B4AC333E8B5EC54 /* SecondBrainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */; };
+		14EC76FF04AD1E9CA8821C30 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
+		1E20EE93269DFEFF1DFB9110 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		24A95C8605017621BC54120B /* DocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957834F4A9047230E5195B26 /* DocumentsTests.swift */; };
 		25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD07317404B3BEF77505FA3 /* ConversationStore.swift */; };
 		28C4C45071833A65D8042BC7 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FF043456831431801189D0 /* InputBar.swift */; };
@@ -27,9 +31,11 @@
 		2E2AE0CB0F0095940BFD3079 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3B5A05A74A82D7EAD93D989E /* Assets.xcassets */; };
 		308CBF03835CB246EF4E5725 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		3383E54C8EE818E4EE28F64A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B910048AA5B7CF4CF88553 /* AppDelegate.swift */; };
+		39AA7E9D4F45C1331F2469C4 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */; };
 		3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5625CB5A1D7224D40E394A01 /* FamilyView.swift */; };
 		3F6A6A60642E8F5C1DC50070 /* IconGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A873D448B86F04E46852AD68 /* IconGalleryView.swift */; };
 		4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1072AD1394544857B5BED36D /* ChatModels.swift */; };
+		4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 964663D7C194F32CAB945CD0 /* ShareModel.swift */; };
 		4F14D88AC2451671828A022F /* EventsCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2589F13E371B721791902AA /* EventsCodingTests.swift */; };
 		530915FB409B912C50D89900 /* SpeechTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D07BF5B3DFD216187A1FAED /* SpeechTests.swift */; };
 		5422E1784BA6E9BDE114CE27 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F71764273FF93B42753C6E1 /* Theme.swift */; };
@@ -38,6 +44,7 @@
 		57434EFF796701A96C505E8D /* SidePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F58EACDFBE9E63C81E0664 /* SidePanel.swift */; };
 		57CF0DA18B43EAD53CA6D4E8 /* DocumentReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E17EBA84621CA7DC748663 /* DocumentReader.swift */; };
 		5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585A161721BF631A7CFAD1DC /* ReminderStore.swift */; };
+		5FF485EC222D3B0637EA3B53 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
 		620DDDD97BD030CF92AA4CEC /* Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C358554D2B07798B83D777 /* Events.swift */; };
 		6590EC7D53515010D1ECD772 /* ListeningOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */; };
 		6A942790FE46EB1F7F086645 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */; };
@@ -46,11 +53,14 @@
 		85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD343071ED74C53EE49555CE /* VoiceTests.swift */; };
 		896501B81A339C83B037EE05 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98000DE6D12B55CB9A3223 /* HomeView.swift */; };
 		8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6A663AAF174530467149DD /* OnboardingView.swift */; };
+		8DB28567C9E2E8379E8AB13E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */; };
 		8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482E5F1386683C4811B2C6EE /* CardExport.swift */; };
 		929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5805C7F8E13A9BB5B66DD2A3 /* SentenceSplitter.swift */; };
+		92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E5156E50AC31BC18C2094CD /* ErnieShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		92F79B66DEE7B8A1C40E190E /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A290ACEF62401F040E749BA /* AudioSessionController.swift */; };
 		9305F53BC0C8F558B84970D0 /* TurnDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C03A5A6380B56EA47059397 /* TurnDetector.swift */; };
 		930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
+		953D0378785DCF39D7B18212 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
 		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
@@ -87,6 +97,13 @@
 			remoteGlobalIDString = 8CC7C7ADDDD26B459C5BCC7A;
 			remoteInfo = Ernie;
 		};
+		C8E6005D5A76DD0DB26FCA3D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C31EB1EDA452E6E8522D9ED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2E2D83049C6BA651CC6F13CE;
+			remoteInfo = ErnieShare;
+		};
 		DC3E998405006BF2CB8461B0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0C31EB1EDA452E6E8522D9ED /* Project object */;
@@ -104,6 +121,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				F53E4F4B5643E6A0A2F32A94 /* ErnieWidgets.appex in Embed Foundation Extensions */,
+				92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -113,6 +131,7 @@
 /* Begin PBXFileReference section */
 		0318A65C146A510647B4A7A4 /* TtsMarkerProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TtsMarkerProbe.swift; sourceTree = "<group>"; };
 		06D05B4674194F94566A5561 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		098CFF2AFD305C74A2B897D4 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 		0AA2FF63BFF2CB0C2696ED81 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
 		0C98000DE6D12B55CB9A3223 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -123,6 +142,7 @@
 		18135035CD14820BAC03C2C7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		1C5F81F2C5E0230E53EE2493 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieApp.swift; sourceTree = "<group>"; };
+		1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsView.swift; sourceTree = "<group>"; };
 		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
 		2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ErnieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -132,6 +152,7 @@
 		4361E7F7124014F0D94B4EA2 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStore.swift; sourceTree = "<group>"; };
 		482E5F1386683C4811B2C6EE /* CardExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardExport.swift; sourceTree = "<group>"; };
+		4C582BDD29CFEE84A945F289 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeServerView.swift; sourceTree = "<group>"; };
 		52FF043456831431801189D0 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		54C358554D2B07798B83D777 /* Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Events.swift; sourceTree = "<group>"; };
@@ -151,9 +172,11 @@
 		7BC159589ACD4766C7B1AA7D /* Ordering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ordering.swift; sourceTree = "<group>"; };
 		7C03A5A6380B56EA47059397 /* TurnDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnDetector.swift; sourceTree = "<group>"; };
 		7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
+		7E5156E50AC31BC18C2094CD /* ErnieShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ErnieShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AF98DF9BED3D01480A522D /* SpeechInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechInput.swift; sourceTree = "<group>"; };
 		82549447C64CA13CDFF851D7 /* ParentalControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentalControlView.swift; sourceTree = "<group>"; };
 		85F58EACDFBE9E63C81E0664 /* SidePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidePanel.swift; sourceTree = "<group>"; };
+		87E1A49827F8D4E27EBDB62D /* ErnieShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieShare.entitlements; sourceTree = "<group>"; };
 		88B910048AA5B7CF4CF88553 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		89A03E811988D4217D0911B5 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		8A290ACEF62401F040E749BA /* AudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionController.swift; sourceTree = "<group>"; };
@@ -162,8 +185,10 @@
 		900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ErnieWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		957834F4A9047230E5195B26 /* DocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsTests.swift; sourceTree = "<group>"; };
 		96165AA5F1E4F3A76F4C85E2 /* Ernie.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ernie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		964663D7C194F32CAB945CD0 /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
 		9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderingTests.swift; sourceTree = "<group>"; };
 		A873D448B86F04E46852AD68 /* IconGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconGalleryView.swift; sourceTree = "<group>"; };
+		A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		AC094642FF9A09140787A348 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
 		AD343071ED74C53EE49555CE /* VoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTests.swift; sourceTree = "<group>"; };
 		ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
@@ -200,6 +225,7 @@
 			isa = PBXGroup;
 			children = (
 				96165AA5F1E4F3A76F4C85E2 /* Ernie.app */,
+				7E5156E50AC31BC18C2094CD /* ErnieShare.appex */,
 				2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */,
 				900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */,
 			);
@@ -265,6 +291,7 @@
 			children = (
 				DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */,
 				E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */,
+				06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -362,6 +389,7 @@
 			isa = PBXGroup;
 			children = (
 				39E00D3D640F9F37578B10F3 /* Ernie */,
+				C276C0BAEAC53420E54F0FFD /* ErnieShare */,
 				22A9BBE23A356BA082DEC987 /* ErnieTests */,
 				270D444F40A039AF982FF263 /* ErnieWidgets */,
 				456CAB0711BA5BF64F2E8AD8 /* Shared */,
@@ -393,6 +421,18 @@
 			path = Documents;
 			sourceTree = "<group>";
 		};
+		C276C0BAEAC53420E54F0FFD /* ErnieShare */ = {
+			isa = PBXGroup;
+			children = (
+				87E1A49827F8D4E27EBDB62D /* ErnieShare.entitlements */,
+				4C582BDD29CFEE84A945F289 /* Info.plist */,
+				964663D7C194F32CAB945CD0 /* ShareModel.swift */,
+				A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */,
+				1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */,
+			);
+			path = ErnieShare;
+			sourceTree = "<group>";
+		};
 		E1DA6F70E1C483F5146CF30B /* Brain */ = {
 			isa = PBXGroup;
 			children = (
@@ -415,6 +455,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2E2D83049C6BA651CC6F13CE /* ErnieShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BAB7DCA54813BDE6F11D8774 /* Build configuration list for PBXNativeTarget "ErnieShare" */;
+			buildPhases = (
+				B4E67FC2061EE07717BDBFE7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ErnieShare;
+			packageProductDependencies = (
+			);
+			productName = ErnieShare;
+			productReference = 7E5156E50AC31BC18C2094CD /* ErnieShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		699B84F9AE2D3047E49E6F7F /* ErnieTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5B2BEE072C11585B83079571 /* Build configuration list for PBXNativeTarget "ErnieTests" */;
@@ -445,6 +502,7 @@
 			);
 			dependencies = (
 				9FCA3399E6872D3721349F84 /* PBXTargetDependency */,
+				7A70B6CA4F0E8390EFB7A406 /* PBXTargetDependency */,
 			);
 			name = Ernie;
 			packageProductDependencies = (
@@ -479,6 +537,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					2E2D83049C6BA651CC6F13CE = {
+						DevelopmentTeam = 76X78MBPR3;
+						ProvisioningStyle = Automatic;
+					};
 					699B84F9AE2D3047E49E6F7F = {
 						DevelopmentTeam = 76X78MBPR3;
 						ProvisioningStyle = Automatic;
@@ -509,6 +571,7 @@
 			targets = (
 				8CC7C7ADDDD26B459C5BCC7A /* Ernie */,
 				F37FC99C560F390D372EBF73 /* ErnieWidgets */,
+				2E2D83049C6BA651CC6F13CE /* ErnieShare */,
 				699B84F9AE2D3047E49E6F7F /* ErnieTests */,
 			);
 		};
@@ -547,6 +610,21 @@
 				022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */,
 				2A5E6AF978D040998A7842E2 /* ReminderAlarm.swift in Sources */,
 				930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */,
+				953D0378785DCF39D7B18212 /* ShareInbox.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B4E67FC2061EE07717BDBFE7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				14EC76FF04AD1E9CA8821C30 /* Credentials.swift in Sources */,
+				1E20EE93269DFEFF1DFB9110 /* Keychain.swift in Sources */,
+				072027F14DC8984C8D8DFD0E /* ShareInbox.swift in Sources */,
+				4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */,
+				39AA7E9D4F45C1331F2469C4 /* ShareView.swift in Sources */,
+				8DB28567C9E2E8379E8AB13E /* ShareViewController.swift in Sources */,
+				064BA644DFD42668E74976B1 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -600,6 +678,7 @@
 				AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */,
 				929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */,
 				A93C1F25009D68617118B48F /* SettingsView.swift in Sources */,
+				5FF485EC222D3B0637EA3B53 /* ShareInbox.swift in Sources */,
 				F54BB9A4CE55E3CA6D55CC42 /* ShoppingStore.swift in Sources */,
 				57434EFF796701A96C505E8D /* SidePanel.swift in Sources */,
 				E8BCEEAC1864E35B6BCB3B6B /* SkillsView.swift in Sources */,
@@ -618,6 +697,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		7A70B6CA4F0E8390EFB7A406 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2E2D83049C6BA651CC6F13CE /* ErnieShare */;
+			targetProxy = C8E6005D5A76DD0DB26FCA3D /* PBXContainerItemProxy */;
+		};
 		7AF12F9CF7D0FC5E4C499BAE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 8CC7C7ADDDD26B459C5BCC7A /* Ernie */;
@@ -631,6 +715,27 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		058F9524B90EFE16A65A087D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ErnieShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.websdbm.ernie.share;
+				PRODUCT_NAME = ErnieShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		097C4E8350BC5E6B0DC53B2D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -752,6 +857,27 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		332448A71CE38627EFB1EDEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ErnieShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.websdbm.ernie.share;
+				PRODUCT_NAME = ErnieShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
@@ -921,6 +1047,15 @@
 			buildConfigurations = (
 				8E6E7391C7D4F0C5AD761345 /* Debug */,
 				F90008BBBACB2E9203CCEF8B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BAB7DCA54813BDE6F11D8774 /* Build configuration list for PBXNativeTarget "ErnieShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				332448A71CE38627EFB1EDEF /* Debug */,
+				058F9524B90EFE16A65A087D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
