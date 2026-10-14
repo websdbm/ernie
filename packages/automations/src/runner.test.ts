@@ -10,6 +10,7 @@ import {
   buildAutomationPrompt,
   executeRun,
   isTransientError,
+  lastAlertOf,
   needsUser,
   notificationFor,
   PermanentError,
@@ -60,7 +61,13 @@ function fakeRepo(automations: Automation[]) {
     create: async () => {
       throw new Error('non usato');
     },
-    mergeMeta: async () => null,
+    mergeMeta: async (_u, id, patch) => {
+      const i = automations.findIndex((x) => x.id === id);
+      if (i < 0) return null;
+      const cur = automations[i] as Automation;
+      automations[i] = { ...cur, meta: { ...cur.meta, ...patch } };
+      return automations[i] as Automation;
+    },
     setEnabled: async (_u, id, enabled) => {
       const i = automations.findIndex((a) => a.id === id);
       if (i < 0) return null;
@@ -609,5 +616,57 @@ describe('classificazione errori, prompt, notifiche', () => {
     expect(n.kind).toBe('automation.approval');
     expect(n.body).toMatch(/shopping_list_add/);
     expect(n.body).toMatch(/uova/);
+  });
+});
+
+describe('sentinelle: avvisi ripetuti ed eventi unici', () => {
+  const guided = {
+    type: 'guided' as const,
+    instructions: 'controlla il prezzo',
+    allowedTools: [],
+    modelClass: 'standard' as const,
+    contextTags: [],
+  };
+
+  it('dopo un avviso il prompt chiede di riscrivere solo per una novità', () => {
+    const fresh = automation({
+      notifyPolicy: 'if_condition',
+      condition: 'il Bitcoin supera 50.000 dollari',
+    });
+    expect(buildAutomationPrompt(fresh, guided, { triggerType: 'cron' }, new Date())).not.toContain(
+      'Hai già avvisato',
+    );
+    const alerted = automation({
+      notifyPolicy: 'if_condition',
+      condition: 'il Bitcoin supera 50.000 dollari',
+      meta: {
+        lastAlert: { at: '2026-10-14T08:00:00.000Z', summary: 'Il Bitcoin vale 83.000 dollari.' },
+      },
+    });
+    const p = buildAutomationPrompt(alerted, guided, { triggerType: 'cron' }, new Date());
+    expect(p).toContain('Hai già avvisato l’utente'.replace('’', "'"));
+    expect(p).toContain('«Il Bitcoin vale 83.000 dollari.»');
+    expect(p).toContain('SOLO se c’è una novità rilevante'.replace('’', "'"));
+    expect(lastAlertOf(alerted)).toEqual({
+      at: '2026-10-14T08:00:00.000Z',
+      summary: 'Il Bitcoin vale 83.000 dollari.',
+    });
+  });
+
+  it('avviso → ultimo avviso ricordato; evento unico → la sentinella si ferma e lo dice', async () => {
+    const a = automation({ notifyPolicy: 'if_condition', condition: 'c’è qualcosa nella lista' });
+    const once = automation({
+      notifyPolicy: 'if_condition',
+      condition: 'c’è qualcosa nella lista',
+      meta: { once: true },
+    });
+    const list = [a, once];
+    const { d, notifications } = deps(list, skills());
+    await executeRun(d, job(a), 1);
+    expect(list[0]?.meta.lastAlert).toMatchObject({ summary: expect.any(String) });
+    expect(list[0]?.enabled).toBe(true);
+    await executeRun(d, job(once), 1);
+    expect(list[1]?.enabled).toBe(false);
+    expect(notifications.at(-1)?.body).toContain('la sentinella «Promemoria lista» si ferma qui');
   });
 });

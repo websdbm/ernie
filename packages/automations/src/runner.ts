@@ -311,6 +311,36 @@ async function finish(
     !pausedReason &&
     !silent &&
     (await deps.repo.recentlyNotified(run.userId, automation.id, hash).catch(() => false));
+  // Sentinella che avvisa: si ricorda l'avviso (i controlli successivi riscrivono solo per una novità) e,
+  // se l'evento era unico, si ferma da sola dicendolo nel messaggio.
+  const alerting =
+    automation.notifyPolicy === 'if_condition' &&
+    !pausedReason &&
+    !silent &&
+    !duplicate &&
+    updated.status === 'succeeded';
+  const stopAfter = alerting && automation.meta.once === true;
+  if (stopAfter)
+    message = {
+      ...message,
+      body: `${message.body}\n\nEra un evento da segnalare una volta: la sentinella «${automation.title}» si ferma qui.`.slice(
+        0,
+        2000,
+      ),
+    };
+  if (alerting) {
+    try {
+      await deps.repo.mergeMeta(run.userId, automation.id, {
+        lastAlert: {
+          at: new Date().toISOString(),
+          summary: (updated.outcome?.summary ?? '').slice(0, 600),
+        },
+      });
+      if (stopAfter) await deps.repo.setEnabled(run.userId, automation.id, false);
+    } catch (err) {
+      deps.logger.warn({ err, runId: run.id }, 'stato della sentinella non aggiornato');
+    }
+  }
   if ((automation.notify || pausedReason) && f.status !== 'skipped' && !silent && !duplicate) {
     try {
       const n = await deps.repo.notify(run.userId, message);
@@ -512,6 +542,13 @@ export function buildAutomationPrompt(
     parts.push(
       `Avvisa l'utente SOLO se è vera questa condizione: «${automation.condition}». Se non è vera o non puoi verificarla, rispondi soltanto con [SILENZIO] seguito da una riga di motivo. Se è vera, comincia con [AVVISO] e poi scrivi il messaggio per l'utente.`,
     );
+    // Regola sugli avvisi ripetuti (richiesta dell'utente, 14 ott 2026): una condizione che resta vera non
+    // deve avvisare a ogni controllo; si riscrive solo per una novità rispetto all'ultimo avviso.
+    const last = lastAlertOf(automation);
+    if (last)
+      parts.push(
+        `Hai già avvisato l'utente ${new Intl.DateTimeFormat('it-IT', { dateStyle: 'full', timeStyle: 'short', timeZone: automation.timezone }).format(new Date(last.at))}: «${last.summary}». Avvisalo di nuovo SOLO se c'è una novità rilevante rispetto a quell'avviso (un fatto nuovo, oppure un valore cambiato in modo significativo, indicativamente di oltre il 5 %). Se la situazione è sostanzialmente la stessa, rispondi [SILENZIO] e una riga di motivo.`,
+      );
   }
   if (data.payload !== undefined) {
     let json = JSON.stringify(data.payload, null, 1);
@@ -744,6 +781,16 @@ async function runGuided(
     status: 'succeeded',
     outcome: { summary, data: { model: companion.profile.modelId, modelClass } },
   };
+}
+
+/** Ultimo avviso mandato da una sentinella (in `meta.lastAlert`), se c'è. */
+export function lastAlertOf(
+  automation: Pick<Automation, 'meta'>,
+): { at: string; summary: string } | null {
+  const v = automation.meta.lastAlert as { at?: unknown; summary?: unknown } | undefined;
+  return v && typeof v.at === 'string' && typeof v.summary === 'string'
+    ? { at: v.at, summary: v.summary }
+    : null;
 }
 
 /**

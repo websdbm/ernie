@@ -16,6 +16,8 @@ export interface SentinelInfo {
   readonly url: string | null;
   readonly enabled: boolean;
   readonly pausedReason: string | null;
+  /** Evento unico: dopo il primo avviso la sentinella si ferma da sola. */
+  readonly once: boolean;
 }
 
 export interface SentinelStore {
@@ -29,6 +31,7 @@ export interface SentinelStore {
       source?: 'pagina' | 'feed';
       frequency: SentinelFrequency;
       time?: string;
+      once?: boolean;
     },
   ): Promise<SentinelInfo>;
   list(userId: string): Promise<SentinelInfo[]>;
@@ -43,6 +46,7 @@ const Info = z.object({
   url: z.string().nullable(),
   enabled: z.boolean(),
   pausedReason: z.string().nullable(),
+  once: z.boolean(),
 });
 
 export function createSentinelTools(store: SentinelStore): ToolSpec[] {
@@ -52,7 +56,7 @@ export function createSentinelTools(store: SentinelStore): ToolSpec[] {
       version: '1',
       category: 'sentinels',
       description:
-        "Crea una sentinella: un controllo ricorrente che avvisa l'utente SOLO quando una condizione si avvera (es. «avvisami quando esce la versione 2.0»). Se c'è una pagina o un feed da tenere d'occhio indicalo in url: il modello lavora solo quando cambia.",
+        "Crea una sentinella: un controllo ricorrente che avvisa l'utente SOLO quando una condizione si avvera (es. «avvisami quando esce la versione 2.0»). Se c'è una pagina o un feed da tenere d'occhio indicalo in url: il modello lavora solo quando cambia. Dopo un avviso la sentinella riscrive solo se c'è una novità rispetto all'ultimo avviso; con once true (evento che accade una volta: «quando esce…», «quando annunciano…», «quando torna disponibile…») si ferma da sola dopo il primo avviso.",
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 5_000,
       inputSchema: z.object({
@@ -71,6 +75,10 @@ export function createSentinelTools(store: SentinelStore): ToolSpec[] {
           .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
           .optional()
           .describe('Ora del controllo HH:MM (giornaliero o settimanale), predefinita 09:00'),
+        once: z
+          .boolean()
+          .default(false)
+          .describe('Evento unico: true se dopo il primo avviso non serve più controllare'),
       }),
       outputSchema: Info,
       execute: async (input, ctx) => {
@@ -83,6 +91,7 @@ export function createSentinelTools(store: SentinelStore): ToolSpec[] {
             ...(input.url ? { url: input.url } : {}),
             ...(input.source ? { source: input.source } : {}),
             ...(input.time ? { time: input.time } : {}),
+            ...(input.once ? { once: true } : {}),
           });
         } catch (err) {
           throw new ToolError(err instanceof Error ? err.message : String(err), 'invalid');

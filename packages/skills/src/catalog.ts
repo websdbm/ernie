@@ -246,8 +246,9 @@ export const RECIPES_SKILL_INSTRUCTIONS = [
 export const SENTINELS_SKILL_INSTRUCTIONS = [
   'Procedura «Sentinelle».',
   "1) Per «avvisami quando…», «dimmi se…», «tienimi d'occhio…» crea una sentinella con sentinel_create: titolo breve, cosa controllare, una condizione chiara e verificabile (non vaga), url se l'utente lo dà o se esiste una pagina ufficiale ovvia (source «feed» per RSS/Atom), frequenza (predefinita ogni giorno alle 09:00; ogni ora solo se serve davvero).",
-  '2) Conferma in una frase: cosa controllerai, quando, e che scriverai solo quando la condizione si avvera. Se la richiesta è troppo vaga, chiedi una precisazione prima di crearla.',
-  "3) «Quali sentinelle ho?» → sentinel_list; «togli la sentinella …» → sentinel_list e poi sentinel_remove con l'id giusto.",
+  "2) Evento che accade una volta («quando esce…», «quando annunciano…», «quando torna disponibile…»): once true, la sentinella si ferma da sola dopo il primo avviso. Soglie e situazioni che possono ripetersi («se il prezzo scende sotto…»): once false; dopo un avviso riscrive solo se c'è una novità rispetto all'ultimo.",
+  '3) Conferma in una frase: cosa controllerai, quando, che scriverai solo quando la condizione si avvera e, per un evento unico, che poi la sentinella si ferma. Se la richiesta è troppo vaga, chiedi una precisazione prima di crearla.',
+  "4) «Quali sentinelle ho?» → sentinel_list (quelle con enabled false hanno già avvisato e si sono fermate); «togli la sentinella …» → sentinel_list e poi sentinel_remove con l'id giusto.",
 ].join('\n');
 
 /** Skill guidata «Second brain» (docs/research/12-second-brain.md). */

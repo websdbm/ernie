@@ -189,7 +189,7 @@ struct HomeView: View {
             shortcut("Second brain", icon: "brain.head.profile", tint: .brain, to: .brain)
             shortcut("Promemoria", icon: "bell.fill", tint: .reminders, to: .reminders)
             shortcut("Famiglia", icon: "person.2.fill", tint: .sentinels, to: .family)
-            shortcut("Skill", icon: "sparkle", tint: .documents, to: .skills)
+            shortcut("Skill", icon: "bolt.shield.fill", tint: .documents, to: .skills)
         }
     }
 

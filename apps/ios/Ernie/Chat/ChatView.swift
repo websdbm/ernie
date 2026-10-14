@@ -46,7 +46,7 @@ struct ChatView: View {
                     }
                     .frame(maxHeight: .infinity)
                     .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
-                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, onSkills: { showSkills = true }, documents: model.documents)
+                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents)
                 }
                 if Self.showsListening(voice.phase) {
                     ListeningOverlay(voice: voice, conversation: conversation)

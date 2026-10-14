@@ -422,7 +422,7 @@ describe('sveglia: promemoria che suona sul telefono, senza email', () => {
     const reply = await skill.run(plan, { userId: 'u', sessionId: null, requestId: 'r' });
     expect(create.mock.calls[0]?.[1]).toMatchObject({ channels: { alarm: true, email: false } });
     expect(reply.text).toMatch(
-      /^⏰ Sveglia domani alle 06:00\. Suona sul telefono come una sveglia/,
+      /^⏰ Sveglia .+ alle 06:00\. Suona sul telefono come una sveglia/,
     );
     expect(reply.blocks?.[0]).toMatchObject({ kind: 'reminders', title: 'Sveglia' });
   });

@@ -35,6 +35,7 @@ const toInfo = (a: Automation): SentinelInfo => ({
   url: a.check?.url ?? null,
   enabled: a.enabled,
   pausedReason: a.pausedReason,
+  once: a.meta?.once === true,
 });
 
 export function createSentinelStore(deps: {
@@ -68,6 +69,7 @@ export function createSentinelStore(deps: {
           budgetUsd: Math.min(0.05, deps.maxBudgetUsd),
           notifyPolicy: 'if_condition',
           condition: s.condition,
+          ...(s.once ? { meta: { once: true } } : {}),
           ...(s.url
             ? {
                 check: {

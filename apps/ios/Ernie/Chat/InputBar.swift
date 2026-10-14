@@ -2,7 +2,7 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Un campo, il pulsante ✦ delle skill e un solo pulsante d'azione: microfono (un tocco avvia l'ascolto; tenuto premuto,
+/// Un campo e un solo pulsante d'azione (le skill stanno nel pannello laterale, decisione dell'utente del 14 ott 2026): microfono (un tocco avvia l'ascolto; tenuto premuto,
 /// o con l'impostazione «Conversazione continua», apre il dialogo a mani libere), invio quando c'è testo, stop mentre
 /// Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla,
 /// ↑ invia. Nella conversazione continua, mentre Ernie risponde, il microfono interrompe e riapre l'ascolto.
@@ -11,8 +11,6 @@ struct InputBar: View {
     var composing: FocusState<Bool>.Binding
     let conversation: ConversationStore
     let voice: VoiceController
-    /// Apre il pannello delle skill (decisione dell'utente: accanto al microfono, non in alto).
-    var onSkills: () -> Void = {}
     /// Allegato in preparazione (skill «Documenti»): «+» a sinistra del campo.
     var documents: DocumentComposer?
     @State private var showScanner = false
@@ -58,15 +56,6 @@ struct InputBar: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 12)
                         .onSubmit(sendDraft)
-                    Button(action: onSkills) {
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Theme.accentText)
-                            .frame(width: 44, height: 44)
-                            .background(Theme.surfaceMuted, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Skill")
                     actionButton
                 }
             }
