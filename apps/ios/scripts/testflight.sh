@@ -30,12 +30,12 @@ fi
 echo "== archivio (build $BUILD)"
 xcodebuild archive -project Ernie.xcodeproj -scheme Ernie -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$WORK/Ernie.xcarchive" \
-  -allowProvisioningUpdates -allowProvisioningDeviceRegistration "${AUTH[@]}" \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration ${AUTH[@]+"${AUTH[@]}"} \
   CURRENT_PROJECT_VERSION="$BUILD" | grep -E "error:|warning: .*(provision|sign)|ARCHIVE" || true
 test -d "$WORK/Ernie.xcarchive"
 echo "== esportazione e caricamento su App Store Connect"
 xcodebuild -exportArchive -archivePath "$WORK/Ernie.xcarchive" -exportOptionsPlist ExportOptions.plist \
-  -exportPath "$WORK/export" -allowProvisioningUpdates "${AUTH[@]}" | grep -E "error:|Upload|EXPORT" || true
+  -exportPath "$WORK/export" -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"} | grep -E "error:|Upload|EXPORT" || true
 echo "== «Cosa testare» su TestFlight dalle novità della build $BUILD"
 "${NODE_BIN:-node}" scripts/asc.mjs whats-new "$BUILD" --wait | grep -E "cosaTestare|Error" || echo "attenzione: «Cosa testare» non scritto (riprova: node apps/ios/scripts/asc.mjs whats-new $BUILD)"
 echo "fatto: la build compare in TestFlight dopo l'elaborazione (5–15 minuti)."
