@@ -571,6 +571,28 @@ async function main(): Promise<void> {
         intents,
         profiles,
         healthNotices: (userId) => health.takeNotices(userId),
+        recordLocalTurn: async (userId, sessionId, userText, reply) => {
+          if (!(await memory.getThreadById({ threadId: sessionId })))
+            await memory.createThread({ threadId: sessionId, resourceId: userId });
+          const now = Date.now();
+          const message = (role: 'user' | 'assistant', text: string, at: number) => ({
+            id: randomUUID(),
+            role,
+            createdAt: new Date(at),
+            threadId: sessionId,
+            resourceId: userId,
+            type: 'text',
+            content: { format: 2, parts: [{ type: 'text', text }] },
+          });
+          // I messaggi interni (promemoria scattati, «__…») restano fuori: si salva solo la risposta.
+          const internal = userText.startsWith('__');
+          await memory.saveMessages({
+            messages: [
+              ...(internal ? [] : [message('user', userText, now - 1)]),
+              message('assistant', reply, now),
+            ] as never,
+          });
+        },
         brainSuggest: (userId, text, exclude) => brain.service.suggest(userId, text, exclude),
         // Travaso dalla memoria (B2): una proposta ogni 30 giorni per argomento, ricordata in Redis.
         brainTransfer: async (userId) => {

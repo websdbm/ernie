@@ -131,6 +131,16 @@ export interface ConnectionDeps {
   readonly healthNotices?: (userId: string) => Promise<string | null>;
   /** Second brain (B2): proposta di travaso dalla memoria (blocco per il contesto), al più una per conversazione. */
   readonly brainTransfer?: (userId: string) => Promise<string | null>;
+  /**
+   * Turni risolti senza modello (skill deterministiche, comandi): salvati nella cronologia della sessione sul
+   * server, così il registro del controllo genitori è completo e l'agente ne sa qualcosa nei turni dopo.
+   */
+  readonly recordLocalTurn?: (
+    userId: string,
+    sessionId: string,
+    userText: string,
+    reply: string,
+  ) => Promise<void>;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
   readonly tools?: {
     readonly categories: readonly string[];
@@ -975,6 +985,16 @@ export class ClientConnection {
     );
     this.remember('utente', userText);
     this.remember('assistente', reply);
+    const sid = this.sessionId;
+    if (sid && this.deps.recordLocalTurn)
+      void this.deps
+        .recordLocalTurn(this.auth.userId, sid, userText, reply)
+        .catch((err: unknown) =>
+          this.deps.logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'turno locale non salvato nella cronologia',
+          ),
+        );
     await this.sendEmotion(correlationId, {
       userText,
       replyText: reply,

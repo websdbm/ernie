@@ -196,9 +196,14 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
       }
       // Controllo genitori: l'account di un figlio seguito (le impostazioni effettive portano le skill concesse).
-      if (Array.isArray((await currentSettings(auth)).guardianAllowed)) {
-        const kidNote =
-          'Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori. Se chiede una funzione non attiva, spiega che può chiederla al genitore.';
+      const effective = await currentSettings(auth);
+      if (Array.isArray(effective.guardianAllowed)) {
+        const allowed = new Set(effective.guardianAllowed as string[]);
+        const off = [
+          ...SKILL_CATALOG.filter((x) => !allowed.has(x.id)).map((x) => x.title),
+          ...(allowed.has('web') ? [] : ['ricerca sul web']),
+        ];
+        const kidNote = `Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori.${off.length ? ` Funzioni spente dal genitore: ${off.join(', ')}. Se ne chiede una, spiega con gentilezza che è spenta e che può chiedere al genitore di accenderla.` : ''}`;
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${kidNote}` : kidNote;
       }
       // Il modello diceva «non ho uno strumento per la sveglia»: promemoria e sveglie passano dalla skill Ricordami.
