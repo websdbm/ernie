@@ -152,16 +152,15 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
         opts.logger?.warn({ token: m.token }, 'inoltro email: token sconosciuto');
         continue;
       }
-      const senders = await withUser(pool, userId, async (c) =>
-        authorizedSenders(
-          (
-            await c.query<{ email: string | null; extra: unknown }>(
-              `SELECT settings->>'email' AS email, settings->'extraEmails' AS extra FROM users WHERE id = $1`,
-              [userId],
-            )
-          ).rows[0] ?? {},
-        ),
-      );
+      const senders = await withUser(pool, userId, async (c) => {
+        const row = (
+          await c.query<{ email: string | null; extra: unknown }>(
+            `SELECT settings->>'email' AS email, settings->'extraEmails' AS extra FROM users WHERE id = $1`,
+            [userId],
+          )
+        ).rows[0];
+        return authorizedSenders({ email: row?.email, extraEmails: row?.extra });
+      });
       if (!senders.has(m.from)) {
         opts.logger?.warn({ userId, from: m.from }, 'inoltro email: mittente non riconosciuto');
         continue;
