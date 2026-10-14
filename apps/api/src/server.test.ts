@@ -42,6 +42,22 @@ describe('API server', () => {
     expect(typeof body.uptimeSeconds).toBe('number');
   });
 
+  it('il log della richiesta in arrivo non contiene la chiave passata in query string', async () => {
+    const lines: string[] = [];
+    const captured = createLogger({
+      level: 'info',
+      name: 'test',
+      destination: { write: (msg: string) => void lines.push(msg) },
+    });
+    const app = await buildServer({ config, logger: captured, checks: {} });
+    apps.push(app);
+    const res = await app.inject({ method: 'GET', url: '/health?key=chiave-segreta&x=1' });
+    expect(res.statusCode).toBe(200);
+    const incoming = lines.find((l) => l.includes('incoming request')) ?? '';
+    expect(incoming).toContain('/health?key=[REDACTED]&x=1');
+    expect(lines.join('\n')).not.toContain('chiave-segreta');
+  });
+
   it('GET /ready risponde 200 quando tutte le dipendenze rispondono', async () => {
     const app = await make({ postgres: ok, redis: ok });
     const res = await app.inject({ method: 'GET', url: '/ready' });

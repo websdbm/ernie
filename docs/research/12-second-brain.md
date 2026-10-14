@@ -126,6 +126,11 @@ andamenti, spiegazioni prudenti, avvisi spontanei e una «tabellina» riconoscib
   dominio verificato in Brevo) e chiama `POST /v1/brain/inbound/email?key=…`. Si accettano solo messaggi il cui
   mittente è l'email della scheda; il token → utente passa da `brain_inbox_user` (migrazione 0031). Fonte `email`;
   allegati elencati, non scaricati. Variabili: `BRAIN_INBOUND_SECRET`, `BRAIN_INBOUND_DOMAIN`.
+  Configurazione fatta il 14 ott 2026: su Aruba (DNS di eklettica.it, TTL 5 min) i TXT `brain.ernie.staging3`
+  (codice Brevo) e `mail._domainkey.brain.ernie.staging3` (DKIM) più i due MX «su sottodominio»; il DMARC è
+  ereditato da `_dmarc.eklettica.it`. Dominio autenticato in Brevo e webhook inbound registrato (id 2615310,
+  evento `inboundEmailProcessed`, dominio `brain.ernie.staging3.eklettica.it`). Per ricrearlo: `POST
+  https://api.brevo.com/v3/webhooks` con `type: inbound` e l'URL del webhook con la chiave letta dal `.env`.
 - **Riordino proposto da Ernie.** Se almeno 5 note sono collegate alla stessa pagina-concetto, al turno successivo
   Ernie propone in una riga di riunirle («Ho 8 note sulla caldaia: le unisco?»), una volta ogni 30 giorni per pagina.
   Solo dopo il sì chiama `brain_merge`: una sezione per nota con la data, le originali spariscono (restano nella

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newId } from './ids.js';
-import { createLogger } from './logger.js';
+import { createLogger, redactUrl } from './logger.js';
 
 function collector() {
   const lines: string[] = [];
@@ -43,6 +43,44 @@ describe('createLogger', () => {
     expect(line).not.toContain('"pw"');
     expect(line).not.toContain('Bearer abc');
     expect(line).toContain('[REDACTED]');
+  });
+
+  it('redige i parametri sensibili nell’URL della richiesta (chiave del webhook in query string)', () => {
+    expect(redactUrl('/v1/brain/inbound/email?key=abc123&x=1')).toBe(
+      '/v1/brain/inbound/email?key=[REDACTED]&x=1',
+    );
+    expect(redactUrl('/a?x=1&api_key=k&token=t&secret=s&Signature=z')).toBe(
+      '/a?x=1&api_key=[REDACTED]&token=[REDACTED]&secret=[REDACTED]&Signature=[REDACTED]',
+    );
+    expect(redactUrl('/a?keyword=ok&monkey=1')).toBe('/a?keyword=ok&monkey=1');
+    expect(redactUrl('/senza/query')).toBe('/senza/query');
+
+    const { lines, stream } = collector();
+    const log = createLogger({ level: 'info', name: 'test', destination: stream });
+    log.info(
+      {
+        req: {
+          method: 'POST',
+          url: '/v1/brain/inbound/email?key=supersegreta',
+          host: 'ernie.example',
+          ip: '10.0.0.1',
+          headers: { 'accept-version': '1' },
+          socket: { remotePort: 4321 },
+        },
+      },
+      'incoming request',
+    );
+    const line = lines[0] ?? '';
+    expect(line).not.toContain('supersegreta');
+    const parsed = JSON.parse(line);
+    expect(parsed.req).toEqual({
+      method: 'POST',
+      url: '/v1/brain/inbound/email?key=[REDACTED]',
+      version: '1',
+      host: 'ernie.example',
+      remoteAddress: '10.0.0.1',
+      remotePort: 4321,
+    });
   });
 
   it('rispetta il livello minimo', () => {

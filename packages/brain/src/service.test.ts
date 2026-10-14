@@ -239,7 +239,7 @@ describe('second brain B3: modifica, cancellazione, riordino', () => {
     );
     expect(spese?.note.links).toEqual(['Caldaia']);
     expect(page?.backlinks).toContain('Spese di casa');
-    expect(git(base + '/' + user, 'log', '--format=%s', '-1')).toContain(
+    expect(git(`${base}/${user}`, 'log', '--format=%s', '-1')).toContain(
       'unite 3 note in «Caldaia»',
     );
 
