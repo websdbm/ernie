@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  authorizedSenders,
   cleanSubject,
   emailToNote,
   inboundToken,
   newInboxToken,
+  normalizeEmails,
   parseInboundPayload,
 } from './brain-inbound.js';
 import { shareTitle } from './routes/brain.js';
@@ -85,6 +87,18 @@ describe('inoltro email al second brain (B3)', () => {
         new Date('2026-10-14T10:00:00Z'),
       ).title,
     ).toBe('Email del 2026-10-14');
+  });
+
+  it('mittenti accettati: email della scheda più gli altri indirizzi, minuscoli e senza doppioni', () => {
+    const s = authorizedSenders({
+      email: ' Grassi.Alessandro@gmail.com ',
+      extraEmails: ['A.Grassi@issm.it', 'a.grassi@issm.it', ' ', 42, 'senza-chiocciola'],
+    });
+    expect([...s]).toEqual(['grassi.alessandro@gmail.com', 'a.grassi@issm.it']);
+    expect(authorizedSenders({}).size).toBe(0);
+    expect(authorizedSenders({ email: '', extraEmails: 'x@y.it' }).size).toBe(0);
+    expect(normalizeEmails(['B@c.it', 'b@c.it', 'a@b.it'])).toEqual(['b@c.it', 'a@b.it']);
+    expect(normalizeEmails(null)).toEqual([]);
   });
 
   it('titolo di una condivisione: dato, poi pagina, poi sito, poi prima riga del testo', () => {

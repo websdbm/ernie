@@ -113,3 +113,30 @@ export function newInboxToken(random: () => number = Math.random): string {
   for (let i = 0; i < 12; i++) s += alphabet[Math.floor(random() * alphabet.length)];
   return s;
 }
+
+/** Indirizzi (minuscoli, senza spazi, senza doppioni) da un valore qualsiasi delle impostazioni. */
+export function normalizeEmails(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const v of value) {
+    if (typeof v !== 'string') continue;
+    const e = v.trim().toLowerCase();
+    if (e?.includes('@') && !out.includes(e)) out.push(e);
+  }
+  return out;
+}
+
+/**
+ * Mittenti da cui si accettano gli inoltri: l'email della scheda più gli «altri indirizzi» (es. quello di lavoro)
+ * che l'utente ha aggiunto dall'app. Tutto minuscolo, così il confronto con `From` è insensibile alle maiuscole.
+ */
+export function authorizedSenders(settings: {
+  readonly email?: unknown;
+  readonly extraEmails?: unknown;
+}): Set<string> {
+  const out = new Set<string>();
+  if (typeof settings.email === 'string' && settings.email.trim())
+    out.add(settings.email.trim().toLowerCase());
+  for (const e of normalizeEmails(settings.extraEmails)) out.add(e);
+  return out;
+}

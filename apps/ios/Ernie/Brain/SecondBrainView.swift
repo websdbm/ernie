@@ -85,11 +85,15 @@ extension ApiClient {
         let _: EmptyResponse = try await request("DELETE", "/v1/brain/note?path=\(Self.encodeQueryValue(path))")
     }
 
-    /// Indirizzo al quale inoltrare le email; `nil` se il server non ha la posta in arrivo configurata.
-    func brainInboxAddress() async throws -> String? {
-        struct Out: Decodable { var address: String? }
-        let out: Out = try await request("GET", "/v1/brain/inbox-address")
-        return out.address
+    /// Indirizzo al quale inoltrare le email (`address` nil se il server non ha la posta in arrivo configurata),
+    /// con l'email della scheda e gli altri indirizzi da cui si accettano gli inoltri.
+    func brainInboxAddress() async throws -> BrainInbox {
+        try await request("GET", "/v1/brain/inbox-address")
+    }
+
+    /// Sostituisce l'elenco degli altri indirizzi (PATCH /v1/me/settings { extraEmails }); torna le impostazioni aggiornate.
+    func setExtraEmails(_ emails: [String]) async throws -> [String: JSONValue] {
+        try await updateSettings(["extraEmails": .array(emails.map { .string($0) })])
     }
 
     /// Codifica un valore da mettere nella query: anche `/`, `+`, `&` e `=` diventano sequenze di escape.
@@ -747,23 +751,37 @@ struct BrainNewNoteSheet: View {
 }
 
 /// Foglio «Inoltra email al second brain»: l'indirizzo si legge dal server quando il foglio si apre.
+/// Risposta di GET /v1/brain/inbox-address.
+struct BrainInbox: Decodable, Sendable {
+    var address: String?
+    /// Email della scheda (mittente sempre accettato); nil se non è ancora stata detta a Ernie.
+    var email: String?
+    /// Altri indirizzi dell'utente da cui si accettano gli inoltri (es. quello di lavoro).
+    var extraEmails: [String]
+}
+
 struct BrainInboxSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var address: String?
+    @State private var primaryEmail: String?
+    @State private var extraEmails: [String] = []
+    @State private var newEmail = ""
     @State private var loading = true
+    @State private var saving = false
     @State private var error: String?
     @State private var copied = false
+    @FocusState private var editing: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Inoltra un'email a questo indirizzo dal tuo indirizzo registrato nella scheda: diventa una nota nel second brain.")
+                    Text("Inoltra un'email a questo indirizzo: diventa una nota nel second brain. Vale solo se la mandi da uno degli indirizzi accettati qui sotto.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
-                Section {
+                Section("Indirizzo di Ernie") {
                     if loading {
                         ProgressView().frame(maxWidth: .infinity)
                     } else if let address, !address.isEmpty {
@@ -785,6 +803,50 @@ struct BrainInboxSheet: View {
                         Text(error).font(.footnote).foregroundStyle(.red)
                     }
                 }
+                if !loading, address != nil {
+                    Section {
+                        if let primaryEmail, !primaryEmail.isEmpty {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(primaryEmail)
+                                    Text("Email della scheda").font(.caption).foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "person.crop.circle").foregroundStyle(Color.accentColor)
+                            }
+                        } else {
+                            Text("Nessuna email nella scheda: dilla a Ernie o aggiungila qui sotto.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        ForEach(extraEmails, id: \.self) { email in
+                            Label(email, systemImage: "envelope")
+                        }
+                        .onDelete { offsets in
+                            var next = extraEmails
+                            next.remove(atOffsets: offsets)
+                            Task { await save(next) }
+                        }
+                        HStack {
+                            TextField("Altro indirizzo (es. lavoro)", text: $newEmail)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .focused($editing)
+                                .onSubmit { Task { await add() } }
+                            if saving {
+                                ProgressView()
+                            } else {
+                                Button("Aggiungi") { Task { await add() } }
+                                    .disabled(!Self.looksLikeEmail(newEmail))
+                            }
+                        }
+                    } header: {
+                        Text("Mittenti accettati")
+                    } footer: {
+                        Text("Le email da altri mittenti vengono ignorate. Scorri a sinistra per togliere un indirizzo.")
+                    }
+                }
             }
             .navigationTitle("Inoltra email")
             .navigationBarTitleDisplayMode(.inline)
@@ -795,16 +857,49 @@ struct BrainInboxSheet: View {
         }
     }
 
-    /// Legge l'indirizzo dal server (GET /v1/brain/inbox-address).
+    /// Legge indirizzo e mittenti dal server (GET /v1/brain/inbox-address).
     private func load() async {
         guard let api = model.api else { loading = false; return }
         loading = true
         do {
-            address = try await api.brainInboxAddress()
+            let inbox = try await api.brainInboxAddress()
+            address = inbox.address
+            primaryEmail = inbox.email
+            extraEmails = inbox.extraEmails
             error = nil
         } catch {
             self.error = AppModel.describe(error)
         }
         loading = false
+    }
+
+    private func add() async {
+        let email = newEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard Self.looksLikeEmail(email) else { return }
+        guard email != primaryEmail?.lowercased(), !extraEmails.contains(email) else { newEmail = ""; return }
+        await save(extraEmails + [email])
+        if error == nil { newEmail = ""; editing = false }
+    }
+
+    /// Salva l'elenco (PATCH /v1/me/settings) e lo rilegge dalla risposta.
+    private func save(_ next: [String]) async {
+        guard let api = model.api else { return }
+        saving = true
+        do {
+            let settings = try await api.setExtraEmails(next)
+            model.applySettings(settings)
+            extraEmails = settings["extraEmails"]?.arrayValue?.compactMap(\.stringValue) ?? next
+            error = nil
+        } catch {
+            self.error = AppModel.describe(error)
+        }
+        saving = false
+    }
+
+    static func looksLikeEmail(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let at = t.firstIndex(of: "@"), at != t.startIndex else { return false }
+        let domain = t[t.index(after: at)...]
+        return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".") && !t.contains(" ")
     }
 }

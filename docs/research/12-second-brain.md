@@ -124,7 +124,8 @@ andamenti, spiegazioni prudenti, avvisi spontanei e una «tabellina» riconoscib
 - **Inoltro email.** Indirizzo personale `<token>@brain.ernie.staging3.eklettica.it` (Second brain › ⋯ › Inoltra email);
   Brevo riceve la posta del sottodominio (record MX `inbound1.sendinblue.com` 10 e `inbound2.sendinblue.com` 20,
   dominio verificato in Brevo) e chiama `POST /v1/brain/inbound/email?key=…`. Si accettano solo messaggi il cui
-  mittente è l'email della scheda; il token → utente passa da `brain_inbox_user` (migrazione 0031). Fonte `email`;
+  mittente è l'email della scheda o uno degli «altri indirizzi» dell'utente (`settings.extraEmails`, gestiti
+  dall'app nello stesso foglio, `PATCH /v1/me/settings`); il token → utente passa da `brain_inbox_user` (migrazione 0031). Fonte `email`;
   allegati elencati, non scaricati. Variabili: `BRAIN_INBOUND_SECRET`, `BRAIN_INBOUND_DOMAIN`.
   Configurazione fatta il 14 ott 2026: su Aruba (DNS di eklettica.it, TTL 5 min) i TXT `brain.ernie.staging3`
   (codice Brevo) e `mail._domainkey.brain.ernie.staging3` (DKIM) più i due MX «su sottodominio»; il DMARC è

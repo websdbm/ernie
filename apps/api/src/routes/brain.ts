@@ -4,7 +4,13 @@ import type { Logger } from '@ernie/observability';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
-import { emailToNote, newInboxToken, parseInboundPayload } from '../brain-inbound.js';
+import {
+  authorizedSenders,
+  emailToNote,
+  newInboxToken,
+  normalizeEmails,
+  parseInboundPayload,
+} from '../brain-inbound.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface BrainRoutesOptions {
@@ -146,18 +152,17 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
         opts.logger?.warn({ token: m.token }, 'inoltro email: token sconosciuto');
         continue;
       }
-      const email = await withUser(
-        pool,
-        userId,
-        async (c) =>
+      const senders = await withUser(pool, userId, async (c) =>
+        authorizedSenders(
           (
-            await c.query<{ email: string | null }>(
-              `SELECT settings->>'email' AS email FROM users WHERE id = $1`,
+            await c.query<{ email: string | null; extra: unknown }>(
+              `SELECT settings->>'email' AS email, settings->'extraEmails' AS extra FROM users WHERE id = $1`,
               [userId],
             )
-          ).rows[0]?.email ?? null,
+          ).rows[0] ?? {},
+        ),
       );
-      if (!email || email.trim().toLowerCase() !== m.from) {
+      if (!senders.has(m.from)) {
         opts.logger?.warn({ userId, from: m.from }, 'inoltro email: mittente non riconosciuto');
         continue;
       }
@@ -332,15 +337,20 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
       const { userId } = requireAuth(req);
       const inbound = opts.inbound;
       const pool = opts.pool;
-      if (!inbound || !pool) return { address: null };
+      if (!inbound || !pool) return { address: null, email: null, extraEmails: [] };
+      let email: string | null = null;
+      let extraEmails: string[] = [];
       const token = await withUser(pool, userId, async (c) => {
-        const cur = (
-          await c.query<{ token: string | null }>(
-            `SELECT settings->>'brainInboxToken' AS token FROM users WHERE id = $1`,
+        const row = (
+          await c.query<{ token: string | null; email: string | null; extra: unknown }>(
+            `SELECT settings->>'brainInboxToken' AS token, settings->>'email' AS email,
+                    settings->'extraEmails' AS extra FROM users WHERE id = $1`,
             [userId],
           )
-        ).rows[0]?.token;
-        if (cur) return cur;
+        ).rows[0];
+        email = row?.email?.trim() || null;
+        extraEmails = normalizeEmails(row?.extra);
+        if (row?.token) return row.token;
         const fresh = newInboxToken();
         await c.query(
           `UPDATE users SET settings = settings || jsonb_build_object('brainInboxToken', $2::text)
@@ -356,7 +366,8 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
           ).rows[0]?.token ?? fresh
         );
       });
-      return { address: `${token}@${inbound.domain}` };
+      // Mittenti accettati: l'email della scheda più gli altri indirizzi (PATCH /v1/me/settings { extraEmails }).
+      return { address: `${token}@${inbound.domain}`, email, extraEmails };
     });
   });
 }

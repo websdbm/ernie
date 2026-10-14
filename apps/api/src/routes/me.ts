@@ -23,6 +23,12 @@ const SettingsPatch = z
     dailyBudgetUsd: z.number().min(0).max(50).optional(),
     speakReplies: z.boolean().optional(),
     email: z.string().trim().email().max(120).or(z.literal('')).optional(),
+    /** Altri indirizzi dell'utente (es. lavoro): da questi si accettano gli inoltri al second brain. */
+    extraEmails: z
+      .array(z.string().trim().toLowerCase().email().max(120))
+      .max(10)
+      .transform((list) => [...new Set(list)])
+      .optional(),
     emailNotifications: z.boolean().optional(),
     /** Gate della proattività (M9 A3): messaggi spontanei sì/no, ore di quiete, tetto giornaliero. */
     proactive: z.boolean().optional(),
@@ -80,7 +86,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
       if (!b.success)
         return badRequest(
           reply,
-          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, emailNotifications, proactive, quietHours, proactiveDailyCap',
+          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, extraEmails, emailNotifications, proactive, quietHours, proactiveDailyCap',
         );
       const row = await withUser(
         opts.pool,

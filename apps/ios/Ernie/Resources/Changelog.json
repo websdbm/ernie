@@ -1,5 +1,24 @@
 [
   {
+    "build": 49,
+    "date": "2026-10-14",
+    "title": "Inoltro email da più indirizzi",
+    "items": [
+      {
+        "icon": "envelope.badge.person.crop",
+        "title": "Mittenti accettati per l'inoltro",
+        "detail": "In Second brain › ⋯ › Inoltra email ora vedi chi può scrivere a Ernie: l'email della scheda più gli altri tuoi indirizzi (per esempio quello di lavoro), che aggiungi e togli lì. Le email da altri mittenti restano ignorate.",
+        "test": "Aggiungi il tuo indirizzo di lavoro, inoltra un'email da lì e controlla che compaia come nota."
+      },
+      {
+        "icon": "lock.shield",
+        "title": "Log del server più prudenti",
+        "detail": "Le chiavi passate negli indirizzi delle richieste non finiscono più nei log del server.",
+        "test": "Niente da provare dall'app."
+      }
+    ]
+  },
+  {
     "build": 48,
     "date": "2026-10-14",
     "title": "Second brain aperto: condividi, modifica, inoltra",
