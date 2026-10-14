@@ -291,7 +291,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
             : tidyReminderText(spoken),
         ) || spoken;
       if (!input.forLabel) {
-        const text = await titled();
+        const text = input.literalTitle ? spoken : await titled();
         const a = await insert(userId, text, at, input.timezone, {
           ...(!sameText(spoken, text) ? { spoken } : {}),
           ...(input.repeat ? { repeat: input.repeat } : {}),
@@ -309,7 +309,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
       if (!link) throw new UnknownPersonError(input.forLabel);
       const fromLabel = (await deps.family?.labelFor(link.otherUserId, userId)) ?? 'un familiare';
-      const text = await titled(fromLabel);
+      const text = input.literalTitle ? spoken : await titled(fromLabel);
       const meta: Meta = {
         from: userId,
         fromLabel,

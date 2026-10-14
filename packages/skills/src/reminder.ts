@@ -57,6 +57,8 @@ export interface ReminderStore {
       repeat?: ReminderRepeat;
       /** Canali chiesti a voce («mandamelo per email»). */
       channels?: ReminderChannels;
+      /** Titolo da tenere com'è, senza riscriverlo con il modello (es. «Sveglia», scelta dell'utente). */
+      literalTitle?: boolean;
     },
   ): Promise<Reminder>;
   /** Promemoria futuri ancora attivi, dal più vicino. */
@@ -738,7 +740,7 @@ export function createReminderSkill(
               ...(p.repeat ? { repeat: p.repeat } : {}),
               // Sveglia: suona sul telefono e niente email, anche se le email dei promemoria sono accese.
               ...(p.alarm
-                ? { channels: { alarm: true, email: false } }
+                ? { channels: { alarm: true, email: false }, literalTitle: true }
                 : p.email
                   ? { channels: { email: true } }
                   : {}),

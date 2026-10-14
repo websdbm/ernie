@@ -420,7 +420,10 @@ describe('sveglia: promemoria che suona sul telefono, senza email', () => {
     const skill = createReminderSkill(store, TZ);
     const plan = parseReminderCommand('svegliami domani alle 6', LATE, TZ);
     const reply = await skill.run(plan, { userId: 'u', sessionId: null, requestId: 'r' });
-    expect(create.mock.calls[0]?.[1]).toMatchObject({ channels: { alarm: true, email: false } });
+    expect(create.mock.calls[0]?.[1]).toMatchObject({
+      channels: { alarm: true, email: false },
+      literalTitle: true,
+    });
     expect(reply.text).toMatch(/^⏰ Sveglia .+ alle 06:00\. Suona sul telefono come una sveglia/);
     expect(reply.blocks?.[0]).toMatchObject({ kind: 'reminders', title: 'Sveglia' });
   });
