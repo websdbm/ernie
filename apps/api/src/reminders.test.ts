@@ -97,6 +97,7 @@ function fakeFamily(): FamilyRepository {
   };
   return {
     list: async (u) => links[u] ?? [],
+    preview: async () => null,
     find: async (u, label) =>
       (links[u] ?? []).find((l) => l.label.toLowerCase() === label.toLowerCase()) ?? null,
     labelFor: async (u, other) =>

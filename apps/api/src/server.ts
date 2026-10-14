@@ -8,6 +8,7 @@ import { type AutomationRoutesOptions, automationRoutes } from './routes/automat
 import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
+import { type GuardianRoutesOptions, guardianRoutes } from './routes/guardian.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { type ProfileRoutesOptions, profileRoutes } from './routes/profile.js';
@@ -39,6 +40,8 @@ export interface BuildServerOptions {
   readonly brain?: BrainRoutesOptions;
   /** Famiglia (M7e): collegamenti fra installazioni. */
   readonly family?: FamilyRoutesOptions;
+  /** Controllo genitori (0030). */
+  readonly guardian?: GuardianRoutesOptions;
   readonly toolRules?: ToolRulesRoutesOptions;
 }
 
@@ -117,6 +120,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
   if (opts.family) await app.register(familyRoutes, opts.family);
+  if (opts.guardian) await app.register(guardianRoutes, opts.guardian);
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);
   if (opts.profile) await app.register(profileRoutes, opts.profile);
   if (opts.brain) await app.register(brainRoutes, opts.brain);

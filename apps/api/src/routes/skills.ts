@@ -11,6 +11,11 @@ export interface SkillsRoutesOptions {
   readonly pool: Pool;
   /** Invalida le cache per utente (registry delle skill, agenti di sessione) dopo un cambio. */
   readonly onChanged?: (userId: string) => void;
+  /** Controllo genitori: impostazioni effettive con le skill concesse dal genitore (null se non seguito). */
+  readonly applyGuardian?: (
+    userId: string,
+    settings: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
 }
 
 /** `available`: compare nel pannello ✦ (impostazioni); `enabled`: attiva adesso (pannello ✦). */
@@ -31,7 +36,9 @@ function requireAuth(req: FastifyRequest): AuthContext {
 export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptions): Promise<void> {
   if (!app.hasRequestDecorator('auth')) app.decorateRequest('auth', null);
 
-  const settingsOf = async (userId: string): Promise<Record<string, unknown>> =>
+  const withLimits = async (userId: string, settings: Record<string, unknown>) =>
+    opts.applyGuardian ? opts.applyGuardian(userId, settings) : settings;
+  const rawSettingsOf = async (userId: string): Promise<Record<string, unknown>> =>
     withUser(
       pool(opts),
       userId,
@@ -43,6 +50,7 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
           )
         ).rows[0]?.settings ?? {},
     );
+  const settingsOf = async (userId: string) => withLimits(userId, await rawSettingsOf(userId));
   const present = (settings: Record<string, unknown>) => {
     const available = availableSkillIds(settings);
     const enabledMap = (settings.skills ?? {}) as Record<string, unknown>;
@@ -65,6 +73,8 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
         enabled: typeof v === 'boolean' ? v : s.defaultEnabled,
         /** Lavora davvero: disponibile e accesa. */
         active: active.has(s.id),
+        /** Controllo genitori: non concessa dal genitore (il figlio non può accenderla). */
+        locked: Array.isArray(settings.guardianAllowed) && !settings.guardianAllowed.includes(s.id),
       };
     });
   };
@@ -87,6 +97,12 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
           error: 'invalid_body',
           message: 'atteso { enabled?: boolean, available?: boolean }',
         });
+      const current = await settingsOf(auth.userId);
+      if (Array.isArray(current.guardianAllowed) && !current.guardianAllowed.includes(id))
+        return reply.code(403).send({
+          error: 'locked',
+          message: 'questa skill la sceglie il genitore (controllo genitori)',
+        });
       const enabledPatch = b.data.enabled === undefined ? {} : { [id]: b.data.enabled };
       const availablePatch = b.data.available === undefined ? {} : { [id]: b.data.available };
       const settings = await withUser(
@@ -104,7 +120,7 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
           ).rows[0]?.settings ?? {},
       );
       opts.onChanged?.(auth.userId);
-      return { skills: present(settings) };
+      return { skills: present(await withLimits(auth.userId, settings)) };
     });
   });
 }

@@ -378,5 +378,8 @@ export function disabledToolIds(
   }
   // Un tool usato anche da una skill accesa resta disponibile.
   for (const s of SKILL_CATALOG) if (enabled.has(s.id)) for (const t of s.tools) out.delete(t);
+  // Controllo genitori: capacità extra non concesse (es. ricerca sul web), sempre spente.
+  const blocked = settings?.guardianBlockedTools;
+  if (Array.isArray(blocked)) for (const t of blocked) if (typeof t === 'string') out.add(t);
   return out;
 }

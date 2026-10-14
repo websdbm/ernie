@@ -96,6 +96,7 @@ import { formatTransferProposal, transferCandidate } from './brain-transfer.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
+import { createGuardianStore, guardianSettings } from './guardian.js';
 import { createHealthRuntime } from './health.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
@@ -297,17 +298,24 @@ async function main(): Promise<void> {
   });
   for (const t of createBrainTools(brain.tools)) registry.register(t);
   // Impostazioni dell'utente (interruttori delle skill) lette dal database.
-  const loadUserSettings = (userId: string) =>
-    withUser(
-      postgres.pool,
+  // Controllo genitori: per un figlio seguito valgono solo le skill concesse dal genitore (calcolate a ogni lettura).
+  const guardian = createGuardianStore(postgres.pool);
+  const applyGuardian = async (userId: string, settings: Record<string, unknown>) =>
+    guardianSettings(settings, await guardian.limitsFor(userId));
+  const loadUserSettings = async (userId: string) =>
+    applyGuardian(
       userId,
-      async (c) =>
-        (
-          await c.query<{ settings: Record<string, unknown> }>(
-            `SELECT settings FROM users WHERE id = $1`,
-            [userId],
-          )
-        ).rows[0]?.settings ?? {},
+      await withUser(
+        postgres.pool,
+        userId,
+        async (c) =>
+          (
+            await c.query<{ settings: Record<string, unknown> }>(
+              `SELECT settings FROM users WHERE id = $1`,
+              [userId],
+            )
+          ).rows[0]?.settings ?? {},
+      ),
     );
   // Sezione salute: valori dei referti letti al caricamento, storico e confronti, note riservate nel vault.
   // Tutto dietro la skill «Salute»: spenta, niente tool, niente lettura dei referti, niente avvisi.
@@ -488,6 +496,7 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       pool: postgres.pool,
+      applyGuardian,
       onChanged: (userId) => companions.invalidateUser(userId),
     },
     documents: {
@@ -509,6 +518,13 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       repo: family,
+      onChanged: (userId) => companions.invalidateUser(userId),
+    },
+    guardian: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      pool: postgres.pool,
+      store: guardian,
       onChanged: (userId) => companions.invalidateUser(userId),
     },
     profile: {

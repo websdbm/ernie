@@ -27,6 +27,15 @@ export interface FamilyInvite {
   /** Come chi invita propone di farsi chiamare. */
   readonly myLabel: string;
   readonly expiresAt: Date;
+  /** Controllo genitori (0030): accettando, il figlio è seguito da chi invita. */
+  readonly supervised: boolean;
+}
+
+export class SupervisedUnlinkError extends Error {
+  constructor() {
+    super('il controllo genitori è attivo: può toglierlo solo il genitore');
+    this.name = 'SupervisedUnlinkError';
+  }
 }
 
 export class OwnInviteError extends Error {
@@ -44,8 +53,13 @@ export interface FamilyRepository {
   labelFor(userId: string, otherUserId: string): Promise<string | null>;
   createInvite(
     userId: string,
-    input: { label: string; relation: Relation; myLabel: string },
+    input: { label: string; relation: Relation; myLabel: string; supervised?: boolean | undefined },
   ): Promise<FamilyInvite>;
+  /** Cosa propone un codice (per chi lo riceve, prima di accettare); null se non valido. */
+  preview(
+    userId: string,
+    code: string,
+  ): Promise<{ label: string; myLabel: string; relation: Relation; supervised: boolean } | null>;
   listInvites(userId: string): Promise<FamilyInvite[]>;
   removeInvite(userId: string, code: string): Promise<boolean>;
   /** Accetta un codice: crea le due righe; null se il codice non è valido, usato o scaduto. */
@@ -79,6 +93,7 @@ interface IRow {
   relation: Relation;
   my_label: string;
   expires_at: Date;
+  supervised: boolean;
 }
 
 const toLink = (r: LRow): FamilyLink => ({
@@ -94,6 +109,7 @@ const toInvite = (r: IRow): FamilyInvite => ({
   relation: r.relation,
   myLabel: r.my_label,
   expiresAt: r.expires_at,
+  supervised: r.supervised,
 });
 
 export function createFamilyRepository(pool: Pool): FamilyRepository {
@@ -133,9 +149,18 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
         try {
           return await withUser(pool, userId, async (c) => {
             const res = await c.query<IRow>(
-              `INSERT INTO family_invites (code, user_id, relation, label, my_label, expires_at)
-               VALUES ($1,$2,$3,$4,$5,$6) RETURNING code, label, relation, my_label, expires_at`,
-              [code, userId, input.relation, input.label.trim(), input.myLabel.trim(), expiresAt],
+              `INSERT INTO family_invites (code, user_id, relation, label, my_label, expires_at, supervised)
+               VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING code, label, relation, my_label, expires_at, supervised`,
+              [
+                code,
+                userId,
+                input.relation,
+                input.label.trim(),
+                input.myLabel.trim(),
+                expiresAt,
+                // Il controllo genitori ha senso solo invitando un figlio.
+                input.supervised === true && input.relation === 'figlio',
+              ],
             );
             const row = res.rows[0];
             if (!row) throw new Error('invito non creato');
@@ -151,12 +176,33 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
       return withUser(pool, userId, async (c) =>
         (
           await c.query<IRow>(
-            `SELECT code, label, relation, my_label, expires_at FROM family_invites
+            `SELECT code, label, relation, my_label, expires_at, supervised FROM family_invites
               WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() ORDER BY created_at`,
             [userId],
           )
         ).rows.map(toInvite),
       );
+    },
+    async preview(userId, code) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query<{
+          o_label: string;
+          o_my_label: string;
+          o_relation: Relation;
+          o_supervised: boolean;
+        }>(`SELECT o_label, o_my_label, o_relation, o_supervised FROM family_invite_preview($1)`, [
+          code,
+        ]);
+        const row = r.rows[0];
+        return row
+          ? {
+              label: row.o_label,
+              myLabel: row.o_my_label,
+              relation: row.o_relation,
+              supervised: row.o_supervised,
+            }
+          : null;
+      });
     },
     async removeInvite(userId, code) {
       return withUser(
@@ -201,13 +247,19 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
       }
     },
     async unlink(userId, otherUserId) {
-      return withUser(
-        pool,
-        userId,
-        async (c) =>
-          (await c.query<{ n: number }>(`SELECT family_unlink($1) AS n`, [otherUserId])).rows[0]
-            ?.n === 2,
-      );
+      try {
+        return await withUser(
+          pool,
+          userId,
+          async (c) =>
+            (await c.query<{ n: number }>(`SELECT family_unlink($1) AS n`, [otherUserId])).rows[0]
+              ?.n === 2,
+        );
+      } catch (err) {
+        if ((err as { message?: string }).message?.includes('supervisione_attiva'))
+          throw new SupervisedUnlinkError();
+        throw err;
+      }
     },
   };
 }

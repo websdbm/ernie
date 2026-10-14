@@ -195,6 +195,12 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           'Come funziona la tua memoria: dopo ogni scambio quello che la persona racconta di sé viene annotato da solo (dati anagrafici e famiglia nella sua scheda, il resto tra i ricordi) e lo ritrovi nelle conversazioni successive. Non dire che non puoi ricordare o che ti manca uno strumento per salvarlo; se ti chiede cosa sai, rispondi da qui. Può vedere e correggere la scheda in Impostazioni › La tua scheda.';
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
       }
+      // Controllo genitori: l'account di un figlio seguito (le impostazioni effettive portano le skill concesse).
+      if (Array.isArray((await currentSettings(auth)).guardianAllowed)) {
+        const kidNote =
+          'Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori. Se chiede una funzione non attiva, spiega che può chiederla al genitore.';
+        memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${kidNote}` : kidNote;
+      }
       // Il modello diceva «non ho uno strumento per la sveglia»: promemoria e sveglie passano dalla skill Ricordami.
       const remindersNote =
         'Promemoria e sveglie: li imposta da sola la skill Ricordami quando la persona dice «ricordami di … alle …» o «svegliami domani alle 6» (la sveglia suona sul telefono, con Posticipa, senza email). Se una richiesta del genere arriva a te, non dire che non puoi: chiedi di ripeterla così, con giorno e ora.';

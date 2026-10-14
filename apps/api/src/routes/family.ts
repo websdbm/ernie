@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
-import { type FamilyRepository, OwnInviteError, RELATIONS } from '../family.js';
+import {
+  type FamilyRepository,
+  OwnInviteError,
+  RELATIONS,
+  SupervisedUnlinkError,
+} from '../family.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface FamilyRoutesOptions {
@@ -20,7 +25,14 @@ function requireAuth(req: FastifyRequest): AuthContext {
 }
 
 const Label = z.string().trim().min(1).max(40);
-const InviteBody = z.object({ label: Label, relation: z.enum(RELATIONS), myLabel: Label }).strict();
+const InviteBody = z
+  .object({
+    label: Label,
+    relation: z.enum(RELATIONS),
+    myLabel: Label,
+    supervised: z.boolean().optional(),
+  })
+  .strict();
 const AcceptBody = z
   .object({ code: z.string().trim().min(4).max(12), label: Label.optional() })
   .strict();
@@ -51,8 +63,20 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
           relation: i.relation,
           myLabel: i.myLabel,
           expiresAt: i.expiresAt.toISOString(),
+          supervised: i.supervised,
         })),
       };
+    });
+
+    // Prima di accettare: chi invita, come, e se l'invito porta il controllo genitori (consenso informato).
+    api.get('/v1/family/invites/:code/preview', async (req, reply) => {
+      const auth = requireAuth(req);
+      const p = await opts.repo.preview(auth.userId, (req.params as { code: string }).code);
+      if (!p)
+        return reply
+          .code(404)
+          .send({ error: 'invalid_code', message: 'codice non valido, già usato o scaduto' });
+      return { invite: p };
     });
 
     api.post('/v1/family/invites', async (req, reply) => {
@@ -70,6 +94,7 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
           relation: i.relation,
           myLabel: i.myLabel,
           expiresAt: i.expiresAt.toISOString(),
+          supervised: i.supervised,
         },
       });
     });
@@ -115,7 +140,14 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
       const other = (req.params as { otherUserId: string }).otherUserId;
       if (!z.uuid().safeParse(other).success)
         return reply.code(400).send({ error: 'invalid_id', message: 'id non valido' });
-      const ok = await opts.repo.unlink(auth.userId, other);
+      let ok: boolean;
+      try {
+        ok = await opts.repo.unlink(auth.userId, other);
+      } catch (err) {
+        if (err instanceof SupervisedUnlinkError)
+          return reply.code(403).send({ error: 'supervised', message: err.message });
+        throw err;
+      }
       if (!ok)
         return reply.code(404).send({ error: 'not_found', message: 'collegamento inesistente' });
       opts.onChanged?.(auth.userId);
