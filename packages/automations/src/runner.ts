@@ -545,7 +545,11 @@ export function buildAutomationPrompt(
     // Regola sugli avvisi ripetuti (richiesta dell'utente, 14 ott 2026): una condizione che resta vera non
     // deve avvisare a ogni controllo; si riscrive solo per una novità rispetto all'ultimo avviso.
     const last = lastAlertOf(automation);
-    if (last)
+    if (!last)
+      parts.push(
+        "Non hai ancora mai avvisato l'utente: se la condizione è già vera, anche per un fatto avvenuto prima di oggi, avvisalo (dicendo quando è successo).",
+      );
+    else
       parts.push(
         `Hai già avvisato l'utente ${new Intl.DateTimeFormat('it-IT', { dateStyle: 'full', timeStyle: 'short', timeZone: automation.timezone }).format(new Date(last.at))}: «${last.summary}». Avvisalo di nuovo SOLO se c'è una novità rilevante rispetto a quell'avviso (un fatto nuovo, oppure un valore cambiato in modo significativo, indicativamente di oltre il 5 %). Se la situazione è sostanzialmente la stessa, rispondi [SILENZIO] e una riga di motivo.`,
       );

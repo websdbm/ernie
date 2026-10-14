@@ -45,14 +45,15 @@ describe('controlli economici', () => {
     ).rejects.toThrow('indirizzo interno');
   });
 
-  it('pagina: primo giro memorizza senza avvisare; uguale → niente; cambiata → diff delle righe nuove', async () => {
+  it('pagina: primo giro memorizza e fa valutare il contenuto attuale; uguale → niente; cambiata → diff delle righe nuove', async () => {
     const check = { type: 'page_changed' as const, url: 'https://esempio.it/versioni' };
     const deps = { resolve: publicDns };
     const r1 = await evaluateCheck(check, null, {
       ...deps,
       fetch: fakeFetch([page('<p>1.9 uscita</p>')]),
     });
-    expect(r1.changed).toBe(false);
+    expect(r1.changed).toBe(true);
+    expect(r1.diff).toContain('Primo controllo');
     const r2 = await evaluateCheck(check, r1.state, {
       ...deps,
       fetch: fakeFetch([page('<p>1.9 uscita</p>')]),
@@ -68,7 +69,7 @@ describe('controlli economici', () => {
     expect(pageText(page('<p>ciao</p>'))).toEqual(['Versioni', 'ciao']);
   });
 
-  it('feed: voci nuove dopo il primo giro; errore della fonte = errore, non cambiamento', async () => {
+  it('feed: primo giro fa valutare le voci attuali, poi solo le nuove; errore della fonte = errore, non cambiamento', async () => {
     const rss = (items: string[]) =>
       `<rss><channel>${items.map((t) => `<item><title>${t}</title><link>https://x.it/${t}</link><guid>${t}</guid></item>`).join('')}</channel></rss>`;
     expect(feedItems(rss(['a', 'b'])).map((i) => i.id)).toEqual(['a', 'b']);
@@ -77,7 +78,8 @@ describe('controlli economici', () => {
       resolve: publicDns,
       fetch: fakeFetch([rss(['a', 'b'])]),
     });
-    expect(r1.changed).toBe(false);
+    expect(r1.changed).toBe(true);
+    expect(r1.diff).toContain('Primo controllo');
     const r2 = await evaluateCheck(check, r1.state, {
       resolve: publicDns,
       fetch: fakeFetch([rss(['c', 'a', 'b'])]),

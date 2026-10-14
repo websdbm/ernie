@@ -156,7 +156,14 @@ export async function evaluateCheck(
     const prev = typeof state?.hash === 'string' ? state.hash : null;
     const prevText = typeof state?.text === 'string' ? state.text : '';
     const next = { hash, text: kept, checkedAt: new Date().toISOString() };
-    if (!prev) return { changed: false, state: next }; // primo giro: si memorizza la pagina, nessun avviso
+    // Primo giro: si memorizza la pagina e il modello valuta subito la condizione sul contenuto attuale
+    // (una condizione già vera alla creazione va segnalata, 14 ott 2026).
+    if (!prev)
+      return {
+        changed: true,
+        state: next,
+        diff: `Primo controllo della pagina ${check.url} (contenuto attuale):\n${kept.slice(0, 3_000)}`,
+      };
     if (prev === hash) return { changed: false, state: { ...next, text: prevText || kept } };
     const old = new Set(prevText.split('\n'));
     const added = lines.filter((l) => !old.has(l));
@@ -172,7 +179,17 @@ export async function evaluateCheck(
   const seen = Array.isArray(state?.seen) ? (state.seen as string[]) : null;
   const ids = items.map((i) => i.id);
   const next = { seen: ids.slice(0, 200), checkedAt: new Date().toISOString() };
-  if (!seen) return { changed: false, state: next }; // primo giro: si segnano come viste le voci attuali
+  // Primo giro: le voci attuali si segnano come viste e il modello le valuta subito.
+  if (!seen)
+    return {
+      changed: true,
+      state: next,
+      diff: `Primo controllo del feed ${check.url} (voci attuali):\n${items
+        .slice(0, 15)
+        .map((i) => `- ${i.title} ${i.link}`)
+        .join('\n')
+        .slice(0, 3_000)}`,
+    };
   const fresh = items.filter((i) => !seen.includes(i.id));
   if (!fresh.length)
     return {
