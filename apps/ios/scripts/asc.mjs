@@ -10,9 +10,12 @@
  *   node apps/ios/scripts/asc.mjs device <nome> <udid>                      registra un iPhone per le build ad hoc (es. l'iPhone di un familiare)
  *   node apps/ios/scripts/asc.mjs bundles                                   App ID registrati (com.websdbm.ernie*) con le capability
  *   node apps/ios/scripts/asc.mjs app-groups <identifier> [nome]            registra l'App ID se manca e abilita la capability App Groups
+ *   node apps/ios/scripts/asc.mjs whats-new <build> [--wait]                scrive «Cosa testare» (TestFlight) dalla voce della build in Ernie/Resources/Changelog.json
  * Variabili: ASC_KEY_ID (default APWGU2N593), ASC_ISSUER_ID, ASC_KEY_PATH (~/.appstoreconnect/private_keys/AuthKey_<id>.p8), ASC_APP_ID (default 6821598639).
  */
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createSign } from 'node:crypto';
 import { homedir } from 'node:os';
 
@@ -153,12 +156,56 @@ switch (cmd) {
     out({ id: bundle.id, identifier, capability: r.data.id, appGroups: 'abilitata' });
     break;
   }
+  case 'whats-new': {
+    // Stesso testo della schermata «Novità» dell'app: cosa è cambiato e come provarlo.
+    const build = Number(args[0]);
+    const file = join(dirname(fileURLToPath(import.meta.url)), '..', 'Ernie', 'Resources', 'Changelog.json');
+    const entry = JSON.parse(readFileSync(file, 'utf8')).find((e) => e.build === build);
+    if (!entry) throw new Error(`nessuna voce per la build ${build} in Changelog.json`);
+    const text = [
+      `Versione ${entry.build} — ${entry.title}`,
+      '',
+      ...entry.items.flatMap((i) => [`• ${i.title}: ${i.detail}`, ...(i.test ? [`  Come provarla: ${i.test}`] : []), '']),
+    ]
+      .join('\n')
+      // TestFlight rifiuta alcuni simboli («✕», frecce): al loro posto le parole.
+      .replace(/✕/g, 'X')
+      .replace(/↑/g, 'la freccia in su')
+      .replace(/[\u2190-\u21FF\u2700-\u27BF]/g, '')
+      .trim()
+      .slice(0, 4000);
+    // Dopo il caricamento la build compare nell'API con qualche minuto di ritardo: con --wait si aspetta (max 20 min).
+    let b = null;
+    for (let i = 0; i < (args.includes('--wait') ? 80 : 1); i++) {
+      const r = await api('GET', `/v1/builds?filter[app]=${appId}&filter[version]=${build}&limit=1`);
+      b = r.data[0] ?? null;
+      if (b) break;
+      await new Promise((ok) => setTimeout(ok, 15_000));
+    }
+    if (!b) throw new Error(`build ${build} non ancora visibile su App Store Connect`);
+    const locs = await api('GET', `/v1/builds/${b.id}/betaBuildLocalizations`);
+    const it = locs.data.find((l) => l.attributes.locale.startsWith('it'));
+    if (it)
+      await api('PATCH', `/v1/betaBuildLocalizations/${it.id}`, {
+        data: { type: 'betaBuildLocalizations', id: it.id, attributes: { whatsNew: text } },
+      });
+    else
+      await api('POST', '/v1/betaBuildLocalizations', {
+        data: {
+          type: 'betaBuildLocalizations',
+          attributes: { locale: 'it', whatsNew: text },
+          relationships: { build: { data: { type: 'builds', id: b.id } } },
+        },
+      });
+    out({ build, buildId: b.id, caratteri: text.length, cosaTestare: 'scritto' });
+    break;
+  }
   case 'get': {
     // Sonda generica (diagnostica): node asc.mjs get /v1/bundleIds
     out(await api('GET', args[0]));
     break;
   }
   default:
-    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | uninvite <email> | add-internal <email> <gruppo> | devices | device <nome> <udid> | bundles | app-groups <identifier> [nome] | get <path>');
+    console.error('comandi: groups | testers <gruppo> | invite <email> <nome> <cognome> [ruolo] | uninvite <email> | add-internal <email> <gruppo> | devices | device <nome> <udid> | bundles | app-groups <identifier> [nome] | whats-new <build> [--wait] | get <path>');
     process.exit(64);
 }

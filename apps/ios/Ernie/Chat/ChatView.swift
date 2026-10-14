@@ -12,6 +12,8 @@ struct ChatView: View {
     @State private var showFamily = false
     @State private var showProfile = false
     @State private var panelOpen = false
+    /// Novità mostrate all'avvio dopo un aggiornamento, o riaperte dal pannello.
+    @State private var whatsNew: [ChangelogEntry]?
     @State private var debugIcons = false
     @State private var draft = ""
     @FocusState private var composing: Bool
@@ -64,6 +66,18 @@ struct ChatView: View {
         .sheet(isPresented: $showBrain) { SecondBrainView() }
         .sheet(isPresented: $showReminders) { RemindersView() }
         .sheet(isPresented: $showSkills) { SkillsSheet() }
+        .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { whatsNew = nil } })) {
+            WhatsNewView(entries: whatsNew ?? [])
+        }
+        .task {
+            // Dopo un aggiornamento: le novità delle versioni non ancora viste, una volta sola.
+            let unseen = Changelog.unseen()
+            Changelog.markSeen()
+            if !unseen.isEmpty {
+                try? await Task.sleep(for: .milliseconds(600))
+                whatsNew = unseen
+            }
+        }
         .sheet(isPresented: $showFamily) { ClosableSheet { FamilyView() } }
         .sheet(isPresented: $showProfile) { ClosableSheet { ProfileView() } }
         #if DEBUG
@@ -90,6 +104,7 @@ struct ChatView: View {
         case .profile: showProfile = true
         case .skills: showSkills = true
         case .settings: showSettings = true
+        case .whatsNew: whatsNew = Array(Changelog.load().prefix(3))
         }
     }
 

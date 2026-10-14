@@ -11,6 +11,7 @@ enum PanelDestination: Hashable {
     case profile
     case skills
     case settings
+    case whatsNew
 }
 
 /// Pannello laterale (bozzetto 4): scheda dell'utente, nuova conversazione, sezioni, storico delle conversazioni.
@@ -148,7 +149,7 @@ struct SidePanel: View {
 
     // MARK: - sezioni
 
-    /// Promemoria, Second brain, (Salute se attiva), Skill, Famiglia.
+    /// Promemoria, Second brain, (Salute se attiva), Skill, Famiglia, Novità.
     private var sectionRows: some View {
         VStack(spacing: 2) {
             sectionRow("Promemoria", icon: "bell.fill", tint: .reminders, badge: upcomingReminders, destination: .reminders)
@@ -158,6 +159,7 @@ struct SidePanel: View {
             }
             sectionRow("Skill", icon: "bolt.shield.fill", tint: .neutral, destination: .skills)
             sectionRow("Famiglia", icon: "person.2.fill", tint: .neutral, destination: .family)
+            sectionRow("Novità", icon: "sparkles", tint: .brain, destination: .whatsNew)
         }
     }
 

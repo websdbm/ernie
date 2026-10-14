@@ -1,0 +1,102 @@
+[
+  {
+    "build": 46,
+    "date": "2026-10-14",
+    "title": "Novità a ogni versione",
+    "items": [
+      {
+        "icon": "sparkles",
+        "title": "Novità a ogni versione",
+        "detail": "Questa schermata: dopo ogni aggiornamento mostra cosa è cambiato e come provarlo. Si riapre dal pannello laterale, voce «Novità». Lo stesso elenco compare in TestFlight, in «Cosa testare».",
+        "test": "Apri il pannello laterale e tocca «Novità»."
+      }
+    ]
+  },
+  {
+    "build": 45,
+    "date": "2026-10-14",
+    "title": "Sveglie, sentinelle più furbe e notifiche push",
+    "items": [
+      {
+        "icon": "alarm.fill",
+        "title": "Sveglie a voce",
+        "detail": "«Svegliami domani alle 6», «metti la sveglia per le sette e mezza», «ogni giorno svegliami alle 7»: diventa un promemoria che suona come una sveglia, con Posticipa e senza email. Le ore si possono dire anche in lettere.",
+        "test": "Di’ «svegliami tra 2 minuti» e lascia il telefono bloccato."
+      },
+      {
+        "icon": "bell.badge.fill",
+        "title": "Notifiche push",
+        "detail": "Promemoria, sentinelle e avvisi arrivano anche come notifica sul telefono, non solo nella chat.",
+        "test": "Di’ «ricordami tra 2 minuti di bere un bicchiere d’acqua», chiudi l’app e aspetta la notifica."
+      },
+      {
+        "icon": "eye.fill",
+        "title": "Sentinelle che non ripetono",
+        "detail": "Dopo un avviso la sentinella riscrive solo se c’è una novità; per gli eventi unici («quando esce…») si ferma da sola dopo il primo avviso. Al primo controllo segnala subito una condizione già vera.",
+        "test": "Di’ «avvisami quando Apple rilascia iOS 26»: deve rispondere che è già uscito e fermarsi."
+      },
+      {
+        "icon": "bolt.shield.fill",
+        "title": "Skill nel pannello laterale",
+        "detail": "Il pulsante delle skill non è più nella barra di scrittura: si aprono dal pannello laterale (o dalla scorciatoia «Skill» nella schermata Oggi).",
+        "test": "Apri il pannello con il pulsante in alto a sinistra e tocca «Skill»."
+      }
+    ]
+  },
+  {
+    "build": 44,
+    "date": "2026-10-13",
+    "title": "Nuova interfaccia",
+    "items": [
+      {
+        "icon": "sun.max.fill",
+        "title": "Schermata «Oggi»",
+        "detail": "Con la chat vuota: saluto, l’orso con il suo stato, i prossimi promemoria, scorciatoie e suggerimenti toccabili.",
+        "test": "Apri il pannello e tocca «Nuova conversazione»."
+      },
+      {
+        "icon": "sidebar.leading",
+        "title": "Pannello laterale e conversazioni passate",
+        "detail": "Sezioni (Promemoria, Second brain, Salute, Skill, Famiglia) e lo storico delle conversazioni: toccandone una la riprendi.",
+        "test": "Pulsante in alto a sinistra, poi tocca una conversazione di ieri."
+      },
+      {
+        "icon": "waveform",
+        "title": "Ascolto a tutto schermo",
+        "detail": "Mentre parli: orso grande con gli anelli che seguono la voce, le tue parole in tempo reale, ✕ per annullare e ↑ per inviare.",
+        "test": "Tocca il microfono e parla."
+      },
+      {
+        "icon": "rectangle.stack.fill",
+        "title": "Schede uniformi e tema scuro",
+        "detail": "Promemoria, ricette, fonti, salute e documenti hanno la stessa struttura e un colore per skill; il tema scuro è curato.",
+        "test": "Chiedi «che promemoria ho?» e prova anche con il telefono in modalità scura."
+      },
+      {
+        "icon": "circle.dashed",
+        "title": "Avatar galleggiante su richiesta",
+        "detail": "Durante la conversazione l’orso sta nella capsula in alto; l’avatar trascinabile di prima resta disponibile.",
+        "test": "Tieni premuta la capsula in alto e scegli «Avatar galleggiante»."
+      }
+    ]
+  },
+  {
+    "build": 43,
+    "date": "2026-10-13",
+    "title": "Salute ed email nella scheda",
+    "items": [
+      {
+        "icon": "heart.text.square.fill",
+        "title": "Skill «Salute» (spenta di partenza)",
+        "detail": "Carica il referto delle analisi come documento: Ernie legge i valori, li salva nella cartella riservata «Salute» e risponde con la tabellina, confronti e andamenti.",
+        "test": "Accendi «Salute» dal pannello Skill, carica un referto e chiedi «com’è il colesterolo?»."
+      },
+      {
+        "icon": "envelope.fill",
+        "title": "Email nella scheda anagrafica",
+        "detail": "L’indirizzo per le email dei promemoria vive nella tua scheda: se manca Ernie lo chiede, e lo cambia quando glielo dici.",
+        "test": "Di’ «la mia email è …» e controlla in Impostazioni › La tua scheda."
+      }
+    ]
+  }
+]
