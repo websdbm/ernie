@@ -278,11 +278,19 @@ final class ConversationStore {
         lastAvatarEmotion = name
         emotionTask?.cancel()
         emotionTask = Task { [weak self] in
-            // L'evento arriva a fine turno, spesso un attimo prima che la voce parta: si lascia un margine,
-            // poi si aspetta la fine del parlato (durante il parlato si vede la bocca, non l'espressione).
-            try? await Task.sleep(for: .milliseconds(1500))
+            // L'evento arriva a fine turno, spesso prima che la voce parta: con la voce accesa si aspetta che il
+            // parlato cominci (al più 6 s) e poi che finisca; la durata parte da lì (prima l'espressione restava
+            // visibile un secondo appena, perché il conto partiva prima della voce).
             var waited = 0
-            while let self, self.speaker.isSpeaking, waited < 90_000, !Task.isCancelled {
+            if self?.settings.voiceOutput == true {
+                while let self, !self.speaker.isSpeaking, self.agentState != .idle || waited < 1500,
+                      waited < 6_000, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    waited += 250
+                }
+            }
+            waited = 0
+            while let self, self.speaker.isSpeaking || self.agentState == .speaking, waited < 90_000, !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 waited += 250
             }

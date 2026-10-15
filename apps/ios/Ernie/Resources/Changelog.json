@@ -1,5 +1,30 @@
 [
   {
+    "build": 56,
+    "date": "2026-10-15",
+    "title": "Ernie più espressivo",
+    "items": [
+      {
+        "icon": "sunglasses.fill",
+        "title": "Occhiali da sole ed espressione feroce",
+        "detail": "L'orso ha 16 espressioni nuove: occhiali da sole, faccia feroce e ruggito, risata, occhi a cuore, imbarazzo, confusione, sbadiglio, aria fiera, preoccupazione, entusiasmo. Di' «sei un mito» per gli occhiali da sole, «forza Ernie, carica!» per la faccia feroce.",
+        "test": "Scrivi «sei troppo forte» e guarda l'orso quando Ernie ha finito di rispondere."
+      },
+      {
+        "icon": "theatermasks.fill",
+        "title": "Più variabilità",
+        "detail": "La stessa emozione può avere facce diverse; a riposo ogni tanto l'orso cambia espressione da solo e, quando si addormenta, sbadiglia. L'espressione resta visibile qualche secondo dopo che Ernie ha finito di parlare (prima spariva quasi subito).",
+        "test": "Lascia l'app aperta qualche minuto senza toccarla e guarda l'orso."
+      },
+      {
+        "icon": "square.grid.2x2.fill",
+        "title": "Nuove espressioni anche nel widget",
+        "detail": "Nel corso della giornata il widget mostra anche gli occhiali da sole, l'aria fiera e l'entusiasmo.",
+        "test": "Controlla il widget dell'orso più volte nella giornata."
+      }
+    ]
+  },
+  {
     "build": 55,
     "date": "2026-10-15",
     "title": "Nomi ai luoghi in chat e widget che si apre subito",
