@@ -37,6 +37,8 @@ export const envSchema = z.object({
   /** auto: API di Anthropic se c'è la chiave (OpenRouter come riserva), altrimenti OpenRouter. */
   LLM_PROVIDER: z.enum(['auto', 'anthropic', 'openrouter']).default('auto'),
   FIRECRAWL_API_KEY: z.string().min(1).optional(),
+  /** Google Places (skill «Portami lì»): ricerca dei posti. Senza, si usa OpenStreetMap (Nominatim). */
+  GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
   /** Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin. */
   WS_ALLOWED_ORIGINS: z.string().default(''),
   /** Tetto di spesa LLM giornaliero per utente, in USD, se non impostato in users.settings. */
@@ -67,7 +69,7 @@ export const envSchema = z.object({
   TOOL_CATEGORIES: z
     .string()
     .default(
-      'utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain,health,reminders,family',
+      'utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain,health,reminders,family,places',
     ),
   /** Second brain: cartella dei vault (uno per utente), remoti git per utente, chiave di deploy (base64). */
   BRAIN_DIR: z.string().default('./.data/brain'),
@@ -191,6 +193,7 @@ export interface AppConfig {
     readonly openaiApiKey: string | undefined;
     readonly anthropicApiKey: string | undefined;
     readonly firecrawlApiKey: string | undefined;
+    readonly googleMapsApiKey: string | undefined;
   };
 }
 
@@ -336,6 +339,7 @@ export function toAppConfig(env: Env): AppConfig {
           ? undefined
           : (env.ANTHROPIC_API_KEY ?? env.CLAUDE_API_KEY),
       firecrawlApiKey: env.FIRECRAWL_API_KEY,
+      googleMapsApiKey: env.GOOGLE_MAPS_API_KEY,
     },
   };
 }
@@ -399,6 +403,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
       openaiApiKey: present(config.providers.openaiApiKey),
       anthropicApiKey: present(config.providers.anthropicApiKey),
       firecrawlApiKey: present(config.providers.firecrawlApiKey),
+      googleMapsApiKey: present(config.providers.googleMapsApiKey),
     },
   };
 }

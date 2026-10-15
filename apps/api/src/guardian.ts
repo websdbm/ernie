@@ -25,9 +25,9 @@ export const GUARDIAN_EXTRAS = [
  * uguali (richiesta dell'utente: i nonni come il figlio), separate perché potranno divergere.
  */
 export const DEFAULT_SKILLS: Readonly<Record<Supervisable, readonly string[]>> = {
-  figlio: ['ricordami', 'shopping_list', 'documenti', 'messaggi'],
-  nonno: ['ricordami', 'shopping_list', 'documenti', 'messaggi'],
-  nonna: ['ricordami', 'shopping_list', 'documenti', 'messaggi'],
+  figlio: ['ricordami', 'shopping_list', 'documenti', 'messaggi', 'portami'],
+  nonno: ['ricordami', 'shopping_list', 'documenti', 'messaggi', 'portami'],
+  nonna: ['ricordami', 'shopping_list', 'documenti', 'messaggi', 'portami'],
 };
 
 const KNOWN = new Set<string>([

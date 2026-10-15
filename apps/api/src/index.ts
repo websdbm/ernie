@@ -77,6 +77,7 @@ import {
   createLearnedSkillRepository,
   createMemorySkill,
   createMessagesSkill,
+  createNavigateSkill,
   createPgActivityStore,
   createRecipesSkill,
   createReminderSkill,
@@ -131,6 +132,7 @@ import { createHealthRuntime } from './health.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createIntentStore } from './intents.js';
+import { createNavigateStore, createNavigationTools, createPlaceSearch } from './navigation.js';
 import { pickBrainPlace, placeFromNote } from './places.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
@@ -452,6 +454,33 @@ async function main(): Promise<void> {
     logger,
   });
   registry.register(createFamilyMessageTool(familyMessenger));
+  // «Portami lì»: luoghi della scheda (e del second brain), ricerca dei posti (Google Places o OpenStreetMap),
+  // link di Google Maps. «Ufficio» e «lavoro» valgono come lo stesso luogo, come per i promemoria.
+  const placeAliases: Record<string, string> = { ufficio: 'lavoro', lavoro: 'ufficio' };
+  const navigateStore = createNavigateStore({
+    findPlace: async (userId, label) => {
+      const norm = normalizePlaceLabel(label);
+      if (!norm) return null;
+      const list = await reminderPlaces.list(userId);
+      const alias = placeAliases[norm];
+      const known =
+        list.find((p) => p.label === norm) ??
+        (alias ? list.find((p) => p.label === alias) : undefined);
+      const found = known
+        ? { place: known, note: undefined }
+        : await reminderPlaces.fromBrain(userId, norm).catch(() => null);
+      if (!found) return null;
+      const pl = found.place;
+      return {
+        label: pl.label,
+        ...(pl.address ? { address: pl.address } : {}),
+        ...(pl.lat !== undefined && pl.lng !== undefined ? { lat: pl.lat, lng: pl.lng } : {}),
+        ...(found.note ? { note: found.note } : {}),
+      };
+    },
+    search: createPlaceSearch({ googleKey: config.providers.googleMapsApiKey, logger }),
+  });
+  for (const t of createNavigationTools(navigateStore)) registry.register(t);
   // Messaggi urgenti non confermati: la notifica si ripete (ogni 30 s, poi ogni minuto, per un'ora).
   let nagging = false;
   const nagTimer = setInterval(() => {
@@ -602,6 +631,7 @@ async function main(): Promise<void> {
             return { label: m.label, block: toFamilyMessageBlock(m) };
           },
         }),
+        createNavigateSkill(navigateStore),
         createDiarySkill(createPgActivityStore(postgres.pool)),
         // «Cosa sai di me?», «perché sai che …?», «dimentica che …» (M9 A4): fuori catalogo, sempre attiva.
         createMemorySkill({

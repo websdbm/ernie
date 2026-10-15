@@ -130,6 +130,25 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultEnabled: true,
   },
   {
+    id: 'portami',
+    title: 'Portami lì',
+    icon: 'location.north.line.fill',
+    tint: 'blue',
+    summary:
+      'Indicazioni stradali con Google Maps verso i tuoi luoghi, un indirizzo o un posto da cercare.',
+    description:
+      "Di' «portami a casa», «portami in via Roma 3, Treviso», «come arrivo dal dentista?» o «indicazioni per la stazione a piedi»: Ernie prepara il percorso in Google Maps dalla posizione in cui sei. Usa i luoghi della tua scheda e del second brain; se un posto ha più risultati (due pizzerie con lo stesso nome) ti fa scegliere con un tocco.",
+    kind: 'deterministic',
+    tools: ['place_lookup', 'directions_link'],
+    examples: [
+      'portami a casa',
+      'come arrivo dal dentista?',
+      'indicazioni per la stazione di Padova a piedi',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
+  {
     id: 'messaggi',
     title: 'Messaggi',
     icon: 'envelope.fill',

@@ -616,6 +616,20 @@ export const InterpretationBlock = z.object({
     .min(1)
     .max(4),
 });
+/**
+ * Indicazioni stradali (v1.19, skill «Portami lì»): un luogo della scheda, un indirizzo o un posto trovato con la
+ * ricerca, e il link a Google Maps (`url`, percorso dalla posizione attuale). Le coordinate, se ci sono, servono
+ * all'anteprima della mappa nell'app.
+ */
+export const DirectionsBlock = z.object({
+  kind: z.literal('directions'),
+  label: z.string().min(1).max(120),
+  address: z.string().max(200).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  mode: z.enum(['driving', 'walking', 'bicycling', 'transit']),
+  url: z.url().max(2000),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -631,6 +645,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   ChoicesBlock,
   FamilyMessageBlock,
   InterpretationBlock,
+  DirectionsBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 
