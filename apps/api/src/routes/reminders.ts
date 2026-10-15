@@ -26,6 +26,7 @@ const json = (r: Reminder) => ({
   ...(r.from ? { from: r.from } : {}),
   ...(r.channels ? { channels: r.channels } : {}),
   ...(r.repeat ? { repeat: { ...r.repeat, label: repeatLabel(r.repeat) } } : {}),
+  ...(r.eventAt ? { eventAt: r.eventAt.toISOString() } : {}),
 });
 
 /** Promemoria per l'app (scheda e widget): elenco dei prossimi, modifica e annullamento. */

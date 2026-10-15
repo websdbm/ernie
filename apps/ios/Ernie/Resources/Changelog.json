@@ -1,5 +1,24 @@
 [
   {
+    "build": 51,
+    "date": "2026-10-15",
+    "title": "Scheda dei promemoria con i testi grandi",
+    "items": [
+      {
+        "icon": "textformat.size",
+        "title": "Chip e comandi non si scompaginano più",
+        "detail": "Con i caratteri grandi «Sveglia», «Email», la matita e «Annulla» restano interi: se non ci stanno su una riga, i chip vanno sopra e i comandi sotto.",
+        "test": "Con Impostazioni › Schermo › Dimensione testo al massimo, apri una scheda di promemoria."
+      },
+      {
+        "icon": "calendar.badge.clock",
+        "title": "Ora dell'appuntamento anche nell'elenco",
+        "detail": "La riga «Appuntamento alle 19:00, avviso un'ora prima» compare anche quando la scheda si aggiorna dall'elenco del server.",
+        "test": "Crea un appuntamento con preavviso e riapri la conversazione."
+      }
+    ]
+  },
+  {
     "build": 50,
     "date": "2026-10-15",
     "title": "Appuntamenti con preavviso e domande chiuse",

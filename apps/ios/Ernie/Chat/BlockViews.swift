@@ -59,6 +59,8 @@ struct ChoicesCard: View {
                     } label: {
                         Text(option.label)
                             .font(.subheadline.weight(.medium))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .background(
@@ -80,23 +82,31 @@ struct ChoicesCard: View {
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
+    /// Dimensione di un figlio: ideale, ma non più larga della riga (un'etichetta lunga va a capo al suo interno).
+    private func size(of v: LayoutSubview, width: CGFloat) -> CGSize {
+        let ideal = v.sizeThatFits(.unspecified)
+        if width.isFinite, ideal.width > width { return v.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
+        return ideal
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
         for v in subviews {
-            let size = v.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            let size = size(of: v, width: width)
+            if x > 0, x + size.width > width + 0.5 { x = 0; y += rowHeight + spacing; rowHeight = 0 }
             x += size.width + spacing
+            maxX = max(maxX, x - spacing)
             rowHeight = max(rowHeight, size.height)
         }
-        return CGSize(width: width == .infinity ? x : width, height: y + rowHeight)
+        return CGSize(width: width.isFinite ? min(width, ceil(maxX)) : ceil(maxX), height: ceil(y + rowHeight))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
         for v in subviews {
-            let size = v.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
+            let size = size(of: v, width: bounds.width)
+            if x > bounds.minX, x + size.width > bounds.maxX + 0.5 { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
             v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
@@ -189,7 +199,10 @@ struct RemindersCard: View {
     /// Righe aggiornate: un promemoria modificato ha un id nuovo, la scheda lo segue.
     private var rows: [ReminderItem] {
         block.reminders.map { r in
-            if let live = model.reminders.item(r.id) { return live }
+            if var live = model.reminders.item(r.id) {
+                if live.eventAt == nil { live.eventAt = r.eventAt }
+                return live
+            }
             var x = r
             if r.status == "scheduled" { x.status = isPast(r) ? "done" : "cancelled" }
             return x
@@ -246,25 +259,20 @@ struct RemindersCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if scheduled {
-                HStack(spacing: 8) {
-                    ReminderChannelChips(item: r)
-                    Spacer(minLength: 0)
-                    Button {
-                        editing = editing == r.id ? nil : r.id
-                    } label: {
-                        Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle")
-                            .font(.title3)
-                            .foregroundStyle(Theme.accentText)
+                // Con i testi grandi la riga non ci sta: i chip vanno sopra e i comandi sotto, senza spezzare le parole.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        ReminderChannelChips(item: r)
+                        Spacer(minLength: 8)
+                        actions(r)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Modifica")
-                    Button("Annulla") { Task { await model.reminders.cancel(r) } }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkSecondary)
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .overlay(Capsule().strokeBorder(Theme.hairline))
+                    VStack(alignment: .leading, spacing: 10) {
+                        ReminderChannelChips(item: r)
+                        HStack(spacing: 8) {
+                            Spacer(minLength: 0)
+                            actions(r)
+                        }
+                    }
                 }
             }
             if editing == r.id {
@@ -274,6 +282,29 @@ struct RemindersCard: View {
             }
         }
         .opacity(scheduled ? 1 : 0.7)
+    }
+
+    /// Matita (modifica) e «Annulla»: stessi comandi in entrambe le disposizioni.
+    @ViewBuilder
+    private func actions(_ r: ReminderItem) -> some View {
+        Button {
+            editing = editing == r.id ? nil : r.id
+        } label: {
+            Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle")
+                .font(.title3)
+                .foregroundStyle(Theme.accentText)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Modifica")
+        Button("Annulla") { Task { await model.reminders.cancel(r) } }
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(Theme.inkSecondary)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .overlay(Capsule().strokeBorder(Theme.hairline))
     }
 
     /// Preavviso di un appuntamento: «Appuntamento alle 19:00, avviso un'ora prima».
@@ -420,7 +451,7 @@ struct ReminderChannelChips: View {
     private var draftLooksLikeEmail: Bool { emailDraft.contains("@") && emailDraft.contains(".") }
 
     var body: some View {
-        HStack(spacing: 6) {
+        FlowLayout(spacing: 6) {
             // Ai promemoria messi a un familiare la sveglia non serve: suona sul suo telefono.
             if item.forLabel == nil {
                 ReminderChannelChip(title: "Sveglia", symbol: "alarm.fill", on: alarmOn) {
@@ -464,12 +495,14 @@ private struct ReminderChannelChip: View {
                 Image(systemName: symbol)
                     .font(.caption2.weight(.semibold))
                 Text(title)
+                    .lineLimit(1)
                 if on {
                     Image(systemName: "checkmark")
                         .font(.caption2.weight(.bold))
                 }
             }
             .font(.caption.weight(.medium))
+            .fixedSize()
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .foregroundStyle(on ? Theme.accentText : Theme.inkSecondary)
