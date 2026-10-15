@@ -36,6 +36,42 @@ function reasoningBody(effort: ReasoningEffort): Record<string, unknown> {
 const errorText = (err: unknown) =>
   (err instanceof Error ? err.message : String(err)).slice(0, 300);
 
+/**
+ * Punti di cache stabili (16 ott 2026). Il contesto del turno sta subito prima del messaggio dell'utente e non
+ * viene salvato: al turno dopo la richiesta cambia proprio lì, e il solo punto di cache automatico (in fondo alla
+ * richiesta) non si ritrovava mai. Misurato in produzione: zero letture dalla cache, 15–17 mila token riscritti a
+ * ogni turno, prima risposta dopo 4–8 s. Due punti in più: in fondo al prompt di sistema (strumenti, personalità e
+ * scheda: si rileggono dal secondo turno) e sull'ultimo messaggio dell'assistente o risultato di uno strumento
+ * (la cronologia si rilegge dal turno dopo). Con quello automatico sono tre, il massimo è quattro.
+ */
+export function markHistoryCache<M extends { role: string; providerOptions?: unknown }>(
+  prompt: readonly M[],
+): M[] {
+  const out = [...prompt];
+  const mark = (i: number) => {
+    const m = out[i];
+    if (!m) return;
+    const options = (m.providerOptions ?? {}) as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    out[i] = {
+      ...m,
+      providerOptions: {
+        ...options,
+        anthropic: { ...(options.anthropic ?? {}), cacheControl: { type: 'ephemeral' } },
+      },
+    };
+  };
+  let lastSystem = -1;
+  while (out[lastSystem + 1]?.role === 'system') lastSystem++;
+  if (lastSystem >= 0 && lastSystem < out.length - 1) mark(lastSystem);
+  let i = out.length - 1;
+  while (i > lastSystem && out[i]?.role !== 'assistant' && out[i]?.role !== 'tool') i--;
+  if (i > lastSystem) mark(i);
+  return out;
+}
+
 /** «anthropic/claude-haiku-5.5» (OpenRouter) → «claude-haiku-5-5» (API di Anthropic). */
 export function anthropicModelId(openrouterId: string): string {
   return openrouterId.replace(/^anthropic\//, '').replace(/\./g, '-');
@@ -80,6 +116,7 @@ export function createModelGateway(opts: GatewayOptions) {
         // Cache automatica del prefisso e sforzo di ragionamento fisso per classe (come su OpenRouter).
         transformParams: async ({ params }) => ({
           ...params,
+          prompt: markHistoryCache(params.prompt),
           providerOptions: {
             ...params.providerOptions,
             anthropic: {
