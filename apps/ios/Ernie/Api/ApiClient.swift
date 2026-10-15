@@ -210,6 +210,11 @@ enum FamilyRelation: String, CaseIterable, Identifiable {
     }
     static func title(for raw: String) -> String { FamilyRelation(rawValue: raw)?.title ?? raw }
     static func symbol(for raw: String) -> String { FamilyRelation(rawValue: raw)?.symbol ?? "person.fill" }
+    /// Pronome oggetto per le frasi «seguirlo/seguirla»: «la» solo per la nonna (figlio/a resta al maschile).
+    var objectPronoun: String { self == .nonna ? "la" : "lo" }
+    static func objectPronoun(for raw: String?) -> String {
+        (raw.flatMap(FamilyRelation.init(rawValue:)) ?? .figlio).objectPronoun
+    }
     static func supervisionTitle(for raw: String?) -> String {
         (raw.flatMap(FamilyRelation.init(rawValue:)) ?? .figlio).supervisionTitle
     }

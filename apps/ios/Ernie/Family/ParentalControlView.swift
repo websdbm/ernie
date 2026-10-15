@@ -98,7 +98,7 @@ struct ParentalControlView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await reload() }
         .confirmationDialog("\(releaseTitle)?", isPresented: $confirmRelease, titleVisibility: .visible) {
-            Button(isChild ? "Togli il controllo" : "Smetti di seguirlo", role: .destructive) { Task { await release() } }
+            Button(isChild ? "Togli il controllo" : "Smetti di seguir\(FamilyRelation.objectPronoun(for: child.relation))", role: .destructive) { Task { await release() } }
             Button("Annulla", role: .cancel) {}
         } message: {
             Text("\(child.label) potrà di nuovo usare tutte le skill e le sue conversazioni non saranno più visibili a te.")
@@ -117,7 +117,7 @@ struct ParentalControlView: View {
             eyebrow: "Account seguito",
             title: isChild
                 ? "Controllo genitori attivo dal \(ParentalFormat.day(child.since))"
-                : "Lo segui dal \(ParentalFormat.day(child.since))"
+                : "\(FamilyRelation.objectPronoun(for: child.relation).capitalized) segui dal \(ParentalFormat.day(child.since))"
         ) {
             Text("\(child.label) vede che l'account è seguito e quando consulti le conversazioni.")
                 .font(.subheadline)

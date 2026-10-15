@@ -106,7 +106,7 @@ struct FamilyView: View {
             isPresented: Binding(get: { pendingUnlink != nil }, set: { if !$0 { pendingUnlink = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Scollega e smetti di seguirlo", role: .destructive) {
+            Button("Scollega e smetti di seguir\(pendingPronoun)", role: .destructive) {
                 if let offsets = pendingUnlink { Task { await unlink(offsets) } }
                 pendingUnlink = nil
             }
@@ -114,6 +114,12 @@ struct FamilyView: View {
         } message: {
             Text("Scollegando \(pendingLabel) smetti di seguire il suo account: non potrai più scegliere le sue skill né leggere le sue conversazioni.")
         }
+    }
+
+    /// «lo» o «la» per la persona in attesa di scollegamento.
+    private var pendingPronoun: String {
+        guard let i = pendingUnlink?.first, links.indices.contains(i) else { return "lo" }
+        return FamilyRelation.objectPronoun(for: links[i].relation)
     }
 
     /// Nome della persona in attesa di scollegamento (per il titolo della conferma).
@@ -223,7 +229,7 @@ struct FamilyInviteSheet: View {
                         Section {
                             Toggle(relation == .figlio ? "Con controllo genitori" : "Segui il suo account", isOn: $supervised)
                         } footer: {
-                            Text("Sceglierai tu le skill che può usare e potrai leggere le sue conversazioni. Lo saprà: lo vede prima di accettare e nella sua app. Solo tu potrai smettere di seguirlo.")
+                            Text("Sceglierai tu le skill che può usare e potrai leggere le sue conversazioni. Lo saprà: lo vede prima di accettare e nella sua app. Solo tu potrai smettere di seguir\(relation.objectPronoun).")
                         }
                         if supervised, let profiles {
                             Section {
@@ -393,7 +399,7 @@ struct FamilyAcceptSheet: View {
             Section {
                 ErnieCard(icon: "shield.lefthalf.filled", tint: .health, eyebrow: "Consenso richiesto", title: FamilyRelation.supervisionTitle(for: p.relation)) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Accettando, «\(p.myLabel)» sceglierà quali skill puoi usare e potrà leggere le tue conversazioni con Ernie. Nella tua app vedrai sempre che l'account è seguito e quando le ha guardate. Non potrai scollegarti da solo.")
+                        Text("Accettando, «\(p.myLabel)» sceglierà quali skill puoi usare e potrà leggere le tue conversazioni con Ernie. Nella tua app vedrai sempre che l'account è seguito e quando le ha guardate. Non potrai scollegarti da \(p.relation == "nonna" ? "sola" : "solo").")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
