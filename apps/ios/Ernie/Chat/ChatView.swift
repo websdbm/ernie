@@ -255,6 +255,7 @@ struct MessageList: View {
             case .message(let m): MessageRow(message: m, conversation: conversation)
             case .confirmation(let c): ConfirmationCardView(card: c, conversation: conversation)
             case .notification(let n): NotificationCardView(card: n, conversation: conversation)
+            case .family(let f): FamilyMessageBubble(message: f)
             }
         }
         Color.clear.frame(height: 1).id("bottom")

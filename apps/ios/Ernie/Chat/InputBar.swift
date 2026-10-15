@@ -16,6 +16,7 @@ struct InputBar: View {
     @State private var showScanner = false
     @State private var showFiles = false
     @State private var showPhotos = false
+    @State private var showFamilyComposer = false
     @State private var photoItems: [PhotosPickerItem] = []
 
     private enum Mode { case mic, send, stop, voice }
@@ -91,6 +92,7 @@ struct InputBar: View {
                 documents?.importImages([image], source: "photo")
             }
         }
+        .sheet(isPresented: $showFamilyComposer) { FamilyComposerSheet() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty else { return }
@@ -114,6 +116,8 @@ struct InputBar: View {
             // Il selettore foto non si presenta da dentro un menu: lo apre un modificatore sulla barra.
             Button("Foto", systemImage: "photo.on.rectangle") { showPhotos = true }
             Button("File (PDF)", systemImage: "folder") { showFiles = true }
+            Divider()
+            Button("Messaggio a un familiare", systemImage: "envelope") { showFamilyComposer = true }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .semibold))

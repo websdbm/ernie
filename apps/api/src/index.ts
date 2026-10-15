@@ -113,7 +113,7 @@ import {
 } from './brain-transfer.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
-import { createFamilyRepository } from './family.js';
+import { closeLabel, createFamilyRepository } from './family.js';
 import {
   createFamilyMessageStore,
   createFamilyMessageTool,
@@ -564,7 +564,15 @@ async function main(): Promise<void> {
         createMessagesSkill({
           send: async (userId, input) => {
             const m = await familyMessenger.sendToLabel(userId, input);
-            if (!m) throw new UnknownPersonError(input.toLabel);
+            if (!m) {
+              const close = (await family.list(userId)).filter((l) =>
+                closeLabel(l.label, input.toLabel),
+              );
+              throw new UnknownPersonError(
+                input.toLabel,
+                close.length === 1 ? close[0]?.label : undefined,
+              );
+            }
             return { label: m.label, block: toFamilyMessageBlock(m) };
           },
         }),

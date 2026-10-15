@@ -44,7 +44,7 @@ targets:
         NSMicrophoneUsageDescription: "Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi."
         NSSpeechRecognitionUsageDescription: "La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo."
         NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
-        NSCameraUsageDescription: "Per scansionare documenti con la fotocamera: il testo viene letto sul telefono, l'immagine non viene conservata."
+        NSCameraUsageDescription: "Per scansionare documenti (il testo viene letto sul telefono, l'immagine non viene conservata) e per scattare le foto da mandare ai familiari."
         NSPhotoLibraryAddUsageDescription: "Per salvare nella galleria gli schemi e i riassunti che esporti."
         NSLocationWhenInUseUsageDescription: "Ernie usa la tua posizione approssimata, solo mentre usi l'app, per rispondere su meteo, luoghi vicini e orari senza chiederti dove sei."
         NSAlarmKitUsageDescription: "I promemoria suonano come una sveglia, anche con il telefono in silenzioso, e puoi posticiparli."

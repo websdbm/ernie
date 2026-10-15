@@ -149,6 +149,11 @@ final class AppModel {
     /// Elabora la coda del foglio «Condividi con Ernie»: link e testi vanno al server; al più un'immagine o un PDF
     /// per volta entra nel documento della barra di scrittura, con la richiesta già pronta da inviare.
     /// Gli elementi non riusciti restano in coda per la prossima apertura.
+    /// Messaggi in famiglia nuovi dal server (avvio, primo piano, notifica).
+    func syncFamilyMessages() async {
+        await FamilyMessageSync.sync(api: api, conversation: conversation)
+    }
+
     func processShareInbox() async {
         guard !isProcessingShares, let credentials, let conversation else { return }
         isProcessingShares = true
@@ -236,6 +241,8 @@ final class AppModel {
             reminders.apply(block)
         }
         Task { await self.reminders.refresh() }
+        // Messaggi in famiglia arrivati mentre l'app era chiusa.
+        Task { await self.syncFamilyMessages() }
         // Modello vocale italiano scaricato in anticipo: il primo tocco sul microfono non deve aspettare.
         Task { await self.voice?.prewarm() }
         store.connect()

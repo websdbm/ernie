@@ -60,6 +60,17 @@ describe('skill Messaggi', () => {
     expect(r.text).toBe('✉️ Mandato a Giorgio.');
     expect(r.blocks?.[0]).toMatchObject({ kind: 'family_message', direction: 'out' });
     expect(sent).toEqual([{ toLabel: 'Giorgio', text: 'La cena è pronta' }]);
+    const close = createMessagesSkill({
+      send: async (_u, input) => {
+        throw new UnknownPersonError(input.toLabel, 'papo');
+      },
+    });
+    const suggested = await close.run({ op: 'send', who: 'papi', text: 'Porto io il pane' }, ctx);
+    expect(suggested.text).toBe('Non trovo «papi» in Famiglia: intendevi papo?');
+    expect(suggested.blocks?.[0]).toMatchObject({
+      kind: 'choices',
+      options: [{ label: 'Scrivi a papo che porto io il pane' }, { label: 'No, lascia stare' }],
+    });
     const unknown = await skill.run({ op: 'send', who: 'Marco', text: 'ciao' }, ctx);
     expect(unknown.text).toContain('Non conosco nessun «Marco»');
     const ask = await skill.run({ op: 'ask_text', who: 'Giorgio' }, ctx);

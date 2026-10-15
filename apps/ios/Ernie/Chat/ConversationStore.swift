@@ -371,6 +371,11 @@ final class ConversationStore {
         case .toolConfirmationResolved(let p):
             update(confirmation: p.approvalId) { $0.decision = p.decision }
         case .assistantBlock(let p):
+            // Messaggio in famiglia: un fumetto suo nella conversazione, non dentro la risposta di Ernie.
+            if case .familyMessage(let f) = p.block {
+                addFamily(f)
+                break
+            }
             onBlock?(p.block)
             if case .unknown = p.block { break }
             upsertAssistant(for: e.correlationId) { m in
@@ -501,6 +506,19 @@ final class ConversationStore {
             changed = true
         }
         if changed { persist() }
+    }
+
+    /// Messaggio in famiglia (ricevuto o mandato): una volta sola per id, in fondo alla conversazione.
+    func addFamily(_ m: FamilyMessageBlock) {
+        let known = items.contains { item in
+            if case .family(let f) = item { return f.id == m.id }
+            return false
+        }
+        FamilyMessageSync.noteSeen(m)
+        guard !known else { return }
+        items.append(.family(m))
+        persist()
+        if m.incoming { FamilyMessageSync.pendingRead.insert(m.id) }
     }
 
     private func persist() {

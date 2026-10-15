@@ -26,11 +26,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        let family = Self.isFamilyMessage(notification.request.content.userInfo)
         await MainActor.run { model?.inbox.scheduleRefresh() }
+        if family { await model?.syncFamilyMessages() }
         return [.banner, .sound, .list]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let family = Self.isFamilyMessage(response.notification.request.content.userInfo)
         await MainActor.run { model?.inbox.scheduleRefresh() }
+        if family { await model?.syncFamilyMessages() }
+    }
+
+    /// Notifica di un messaggio in famiglia (dati sotto la chiave `ernie`).
+    nonisolated static func isFamilyMessage(_ info: [AnyHashable: Any]) -> Bool {
+        (info["ernie"] as? [String: Any])?["kind"] as? String == "family_message"
     }
 }

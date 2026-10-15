@@ -490,6 +490,25 @@ struct ChoicesBlock: Codable, Sendable, Equatable {
     var options: [ChoiceOption]
 }
 
+/// Messaggio in famiglia (v1.16): fumetto a busta con chi scrive (il nome che gli dà chi legge), foto facoltativa.
+struct FamilyMessageBlock: Codable, Sendable, Equatable, Identifiable {
+    struct Image: Codable, Sendable, Equatable {
+        var width: Int?
+        var height: Int?
+    }
+    var id: String
+    /// «in» ricevuto, «out» scritto da me.
+    var direction: String
+    var otherUserId: String
+    var label: String
+    var text: String
+    var image: Image?
+    var replyTo: String?
+    var at: String
+
+    var incoming: Bool { direction == "in" }
+}
+
 /// Fonti (v1.9): pagine dei documenti davvero usate e citate nella risposta, con il passo originale.
 struct CitationItem: Codable, Sendable, Equatable, Identifiable {
     var documentId: String
@@ -556,6 +575,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case citations(CitationsBlock)
     case health(HealthBlock)
     case choices(ChoicesBlock)
+    case familyMessage(FamilyMessageBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -588,6 +608,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .health(try HealthBlock(from: decoder))
         case "choices":
             self = .choices(try ChoicesBlock(from: decoder))
+        case "family_message":
+            self = .familyMessage(try FamilyMessageBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -633,6 +655,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .choices(let block):
             try c.encode("choices", forKey: .kind)
+            try block.encode(to: encoder)
+        case .familyMessage(let block):
+            try c.encode("family_message", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

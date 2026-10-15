@@ -102,6 +102,24 @@ export function createMessagesSkill(sender: FamilyMessageSender | null): Determi
           blocks: [sent.block],
         };
       } catch (err) {
+        if (err instanceof UnknownPersonError && err.suggestion) {
+          // Nome quasi uguale a uno collegato: si propone con un tocco, senza mandare da soli.
+          const fixed = `Scrivi a ${err.suggestion} che ${p.text.charAt(0).toLowerCase()}${p.text.slice(1)}`;
+          return {
+            text: `Non trovo «${err.label}» in Famiglia: intendevi ${err.suggestion}?`,
+            actions: [],
+            blocks: [
+              {
+                kind: 'choices',
+                question: `Mandare il messaggio a ${err.suggestion}?`,
+                options: [
+                  { id: '1', label: fixed.slice(0, 80) },
+                  { id: '2', label: 'No, lascia stare' },
+                ],
+              },
+            ],
+          };
+        }
         if (err instanceof UnknownPersonError)
           return {
             text: `Non conosco nessun «${err.label}» in Famiglia. Collega la sua installazione da Impostazioni › Famiglia (con un codice d'invito) e riprova.`,

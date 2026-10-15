@@ -107,6 +107,24 @@ export interface FamilyRepository {
 export const normalizeLabel = (s: string): string =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
+/**
+ * Etichette quasi uguali (una lettera di differenza, nomi di almeno 4 lettere): «papi» per «papo», «Giorgo» per
+ * «Giorgio». Errori tipici della tastiera e della dettatura: servono a proporre il nome giusto, mai a scegliere da
+ * soli (Luca e Lucia sono persone diverse).
+ */
+export function closeLabel(a: string, b: string): boolean {
+  const x = normalizeLabel(a);
+  const y = normalizeLabel(b);
+  if (x === y) return true;
+  if (Math.min(x.length, y.length) < 4 || Math.abs(x.length - y.length) > 1) return false;
+  // Distanza di modifica ≤ 1 (sostituzione, inserimento o cancellazione).
+  let i = 0;
+  while (i < x.length && i < y.length && x[i] === y[i]) i++;
+  if (x.length === y.length) return x.slice(i + 1) === y.slice(i + 1);
+  const [long, short] = x.length > y.length ? [x, y] : [y, x];
+  return long.slice(i + 1) === short.slice(i);
+}
+
 // Senza 0/O e 1/I: il codice si detta a voce o si copia da un messaggio.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const INVITE_TTL_MS = 48 * 3_600_000;

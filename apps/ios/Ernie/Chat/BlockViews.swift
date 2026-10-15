@@ -33,6 +33,8 @@ struct BlockView: View {
             HealthCard(block: block)
         case .choices(let block):
             ChoicesCard(block: block, conversation: conversation)
+        case .familyMessage(let block):
+            FamilyMessageBubble(message: block)
         case .unknown:
             EmptyView()
         }

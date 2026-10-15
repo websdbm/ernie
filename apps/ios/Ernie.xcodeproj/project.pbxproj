@@ -68,6 +68,7 @@
 		989817D51BF87C6BE9FA8F7D /* ErnieSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */; };
 		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
+		A36E1423BE378890A7324F0F /* FamilyMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35F871845638AB7AFEDC916C /* FamilyMessages.swift */; };
 		A525AF6B03592F73930C696C /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
@@ -157,6 +158,7 @@
 		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
 		253D37BCE9386A221FC141AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ErnieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		35F871845638AB7AFEDC916C /* FamilyMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyMessages.swift; sourceTree = "<group>"; };
 		372714292F29616AAC713015 /* DocumentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentComposer.swift; sourceTree = "<group>"; };
 		3B5A05A74A82D7EAD93D989E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningOverlay.swift; sourceTree = "<group>"; };
@@ -388,6 +390,7 @@
 		8DBDB79A8F256B8D3C4D8031 /* Family */ = {
 			isa = PBXGroup;
 			children = (
+				35F871845638AB7AFEDC916C /* FamilyMessages.swift */,
 				82549447C64CA13CDFF851D7 /* ParentalControlView.swift */,
 				601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */,
 			);
@@ -681,6 +684,7 @@
 				F6200A90D63F4EC2AB9BB8B4 /* DocumentScannerView.swift in Sources */,
 				E7585979677E79EA572D5506 /* ErnieApp.swift in Sources */,
 				620DDDD97BD030CF92AA4CEC /* Events.swift in Sources */,
+				A36E1423BE378890A7324F0F /* FamilyMessages.swift in Sources */,
 				3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */,
 				107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */,
 				896501B81A339C83B037EE05 /* HomeView.swift in Sources */,

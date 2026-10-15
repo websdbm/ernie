@@ -57,7 +57,11 @@ export interface ReminderChannels {
 
 /** «Ricorda a Giorgio…» senza un collegamento con quell'etichetta. */
 export class UnknownPersonError extends Error {
-  constructor(readonly label: string) {
+  /** `suggestion`: un'etichetta collegata quasi uguale («papo» per «papi»), da proporre all'utente. */
+  constructor(
+    readonly label: string,
+    readonly suggestion?: string,
+  ) {
     super(`persona sconosciuta: ${label}`);
     this.name = 'UnknownPersonError';
   }

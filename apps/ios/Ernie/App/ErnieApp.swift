@@ -38,6 +38,7 @@ struct RootView: View {
                 Task { await model.processShareInbox() }
                 // Promemoria rimessi in pari: anche quelli legati a un luogo scattati mentre l'app era chiusa.
                 Task { await model.reminders.refresh() }
+                Task { await model.syncFamilyMessages() }
             }
             // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.
             if phase == .background { WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear") }

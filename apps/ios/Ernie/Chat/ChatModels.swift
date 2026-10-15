@@ -116,12 +116,15 @@ enum ChatItem: Codable, Sendable, Equatable, Identifiable {
     case message(ChatMessage)
     case confirmation(ConfirmationCard)
     case notification(NotificationCard)
+    /// Messaggio in famiglia (v1.16): fumetto suo, né dell'utente né di Ernie.
+    case family(FamilyMessageBlock)
 
     var id: String {
         switch self {
         case .message(let m): "m:\(m.id)"
         case .confirmation(let c): "c:\(c.approvalId)"
         case .notification(let n): "n:\(n.id)"
+        case .family(let f): "f:\(f.id)"
         }
     }
 }
