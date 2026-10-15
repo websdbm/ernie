@@ -76,4 +76,87 @@ describe('skill Messaggi', () => {
     const ask = await skill.run({ op: 'ask_text', who: 'Giorgio' }, ctx);
     expect(ask.awaiting).toEqual({ kind: 'message', who: 'Giorgio' });
   });
+
+  it('urgente («super snooze»): dalla parte di comando, non dal testo del messaggio', () => {
+    expect(
+      parseMessageCommand('Manda un messaggio urgente a Giorgio: torna subito a casa'),
+    ).toEqual({
+      op: 'send',
+      who: 'Giorgio',
+      text: 'Torna subito a casa',
+      urgent: true,
+    });
+    expect(parseMessageCommand('messaggio urgente a Giorgio: chiamami')).toMatchObject({
+      who: 'Giorgio',
+      urgent: true,
+    });
+    expect(parseMessageCommand('manda un super snooze a Giorgio: sveglia!')).toMatchObject({
+      who: 'Giorgio',
+      text: 'Sveglia!',
+      urgent: true,
+    });
+    expect(parseMessageCommand('Urgente: scrivi a Giorgio che deve chiamarmi')).toMatchObject({
+      who: 'Giorgio',
+      urgent: true,
+    });
+    expect(parseMessageCommand('scrivi a Giorgio urgente: rispondi al telefono')).toMatchObject({
+      who: 'Giorgio',
+      text: 'Rispondi al telefono',
+      urgent: true,
+    });
+    // «urgente» dentro il messaggio non lo rende urgente.
+    expect(parseMessageCommand('scrivi a Giorgio che è urgente comprare il pane')).toEqual({
+      op: 'send',
+      who: 'Giorgio',
+      text: 'È urgente comprare il pane',
+    });
+    expect(parseMessageCommand('manda un messaggio urgente a Giorgio')).toEqual({
+      op: 'ask_text',
+      who: 'Giorgio',
+      urgent: true,
+    });
+    expect(messageFollowUp({ kind: 'message', who: 'Giorgio', urgent: true }, 'torna')).toEqual({
+      op: 'send',
+      who: 'Giorgio',
+      text: 'Torna',
+      urgent: true,
+    });
+  });
+
+  it('urgente: lo dice nella risposta; a chi non è un figlio propone il messaggio normale', async () => {
+    const sent: unknown[] = [];
+    const ctx = { userId: 'u', sessionId: null, requestId: 'x' };
+    const skill = createMessagesSkill({
+      send: async (_u, input) => {
+        sent.push(input);
+        return {
+          label: 'Giorgio',
+          block: {
+            kind: 'family_message',
+            id: '11111111-1111-4111-8111-111111111111',
+            direction: 'out',
+            otherUserId: '22222222-2222-4222-8222-222222222222',
+            label: 'Giorgio',
+            text: input.text,
+            at: '2026-10-15T19:00:00.000Z',
+            urgent: true,
+          },
+        };
+      },
+    });
+    const r = await skill.run({ op: 'send', who: 'Giorgio', text: 'Torna', urgent: true }, ctx);
+    expect(r.text).toContain('come urgente');
+    expect(sent).toEqual([{ toLabel: 'Giorgio', text: 'Torna', urgent: true }]);
+    const refused = createMessagesSkill({
+      send: async () => {
+        throw Object.assign(new Error('no'), { name: 'UrgentNotAllowedError' });
+      },
+    });
+    const no = await refused.run({ op: 'send', who: 'papo', text: 'Vieni', urgent: true }, ctx);
+    expect(no.text).toContain('solo ai figli');
+    expect(no.blocks?.[0]).toMatchObject({
+      kind: 'choices',
+      options: [{ label: 'Scrivi a papo che vieni' }, { label: 'No, lascia stare' }],
+    });
+  });
 });

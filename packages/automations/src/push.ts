@@ -41,20 +41,38 @@ export function parseApnsPrivateKey(pem: string): KeyObject {
 export interface PushMessage {
   readonly title: string;
   readonly body: string;
+  readonly subtitle?: string;
+  /** Suono nel pacchetto dell'app (es. «urgente.caf»); altrimenti quello predefinito. */
+  readonly sound?: string;
+  /** Le notifiche con lo stesso identificativo si sostituiscono (ripetizioni di un messaggio urgente). */
+  readonly collapseId?: string;
   /** Dati applicativi recapitati all'app (chiave `ernie` nel payload). */
   readonly data?: Record<string, unknown>;
   readonly badge?: number;
   readonly threadId?: string;
+  /**
+   * «time-sensitive»: resta in cima alla schermata di blocco e passa i Full immersion (serve l'entitlement
+   * nell'app; senza, iOS la tratta come normale).
+   */
+  readonly interruptionLevel?: 'passive' | 'active' | 'time-sensitive';
+  /** Categoria registrata dall'app, con le sue azioni (es. «Rispondi» dalla notifica). */
+  readonly category?: string;
 }
 
 /** Payload APNs: alert visibile, suono predefinito, `content-available` per il refresh, dati sotto `ernie`. */
 export function buildApnsPayload(msg: PushMessage): Record<string, unknown> {
   return {
     aps: {
-      alert: { title: msg.title.slice(0, 120), body: msg.body.slice(0, 1000) },
-      sound: 'default',
+      alert: {
+        title: msg.title.slice(0, 120),
+        ...(msg.subtitle ? { subtitle: msg.subtitle.slice(0, 120) } : {}),
+        body: msg.body.slice(0, 1000),
+      },
+      sound: msg.sound ?? 'default',
       ...(msg.badge === undefined ? {} : { badge: msg.badge }),
       ...(msg.threadId ? { 'thread-id': msg.threadId } : {}),
+      ...(msg.interruptionLevel ? { 'interruption-level': msg.interruptionLevel } : {}),
+      ...(msg.category ? { category: msg.category } : {}),
       'mutable-content': 1,
     },
     ernie: msg.data ?? {},
@@ -113,6 +131,7 @@ export function createApnsClient(
           'apns-push-type': 'alert',
           'apns-priority': '10',
           'apns-expiration': '0',
+          ...(msg.collapseId ? { 'apns-collapse-id': msg.collapseId.slice(0, 64) } : {}),
           'content-type': 'application/json',
         });
         let status = 0;

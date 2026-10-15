@@ -6,6 +6,7 @@ import {
   type FamilyMessageStore,
   type FamilyMessenger,
   NotLinkedError,
+  UrgentNotAllowedError,
 } from '../family-messages.js';
 import { createAuthHook } from '../ws/plugin.js';
 
@@ -33,6 +34,8 @@ const SendBody = z
     to: z.uuid(),
     text: z.string().max(2000).default(''),
     replyTo: z.uuid().optional(),
+    /** «Super snooze»: solo a un figlio. */
+    urgent: z.boolean().optional(),
     image: z
       .object({
         mime: z.enum(['image/jpeg', 'image/png', 'image/heic']),
@@ -59,6 +62,8 @@ const json = (m: FamilyMessage) => ({
   replyTo: m.replyTo,
   at: m.at.toISOString(),
   readAt: m.readAt?.toISOString() ?? null,
+  ...(m.urgent ? { urgent: true } : {}),
+  acknowledgedAt: m.acknowledgedAt?.toISOString() ?? null,
 });
 
 /** Messaggi in famiglia (0033): invio con foto, elenco, foto, lettura. */
@@ -100,13 +105,30 @@ export async function familyMessagesRoutes(
           text: b.data.text,
           ...(image ? { image } : {}),
           ...(b.data.replyTo ? { replyTo: b.data.replyTo } : {}),
+          ...(b.data.urgent ? { urgent: true } : {}),
         });
         return reply.code(201).send({ message: json(m) });
       } catch (err) {
         if (err instanceof NotLinkedError)
           return reply.code(403).send({ error: 'not_linked', message: err.message });
+        if (err instanceof UrgentNotAllowedError)
+          return reply.code(403).send({ error: 'urgent_not_allowed', message: err.message });
         throw err;
       }
+    });
+
+    // Conferma di lettura di un messaggio urgente: smette di suonare e lo dice a chi l'ha mandato.
+    api.post('/v1/family/messages/:id/ack', async (req, reply) => {
+      const { userId } = requireAuth(req);
+      const id = (req.params as { id: string }).id;
+      if (!z.uuid().safeParse(id).success)
+        return reply.code(400).send({ error: 'invalid_id', message: 'id non valido' });
+      const m = await opts.messenger.acknowledge(userId, id);
+      if (!m)
+        return reply
+          .code(404)
+          .send({ error: 'not_found', message: 'nessun messaggio urgente da confermare' });
+      return { message: json(m) };
     });
 
     api.get('/v1/family/messages', async (req) => {

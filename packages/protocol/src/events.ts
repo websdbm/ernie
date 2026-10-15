@@ -534,6 +534,12 @@ export const FamilyMessageBlock = z.object({
     .optional(),
   replyTo: z.uuid().optional(),
   at: z.iso.datetime(),
+  /**
+   * v1.17: urgente («super snooze», solo da un genitore a un figlio): il telefono di chi riceve suona finché non
+   * conferma di averlo letto (`POST /v1/family/messages/:id/ack`); `acknowledgedAt` è l'ora della conferma.
+   */
+  urgent: z.literal(true).optional(),
+  acknowledgedAt: z.iso.datetime().optional(),
 });
 /**
  * Domanda chiusa (v1.13): quando la richiesta è ambigua tra funzioni diverse o manca un dato essenziale, il modello

@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { createPool, type Pool } from '@ernie/db';
+import { createPool, type Pool, withUser } from '@ernie/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createFamilyRepository } from './family.js';
-import { createFamilyMessageStore, NotLinkedError } from './family-messages.js';
+import {
+  createFamilyMessageStore,
+  NotLinkedError,
+  UrgentNotAllowedError,
+} from './family-messages.js';
 
 const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL;
 const APP_PASSWORD = process.env.APP_DB_PASSWORD;
@@ -76,5 +80,54 @@ describe.skipIf(!ready)('messaggi in famiglia (Postgres, RLS, 0033)', () => {
     await expect(store.send(estraneo, { to: papa, text: 'ciao' })).rejects.toBeInstanceOf(
       NotLinkedError,
     );
+  });
+
+  it('urgenti (0034): solo ai figli, ripetizioni dovute, conferma del destinatario, scadenza', async () => {
+    const store = createFamilyMessageStore(app);
+    const urgent = await store.send(papa, { to: giorgio, text: 'Torna a casa', urgent: true });
+    expect(urgent).toMatchObject({ urgent: true, acknowledgedAt: null });
+    // Giorgio non può mandarne a papà (per lui è «genitore»).
+    await expect(
+      store.send(giorgio, { to: papa, text: 'Vieni', urgent: true }),
+    ).rejects.toBeInstanceOf(UrgentNotAllowedError);
+
+    // Appena mandato non è ancora dovuto; dopo un minuto sì, una volta sola per giro.
+    expect((await store.urgentDue()).filter((d) => d.id === urgent.id)).toEqual([]);
+    await owner.query(
+      `UPDATE family_messages SET created_at = now() - interval '1 minute' WHERE id = $1`,
+      [urgent.id],
+    );
+    expect((await store.urgentDue()).filter((d) => d.id === urgent.id)).toEqual([
+      { id: urgent.id, senderId: papa, recipientId: giorgio, count: 1 },
+    ]);
+    expect((await store.urgentDue()).filter((d) => d.id === urgent.id)).toEqual([]);
+
+    // Il destinatario non cambia il testo, solo lettura e conferma.
+    await expect(
+      withUser(app, giorgio, (c) =>
+        c.query(`UPDATE family_messages SET body = 'altro' WHERE id = $1`, [urgent.id]),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    expect(await store.acknowledge(papa, urgent.id)).toBe(false);
+    expect(await store.acknowledge(giorgio, urgent.id)).toBe(true);
+    expect(await store.acknowledge(giorgio, urgent.id)).toBe(false);
+    expect((await store.get(papa, urgent.id))?.acknowledgedAt).toBeInstanceOf(Date);
+    await owner.query(
+      `UPDATE family_messages SET last_nag_at = now() - interval '5 minutes' WHERE id = $1`,
+      [urgent.id],
+    );
+    expect((await store.urgentDue()).filter((d) => d.id === urgent.id)).toEqual([]);
+
+    // Un'ora senza conferma: smette, e lo segnala una volta sola.
+    const old = await store.send(papa, { to: giorgio, text: 'Chiamami', urgent: true });
+    await owner.query(
+      `UPDATE family_messages SET created_at = now() - interval '61 minutes' WHERE id = $1`,
+      [old.id],
+    );
+    expect((await store.urgentDue()).filter((d) => d.id === old.id)).toEqual([]);
+    expect((await store.urgentExpired()).filter((d) => d.id === old.id)).toEqual([
+      { id: old.id, senderId: papa, recipientId: giorgio },
+    ]);
+    expect((await store.urgentExpired()).filter((d) => d.id === old.id)).toEqual([]);
   });
 });

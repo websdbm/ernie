@@ -2,6 +2,7 @@ import type { AutomationRepository } from '@ernie/automations';
 import type { ReminderStore } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AuthContext, Authenticator } from '../auth.js';
+import type { FamilyMessageStore } from '../family-messages.js';
 import { buildWidgetSummary } from '../widget.js';
 import { createAuthHook } from '../ws/plugin.js';
 
@@ -12,6 +13,8 @@ export interface WidgetRoutesOptions {
   readonly automations: AutomationRepository;
   /** Impostazioni effettive dell'utente (interruttore di emergenza, proattività). */
   readonly loadSettings: (userId: string) => Promise<Readonly<Record<string, unknown>>>;
+  /** Messaggi in famiglia: l'ultimo va nel widget del blocco. */
+  readonly familyMessages?: Pick<FamilyMessageStore, 'list'>;
 }
 
 function requireAuth(req: FastifyRequest): AuthContext {
@@ -29,12 +32,13 @@ export async function widgetRoutes(app: FastifyInstance, opts: WidgetRoutesOptio
 
     api.get('/v1/widget', async (req) => {
       const { userId } = requireAuth(req);
-      const [settings, reminders, automations, runs, unread] = await Promise.all([
+      const [settings, reminders, automations, runs, unread, family] = await Promise.all([
         opts.loadSettings(userId),
         opts.reminders.list(userId),
         opts.automations.list(userId),
         opts.automations.listRecentRuns(userId, 10),
         opts.automations.listNotifications(userId, true, 50),
+        opts.familyMessages?.list(userId, { limit: 1 }).catch(() => []) ?? Promise.resolve([]),
       ]);
       return buildWidgetSummary({
         now: new Date(),
@@ -43,6 +47,7 @@ export async function widgetRoutes(app: FastifyInstance, opts: WidgetRoutesOptio
         automations,
         runs,
         unread: unread.length,
+        family: family.at(-1) ?? null,
       });
     });
   });

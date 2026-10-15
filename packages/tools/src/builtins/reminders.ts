@@ -264,7 +264,12 @@ export function createReminderTools(
       },
       present: (_input, out) => {
         const r = [...lastCreated.values()].find((x) => x.id === out.id);
-        return r ? block([r], out.eventAt ? 'Appuntamento' : 'Promemoria') : null;
+        if (!r) return null;
+        // Messo a un familiare: il titolo lo dice, così non sembra un promemoria mio.
+        return block(
+          [r],
+          r.for ? `Promemoria per ${r.for}` : out.eventAt ? 'Appuntamento' : 'Promemoria',
+        );
       },
     }),
     defineTool({

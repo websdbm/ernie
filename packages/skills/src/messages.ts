@@ -12,13 +12,47 @@ export interface FamilyMessageSender {
   /** Manda il messaggio alla persona con quell'etichetta; UnknownPersonError se non c'è. */
   send(
     userId: string,
-    input: { toLabel: string; text: string },
+    input: { toLabel: string; text: string; urgent?: boolean },
   ): Promise<{ label: string; block: ContentBlock }>;
 }
 
+/**
+ * «Super snooze» (richiesta dell'utente, 15 ott 2026): urgente, suona sul telefono del figlio finché non conferma di
+ * averlo letto. Solo da un genitore a un figlio: lo controlla chi manda (UrgentNotAllowedError).
+ */
 export type MessagePlan =
-  | { op: 'send'; who: string; text: string }
-  | { op: 'ask_text'; who: string };
+  | { op: 'send'; who: string; text: string; urgent?: true }
+  | { op: 'ask_text'; who: string; urgent?: true };
+
+const URGENT_WORD = '(?:urgente|urgentissimo|super[\\s-]?snooze)';
+
+/** Toglie «urgente» / «super snooze» dalla parte di comando (non dal testo del messaggio). */
+function stripUrgent(t: string): { t: string; urgent: boolean } {
+  let urgent = false;
+  const mark = (keep: string) => {
+    urgent = true;
+    return keep;
+  };
+  let out = t.replace(new RegExp(`^${URGENT_WORD}\\s*[:,]\\s*`, 'iu'), () => mark(''));
+  out = out.replace(
+    new RegExp(
+      `^((?:manda|invia|mandagli|mandale|scrivi|scrivigli|scrivile)\\s+(?:un\\s+)?(?:messaggio|messaggino|sms)?\\s*)${URGENT_WORD}\\s+`,
+      'iu',
+    ),
+    (_m, p1: string) => mark(p1),
+  );
+  out = out.replace(
+    new RegExp(`^((?:un\\s+)?messaggio)\\s+${URGENT_WORD}\\s+`, 'iu'),
+    (_m, p1: string) => mark(`${p1} `),
+  );
+  return { t: out, urgent };
+}
+
+/** «Giorgio urgente» (detto dopo il nome) → «Giorgio», urgente. */
+function splitWho(who: string): { who: string; urgent: boolean } {
+  const m = new RegExp(`^(.+?)\\s+${URGENT_WORD}$`, 'iu').exec(who);
+  return m?.[1] ? { who: m[1], urgent: true } : { who, urgent: false };
+}
 
 const clean = (s: string) =>
   s
@@ -32,10 +66,13 @@ const WHO = "(?<who>[\\p{L}][\\p{L}'’]*(?:\\s+[\\p{L}][\\p{L}'’]*)?)";
 
 /** Riconosce l'invio di un messaggio a un familiare; null se la frase non è di questo tipo. */
 export function parseMessageCommand(input: string): MessagePlan | null {
-  const t = input
-    .replace(/[‘’´`]/gu, "'")
-    .trim()
-    .replace(/^\[voce\]\s*/u, '');
+  const stripped = stripUrgent(
+    input
+      .replace(/[‘’´`]/gu, "'")
+      .trim()
+      .replace(/^\[voce\]\s*/u, ''),
+  );
+  const t = stripped.t;
   const withText = [
     new RegExp(
       `^(?:manda|invia|mandagli|mandale|scrivi|scrivigli|scrivile)\\s+(?:un\\s+)?(?:messaggio|messaggino|sms)?\\s*(?:a|per|al|alla|allo)\\s+${WHO}\\s*(?::|,|\\s+che\\s|\\s+dicendo(?:gli|le)?\\s+che\\s)\\s*(?<text>.+)$`,
@@ -48,26 +85,42 @@ export function parseMessageCommand(input: string): MessagePlan | null {
   ];
   for (const re of withText) {
     const m = re.exec(t);
-    const who = m?.groups?.who?.trim();
+    const raw = m?.groups?.who?.trim();
     const text = clean(m?.groups?.text ?? '');
-    if (who && text) return { op: 'send', who, text: capital(text.replace(/[.]+$/u, '').trim()) };
+    if (raw && text) {
+      const { who, urgent } = splitWho(raw);
+      return {
+        op: 'send',
+        who,
+        text: capital(text.replace(/[.]+$/u, '').trim()),
+        ...(urgent || stripped.urgent ? { urgent: true as const } : {}),
+      };
+    }
   }
   const bare = new RegExp(
     `^(?:manda|invia|scrivi)\\s+(?:un\\s+)?(?:messaggio|messaggino)\\s+(?:a|per|al|alla)\\s+${WHO}[.!]?$`,
     'iu',
   ).exec(t);
-  if (bare?.groups?.who) return { op: 'ask_text', who: bare.groups.who.trim() };
+  if (bare?.groups?.who) {
+    const { who, urgent } = splitWho(bare.groups.who.trim());
+    return { op: 'ask_text', who, ...(urgent || stripped.urgent ? { urgent: true as const } : {}) };
+  }
   return null;
 }
 
 /** Risposta a «cosa gli scrivo?»: il messaggio successivo è il testo (se non è un altro comando). */
 export function messageFollowUp(awaiting: unknown, input: string): MessagePlan | null {
-  const a = awaiting as { kind?: unknown; who?: unknown } | null;
+  const a = awaiting as { kind?: unknown; who?: unknown; urgent?: unknown } | null;
   if (a?.kind !== 'message' || typeof a.who !== 'string') return null;
   const text = clean(input.replace(/^\[voce\]\s*/u, ''));
   if (!text || text.length > 2000 || /^(?:annulla|lascia\s+stare|niente|no)\b/iu.test(text))
     return null;
-  return { op: 'send', who: a.who, text: capital(text) };
+  return {
+    op: 'send',
+    who: a.who,
+    text: capital(text),
+    ...(a.urgent === true ? { urgent: true } : {}),
+  };
 }
 
 export function createMessagesSkill(sender: FamilyMessageSender | null): DeterministicSkill {
@@ -79,6 +132,7 @@ export function createMessagesSkill(sender: FamilyMessageSender | null): Determi
       'Messaggi alle persone collegate in Famiglia: «scrivi a Giorgio che la cena è pronta», «manda un messaggio a papà: arrivo», «rispondi a papà: ok». Arrivano nella sua chat con una notifica; le foto si mandano dall’app.',
     examples: [
       'scrivi a Giorgio che la cena è pronta',
+      'manda un messaggio urgente a Giorgio: torna subito a casa',
       'manda un messaggio a papà: arrivo tra dieci minuti',
       'rispondi a papà: ok',
     ],
@@ -88,20 +142,43 @@ export function createMessagesSkill(sender: FamilyMessageSender | null): Determi
       const p = plan as MessagePlan;
       if (p.op === 'ask_text')
         return {
-          text: `Cosa scrivo a ${p.who}? Dimmi il messaggio e glielo mando. Per una foto usa il pulsante «+» › «Messaggio a un familiare».`,
+          text: `Cosa scrivo a ${p.who}${p.urgent ? ' (urgente)' : ''}? Dimmi il messaggio e glielo mando. Per una foto usa il pulsante «+» › «Messaggio a un familiare».`,
           actions: [],
-          awaiting: { kind: 'message', who: p.who },
+          awaiting: { kind: 'message', who: p.who, ...(p.urgent ? { urgent: true } : {}) },
         };
       if (!sender)
         return { text: 'I messaggi non sono disponibili in questo contesto.', actions: [] };
       try {
-        const sent = await sender.send(ctx.userId, { toLabel: p.who, text: p.text });
+        const sent = await sender.send(ctx.userId, {
+          toLabel: p.who,
+          text: p.text,
+          ...(p.urgent ? { urgent: true } : {}),
+        });
         return {
-          text: `✉️ Mandato a ${sent.label}.`,
+          text: p.urgent
+            ? `🚨 Mandato a ${sent.label} come urgente: il suo telefono suona finché non conferma di averlo letto. Ti avviso quando lo legge.`
+            : `✉️ Mandato a ${sent.label}.`,
           actions: [`message:${sent.label}`],
           blocks: [sent.block],
         };
       } catch (err) {
+        if (err instanceof Error && err.name === 'UrgentNotAllowedError') {
+          const plain = `Scrivi a ${p.who} che ${p.text.charAt(0).toLowerCase()}${p.text.slice(1)}`;
+          return {
+            text: `I messaggi urgenti (super snooze) si mandano solo ai figli. Lo mando a ${p.who} come messaggio normale?`,
+            actions: [],
+            blocks: [
+              {
+                kind: 'choices',
+                question: `Mandarlo a ${p.who} come messaggio normale?`,
+                options: [
+                  { id: '1', label: plain.slice(0, 80) },
+                  { id: '2', label: 'No, lascia stare' },
+                ],
+              },
+            ],
+          };
+        }
         if (err instanceof UnknownPersonError && err.suggestion) {
           // Nome quasi uguale a uno collegato: si propone con un tocco, senza mandare da soli.
           const fixed = `Scrivi a ${err.suggestion} che ${p.text.charAt(0).toLowerCase()}${p.text.slice(1)}`;

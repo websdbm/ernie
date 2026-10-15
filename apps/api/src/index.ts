@@ -441,9 +441,29 @@ async function main(): Promise<void> {
         payload: { blockId: `family:${block.id}`, block },
       }),
     ...(familyPush ? { push: (userId, msg) => familyPush.notifyUser(userId, msg) } : {}),
+    relationOf: async (userId, otherUserId) =>
+      (await family.list(userId)).find((l) => l.otherUserId === otherUserId)?.relation ?? null,
     logger,
   });
   registry.register(createFamilyMessageTool(familyMessenger));
+  // Messaggi urgenti non confermati: la notifica si ripete (ogni 30 s, poi ogni minuto, per un'ora).
+  let nagging = false;
+  const nagTimer = setInterval(() => {
+    if (nagging || !familyPush) return;
+    nagging = true;
+    familyMessenger
+      .nag()
+      .then((r) => {
+        if (r.repeated || r.expired) logger.info(r, 'messaggi urgenti ripetuti');
+      })
+      .catch((err: unknown) =>
+        logger.warn({ err }, 'ripetizione dei messaggi urgenti non riuscita'),
+      )
+      .finally(() => {
+        nagging = false;
+      });
+  }, 10_000);
+  nagTimer.unref();
   // Second brain: vault git per utente (remoto facoltativo, es. il repository aperto con Obsidian) + indice.
   const brain = await createBrainRuntime({
     config,
@@ -703,6 +723,7 @@ async function main(): Promise<void> {
       reminders,
       automations,
       loadSettings: loadUserSettings,
+      familyMessages: familyMessageStore,
     },
     family: {
       authenticator,
@@ -902,6 +923,7 @@ async function main(): Promise<void> {
     brain.stop();
     logger.info({ signal }, 'arresto in corso');
     clearInterval(evict);
+    clearInterval(nagTimer);
     const timer = setTimeout(() => {
       logger.error('arresto forzato dopo timeout');
       process.exit(1);

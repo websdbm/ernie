@@ -50,5 +50,23 @@ describe('APNs: JWT ES256 e payload', () => {
       },
       ernie: { runId: 'r1', kind: 'automation.approval' },
     });
+    expect((p.aps as Record<string, unknown>)['interruption-level']).toBeUndefined();
+  });
+
+  it('messaggi in famiglia: urgenti (in cima al blocco) e con la categoria delle azioni', () => {
+    const p = buildApnsPayload({
+      title: '✉️ papà',
+      body: 'Arrivo',
+      data: { kind: 'family_message', id: 'm1' },
+      threadId: 'family-u1',
+      interruptionLevel: 'time-sensitive',
+      category: 'FAMILY_MESSAGE',
+    });
+    expect(p.aps).toMatchObject({
+      'interruption-level': 'time-sensitive',
+      category: 'FAMILY_MESSAGE',
+      'thread-id': 'family-u1',
+      'mutable-content': 1,
+    });
   });
 });

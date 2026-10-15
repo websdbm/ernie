@@ -18,6 +18,9 @@ export interface FamilyMessage {
   readonly replyTo: string | null;
   readonly at: Date;
   readonly readAt: Date | null;
+  /** «Super snooze» (0034): suona finché chi riceve non conferma di averlo letto. */
+  readonly urgent: boolean;
+  readonly acknowledgedAt: Date | null;
 }
 
 export interface FamilyMessageImage {
@@ -30,6 +33,7 @@ export interface NewFamilyMessage {
   readonly text: string;
   readonly image?: { mime: string; bytes: Buffer; width?: number; height?: number };
   readonly replyTo?: string;
+  readonly urgent?: boolean;
 }
 
 export class NotLinkedError extends Error {
@@ -37,6 +41,21 @@ export class NotLinkedError extends Error {
     super('la persona non è collegata in Famiglia');
     this.name = 'NotLinkedError';
   }
+}
+
+/** Urgente solo da un genitore a un figlio (relazione «figlio» nel collegamento di chi scrive). */
+export class UrgentNotAllowedError extends Error {
+  constructor() {
+    super('i messaggi urgenti si mandano solo ai figli');
+    this.name = 'UrgentNotAllowedError';
+  }
+}
+
+export interface UrgentDue {
+  readonly id: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+  readonly count: number;
 }
 
 export interface FamilyMessageStore {
@@ -47,6 +66,12 @@ export interface FamilyMessageStore {
   list(userId: string, opts?: { since?: Date; limit?: number }): Promise<FamilyMessage[]>;
   image(userId: string, id: string): Promise<FamilyMessageImage | null>;
   markRead(userId: string, ids: readonly string[]): Promise<number>;
+  /** Conferma di lettura di un urgente da parte di chi lo riceve; false se non c'era niente da confermare. */
+  acknowledge(userId: string, id: string): Promise<boolean>;
+  /** Ripetizioni dovute degli urgenti non confermati (fuori dalla RLS, già segnate come fatte). */
+  urgentDue(): Promise<UrgentDue[]>;
+  /** Urgenti non confermati dopo un'ora: smettono di suonare (una volta sola). */
+  urgentExpired(): Promise<Omit<UrgentDue, 'count'>[]>;
 }
 
 interface Row {
@@ -61,10 +86,12 @@ interface Row {
   created_at: Date;
   read_at: Date | null;
   label: string | null;
+  urgent: boolean;
+  acknowledged_at: Date | null;
 }
 
 const COLS = `m.id, m.sender_id, m.recipient_id, m.body, m.reply_to, (m.image_mime IS NOT NULL) AS has_image,
-  m.image_w, m.image_h, m.created_at, m.read_at, l.label`;
+  m.image_w, m.image_h, m.created_at, m.read_at, l.label, m.urgent, m.acknowledged_at`;
 // Il nome dell'altro dal mio collegamento (RLS: vedo solo le mie righe di family_links).
 const JOIN = `LEFT JOIN family_links l ON l.user_id = $1
   AND l.other_user_id = CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END`;
@@ -81,6 +108,8 @@ function toMessage(r: Row, viewer: string): FamilyMessage {
     replyTo: r.reply_to,
     at: r.created_at,
     readAt: r.read_at,
+    urgent: r.urgent,
+    acknowledgedAt: r.acknowledged_at,
   };
 }
 
@@ -99,8 +128,8 @@ export function createFamilyMessageStore(pool: Pool): FamilyMessageStore {
       const id = await withUser(pool, senderId, async (c) => {
         try {
           const r = await c.query<{ id: string }>(
-            `INSERT INTO family_messages (sender_id, recipient_id, body, reply_to, image_mime, image_bytes, image_w, image_h)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            `INSERT INTO family_messages (sender_id, recipient_id, body, reply_to, image_mime, image_bytes, image_w, image_h, urgent)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
             [
               senderId,
               input.to,
@@ -110,12 +139,14 @@ export function createFamilyMessageStore(pool: Pool): FamilyMessageStore {
               input.image?.bytes ?? null,
               input.image?.width ?? null,
               input.image?.height ?? null,
+              input.urgent === true,
             ],
           );
           return r.rows[0]?.id;
         } catch (err) {
-          // 42501: la policy rifiuta l'inserimento (persona non collegata).
-          if ((err as { code?: string }).code === '42501') throw new NotLinkedError();
+          // 42501: la policy rifiuta l'inserimento (persona non collegata, o urgente a chi non è un figlio).
+          if ((err as { code?: string }).code === '42501')
+            throw input.urgent ? new UrgentNotAllowedError() : new NotLinkedError();
           throw err;
         }
       });
@@ -159,6 +190,36 @@ export function createFamilyMessageStore(pool: Pool): FamilyMessageStore {
         return r.rowCount ?? 0;
       });
     },
+    async acknowledge(userId, id) {
+      return withUser(pool, userId, async (c) => {
+        const r = await c.query(
+          `UPDATE family_messages SET acknowledged_at = now(), read_at = COALESCE(read_at, now())
+            WHERE id = $2 AND recipient_id = $1 AND urgent AND acknowledged_at IS NULL`,
+          [userId, id],
+        );
+        return (r.rowCount ?? 0) > 0;
+      });
+    },
+    async urgentDue() {
+      const r = await pool.query<{
+        o_id: string;
+        o_sender: string;
+        o_recipient: string;
+        o_count: number;
+      }>(`SELECT * FROM family_urgent_due()`);
+      return r.rows.map((x) => ({
+        id: x.o_id,
+        senderId: x.o_sender,
+        recipientId: x.o_recipient,
+        count: x.o_count,
+      }));
+    },
+    async urgentExpired() {
+      const r = await pool.query<{ o_id: string; o_sender: string; o_recipient: string }>(
+        `SELECT * FROM family_urgent_expired()`,
+      );
+      return r.rows.map((x) => ({ id: x.o_id, senderId: x.o_sender, recipientId: x.o_recipient }));
+    },
   };
 }
 
@@ -181,6 +242,50 @@ export function toFamilyMessageBlock(m: FamilyMessage) {
       : {}),
     ...(m.replyTo ? { replyTo: m.replyTo } : {}),
     at: m.at.toISOString(),
+    ...(m.urgent ? { urgent: true as const } : {}),
+    ...(m.acknowledgedAt ? { acknowledgedAt: m.acknowledgedAt.toISOString() } : {}),
+  };
+}
+
+/**
+ * Notifica di un messaggio (richiesta dell'utente, 15 ott 2026: «ben evidenti sul lock screen»): urgente, così resta
+ * in cima alla schermata di blocco; categoria con «Rispondi»; i dati servono all'estensione dell'app per mostrarla
+ * come un messaggio (nome e iniziali di chi scrive) con la foto in anteprima.
+ */
+export interface FamilyPush {
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly body: string;
+  readonly data: Record<string, unknown>;
+  readonly threadId: string;
+  readonly interruptionLevel?: 'time-sensitive';
+  readonly category?: 'FAMILY_MESSAGE' | 'FAMILY_URGENT';
+  readonly sound?: string;
+  readonly collapseId?: string;
+}
+
+/**
+ * Notifica di un messaggio per chi lo riceve. Gli urgenti hanno titolo e suono propri e si ripetono sostituendo la
+ * precedente (stesso identificativo), finché non arriva la conferma di lettura.
+ */
+export function familyPush(received: FamilyMessage): FamilyPush {
+  const body = received.text || '📷 Foto';
+  return {
+    title: received.urgent ? `🚨 Urgente da ${received.label}` : `✉️ ${received.label}`,
+    ...(received.urgent ? { subtitle: 'Aprilo e conferma di averlo letto' } : {}),
+    body: received.image && received.text ? `📷 ${body}` : body,
+    data: {
+      kind: 'family_message',
+      id: received.id,
+      from: received.otherUserId,
+      label: received.label,
+      image: received.image !== null,
+      ...(received.urgent ? { urgent: true } : {}),
+    },
+    threadId: `family-${received.otherUserId}`,
+    interruptionLevel: 'time-sensitive',
+    category: received.urgent ? 'FAMILY_URGENT' : 'FAMILY_MESSAGE',
+    ...(received.urgent ? { sound: 'urgente.caf', collapseId: received.id } : {}),
   };
 }
 
@@ -197,10 +302,9 @@ export interface FamilyMessengerDeps {
     block: ReturnType<typeof toFamilyMessageBlock>,
   ) => Promise<void>;
   /** Notifica sul telefono del destinatario. */
-  readonly push?: (
-    userId: string,
-    msg: { title: string; body: string; data: Record<string, unknown>; threadId: string },
-  ) => Promise<unknown>;
+  readonly push?: (userId: string, msg: FamilyPush) => Promise<unknown>;
+  /** Cosa è per me l'altra persona («figlio», «genitore»…): gli urgenti solo ai figli. */
+  readonly relationOf?: (userId: string, otherUserId: string) => Promise<string | null>;
   readonly logger?: { warn(obj: unknown, msg: string): void };
 }
 
@@ -209,12 +313,19 @@ export interface FamilyMessenger {
   send(senderId: string, input: NewFamilyMessage): Promise<FamilyMessage>;
   sendToLabel(
     senderId: string,
-    input: { toLabel: string; text: string },
+    input: { toLabel: string; text: string; urgent?: boolean },
   ): Promise<FamilyMessage | null>;
+  /** Conferma di lettura di un urgente: lo dice al genitore (scheda aggiornata e notifica). Nil se non c'era. */
+  acknowledge(userId: string, id: string): Promise<FamilyMessage | null>;
+  /** Un giro delle ripetizioni: notifiche degli urgenti non confermati e avviso al genitore per i scaduti. */
+  nag(): Promise<{ repeated: number; expired: number }>;
 }
 
 export function createFamilyMessenger(deps: FamilyMessengerDeps): FamilyMessenger {
+  const warn = (err: unknown, msg: string) => deps.logger?.warn({ err }, msg);
   const send = async (senderId: string, input: NewFamilyMessage) => {
+    if (input.urgent && deps.relationOf && (await deps.relationOf(senderId, input.to)) !== 'figlio')
+      throw new UrgentNotAllowedError();
     const sent = await deps.store.send(senderId, input);
     const received = await deps.store.get(input.to, sent.id).catch(() => null);
     if (received) {
@@ -224,14 +335,8 @@ export function createFamilyMessenger(deps: FamilyMessengerDeps): FamilyMessenge
           deps.logger?.warn({ err }, 'consegna del messaggio in chat non riuscita'),
         );
       if (deps.push) {
-        const body = received.text || '📷 Foto';
         await deps
-          .push(input.to, {
-            title: `✉️ ${received.label}`,
-            body: received.image && received.text ? `📷 ${body}` : body,
-            data: { kind: 'family_message', id: received.id },
-            threadId: `family-${senderId}`,
-          })
+          .push(input.to, familyPush(received))
           .catch((err: unknown) =>
             deps.logger?.warn({ err }, 'notifica del messaggio non riuscita'),
           );
@@ -244,7 +349,64 @@ export function createFamilyMessenger(deps: FamilyMessengerDeps): FamilyMessenge
     async sendToLabel(senderId, input) {
       const link = await deps.findLink(senderId, input.toLabel);
       if (!link) return null;
-      return send(senderId, { to: link.otherUserId, text: input.text });
+      return send(senderId, {
+        to: link.otherUserId,
+        text: input.text,
+        ...(input.urgent ? { urgent: true } : {}),
+      });
+    },
+    async acknowledge(userId, id) {
+      const before = await deps.store.get(userId, id);
+      if (before?.direction !== 'in' || !before.urgent) return null;
+      if (before.acknowledgedAt) return before;
+      await deps.store.acknowledge(userId, id);
+      const mine = await deps.store.get(userId, id);
+      const theirs = await deps.store.get(before.otherUserId, id).catch(() => null);
+      if (theirs) {
+        await deps
+          .deliver(before.otherUserId, toFamilyMessageBlock(theirs))
+          .catch((err: unknown) => warn(err, 'conferma di lettura non consegnata in chat'));
+        await deps
+          .push?.(before.otherUserId, {
+            title: `✓ ${theirs.label} ha letto`,
+            body: `Ha confermato il messaggio urgente: «${(theirs.text || '📷 Foto').slice(0, 120)}»`,
+            data: { kind: 'family_ack', id },
+            threadId: `family-${userId}`,
+          })
+          .catch((err: unknown) => warn(err, 'notifica della conferma non riuscita'));
+      }
+      // Anche gli altri telefoni di chi conferma smettono di mostrarlo come da confermare.
+      if (mine)
+        await deps
+          .deliver(userId, toFamilyMessageBlock(mine))
+          .catch((err: unknown) => warn(err, 'conferma non consegnata in chat'));
+      return mine;
+    },
+    async nag() {
+      let repeated = 0;
+      for (const due of await deps.store.urgentDue()) {
+        const received = await deps.store.get(due.recipientId, due.id).catch(() => null);
+        if (!received || received.acknowledgedAt) continue;
+        await deps
+          .push?.(due.recipientId, familyPush(received))
+          .catch((err: unknown) => warn(err, 'ripetizione del messaggio urgente non riuscita'));
+        repeated++;
+      }
+      let expired = 0;
+      for (const gone of await deps.store.urgentExpired()) {
+        const theirs = await deps.store.get(gone.senderId, gone.id).catch(() => null);
+        if (!theirs) continue;
+        await deps
+          .push?.(gone.senderId, {
+            title: `⏳ ${theirs.label} non ha ancora confermato`,
+            body: `Il messaggio urgente ha suonato per un'ora: «${(theirs.text || '📷 Foto').slice(0, 120)}»`,
+            data: { kind: 'family_unacknowledged', id: gone.id },
+            threadId: `family-${gone.recipientId}`,
+          })
+          .catch((err: unknown) => warn(err, 'avviso di mancata conferma non riuscito'));
+        expired++;
+      }
+      return { repeated, expired };
     },
   };
 }
@@ -270,10 +432,30 @@ export function createFamilyMessageTool(messenger: FamilyMessenger) {
         .min(1)
         .max(2000)
         .describe('Il messaggio rivolto alla persona, in seconda persona'),
+      urgent: z
+        .boolean()
+        .optional()
+        .describe(
+          'Urgente («super snooze»): il telefono suona finché non conferma di averlo letto. Solo se l’utente lo chiede esplicitamente («urgente», «deve leggerlo subito») e solo verso un figlio.',
+        ),
     }),
     outputSchema: z.object({ id: z.string(), to: z.string() }),
     execute: async (input, ctx) => {
-      const m = await messenger.sendToLabel(ctx.userId, { toLabel: input.to, text: input.text });
+      let m: FamilyMessage | null;
+      try {
+        m = await messenger.sendToLabel(ctx.userId, {
+          toLabel: input.to,
+          text: input.text,
+          ...(input.urgent ? { urgent: true } : {}),
+        });
+      } catch (err) {
+        if (err instanceof UrgentNotAllowedError)
+          throw new ToolError(
+            `I messaggi urgenti si mandano solo ai figli: «${input.to}» non è un figlio dell’utente. Mandalo come messaggio normale se l’utente è d’accordo.`,
+            'invalid_input',
+          );
+        throw err;
+      }
       if (!m)
         throw new ToolError(
           `Nessuna persona collegata si chiama «${input.to}»: chiedi all’utente di collegarla da Impostazioni › Famiglia.`,

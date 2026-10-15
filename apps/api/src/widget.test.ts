@@ -115,5 +115,39 @@ describe('riepilogo per il widget', () => {
     expect(s.status.paused).toBe(true);
     expect(s.activity).toBeUndefined();
     expect(s.reminders).toEqual([]);
+    expect(s.family).toBeUndefined();
+  });
+
+  it('ultimo messaggio in famiglia, con il nome che gli do e se ha una foto', () => {
+    const s = buildWidgetSummary({
+      now,
+      settings: {},
+      reminders: [],
+      automations: [],
+      runs: [],
+      unread: 0,
+      family: {
+        id: 'm1',
+        direction: 'in',
+        otherUserId: 'u2',
+        label: 'papo',
+        text: 'La cena è pronta',
+        image: { width: 800, height: 600 },
+        replyTo: null,
+        at: new Date('2026-10-15T12:59:00Z'),
+        readAt: null,
+        urgent: true,
+        acknowledgedAt: null,
+      },
+    });
+    expect(s.family).toEqual({
+      id: 'm1',
+      direction: 'in',
+      label: 'papo',
+      text: 'La cena è pronta',
+      image: true,
+      at: '2026-10-15T12:59:00.000Z',
+      urgent: true,
+    });
   });
 });

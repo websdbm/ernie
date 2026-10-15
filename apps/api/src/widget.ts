@@ -1,5 +1,6 @@
 import { type Automation, type AutomationRun, nextOccurrences } from '@ernie/automations';
 import type { Reminder } from '@ernie/skills';
+import type { FamilyMessage } from './family-messages.js';
 
 /**
  * Riepilogo per il widget grande di Ernie (richiesta dell'utente, 15 ott 2026): prossimi impegni, automazioni
@@ -36,6 +37,17 @@ export interface WidgetSummary {
     readonly quiet: boolean;
   };
   readonly counts: { readonly reminders: number; readonly automations: number };
+  /** Ultimo messaggio in famiglia, mandato o ricevuto (widget «Messaggi» sulla schermata di blocco). */
+  readonly family?: {
+    readonly id: string;
+    readonly direction: 'in' | 'out';
+    readonly label: string;
+    readonly text: string;
+    readonly image: boolean;
+    readonly at: string;
+    /** Urgente non ancora confermato. */
+    readonly urgent?: boolean;
+  };
 }
 
 const REMINDER_KEY = 'promemoria_';
@@ -64,6 +76,7 @@ export function buildWidgetSummary(input: {
   automations: readonly Automation[];
   runs: readonly AutomationRun[];
   unread: number;
+  family?: FamilyMessage | null;
 }): WidgetSummary {
   const { now } = input;
   // Solo quelli con un'ora: i promemoria legati a un luogo non hanno un «prossimo» da mostrare.
@@ -121,5 +134,18 @@ export function buildWidgetSummary(input: {
         }
       : {}),
     counts: { reminders: upcoming.length, automations: active.length },
+    ...(input.family
+      ? {
+          family: {
+            id: input.family.id,
+            direction: input.family.direction,
+            label: input.family.label.slice(0, 60),
+            text: input.family.text.slice(0, 300),
+            image: input.family.image !== null,
+            at: input.family.at.toISOString(),
+            ...(input.family.urgent && !input.family.acknowledgedAt ? { urgent: true } : {}),
+          },
+        }
+      : {}),
   };
 }
