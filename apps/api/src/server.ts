@@ -8,6 +8,10 @@ import { type AutomationRoutesOptions, automationRoutes } from './routes/automat
 import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
+import {
+  type FamilyMessagesRoutesOptions,
+  familyMessagesRoutes,
+} from './routes/family-messages.js';
 import { type GuardianRoutesOptions, guardianRoutes } from './routes/guardian.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
@@ -46,6 +50,8 @@ export interface BuildServerOptions {
   readonly toolRules?: ToolRulesRoutesOptions;
   /** Riepilogo per il widget grande (15 ott 2026). */
   readonly widget?: WidgetRoutesOptions;
+  /** Messaggi in famiglia (0033). */
+  readonly familyMessages?: FamilyMessagesRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -123,6 +129,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
   if (opts.widget) await app.register(widgetRoutes, opts.widget);
+  if (opts.familyMessages) await app.register(familyMessagesRoutes, opts.familyMessages);
   if (opts.family) await app.register(familyRoutes, opts.family);
   if (opts.guardian) await app.register(guardianRoutes, opts.guardian);
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);

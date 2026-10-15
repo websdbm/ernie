@@ -183,7 +183,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       if (deps.family) {
         const links = await deps.family.list(auth.userId);
         if (links.length) {
-          const line = `Persone collegate (Famiglia): ${links.map((l) => `${l.label} (${l.relation})`).join(', ')}. Per un promemoria a una di loro l'utente dice «ricorda a <nome> di …» (skill Ricordami, senza modello).`;
+          const line = `Persone collegate (Famiglia): ${links.map((l) => `${l.label} (${l.relation})`).join(', ')}. Per un promemoria a una di loro l'utente dice «ricorda a <nome> di …» (skill Ricordami, senza modello). Puoi anche mandare loro messaggi: «scrivi a <nome> che …» lo fa la skill Messaggi; in forma libera («di' a Giorgio di venire a cena») usa family_message_send con il testo rivolto alla persona. Non dire che non puoi mandare messaggi ai familiari collegati.`;
           memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${line}` : line;
         }
       }

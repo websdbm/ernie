@@ -12,6 +12,7 @@ describe('catalogo delle skill', () => {
     expect([...enabledSkillIds(undefined)].sort()).toEqual([
       'diario',
       'documenti',
+      'messaggi',
       'ricette',
       'ricordami',
       'second_brain',
@@ -28,6 +29,7 @@ describe('catalogo delle skill', () => {
           sentinelle: false,
           second_brain: false,
           salute: false,
+          messaggi: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -42,6 +44,7 @@ describe('catalogo delle skill', () => {
           sentinelle: false,
           second_brain: false,
           salute: false,
+          messaggi: false,
         },
       }),
     ]).toEqual([]);
@@ -51,6 +54,7 @@ describe('catalogo delle skill', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
       'diario',
       'documenti',
+      'messaggi',
       'ricette',
       'ricordami',
       'salute',
@@ -68,6 +72,7 @@ describe('catalogo delle skill', () => {
           sentinelle: false,
           second_brain: false,
           salute: false,
+          messaggi: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -81,6 +86,7 @@ describe('catalogo delle skill', () => {
           sentinelle: false,
           second_brain: false,
           salute: false,
+          messaggi: false,
         },
         skills: { ricette: true },
       }),
@@ -97,6 +103,7 @@ describe('catalogo delle skill', () => {
             sentinelle: false,
             second_brain: false,
             salute: false,
+            messaggi: false,
           },
           skills: { ricette: true },
         }),

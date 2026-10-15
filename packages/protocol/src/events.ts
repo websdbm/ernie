@@ -515,6 +515,27 @@ export const RemindersBlock = z.object({
     .max(50),
 });
 /**
+ * Messaggio in famiglia (v1.16): mostrato con un fumetto suo, diverso da quelli dell'utente e di Ernie, con
+ * l'etichetta a busta di chi scrive (il nome che gli dà chi riceve). `direction` è dal punto di vista di chi legge.
+ * La foto si scarica con `GET /v1/family/messages/:id/image`.
+ */
+export const FamilyMessageBlock = z.object({
+  kind: z.literal('family_message'),
+  id: z.uuid(),
+  direction: z.enum(['in', 'out']),
+  otherUserId: z.uuid(),
+  label: z.string().min(1).max(60),
+  text: z.string().max(2000),
+  image: z
+    .object({
+      width: z.number().int().positive().optional(),
+      height: z.number().int().positive().optional(),
+    })
+    .optional(),
+  replyTo: z.uuid().optional(),
+  at: z.iso.datetime(),
+});
+/**
  * Domanda chiusa (v1.13): quando la richiesta è ambigua tra funzioni diverse o manca un dato essenziale, il modello
  * propone da 2 a 5 opzioni; l'app le mostra come pulsanti e il tocco invia l'etichetta come messaggio dell'utente.
  */
@@ -589,6 +610,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   CitationsBlock,
   HealthBlock,
   ChoicesBlock,
+  FamilyMessageBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

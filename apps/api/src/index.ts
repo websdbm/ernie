@@ -9,9 +9,12 @@ import {
   PendingApprovals,
 } from '@ernie/agent-core';
 import {
+  createApnsClient,
   createAutomationQueue,
   createAutomationRepository,
+  createDeviceRepository,
   createEventPublisher,
+  createPushSender,
   offerProactive,
   publishUserEvent,
   subscribeUserEvents,
@@ -68,6 +71,7 @@ import {
   createIntentSkill,
   createLearnedSkillRepository,
   createMemorySkill,
+  createMessagesSkill,
   createPgActivityStore,
   createRecipesSkill,
   createReminderSkill,
@@ -76,6 +80,7 @@ import {
   createShoppingListSkill,
   enabledSkillIds,
   tidyReminderText,
+  UnknownPersonError,
 } from '@ernie/skills';
 import { createSoulRepository } from '@ernie/soul';
 import {
@@ -109,6 +114,12 @@ import {
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { createFamilyRepository } from './family.js';
+import {
+  createFamilyMessageStore,
+  createFamilyMessageTool,
+  createFamilyMessenger,
+  toFamilyMessageBlock,
+} from './family-messages.js';
 import { createGuardianStore, guardianSettings } from './guardian.js';
 import { createHealthRuntime } from './health.js';
 import { createPostgres } from './infra/postgres.js';
@@ -408,6 +419,31 @@ async function main(): Promise<void> {
   for (const t of createSentinelTools(sentinelStore)) registry.register(t);
   // Promemoria in forma libera: il modello li crea con i tool (la skill deterministica resta la via senza modello).
   for (const t of createReminderTools(reminders)) registry.register(t);
+  // Messaggi in famiglia (0033): scheda nella chat di chi riceve e notifica push (se APNs è configurato).
+  const familyPush = config.push.apns
+    ? createPushSender({
+        apns: createApnsClient(config.push.apns, logger),
+        devices: createDeviceRepository(postgres.pool),
+        logger,
+      })
+    : undefined;
+  const familyMessageStore = createFamilyMessageStore(postgres.pool);
+  const familyMessenger = createFamilyMessenger({
+    store: familyMessageStore,
+    findLink: async (userId, label) => {
+      const l = await family.find(userId, label);
+      return l ? { otherUserId: l.otherUserId, label: l.label } : null;
+    },
+    deliver: (userId, block) =>
+      publishUserEvent(redis.client, {
+        userId,
+        type: 'assistant.block',
+        payload: { blockId: `family:${block.id}`, block },
+      }),
+    ...(familyPush ? { push: (userId, msg) => familyPush.notifyUser(userId, msg) } : {}),
+    logger,
+  });
+  registry.register(createFamilyMessageTool(familyMessenger));
   // Second brain: vault git per utente (remoto facoltativo, es. il repository aperto con Obsidian) + indice.
   const brain = await createBrainRuntime({
     config,
@@ -525,6 +561,13 @@ async function main(): Promise<void> {
         // Promemoria a evento (ricerca 11, S1): fuori catalogo, viene prima di «Ricordami» nell'ordine.
         createIntentSkill(intents),
         createReminderSkill(reminders),
+        createMessagesSkill({
+          send: async (userId, input) => {
+            const m = await familyMessenger.sendToLabel(userId, input);
+            if (!m) throw new UnknownPersonError(input.toLabel);
+            return { label: m.label, block: toFamilyMessageBlock(m) };
+          },
+        }),
         createDiarySkill(createPgActivityStore(postgres.pool)),
         // «Cosa sai di me?», «perché sai che …?», «dimentica che …» (M9 A4): fuori catalogo, sempre attiva.
         createMemorySkill({
@@ -607,6 +650,13 @@ async function main(): Promise<void> {
       approvals: { store: approvals.store, registry, audit: executor.audit },
       redis: redis.client,
       logger,
+    },
+    familyMessages: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      store: familyMessageStore,
+      messenger: familyMessenger,
+      canSend: async (userId) => enabledSkillIds(await loadUserSettings(userId)).has('messaggi'),
     },
     me: {
       authenticator,

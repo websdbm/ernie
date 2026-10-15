@@ -130,6 +130,24 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     defaultEnabled: true,
   },
   {
+    id: 'messaggi',
+    title: 'Messaggi',
+    icon: 'envelope.fill',
+    tint: 'teal',
+    summary: 'Messaggi e foto alle persone collegate in Famiglia, con risposta.',
+    description:
+      'Scrivi alle persone collegate in Famiglia: «scrivi a Giorgio che la cena è pronta», «manda un messaggio a papà: arrivo». Il messaggio compare nella sua chat con un fumetto a busta e una notifica sul telefono, e può risponderti dal fumetto. Per una foto usa il pulsante «+» › «Messaggio a un familiare».',
+    kind: 'deterministic',
+    tools: ['family_message_send'],
+    examples: [
+      'scrivi a Giorgio che la cena è pronta',
+      'manda un messaggio a papà: arrivo tra dieci minuti',
+      'rispondi a papà: ok',
+    ],
+    defaultAvailable: true,
+    defaultEnabled: true,
+  },
+  {
     id: 'sentinelle',
     title: 'Sentinelle',
     icon: 'binoculars.fill',

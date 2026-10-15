@@ -3,6 +3,7 @@ export * from './diary.js';
 export * from './intents.js';
 export * from './learned.js';
 export * from './memory.js';
+export * from './messages.js';
 export * from './proposals.js';
 export * from './registry.js';
 export * from './reminder.js';
