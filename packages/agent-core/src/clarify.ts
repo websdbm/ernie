@@ -22,18 +22,18 @@ const Questions = z.object({
         options: z.array(z.string().min(1).max(100)).min(2).max(4),
       }),
     )
-    .max(4),
+    .max(3),
 });
 
 export const CLARIFY_INSTRUCTIONS = `Controlli l'interpretazione dei messaggi che l'utente manda al suo assistente personale, prima che l'assistente risponda. Non rispondi all'utente: scrivi solo domande chiuse sul testo.
 
-Individua al massimo 4 punti del messaggio che si possono intendere in modi diversi:
+Individua al massimo 3 punti del messaggio che si possono intendere in modi diversi:
 - pronomi o riferimenti senza un referente certo («lui», «lei», «lì», «quello», «la solita cosa»);
 - nomi o parole che sembrano errori di dettatura o di battitura (es. «Jeff» detto al posto di «Jev», «papi» al posto di «papo»): confrontali con le persone, i luoghi e gli argomenti noti;
 - date, orari o luoghi che possono indicare cose diverse («venerdì», «a casa», «da lui»);
 - una richiesta che ha due letture (fare una cosa o spiegarla, a chi è rivolta).
 
-Per ogni punto: «about» è il pezzo di testo così come l'ha scritto l'utente; «question» una domanda breve; «options» da 2 a 4 interpretazioni concrete e diverse fra loro, prese dal contesto (persone note, luoghi, argomenti degli ultimi scambi), scritte come risposta diretta («Giorgio», «Jev, il router decisionale»). Non aggiungere l'opzione «non si sa»: c'è già.
+Per ogni punto: «about» è il pezzo di testo così come l'ha scritto l'utente; «question» una domanda di poche parole; «options» da 2 a 3 interpretazioni brevi (poche parole), concrete e diverse fra loro, prese dal contesto (persone note, luoghi, argomenti degli ultimi scambi), scritte come risposta diretta («Giorgio», «Jev, il router decisionale»). Non aggiungere l'opzione «non si sa»: c'è già.
 Se il messaggio è chiaro, restituisci nessuna domanda. Non chiedere dettagli che servono solo a eseguire la richiesta quando il testo non è ambiguo.`;
 
 export function questionerPrompt(input: ClarifyInput): string {
@@ -81,7 +81,12 @@ export function createClarifyQuestioner(
         errorStrategy: 'fallback',
         fallbackValue: { questions: [] },
       },
-      modelSettings: { maxOutputTokens: 700 },
+      // Niente ragionamento: domande brevi, servono in fretta (misurato il 15 ott 2026: 2,4–6 s con ~250 token).
+      modelSettings: { maxOutputTokens: 450 },
+      providerOptions: {
+        anthropic: { thinking: { type: 'disabled' } },
+        openrouter: { reasoning: { enabled: false } },
+      },
     } as never);
     const r = result as unknown as {
       object?: z.infer<typeof Questions>;

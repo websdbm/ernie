@@ -672,7 +672,8 @@ async function main(): Promise<void> {
               jev: jevClient,
               questioner: createClarifyQuestioner({ gateway, recorder: clarifyRecorder }, ctx),
               minConfidence: thresholds.clarifyConfidence,
-              timeoutMs: 4_500,
+              // Domande di Haiku (2–4 s) più risposte di Jev (~1 s): scatta solo sui messaggi ambigui o le correzioni.
+              timeoutMs: 7_000,
               ...(config.router.jevModel ? { model: config.router.jevModel } : {}),
             }).clarify(input),
           known: async (userId: string) => {
