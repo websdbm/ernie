@@ -88,23 +88,3 @@ struct ErnieSummary: Codable, Sendable, Equatable {
 
     static var signedIn: Bool { Credentials.load() != nil }
 }
-
-/// Carezze all'orso (tocco sul widget): l'ultimo momento e quante, per variare la reazione.
-enum BearMood {
-    /// UserDefaults è thread-safe; si crea a ogni uso per non tenere uno stato globale non Sendable.
-    private static var defaults: UserDefaults? { UserDefaults(suiteName: ReminderSnapshot.appGroup) }
-    private static let pettedKey = "widget.bear.pettedAt"
-    private static let countKey = "widget.bear.pets"
-
-    static func pet(now: Date = .now) {
-        defaults?.set(now.timeIntervalSince1970, forKey: pettedKey)
-        defaults?.set(pets + 1, forKey: countKey)
-    }
-
-    static var pettedAt: Date? {
-        guard let t = defaults?.double(forKey: pettedKey), t > 0 else { return nil }
-        return Date(timeIntervalSince1970: t)
-    }
-
-    static var pets: Int { defaults?.integer(forKey: countKey) ?? 0 }
-}

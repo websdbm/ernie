@@ -19,8 +19,8 @@
       {
         "icon": "hand.tap.fill",
         "title": "Il widget si apre al primo tocco",
-        "detail": "Toccando l'orso Ernie si apre subito, in ascolto o sulla chat. La carezza all'orso ora è un'opzione: tieni premuto il widget › Modifica widget › «Al tocco» › Accarezza l'orso.",
-        "test": "Con Ernie chiuso, tocca una volta l'orso nel widget piccolo."
+        "detail": "Toccando l'orso Ernie si apre subito nella modalità scelta per il widget: in ascolto o sulla chat. La carezza all'orso non c'è più. Per cambiare modalità tieni premuto il widget › Modifica widget › «Al tocco».",
+        "test": "Con Ernie chiuso, tocca una volta l'orso nel widget: deve aprirsi subito in ascolto (o sulla chat, se l'hai scelto)."
       }
     ]
   },

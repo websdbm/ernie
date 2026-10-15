@@ -5,25 +5,23 @@ import WidgetKit
 /// Widget dell'orso (richiesta dell'utente, 15 ott 2026). In Home: piccolo (solo l'orso), medio (orso con «Parla» e
 /// «Scrivi»), grande (anche impegni, automazioni e attività). Sulla schermata di blocco: circolare (l'orso) e
 /// rettangolare (orso e azione). I widget non possono riprodurre animazioni continue: l'orso cambia espressione nel
-/// corso della giornata (voci della timeline con transizione), dorme di notte o quando Ernie è in pausa, si stupisce
-/// prima di un promemoria e reagisce quando lo tocchi.
+/// corso della giornata (voci della timeline con transizione), dorme di notte o quando Ernie è in pausa e si stupisce
+/// prima di un promemoria. Il tocco apre sempre Ernie nella modalità scelta nella configurazione del widget.
 
 // MARK: - Configurazione e interazioni
 
-/// Cosa fa il tocco sul widget. Di base apre Ernie (richiesta dell'utente, 15 ott 2026: «il widget non si apre al
-/// primo tap» — prima l'orso era un pulsante «carezza» e copriva quasi tutto il widget piccolo).
+/// Modalità in cui il tocco apre Ernie (decisione dell'utente, 15 ott 2026: «tap = apertura app nella modalità scelta
+/// nelle configurazioni»; niente carezza all'orso).
 enum ErnieTapAction: String, AppEnum {
-    case voice, chat, pet
+    case voice, chat
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Al tocco"
     static let caseDisplayRepresentations: [ErnieTapAction: DisplayRepresentation] = [
         .voice: "Parla con Ernie",
         .chat: "Apri la chat",
-        .pet: "Accarezza l'orso (senza aprire)",
     ]
 
-    /// Collegamento che apre l'app: la carezza, sulla schermata di blocco e nei pulsanti, vale come «Parla».
-    var url: URL { URL(string: "ernie://\(self == .chat ? "chat" : "voice")")! }
+    var url: URL { URL(string: "ernie://\(rawValue)")! }
 }
 
 struct ErnieWidgetIntent: WidgetConfigurationIntent {
@@ -34,17 +32,6 @@ struct ErnieWidgetIntent: WidgetConfigurationIntent {
     var tap: ErnieTapAction
 
     init() {}
-}
-
-/// Tocco sull'orso: reagisce (occhiolino, sorriso…) e poi torna tranquillo. Gira nell'estensione, senza aprire l'app.
-struct PetBearIntent: AppIntent {
-    static let title: LocalizedStringResource = "Accarezza l'orso"
-    static let isDiscoverable = false
-
-    func perform() async throws -> some IntentResult {
-        BearMood.pet()
-        return .result()
-    }
 }
 
 // MARK: - Timeline
@@ -99,12 +86,6 @@ enum BearFrames {
         let step = Int(date.timeIntervalSinceReferenceDate / 300) % cycle.count
         return (cycle[step], nil)
     }
-
-    /// Reazione alla carezza: tre fotogrammi a distanza di poco più di un secondo, diversi a ogni tocco.
-    static func reaction(pets: Int) -> [Int] {
-        let variants = [[15, 12, 0], [13, 12, 1], [12, 15, 0], [1, 12, 15]]
-        return variants[pets % variants.count]
-    }
 }
 
 struct ErnieProvider: AppIntentTimelineProvider {
@@ -117,20 +98,10 @@ struct ErnieProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: ErnieWidgetIntent, in context: Context) async -> Timeline<ErnieEntry> {
         let now = Date.now
-        // Dopo una carezza basta la copia salvata: la reazione deve partire subito, senza aspettare la rete.
-        let justPetted = BearMood.pettedAt.map { now.timeIntervalSince($0) < 5 } ?? false
         let cached = ErnieSummary.cached()
         let fresh = cached.map { now.timeIntervalSince($0.generatedAt) < 120 } ?? false
-        let summary = (justPetted || fresh) ? cached : (await ErnieSummary.fetch() ?? cached)
-        var list = entries(now: now, summary: summary, tap: configuration.tap)
-        if justPetted, let first = list.first {
-            let frames = BearFrames.reaction(pets: BearMood.pets)
-            let reaction = frames.enumerated().map { i, frame in
-                ErnieEntry(date: now.addingTimeInterval(Double(i) * 1.3), frame: frame, badge: i == 0 ? "❤️" : nil,
-                           summary: first.summary, reminders: first.reminders, tap: first.tap, signedIn: first.signedIn)
-            }
-            list = reaction + list.filter { $0.date > now.addingTimeInterval(4) }
-        }
+        let summary = fresh ? cached : (await ErnieSummary.fetch() ?? cached)
+        let list = entries(now: now, summary: summary, tap: configuration.tap)
         return Timeline(entries: list, policy: .after(now.addingTimeInterval(30 * 60)))
     }
 
@@ -247,17 +218,9 @@ struct ErnieBearWidgetView: View {
 
     // MARK: Home
 
-    /// L'orso: pulsante «carezza» solo se l'utente l'ha scelto; altrimenti il tocco apre Ernie (widgetURL).
-    @ViewBuilder
+    /// L'orso: nessun pulsante sopra, il tocco apre Ernie (widgetURL) nella modalità scelta.
     private func bear(size: CGFloat) -> some View {
-        if entry.tap == .pet {
-            Button(intent: PetBearIntent()) {
-                WidgetBear(frame: entry.frame, badge: entry.badge, size: size)
-            }
-            .buttonStyle(.plain)
-        } else {
-            WidgetBear(frame: entry.frame, badge: entry.badge, size: size)
-        }
+        WidgetBear(frame: entry.frame, badge: entry.badge, size: size)
     }
 
     private var small: some View {
@@ -441,7 +404,7 @@ struct ErnieBearWidget: Widget {
             ErnieBearWidgetView(entry: entry)
         }
         .configurationDisplayName("Ernie")
-        .description("L'orso di Ernie: toccalo, parlagli o scrivigli. Nel formato grande anche impegni, automazioni e attività.")
+        .description("Tocca l'orso per aprire Ernie in ascolto o sulla chat. Nel formato grande anche impegni, automazioni e attività.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular])
     }
 }
