@@ -309,8 +309,10 @@ async function main(): Promise<void> {
   // Impostazioni dell'utente (interruttori delle skill) lette dal database.
   // Controllo genitori: per un figlio seguito valgono solo le skill concesse dal genitore (calcolate a ogni lettura).
   const guardian = createGuardianStore(postgres.pool);
-  const applyGuardian = async (userId: string, settings: Record<string, unknown>) =>
-    guardianSettings(settings, await guardian.limitsFor(userId));
+  const applyGuardian = async (userId: string, settings: Record<string, unknown>) => {
+    const s = await guardian.supervisedAs(userId);
+    return guardianSettings(settings, s?.allowed ?? null, s?.relation);
+  };
   const loadUserSettings = async (userId: string) =>
     applyGuardian(
       userId,

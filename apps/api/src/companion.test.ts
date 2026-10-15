@@ -4,7 +4,7 @@ import type { LearnedSkillRepository } from '@ernie/skills';
 import { createRecipesSkill, createShoppingListSkill } from '@ernie/skills';
 import type { SoulRepository } from '@ernie/soul';
 import { describe, expect, it } from 'vitest';
-import { createCompanionFactory } from './companion.js';
+import { createCompanionFactory, supervisedNote } from './companion.js';
 
 const logger = {
   info() {},
@@ -72,5 +72,21 @@ describe('skill per utente a metà conversazione', () => {
       settings: { skills: { shopping_list: false } },
     });
     expect(registry.list().map((s) => s.id)).toEqual(['ricette']);
+  });
+});
+
+describe('nota per un account seguito', () => {
+  it('ragazzo: contenuti adatti all’età; nonna e nonno: tono fra adulti, con il genere giusto', () => {
+    const kid = supervisedNote('figlio', ['Ricette']);
+    expect(kid).toContain('adatti alla sua età');
+    expect(kid).toContain('Funzioni spente dal genitore: Ricette');
+    expect(supervisedNote(undefined, [])).toContain('ragazzo');
+    const nonna = supervisedNote('nonna', ['ricerca sul web']);
+    expect(nonna).toContain('una nonna seguita');
+    expect(nonna).toContain('chi la segue');
+    expect(nonna).not.toContain('età');
+    expect(supervisedNote('nonno', [])).toMatch(
+      /^Questo account è di un nonno seguito .*pazienza\.$/,
+    );
   });
 });

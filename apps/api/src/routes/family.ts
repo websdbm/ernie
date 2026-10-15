@@ -2,11 +2,15 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
 import {
+  type FamilyInvite,
   type FamilyRepository,
+  isSupervisable,
   OwnInviteError,
   RELATIONS,
+  type Relation,
   SupervisedUnlinkError,
 } from '../family.js';
+import { cleanAllowed, DEFAULT_SKILLS, guardianCatalog } from '../guardian.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface FamilyRoutesOptions {
@@ -31,11 +35,38 @@ const InviteBody = z
     relation: z.enum(RELATIONS),
     myLabel: Label,
     supervised: z.boolean().optional(),
+    /** Skill di chi verrà seguito, scelte persona per persona (senza: quelle proposte per la parentela). */
+    allowedSkills: z.array(z.string().min(1).max(40)).max(40).optional(),
   })
   .strict();
 const AcceptBody = z
-  .object({ code: z.string().trim().min(4).max(12), label: Label.optional() })
+  .object({
+    code: z.string().trim().min(4).max(12),
+    label: Label.optional(),
+    /** Cosa è per me chi invita, se l'inversa proposta non va bene (es. un nipote che invita la nonna). */
+    relation: z.enum(RELATIONS).optional(),
+  })
   .strict();
+
+/** Skill che avrà chi accetta un invito con account seguito (null se l'invito non lo prevede). */
+function inviteSkills(i: {
+  relation: Relation;
+  supervised: boolean;
+  allowedSkills: readonly string[] | null;
+}): string[] | null {
+  if (!i.supervised || !isSupervisable(i.relation)) return null;
+  return i.allowedSkills ? [...i.allowedSkills] : [...DEFAULT_SKILLS[i.relation]];
+}
+
+const inviteJson = (i: FamilyInvite) => ({
+  code: i.code,
+  label: i.label,
+  relation: i.relation,
+  myLabel: i.myLabel,
+  expiresAt: i.expiresAt.toISOString(),
+  supervised: i.supervised,
+  allowedSkills: inviteSkills(i),
+});
 
 /** Famiglia (M7e): collegamenti con etichetta, inviti con codice, accettazione, scollegamento. */
 export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptions): Promise<void> {
@@ -57,18 +88,11 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
           relation: l.relation,
           createdAt: l.createdAt.toISOString(),
         })),
-        invites: invites.map((i) => ({
-          code: i.code,
-          label: i.label,
-          relation: i.relation,
-          myLabel: i.myLabel,
-          expiresAt: i.expiresAt.toISOString(),
-          supervised: i.supervised,
-        })),
+        invites: invites.map(inviteJson),
       };
     });
 
-    // Prima di accettare: chi invita, come, e se l'invito porta il controllo genitori (consenso informato).
+    // Prima di accettare: chi invita, come, e se l'invito porta l'account seguito con quali skill (consenso informato).
     api.get('/v1/family/invites/:code/preview', async (req, reply) => {
       const auth = requireAuth(req);
       const p = await opts.repo.preview(auth.userId, (req.params as { code: string }).code);
@@ -76,7 +100,18 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
         return reply
           .code(404)
           .send({ error: 'invalid_code', message: 'codice non valido, già usato o scaduto' });
-      return { invite: p };
+      const allowed = inviteSkills(p) ?? [];
+      return {
+        invite: {
+          label: p.label,
+          myLabel: p.myLabel,
+          relation: p.relation,
+          supervised: p.supervised,
+          skills: guardianCatalog(allowed)
+            .filter((s) => s.allowed)
+            .map((s) => ({ id: s.id, title: s.title, icon: s.icon })),
+        },
+      };
     });
 
     api.post('/v1/family/invites', async (req, reply) => {
@@ -86,17 +121,14 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
         return reply
           .code(400)
           .send({ error: 'invalid_body', message: 'attesi label, relation e myLabel' });
-      const i = await opts.repo.createInvite(auth.userId, b.data);
-      return reply.code(201).send({
-        invite: {
-          code: i.code,
-          label: i.label,
-          relation: i.relation,
-          myLabel: i.myLabel,
-          expiresAt: i.expiresAt.toISOString(),
-          supervised: i.supervised,
-        },
+      const { allowedSkills, ...rest } = b.data;
+      const i = await opts.repo.createInvite(auth.userId, {
+        ...rest,
+        ...(isSupervisable(rest.relation)
+          ? { allowedSkills: cleanAllowed(allowedSkills ?? DEFAULT_SKILLS[rest.relation]) }
+          : {}),
       });
+      return reply.code(201).send({ invite: inviteJson(i) });
     });
 
     api.delete('/v1/family/invites/:code', async (req, reply) => {
@@ -112,7 +144,12 @@ export async function familyRoutes(app: FastifyInstance, opts: FamilyRoutesOptio
       if (!b.success)
         return reply.code(400).send({ error: 'invalid_body', message: 'atteso un codice' });
       try {
-        const link = await opts.repo.accept(auth.userId, b.data.code, b.data.label);
+        const link = await opts.repo.accept(
+          auth.userId,
+          b.data.code,
+          b.data.label,
+          b.data.relation,
+        );
         if (!link)
           return reply
             .code(404)

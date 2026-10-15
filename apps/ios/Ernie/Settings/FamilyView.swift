@@ -6,13 +6,13 @@ struct FamilyView: View {
     @Environment(AppModel.self) private var model
     @State private var links: [FamilyLink] = []
     @State private var invites: [FamilyInvite] = []
-    /// Figli seguiti con il controllo genitori (sezione dedicata, solo se ce n'è almeno uno).
+    /// Persone seguite (figli con il controllo genitori, nonni): sezione dedicata, solo se ce n'è almeno una.
     @State private var supervised: [SupervisedChild] = []
     @State private var error: String?
     @State private var loading = true
     @State private var showInvite = false
     @State private var showAccept = false
-    /// Scollegamento di una persona seguita, in attesa di conferma: finisce anche il controllo genitori.
+    /// Scollegamento di una persona seguita, in attesa di conferma: smetto anche di seguirne l'account.
     @State private var pendingUnlink: IndexSet?
 
     var body: some View {
@@ -52,7 +52,7 @@ struct FamilyView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(c.label).font(.body)
-                                Text("seguito dal \(ParentalFormat.day(c.since))")
+                                Text("\(FamilyRelation.title(for: c.relation ?? "figlio")) · seguito dal \(ParentalFormat.day(c.since))")
                                     .font(.caption).foregroundStyle(.secondary)
                                 Text("ultima consultazione: \(Self.reviewText(c.lastReviewAt))")
                                     .font(.caption).foregroundStyle(.secondary)
@@ -60,7 +60,9 @@ struct FamilyView: View {
                         }
                     }
                 } header: {
-                    Text("Controllo genitori")
+                    Text("Account seguiti")
+                } footer: {
+                    Text("Per ognuno scegli le skill che può usare.")
                 }
             }
             if !invites.isEmpty {
@@ -76,7 +78,7 @@ struct FamilyView: View {
                             Text("\(i.label) · \(FamilyRelation.title(for: i.relation)) · scade \(Self.expiry(i.expiresAt))")
                                 .font(.caption).foregroundStyle(.secondary)
                             if i.supervised == true {
-                                ErnieChip(text: "controllo genitori", systemImage: "shield.lefthalf.filled", style: .selected)
+                                ErnieChip(text: FamilyRelation.supervisionTitle(for: i.relation).lowercased(), systemImage: "shield.lefthalf.filled", style: .selected)
                             }
                         }
                     }
@@ -104,13 +106,13 @@ struct FamilyView: View {
             isPresented: Binding(get: { pendingUnlink != nil }, set: { if !$0 { pendingUnlink = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Scollega e togli il controllo", role: .destructive) {
+            Button("Scollega e smetti di seguirlo", role: .destructive) {
                 if let offsets = pendingUnlink { Task { await unlink(offsets) } }
                 pendingUnlink = nil
             }
             Button("Annulla", role: .cancel) { pendingUnlink = nil }
         } message: {
-            Text("Scollegando \(pendingLabel) finisce anche il controllo genitori: non potrai più scegliere le sue skill né leggere le sue conversazioni.")
+            Text("Scollegando \(pendingLabel) smetti di seguire il suo account: non potrai più scegliere le sue skill né leggere le sue conversazioni.")
         }
     }
 
@@ -120,7 +122,7 @@ struct FamilyView: View {
         return links[i].label
     }
 
-    /// Vero se la persona collegata è un figlio seguito da me con il controllo genitori.
+    /// Vero se la persona collegata è seguita da me (controllo genitori o account seguito).
     private func isSupervised(_ link: FamilyLink) -> Bool {
         supervised.contains { $0.childId == link.otherUserId }
     }
@@ -167,7 +169,7 @@ struct FamilyView: View {
         return d.formatted(date: .abbreviated, time: .shortened)
     }
 
-    /// Ultima consultazione delle conversazioni del figlio, o «mai».
+    /// Ultima consultazione delle conversazioni della persona seguita, o «mai».
     static func reviewText(_ iso: String?) -> String {
         guard let iso else { return "mai" }
         return ParentalFormat.when(iso)
@@ -175,6 +177,7 @@ struct FamilyView: View {
 }
 
 /// Crea un invito: chi è l'altro per me, come lo chiamo, come propongo di farmi chiamare → codice da condividere.
+/// Per figlio, nonno e nonna l'account può essere seguito, con le skill scelte qui persona per persona.
 struct FamilyInviteSheet: View {
     var onCreated: (FamilyInvite) -> Void
     @Environment(AppModel.self) private var model
@@ -182,8 +185,12 @@ struct FamilyInviteSheet: View {
     @State private var relation: FamilyRelation = .figlio
     @State private var label = ""
     @State private var myLabel = ""
-    /// Controllo genitori (solo per un figlio): acceso di default, chi accetta lo vede prima di confermare.
+    /// Account seguito (figlio, nonno, nonna): acceso di default, chi accetta lo vede prima di confermare.
     @State private var supervised = true
+    /// Skill concedibili e proposte per parentela (nil: server senza la 0032, decide lui).
+    @State private var profiles: SkillProfiles?
+    /// Skill scelte per questa persona; ripartono da quelle proposte quando cambia la parentela.
+    @State private var allowed: Set<String> = []
     @State private var created: FamilyInvite?
     @State private var busy = false
     @State private var error: String?
@@ -206,15 +213,39 @@ struct FamilyInviteSheet: View {
                 } else {
                     Section("Chi è per te") {
                         Picker("Parentela", selection: $relation) {
-                            ForEach(FamilyRelation.allCases) { r in Text(r.title).tag(r) }
+                            ForEach(FamilyRelation.allCases) { r in
+                                Label(r.title, systemImage: r.symbol).tag(r)
+                            }
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.menu)
                     }
-                    if relation == .figlio {
+                    if relation.supervisable {
                         Section {
-                            Toggle("Con controllo genitori", isOn: $supervised)
+                            Toggle(relation == .figlio ? "Con controllo genitori" : "Segui il suo account", isOn: $supervised)
                         } footer: {
-                            Text("Sceglierai tu le skill che può usare e potrai leggere le sue conversazioni. Lo saprà: lo vede prima di accettare e nella sua app. Solo tu potrai togliere il controllo.")
+                            Text("Sceglierai tu le skill che può usare e potrai leggere le sue conversazioni. Lo saprà: lo vede prima di accettare e nella sua app. Solo tu potrai smettere di seguirlo.")
+                        }
+                        if supervised, let profiles {
+                            Section {
+                                ForEach(profiles.skills) { skill in
+                                    Toggle(isOn: Binding(
+                                        get: { allowed.contains(skill.id) },
+                                        set: { on in if on { allowed.insert(skill.id) } else { allowed.remove(skill.id) } }
+                                    )) {
+                                        HStack(spacing: 12) {
+                                            SkillIcon(systemName: skill.icon.isEmpty ? "sparkle" : skill.icon, tint: ParentalControlView.tint(for: skill.id))
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(skill.title).font(.body)
+                                                Text(skill.summary).font(.caption).foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                            } header: {
+                                Text("Skill che potrà usare")
+                            } footer: {
+                                Text("Proposte per \(relation.title.lowercased()): cambiale come vuoi. Potrai modificarle anche dopo, da Famiglia → Account seguiti.")
+                            }
                         }
                     }
                     Section {
@@ -237,8 +268,24 @@ struct FamilyInviteSheet: View {
                     }
                 }
             }
-            .task { if myLabel.isEmpty { myLabel = model.profile?.displayName ?? "" } }
+            .task {
+                if myLabel.isEmpty { myLabel = model.profile?.displayName ?? "" }
+                await loadProfiles()
+            }
+            .onChange(of: relation) { resetAllowed() }
         }
+    }
+
+    /// Skill concedibili e proposte; su un server vecchio resta nil e la sezione non compare.
+    private func loadProfiles() async {
+        guard profiles == nil, let api = model.api else { return }
+        profiles = try? await api.skillProfiles()
+        resetAllowed()
+    }
+
+    /// Riparte dalle skill proposte per la parentela scelta.
+    private func resetAllowed() {
+        allowed = Set(profiles?.defaults[relation.rawValue] ?? [])
     }
 
     private func create() async {
@@ -250,7 +297,9 @@ struct FamilyInviteSheet: View {
                 label: label.trimmingCharacters(in: .whitespaces),
                 relation: relation.rawValue,
                 myLabel: myLabel.trimmingCharacters(in: .whitespaces),
-                supervised: relation == .figlio && supervised
+                supervised: relation.supervisable && supervised,
+                // Nell'ordine del catalogo; senza profili (server vecchio) decide il server.
+                allowedSkills: profiles.map { p in p.skills.map(\.id).filter(allowed.contains) }
             )
             created = invite
             onCreated(invite)
@@ -271,6 +320,8 @@ struct FamilyAcceptSheet: View {
     @State private var label = ""
     /// Passo 2: anteprima del codice (chi invita, controllo genitori). Nil finché il codice non è controllato.
     @State private var preview: FamilyInvitePreview?
+    /// Cosa è per me chi invita, quando non è ovvio (invito come nonno, nonna o nipote).
+    @State private var inverse: FamilyRelation?
     @State private var busy = false
     @State private var error: String?
 
@@ -327,13 +378,34 @@ struct FamilyAcceptSheet: View {
                     .font(.body)
             }
         }
+        if let choices = FamilyRelation(rawValue: p.relation)?.inverseChoices {
+            Section {
+                Picker("«\(p.myLabel)» per te è", selection: Binding(
+                    get: { inverse ?? choices[0] },
+                    set: { inverse = $0 }
+                )) {
+                    ForEach(choices) { r in Text(r.title).tag(r) }
+                }
+                .pickerStyle(.menu)
+            }
+        }
         if p.supervised {
             Section {
-                ErnieCard(icon: "shield.lefthalf.filled", tint: .health, eyebrow: "Consenso richiesto", title: "Controllo genitori") {
-                    Text("Accettando, «\(p.myLabel)» sceglierà quali skill puoi usare e potrà leggere le tue conversazioni con Ernie. Nella tua app vedrai sempre che l'account è seguito e quando le ha guardate. Non potrai scollegarti da solo.")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                ErnieCard(icon: "shield.lefthalf.filled", tint: .health, eyebrow: "Consenso richiesto", title: FamilyRelation.supervisionTitle(for: p.relation)) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Accettando, «\(p.myLabel)» sceglierà quali skill puoi usare e potrà leggere le tue conversazioni con Ernie. Nella tua app vedrai sempre che l'account è seguito e quando le ha guardate. Non potrai scollegarti da solo.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let skills = p.skills {
+                            Text(skills.isEmpty
+                                 ? "Per ora nessuna skill: Ernie risponderà solo a domande generali."
+                                 : "Per iniziare potrai usare: \(skills.map(\.title).joined(separator: ", ")).")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
             }
             .listRowBackground(Color.clear)
@@ -355,7 +427,11 @@ struct FamilyAcceptSheet: View {
         busy = true
         defer { busy = false }
         do {
-            preview = try await api.previewFamilyInvite(code: cleanCode)
+            let p = try await api.previewFamilyInvite(code: cleanCode)
+            inverse = FamilyRelation(rawValue: p.relation).flatMap { r in
+                r.inverseChoices == nil ? nil : r.defaultInverse(myLabel: p.myLabel)
+            }
+            preview = p
             error = nil
         } catch {
             self.error = AppModel.describe(error)
@@ -369,7 +445,7 @@ struct FamilyAcceptSheet: View {
         defer { busy = false }
         do {
             let clean = label.trimmingCharacters(in: .whitespaces)
-            _ = try await api.acceptFamilyInvite(code: cleanCode, label: clean.isEmpty ? nil : clean)
+            _ = try await api.acceptFamilyInvite(code: cleanCode, label: clean.isEmpty ? nil : clean, relation: inverse?.rawValue)
             onAccepted()
             dismiss()
         } catch {

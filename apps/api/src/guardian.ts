@@ -1,11 +1,13 @@
 import { type Pool, withUser } from '@ernie/db';
 import { SKILL_CATALOG } from '@ernie/skills';
+import type { Relation, Supervisable } from './family.js';
 
 /**
  * Controllo genitori (richiesta dell'utente, 14 ott 2026; migrazione 0030). Il genitore sceglie le skill che il
  * figlio può usare e può leggere le sue conversazioni; il figlio vede che l'account è seguito e quando il genitore
  * ha consultato le conversazioni. La supervisione nasce da un invito «con controllo genitori» accettato dal figlio
- * e la toglie solo il genitore.
+ * e la toglie solo il genitore. Dalla 0032 si possono seguire anche nonno e nonna, con le stesse regole, e le skill
+ * si scelgono persona per persona già nell'invito.
  */
 
 /** Capacità fuori catalogo che il genitore può concedere: la ricerca sul web (tool di uso generale). */
@@ -18,7 +20,15 @@ export const GUARDIAN_EXTRAS = [
   },
 ] as const;
 
-export const DEFAULT_CHILD_SKILLS = ['ricordami', 'shopping_list', 'documenti'] as const;
+/**
+ * Skill proposte nell'invito, per parentela: punto di partenza che chi invita cambia persona per persona. Per ora
+ * uguali (richiesta dell'utente: i nonni come il figlio), separate perché potranno divergere.
+ */
+export const DEFAULT_SKILLS: Readonly<Record<Supervisable, readonly string[]>> = {
+  figlio: ['ricordami', 'shopping_list', 'documenti'],
+  nonno: ['ricordami', 'shopping_list', 'documenti'],
+  nonna: ['ricordami', 'shopping_list', 'documenti'],
+};
 
 const KNOWN = new Set<string>([
   ...SKILL_CATALOG.map((s) => s.id),
@@ -30,6 +40,26 @@ export function cleanAllowed(ids: readonly string[]): string[] {
   return [...new Set(ids.filter((id) => KNOWN.has(id)))];
 }
 
+/** Catalogo per chi segue: skill del catalogo più la ricerca sul web, con lo stato concesso/negato. */
+export function guardianCatalog(allowed: readonly string[]) {
+  return [
+    ...SKILL_CATALOG.map((s) => ({
+      id: s.id,
+      title: s.title,
+      icon: s.icon,
+      summary: s.summary,
+      allowed: allowed.includes(s.id),
+    })),
+    ...GUARDIAN_EXTRAS.map((e) => ({
+      id: e.id,
+      title: e.title,
+      icon: 'globe',
+      summary: e.summary,
+      allowed: allowed.includes(e.id),
+    })),
+  ];
+}
+
 /**
  * Impostazioni effettive di un figlio seguito: le skill non concesse diventano non disponibili (non le può
  * riaccendere) e i tool delle capacità extra non concesse finiscono in `guardianBlockedTools`. Mai salvate:
@@ -38,6 +68,7 @@ export function cleanAllowed(ids: readonly string[]): string[] {
 export function guardianSettings(
   settings: Readonly<Record<string, unknown>>,
   allowed: readonly string[] | null,
+  relation: Supervisable = 'figlio',
 ): Record<string, unknown> {
   if (!allowed) return { ...settings };
   const ok = new Set(allowed);
@@ -48,6 +79,7 @@ export function guardianSettings(
     ...settings,
     skillsAvailable: available,
     guardianAllowed: [...ok],
+    guardianRelation: relation,
     ...(blocked.length ? { guardianBlockedTools: blocked } : {}),
   };
 }
@@ -55,6 +87,8 @@ export function guardianSettings(
 export interface ChildSummary {
   readonly childId: string;
   readonly label: string;
+  /** Cosa è per chi lo segue (figlio, nonno, nonna); null se il collegamento manca. */
+  readonly relation: Relation | null;
   readonly allowed: string[];
   readonly since: Date;
   readonly lastReviewAt: Date | null;
@@ -84,6 +118,8 @@ export interface GuardianStore {
   isGuardian(guardianId: string, childId: string): Promise<boolean>;
   /** Skill concesse a un figlio (intersezione se più genitori); null se l'account non è seguito. */
   limitsFor(childId: string): Promise<string[] | null>;
+  /** Come `limitsFor`, più cosa è la persona per chi la segue (figlio, nonno, nonna). */
+  supervisedAs(childId: string): Promise<{ allowed: string[]; relation: Supervisable } | null>;
   setAllowed(
     guardianId: string,
     childId: string,
@@ -96,17 +132,32 @@ export interface GuardianStore {
 }
 
 export function createGuardianStore(pool: Pool): GuardianStore {
+  const supervisedAs = async (childId: string) =>
+    withUser(pool, childId, async (c) => {
+      const r = await c.query<{ allowed_skills: string[]; relation: Supervisable }>(
+        `SELECT allowed_skills, relation FROM guardianships WHERE child_id = $1 ORDER BY created_at`,
+        [childId],
+      );
+      const head = r.rows[0];
+      if (!head) return null;
+      const rest = r.rows.slice(1).map((x) => x.allowed_skills);
+      return {
+        allowed: head.allowed_skills.filter((id) => rest.every((list) => list.includes(id))),
+        relation: head.relation,
+      };
+    });
   return {
     async children(guardianId) {
       return withUser(pool, guardianId, async (c) => {
         const r = await c.query<{
           child_id: string;
           label: string | null;
+          relation: Relation | null;
           allowed_skills: string[];
           created_at: Date;
           last_review: Date | null;
         }>(
-          `SELECT g.child_id, l.label, g.allowed_skills, g.created_at,
+          `SELECT g.child_id, l.label, g.relation, g.allowed_skills, g.created_at,
                   (SELECT max(at) FROM guardian_reviews v WHERE v.guardian_id = g.guardian_id AND v.child_id = g.child_id) AS last_review
              FROM guardianships g
              LEFT JOIN family_links l ON l.user_id = g.guardian_id AND l.other_user_id = g.child_id
@@ -116,6 +167,7 @@ export function createGuardianStore(pool: Pool): GuardianStore {
         return r.rows.map((x) => ({
           childId: x.child_id,
           label: x.label ?? 'Figlio',
+          relation: x.relation,
           allowed: x.allowed_skills,
           since: x.created_at,
           lastReviewAt: x.last_review,
@@ -132,16 +184,9 @@ export function createGuardianStore(pool: Pool): GuardianStore {
       });
     },
     async limitsFor(childId) {
-      return withUser(pool, childId, async (c) => {
-        const r = await c.query<{ allowed_skills: string[] }>(
-          `SELECT allowed_skills FROM guardianships WHERE child_id = $1`,
-          [childId],
-        );
-        if (!r.rows.length) return null;
-        const [first, ...rest] = r.rows.map((x) => x.allowed_skills);
-        return (first ?? []).filter((id) => rest.every((list) => list.includes(id)));
-      });
+      return (await supervisedAs(childId))?.allowed ?? null;
     },
+    supervisedAs,
     async setAllowed(guardianId, childId, allowed) {
       const clean = cleanAllowed(allowed);
       return withUser(pool, guardianId, async (c) => {

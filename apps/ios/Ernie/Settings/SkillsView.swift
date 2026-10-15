@@ -114,7 +114,7 @@ struct SkillsView: View {
     @ViewBuilder
     private func lockCaption(_ skill: SkillInfo) -> some View {
         if skill.locked == true {
-            Label("La sceglie il genitore", systemImage: "lock.fill")
+            Label("La sceglie chi segue il tuo account", systemImage: "lock.fill")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -150,7 +150,7 @@ struct SkillsView: View {
                 ))
                 .labelsHidden()
                 .disabled(locked || busy.contains(skill.id))
-                .accessibilityHint(locked ? "La sceglie il genitore" : "")
+                .accessibilityHint(locked ? "La sceglie chi segue il tuo account" : "")
             }
             if expanded.contains(skill.id) {
                 VStack(alignment: .leading, spacing: 4) {

@@ -7,8 +7,22 @@ import { type Pool, withUser } from '@ernie/db';
  * l'altro lo accetta dal proprio telefono (consenso esplicito) e sceglie come chiamare chi lo ha invitato.
  * Ogni lato vede solo la propria riga; i promemoria «a Giorgio» passano da qui.
  */
-export const RELATIONS = ['figlio', 'genitore', 'partner', 'altro'] as const;
+export const RELATIONS = [
+  'figlio',
+  'genitore',
+  'nonno',
+  'nonna',
+  'nipote',
+  'partner',
+  'altro',
+] as const;
 export type Relation = (typeof RELATIONS)[number];
+
+/** Parentele che si possono seguire con l'invito apposito (0030, nonni dalla 0032). */
+export const SUPERVISABLE = ['figlio', 'nonno', 'nonna'] as const;
+export type Supervisable = (typeof SUPERVISABLE)[number];
+export const isSupervisable = (r: Relation): r is Supervisable =>
+  (SUPERVISABLE as readonly string[]).includes(r);
 
 export interface FamilyLink {
   readonly id: string;
@@ -27,13 +41,15 @@ export interface FamilyInvite {
   /** Come chi invita propone di farsi chiamare. */
   readonly myLabel: string;
   readonly expiresAt: Date;
-  /** Controllo genitori (0030): accettando, il figlio è seguito da chi invita. */
+  /** Account seguito (0030): accettando, il figlio (o il nonno) è seguito da chi invita. */
   readonly supervised: boolean;
+  /** Skill che potrà usare se seguito (0032); null = predefinite. */
+  readonly allowedSkills: string[] | null;
 }
 
 export class SupervisedUnlinkError extends Error {
   constructor() {
-    super('il controllo genitori è attivo: può toglierlo solo il genitore');
+    super('l’account è seguito: può scollegarlo solo chi lo segue');
     this.name = 'SupervisedUnlinkError';
   }
 }
@@ -51,19 +67,40 @@ export interface FamilyRepository {
   find(userId: string, label: string): Promise<FamilyLink | null>;
   /** Come `userId` chiama `otherUserId`; null se non sono collegati. */
   labelFor(userId: string, otherUserId: string): Promise<string | null>;
+  /** `allowedSkills` vale solo per un invito con account seguito (già ripulito da chi chiama). */
   createInvite(
     userId: string,
-    input: { label: string; relation: Relation; myLabel: string; supervised?: boolean | undefined },
+    input: {
+      label: string;
+      relation: Relation;
+      myLabel: string;
+      supervised?: boolean | undefined;
+      allowedSkills?: readonly string[] | undefined;
+    },
   ): Promise<FamilyInvite>;
   /** Cosa propone un codice (per chi lo riceve, prima di accettare); null se non valido. */
   preview(
     userId: string,
     code: string,
-  ): Promise<{ label: string; myLabel: string; relation: Relation; supervised: boolean } | null>;
+  ): Promise<{
+    label: string;
+    myLabel: string;
+    relation: Relation;
+    supervised: boolean;
+    allowedSkills: string[] | null;
+  } | null>;
   listInvites(userId: string): Promise<FamilyInvite[]>;
   removeInvite(userId: string, code: string): Promise<boolean>;
-  /** Accetta un codice: crea le due righe; null se il codice non è valido, usato o scaduto. */
-  accept(userId: string, code: string, label?: string): Promise<FamilyLink | null>;
+  /**
+   * Accetta un codice: crea le due righe; null se il codice non è valido, usato o scaduto. `relation` è cosa è
+   * per me chi invita (senza: l'inversa di quella dell'invito).
+   */
+  accept(
+    userId: string,
+    code: string,
+    label?: string,
+    relation?: Relation,
+  ): Promise<FamilyLink | null>;
   unlink(userId: string, otherUserId: string): Promise<boolean>;
 }
 
@@ -94,6 +131,7 @@ interface IRow {
   my_label: string;
   expires_at: Date;
   supervised: boolean;
+  allowed_skills: string[] | null;
 }
 
 const toLink = (r: LRow): FamilyLink => ({
@@ -110,6 +148,7 @@ const toInvite = (r: IRow): FamilyInvite => ({
   myLabel: r.my_label,
   expiresAt: r.expires_at,
   supervised: r.supervised,
+  allowedSkills: r.allowed_skills,
 });
 
 export function createFamilyRepository(pool: Pool): FamilyRepository {
@@ -144,13 +183,16 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
     },
     async createInvite(userId, input) {
       const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+      // L'account seguito ha senso solo per figlio, nonno e nonna; le skill solo se è seguito.
+      const supervised = input.supervised === true && isSupervisable(input.relation);
+      const allowed = supervised && input.allowedSkills ? [...input.allowedSkills] : null;
       for (let attempt = 0; attempt < 5; attempt++) {
         const code = newInviteCode();
         try {
           return await withUser(pool, userId, async (c) => {
             const res = await c.query<IRow>(
-              `INSERT INTO family_invites (code, user_id, relation, label, my_label, expires_at, supervised)
-               VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING code, label, relation, my_label, expires_at, supervised`,
+              `INSERT INTO family_invites (code, user_id, relation, label, my_label, expires_at, supervised, allowed_skills)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING code, label, relation, my_label, expires_at, supervised, allowed_skills`,
               [
                 code,
                 userId,
@@ -158,8 +200,8 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
                 input.label.trim(),
                 input.myLabel.trim(),
                 expiresAt,
-                // Il controllo genitori ha senso solo invitando un figlio.
-                input.supervised === true && input.relation === 'figlio',
+                supervised,
+                allowed,
               ],
             );
             const row = res.rows[0];
@@ -176,7 +218,7 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
       return withUser(pool, userId, async (c) =>
         (
           await c.query<IRow>(
-            `SELECT code, label, relation, my_label, expires_at, supervised FROM family_invites
+            `SELECT code, label, relation, my_label, expires_at, supervised, allowed_skills FROM family_invites
               WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() ORDER BY created_at`,
             [userId],
           )
@@ -190,9 +232,11 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
           o_my_label: string;
           o_relation: Relation;
           o_supervised: boolean;
-        }>(`SELECT o_label, o_my_label, o_relation, o_supervised FROM family_invite_preview($1)`, [
-          code,
-        ]);
+          o_allowed: string[] | null;
+        }>(
+          `SELECT o_label, o_my_label, o_relation, o_supervised, o_allowed FROM family_invite_preview($1)`,
+          [code],
+        );
         const row = r.rows[0];
         return row
           ? {
@@ -200,6 +244,7 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
               myLabel: row.o_my_label,
               relation: row.o_relation,
               supervised: row.o_supervised,
+              allowedSkills: row.o_allowed,
             }
           : null;
       });
@@ -217,7 +262,7 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
           ).rowCount === 1,
       );
     },
-    async accept(userId, code, label) {
+    async accept(userId, code, label, relation) {
       try {
         return await withUser(pool, userId, async (c) => {
           const res = await c.query<{
@@ -225,9 +270,10 @@ export function createFamilyRepository(pool: Pool): FamilyRepository {
             o_other: string;
             o_label: string;
             o_relation: Relation;
-          }>(`SELECT o_id, o_other, o_label, o_relation FROM family_accept_invite($1, $2)`, [
+          }>(`SELECT o_id, o_other, o_label, o_relation FROM family_accept_invite($1, $2, $3)`, [
             code,
             label ?? null,
+            relation ?? null,
           ]);
           const row = res.rows[0];
           return row

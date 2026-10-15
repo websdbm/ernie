@@ -54,6 +54,8 @@ describe('registro per il genitore: messaggi salvati → righe leggibili', () =>
       false,
     );
     expect(guardianSettings({ a: 1 }, null)).toEqual({ a: 1 });
+    expect(guardianSettings({}, ['ricordami']).guardianRelation).toBe('figlio');
+    expect(guardianSettings({}, ['ricordami'], 'nonna').guardianRelation).toBe('nonna');
   });
 });
 
@@ -95,6 +97,7 @@ describe.skipIf(!ready)('controllo genitori (Postgres, RLS, funzioni della 0030)
       myLabel: 'papà',
       relation: 'figlio',
       supervised: true,
+      allowedSkills: null,
     });
     expect(await family.preview(papa, invite.code)).toBeNull();
     expect(await guardian.limitsFor(giorgio)).toBeNull();
@@ -149,15 +152,63 @@ describe.skipIf(!ready)('controllo genitori (Postgres, RLS, funzioni della 0030)
     expect(await guardian.limitsFor(giorgio)).toBeNull();
   });
 
-  it('il controllo genitori vale solo invitando un figlio', async () => {
+  it('nonna seguita (0032): skill scelte nell’invito, la nonna vede chi la invita come figlio o come nipote', async () => {
+    const family = createFamilyRepository(app);
+    const guardian = createGuardianStore(app);
+    const invite = await family.createInvite(papa, {
+      label: 'Nonna',
+      relation: 'nonna',
+      myLabel: 'Ale',
+      supervised: true,
+      allowedSkills: ['ricordami', 'ricette'],
+    });
+    expect(invite).toMatchObject({ supervised: true, allowedSkills: ['ricordami', 'ricette'] });
+    expect(await family.preview(estraneo, invite.code)).toMatchObject({
+      relation: 'nonna',
+      supervised: true,
+      allowedSkills: ['ricordami', 'ricette'],
+    });
+    // Senza scelta, chi invita la nonna è per lei un figlio.
+    expect(await family.accept(estraneo, invite.code)).toMatchObject({
+      otherUserId: papa,
+      label: 'Ale',
+      relation: 'figlio',
+    });
+    expect(await guardian.supervisedAs(estraneo)).toEqual({
+      allowed: ['ricordami', 'ricette'],
+      relation: 'nonna',
+    });
+    expect(await guardian.children(papa)).toMatchObject([
+      { childId: estraneo, label: 'Nonna', relation: 'nonna' },
+    ]);
+    await expect(family.unlink(estraneo, papa)).rejects.toBeInstanceOf(SupervisedUnlinkError);
+    expect(await family.unlink(papa, estraneo)).toBe(true);
+
+    // Un nipote che invita il nonno: il nonno lo segna come «nipote»; senza seguire l'account.
+    const fromKid = await family.createInvite(giorgio, {
+      label: 'Nonno',
+      relation: 'nonno',
+      myLabel: 'Giorgio',
+    });
+    expect(fromKid).toMatchObject({ supervised: false, allowedSkills: null });
+    expect(await family.accept(estraneo, fromKid.code, undefined, 'nipote')).toMatchObject({
+      otherUserId: giorgio,
+      relation: 'nipote',
+    });
+    expect(await guardian.limitsFor(estraneo)).toBeNull();
+    expect(await family.unlink(estraneo, giorgio)).toBe(true);
+  });
+
+  it('l’account seguito vale solo per figlio, nonno e nonna', async () => {
     const family = createFamilyRepository(app);
     const invite = await family.createInvite(papa, {
       label: 'Estraneo',
       relation: 'partner',
       myLabel: 'Ale',
       supervised: true,
+      allowedSkills: ['web'],
     });
-    expect(invite.supervised).toBe(false);
+    expect(invite).toMatchObject({ supervised: false, allowedSkills: null });
     await family.accept(estraneo, invite.code);
     expect(await createGuardianStore(app).limitsFor(estraneo)).toBeNull();
     await family.unlink(papa, estraneo);

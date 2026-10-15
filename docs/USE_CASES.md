@@ -63,3 +63,16 @@ inserendo il codice, vede prima cosa comporta e poi accetta. Da quel momento:
 Dati: migrazione 0030 (`guardianships`, `guardian_reviews`, `family_invites.supervised`, funzioni `family_invite_preview`,
 `family_accept_invite` e `family_unlink` aggiornate). API: `/v1/family/children…` (genitore), `/v1/family/supervision`
 (figlio), `/v1/family/invites/:code/preview`.
+
+### Nonni e skill per persona (15 ott 2026)
+
+Fra le parentele ci sono anche «Nonno», «Nonna» e «Nipote». Nonno e nonna hanno le stesse possibilità del figlio
+(invito «Segui il suo account», stesso consenso, stesse regole), tenuti distinti perché in futuro potranno divergere;
+l'agente però si rivolge a loro da adulto ad adulto, senza le cautele per l'età. Le skill di chi viene seguito si
+scelgono persona per persona già nell'invito, partendo da quelle proposte per la parentela (`DEFAULT_SKILLS`, per ora
+uguali), e chi accetta vede l'elenco prima di confermare; dopo si cambiano da Famiglia › Account seguiti. Chi accetta
+un invito come nonno o nonna può dire cosa è per lui chi lo invita (figlio, nipote, altro).
+
+Dati: migrazione 0032 (parentele estese, `family_invites.allowed_skills`, `guardianships.relation`,
+`family_invite_preview` con le skill, `family_accept_invite` con la parentela scelta da chi accetta). API:
+`GET /v1/family/skill-profiles`, `allowedSkills` in `POST /v1/family/invites`, `relation` in `POST /v1/family/accept`.

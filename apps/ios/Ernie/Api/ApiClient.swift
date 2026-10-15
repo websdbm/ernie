@@ -70,16 +70,37 @@ struct FamilyInvite: Codable, Sendable, Equatable, Identifiable {
     var relation: String
     var myLabel: String
     var expiresAt: String
-    /// Controllo genitori: accettando, il figlio è seguito da chi invita (server ≥ 0030).
+    /// Account seguito: accettando, il figlio (o il nonno) è seguito da chi invita (server ≥ 0030).
     var supervised: Bool? = nil
+    /// Skill che avrà se seguito, scelte nell'invito (server ≥ 0032).
+    var allowedSkills: [String]? = nil
 }
 
-/// Anteprima di un codice d'invito (prima di accettare): chi invita, come, e se c'è il controllo genitori.
+/// Anteprima di un codice d'invito (prima di accettare): chi invita, come, e se l'account sarà seguito.
 struct FamilyInvitePreview: Codable, Sendable, Equatable {
+    struct Skill: Codable, Sendable, Equatable, Identifiable {
+        var id: String
+        var title: String
+        var icon: String
+    }
     var label: String
     var myLabel: String
     var relation: String
     var supervised: Bool
+    /// Skill che potrà usare se l'account sarà seguito (server ≥ 0032).
+    var skills: [Skill]? = nil
+}
+
+/// Per l'invito con account seguito: skill che si possono concedere e quelle proposte per parentela.
+struct SkillProfiles: Codable, Sendable, Equatable {
+    struct Skill: Codable, Sendable, Equatable, Identifiable {
+        var id: String
+        var title: String
+        var icon: String
+        var summary: String
+    }
+    var skills: [Skill]
+    var defaults: [String: [String]]
 }
 
 /// Skill (o capacità come la ricerca sul web) che il genitore concede o nega al figlio.
@@ -91,11 +112,13 @@ struct GuardianSkill: Codable, Sendable, Equatable, Identifiable {
     var allowed: Bool
 }
 
-/// Figlio seguito con il controllo genitori.
+/// Persona seguita (figlio, nonno, nonna) con l'account seguito.
 struct SupervisedChild: Codable, Sendable, Equatable, Identifiable {
     var id: String { childId }
     var childId: String
     var label: String
+    /// Cosa è per me: figlio, nonno, nonna (server ≥ 0032).
+    var relation: String? = nil
     var since: String
     var lastReviewAt: String?
     var skills: [GuardianSkill]
@@ -135,14 +158,17 @@ struct FamilyOverview: Codable, Sendable, Equatable {
     var invites: [FamilyInvite]
 }
 
-/// Nomi delle parentele nell'interfaccia (valori del server: figlio, genitore, partner, altro).
+/// Nomi delle parentele nell'interfaccia (valori del server: figlio, genitore, nonno, nonna, nipote, partner, altro).
 enum FamilyRelation: String, CaseIterable, Identifiable {
-    case figlio, genitore, partner, altro
+    case figlio, genitore, nonno, nonna, nipote, partner, altro
     var id: String { rawValue }
     var title: String {
         switch self {
         case .figlio: "Figlio/a"
         case .genitore: "Genitore"
+        case .nonno: "Nonno"
+        case .nonna: "Nonna"
+        case .nipote: "Nipote"
         case .partner: "Partner"
         case .altro: "Altro"
         }
@@ -151,12 +177,42 @@ enum FamilyRelation: String, CaseIterable, Identifiable {
         switch self {
         case .figlio: "figure.and.child.holdinghands"
         case .genitore: "figure.2.and.child.holdinghands"
+        case .nonno: "figure.stand"
+        case .nonna: "figure.stand.dress"
+        case .nipote: "figure.child"
         case .partner: "heart.fill"
         case .altro: "person.fill"
         }
     }
+    /// Si può seguire l'account (skill scelte da chi invita, conversazioni leggibili): figlio, nonno, nonna.
+    var supervisable: Bool { self == .figlio || self == .nonno || self == .nonna }
+    /// Nome della supervisione: «controllo genitori» per un figlio, «account seguito» per i nonni.
+    var supervisionTitle: String { self == .figlio ? "Controllo genitori" : "Account seguito" }
+    /// Cosa può essere chi invita per chi accetta, quando non è ovvio (nil: lo decide il server).
+    var inverseChoices: [FamilyRelation]? {
+        switch self {
+        case .nonno, .nonna: [.figlio, .nipote, .altro]
+        case .nipote: [.nonno, .nonna, .altro]
+        default: nil
+        }
+    }
+    /// Scelta proposta fra `inverseChoices`: dal nome con cui chi invita si fa chiamare («nonna» → nonna).
+    func defaultInverse(myLabel: String) -> FamilyRelation {
+        let name = myLabel.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        switch self {
+        case .nonno, .nonna: return name.contains("nipote") ? .nipote : .figlio
+        case .nipote:
+            if name.contains("nonna") { return .nonna }
+            if name.contains("nonno") { return .nonno }
+            return .altro
+        default: return .altro
+        }
+    }
     static func title(for raw: String) -> String { FamilyRelation(rawValue: raw)?.title ?? raw }
     static func symbol(for raw: String) -> String { FamilyRelation(rawValue: raw)?.symbol ?? "person.fill" }
+    static func supervisionTitle(for raw: String?) -> String {
+        (raw.flatMap(FamilyRelation.init(rawValue:)) ?? .figlio).supervisionTitle
+    }
 }
 
 struct Profile: Codable, Sendable, Equatable {
@@ -201,7 +257,7 @@ struct SkillInfo: Codable, Sendable, Equatable, Identifiable {
     var available: Bool
     /// Interruttore del pannello ✦: attiva adesso (vale solo se disponibile).
     var enabled: Bool
-    /// Controllo genitori: non concessa dal genitore, non si può accendere.
+    /// Account seguito: non concessa da chi lo segue, non si può accendere.
     var locked: Bool? = nil
     /// Lavora davvero: disponibile e accesa.
     var active: Bool
@@ -373,11 +429,17 @@ struct ApiClient: Sendable {
         try await requestNoContent("DELETE", "/v1/tool-rules/\(id)")
     }
 
-    func createFamilyInvite(label: String, relation: String, myLabel: String, supervised: Bool = false) async throws -> FamilyInvite {
-        struct Body: Encodable { var label: String; var relation: String; var myLabel: String; var supervised: Bool }
+    /// `allowedSkills`: skill di chi verrà seguito (solo con `supervised`; nil = quelle proposte dal server).
+    func createFamilyInvite(label: String, relation: String, myLabel: String, supervised: Bool = false, allowedSkills: [String]? = nil) async throws -> FamilyInvite {
+        struct Body: Encodable { var label: String; var relation: String; var myLabel: String; var supervised: Bool; var allowedSkills: [String]? }
         struct Out: Decodable { var invite: FamilyInvite }
-        let out: Out = try await request("POST", "/v1/family/invites", body: Body(label: label, relation: relation, myLabel: myLabel, supervised: supervised))
+        let body = Body(label: label, relation: relation, myLabel: myLabel, supervised: supervised, allowedSkills: supervised ? allowedSkills : nil)
+        let out: Out = try await request("POST", "/v1/family/invites", body: body)
         return out.invite
+    }
+
+    func skillProfiles() async throws -> SkillProfiles {
+        try await request("GET", "/v1/family/skill-profiles")
     }
 
     func previewFamilyInvite(code: String) async throws -> FamilyInvitePreview {
@@ -426,10 +488,11 @@ struct ApiClient: Sendable {
         try await requestNoContent("DELETE", "/v1/family/invites/\(code)")
     }
 
-    func acceptFamilyInvite(code: String, label: String?) async throws -> FamilyLink {
-        struct Body: Encodable { var code: String; var label: String? }
+    /// `relation`: cosa è per me chi invita, se l'inversa proposta dal server non va bene.
+    func acceptFamilyInvite(code: String, label: String?, relation: String? = nil) async throws -> FamilyLink {
+        struct Body: Encodable { var code: String; var label: String?; var relation: String? }
         struct Out: Decodable { var link: FamilyLink }
-        let out: Out = try await request("POST", "/v1/family/accept", body: Body(code: code, label: label))
+        let out: Out = try await request("POST", "/v1/family/accept", body: Body(code: code, label: label, relation: relation))
         return out.link
     }
 

@@ -24,7 +24,8 @@ enum ParentalFormat {
     }
 }
 
-/// Controllo genitori, lato genitore: skill concesse al figlio, conversazioni (registro) e tolta la supervisione.
+/// Account seguito, lato di chi segue (genitore per un figlio, figlio o nipote per un nonno): skill concesse
+/// persona per persona, conversazioni (registro) e fine della supervisione.
 struct ParentalControlView: View {
     let child: SupervisedChild
     /// Chiamato dopo aver tolto il controllo, prima di tornare indietro (la lista della famiglia si ricarica).
@@ -81,11 +82,11 @@ struct ParentalControlView: View {
             } header: {
                 Text("Conversazioni")
             } footer: {
-                Text("Aprirle lo registra: il figlio vede «ultima consultazione» nella sua app.")
+                Text("Aprirle lo registra: \(child.label) vede «ultima consultazione» nella sua app.")
             }
             Section {
                 Button(role: .destructive) { confirmRelease = true } label: {
-                    Label("Togli il controllo genitori", systemImage: "shield.slash")
+                    Label(releaseTitle, systemImage: "shield.slash")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(releasing)
@@ -96,20 +97,27 @@ struct ParentalControlView: View {
         .navigationTitle(child.label)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await reload() }
-        .confirmationDialog("Togliere il controllo genitori?", isPresented: $confirmRelease, titleVisibility: .visible) {
-            Button("Togli il controllo", role: .destructive) { Task { await release() } }
+        .confirmationDialog("\(releaseTitle)?", isPresented: $confirmRelease, titleVisibility: .visible) {
+            Button(isChild ? "Togli il controllo" : "Smetti di seguirlo", role: .destructive) { Task { await release() } }
             Button("Annulla", role: .cancel) {}
         } message: {
             Text("\(child.label) potrà di nuovo usare tutte le skill e le sue conversazioni non saranno più visibili a te.")
         }
     }
 
+    /// Figlio (controllo genitori) o nonno/nonna (account seguito): cambiano solo le parole.
+    private var isChild: Bool { (child.relation ?? "figlio") == "figlio" }
+
+    private var releaseTitle: String { isChild ? "Togli il controllo genitori" : "Smetti di seguire l'account" }
+
     private var headerCard: some View {
         ErnieCard(
             icon: "shield.lefthalf.filled",
             tint: .sentinels,
             eyebrow: "Account seguito",
-            title: "Controllo genitori attivo dal \(ParentalFormat.day(child.since))"
+            title: isChild
+                ? "Controllo genitori attivo dal \(ParentalFormat.day(child.since))"
+                : "Lo segui dal \(ParentalFormat.day(child.since))"
         ) {
             Text("\(child.label) vede che l'account è seguito e quando consulti le conversazioni.")
                 .font(.subheadline)

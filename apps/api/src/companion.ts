@@ -195,7 +195,8 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           'Come funziona la tua memoria: dopo ogni scambio quello che la persona racconta di sé viene annotato da solo (dati anagrafici e famiglia nella sua scheda, il resto tra i ricordi) e lo ritrovi nelle conversazioni successive. Non dire che non puoi ricordare o che ti manca uno strumento per salvarlo; se ti chiede cosa sai, rispondi da qui. Può vedere e correggere la scheda in Impostazioni › La tua scheda.';
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
       }
-      // Controllo genitori: l'account di un figlio seguito (le impostazioni effettive portano le skill concesse).
+      // Account seguito: un figlio (controllo genitori) o un nonno; le impostazioni effettive portano le skill
+      // concesse e la parentela.
       const effective = await currentSettings(auth);
       if (Array.isArray(effective.guardianAllowed)) {
         const allowed = new Set(effective.guardianAllowed as string[]);
@@ -203,8 +204,8 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           ...SKILL_CATALOG.filter((x) => !allowed.has(x.id)).map((x) => x.title),
           ...(allowed.has('web') ? [] : ['ricerca sul web']),
         ];
-        const kidNote = `Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori.${off.length ? ` Funzioni spente dal genitore: ${off.join(', ')}. Se ne chiede una, spiega con gentilezza che è spenta e che può chiedere al genitore di accenderla.` : ''}`;
-        memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${kidNote}` : kidNote;
+        const note = supervisedNote(effective.guardianRelation, off);
+        memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${note}` : note;
       }
       // Le frasi standard le prende la skill Ricordami senza modello; in forma libera ci pensa il modello con i tool
       // (richiesta dell'utente, 15 ott 2026: «mi suggerisce come dovrei scrivere, quindi capisce cosa voglio»).
@@ -276,3 +277,18 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
 import { SKILL_CATALOG } from '@ernie/skills';
 
 const isCatalogSkill = (id: string): boolean => SKILL_CATALOG.some((s) => s.id === id);
+
+/**
+ * Nota per l'agente di un account seguito: a un ragazzo contenuti adatti all'età, a un nonno o una nonna il tono di
+ * sempre fra adulti (richiesta dell'utente, 15 ott 2026: i nonni come il figlio per le regole, non per il tono).
+ */
+export function supervisedNote(relation: unknown, off: readonly string[]): string {
+  if (relation === 'nonno' || relation === 'nonna') {
+    const [art, seguit, lui, lo] =
+      relation === 'nonna'
+        ? ['una nonna', 'seguita', 'lei', 'la']
+        : ['un nonno', 'seguito', 'lui', 'lo'];
+    return `Questo account è di ${art} ${seguit} da un familiare (account seguito: chi ${lo} segue sceglie le skill e può leggere le conversazioni, e ${lui} lo sa). Rivolgiti a ${lui} da adulto ad adulto, con chiarezza e pazienza.${off.length ? ` Funzioni spente da chi segue l'account: ${off.join(', ')}. Se ne chiede una, spiega con gentilezza che è spenta e che può chiedere a chi ${lo} segue di accenderla.` : ''}`;
+  }
+  return `Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori.${off.length ? ` Funzioni spente dal genitore: ${off.join(', ')}. Se ne chiede una, spiega con gentilezza che è spenta e che può chiedere al genitore di accenderla.` : ''}`;
+}

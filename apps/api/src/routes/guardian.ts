@@ -1,9 +1,14 @@
 import type { Pool } from '@ernie/db';
-import { SKILL_CATALOG } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
-import { GUARDIAN_EXTRAS, type GuardianStore, toTranscriptMessage } from '../guardian.js';
+import { SUPERVISABLE } from '../family.js';
+import {
+  DEFAULT_SKILLS,
+  type GuardianStore,
+  guardianCatalog,
+  toTranscriptMessage,
+} from '../guardian.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface GuardianRoutesOptions {
@@ -23,24 +28,6 @@ function requireAuth(req: FastifyRequest): AuthContext {
 }
 
 const SkillsBody = z.object({ allowed: z.array(z.string().min(1).max(40)).max(40) }).strict();
-
-/** Catalogo per il genitore: skill del catalogo più la ricerca sul web, con lo stato concesso/negato. */
-const catalogFor = (allowed: readonly string[]) => [
-  ...SKILL_CATALOG.map((s) => ({
-    id: s.id,
-    title: s.title,
-    icon: s.icon,
-    summary: s.summary,
-    allowed: allowed.includes(s.id),
-  })),
-  ...GUARDIAN_EXTRAS.map((e) => ({
-    id: e.id,
-    title: e.title,
-    icon: 'globe',
-    summary: e.summary,
-    allowed: allowed.includes(e.id),
-  })),
-];
 
 /**
  * Controllo genitori (0030). Genitore: figli seguiti, skill concesse, conversazioni (ogni lettura resta nel
@@ -72,10 +59,20 @@ export async function guardianRoutes(
         children: children.map((c) => ({
           childId: c.childId,
           label: c.label,
+          relation: c.relation,
           since: c.since.toISOString(),
           lastReviewAt: c.lastReviewAt?.toISOString() ?? null,
-          skills: catalogFor(c.allowed),
+          skills: guardianCatalog(c.allowed),
         })),
+      };
+    });
+
+    // Per l'invito con account seguito: le skill che si possono concedere e quelle proposte per parentela.
+    api.get('/v1/family/skill-profiles', async (req) => {
+      requireAuth(req);
+      return {
+        skills: guardianCatalog([]).map(({ allowed: _, ...s }) => s),
+        defaults: Object.fromEntries(SUPERVISABLE.map((r) => [r, [...DEFAULT_SKILLS[r]]])),
       };
     });
 
@@ -96,7 +93,7 @@ export async function guardianRoutes(
           .code(404)
           .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
       opts.onChanged?.(g.childId);
-      return { skills: catalogFor(allowed) };
+      return { skills: guardianCatalog(allowed) };
     });
 
     api.delete('/v1/family/children/:childId', async (req, reply) => {

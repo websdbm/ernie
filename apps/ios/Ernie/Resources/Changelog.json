@@ -1,5 +1,30 @@
 [
   {
+    "build": 52,
+    "date": "2026-10-15",
+    "title": "Nonni in famiglia e skill per persona",
+    "items": [
+      {
+        "icon": "figure.stand.dress",
+        "title": "Nonno e nonna fra le parentele",
+        "detail": "Invitando un familiare puoi scegliere anche Nonno, Nonna e Nipote. Nonno e nonna possono avere l'account seguito come un figlio: scegli tu le skill e puoi leggere le conversazioni, e loro lo vedono prima di accettare.",
+        "test": "Famiglia › Invita un familiare: scegli Nonna, lascia acceso «Segui il suo account» e crea il codice."
+      },
+      {
+        "icon": "checklist",
+        "title": "Skill scelte persona per persona già nell'invito",
+        "detail": "Con l'account seguito, nell'invito trovi l'elenco delle skill con quelle proposte per la parentela: accendi o spegni quelle che vuoi per quella persona. Chi accetta vede quali potrà usare. Dopo le cambi da Famiglia › Account seguiti.",
+        "test": "Nell'invito spegni una skill proposta e accendine un'altra, poi controlla l'anteprima dal telefono di chi accetta."
+      },
+      {
+        "icon": "person.2.fill",
+        "title": "Chi accetta corregge la parentela",
+        "detail": "Se la nonna riceve l'invito da un nipote, al momento di accettare può indicare «Nipote» invece di «Figlio/a».",
+        "test": "Accetta un invito come nonno o nonna e guarda la scelta «… per te è»."
+      }
+    ]
+  },
+  {
     "build": 51,
     "date": "2026-10-15",
     "title": "Scheda dei promemoria con i testi grandi",

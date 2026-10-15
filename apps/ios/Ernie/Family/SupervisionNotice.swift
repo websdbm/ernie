@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Controllo genitori, lato figlio: avviso fisso «account seguito» con l'ultima consultazione delle conversazioni.
+/// Account seguito, lato di chi è seguito (figlio o nonno): avviso fisso con l'ultima consultazione delle conversazioni.
 ///
 /// Carica da solo `GET /v1/family/supervision` a ogni comparsa della vista. Se l'account non è seguito non occupa spazio;
 /// lo stesso vale mentre carica. Se un aggiornamento fallisce, resta l'ultimo stato noto. L'avviso non limita nulla:
@@ -35,7 +35,7 @@ struct SupervisionNotice: View {
         let title = "Account seguito da \(Self.joinedLabels(s))"
         let detail = Self.bodyText(s)
         let last = Self.lastLine(s)
-        return ErnieCard(icon: "shield.lefthalf.filled", tint: .sentinels, eyebrow: "Controllo genitori", title: title) {
+        return ErnieCard(icon: "shield.lefthalf.filled", tint: .sentinels, eyebrow: "Account seguito", title: title) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(detail)
                     .font(.subheadline)
@@ -89,7 +89,7 @@ struct SupervisionNotice: View {
     /// Etichette dei genitori in italiano: «mamma», «mamma e papà», «mamma, papà e zia».
     private static func joinedLabels(_ s: Supervision) -> String {
         let names = s.guardians.map(\.label).filter { !$0.isEmpty }
-        guard let last = names.last else { return "un genitore" }
+        guard let last = names.last else { return "un familiare" }
         if names.count == 1 { return last }
         return names.dropLast().joined(separator: ", ") + " e " + last
     }
@@ -107,7 +107,7 @@ struct SupervisionNotice: View {
     private static func lastLine(_ s: Supervision) -> String {
         guard let date = lastReview(s) else {
             return s.guardians.count > 1
-                ? "Nessuno dei genitori ha ancora guardato le conversazioni."
+                ? "Nessuno ha ancora guardato le conversazioni."
                 : "Non ha ancora guardato le conversazioni."
         }
         return "Ultima consultazione: \(relativeMoment(date, compact: false))"
