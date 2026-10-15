@@ -526,6 +526,13 @@ async function main(): Promise<void> {
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
+    widget: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      reminders,
+      automations,
+      loadSettings: loadUserSettings,
+    },
     family: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

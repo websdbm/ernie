@@ -3,6 +3,20 @@ import Observation
 import UIKit
 import UserNotifications
 
+/// Azioni dei widget dell'orso: «Parla» apre l'app in ascolto, «Scrivi» apre la tastiera della chat.
+enum AppLink: Equatable {
+    case voice, chat
+
+    init?(url: URL) {
+        guard url.scheme == "ernie" else { return nil }
+        switch url.host() {
+        case "voice": self = .voice
+        case "chat": self = .chat
+        default: return nil
+        }
+    }
+}
+
 /// Stato radice: credenziali, profilo, conversazione, voce, notifiche. Una sola conversazione attiva per volta.
 @MainActor
 @Observable
@@ -21,6 +35,8 @@ final class AppModel {
     /// Promemoria («Ricordami»): copia dei prossimi, notifiche locali, istantanea per il widget.
     let reminders = ReminderStore()
     var settings = LocalSettings.load()
+    /// Azione chiesta da un widget (ernie://voice, ernie://chat): la esegue la chat appena è pronta.
+    var pendingLink: AppLink?
     /// Coda delle condivisioni in elaborazione: una passata alla volta.
     @ObservationIgnored private var isProcessingShares = false
 

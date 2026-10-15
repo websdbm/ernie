@@ -54,6 +54,10 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         ITSAppUsesNonExemptEncryption: false
+        # Collegamenti dai widget dell'orso: ernie://voice (parla), ernie://chat (scrivi).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.websdbm.ernie
+            CFBundleURLSchemes: [ernie]
     entitlements:
       path: Ernie/Ernie.entitlements
       properties:
@@ -79,10 +83,13 @@ targets:
     sources:
       - path: ErnieWidgets
       - path: Shared
+      # Credenziali dal Keychain condiviso: il widget grande chiede il riepilogo al server (GET /v1/widget).
+      - path: Ernie/Core/Keychain.swift
+      - path: Ernie/Core/Credentials.swift
     info:
       path: ErnieWidgets/Info.plist
       properties:
-        CFBundleDisplayName: Promemoria di Ernie
+        CFBundleDisplayName: Widget di Ernie
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -91,6 +98,7 @@ targets:
       path: ErnieWidgets/ErnieWidgets.entitlements
       properties:
         com.apple.security.application-groups: [group.com.websdbm.ernie]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.widgets

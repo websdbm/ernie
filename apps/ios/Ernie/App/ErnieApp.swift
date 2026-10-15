@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 @main
 struct ErnieApp: App {
@@ -30,9 +31,12 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.credentials == nil)
+        .onOpenURL { url in model.pendingLink = AppLink(url: url) }
         .onChange(of: scenePhase) { _, phase in
             // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.
             if phase == .active { Task { await model.processShareInbox() } }
+            // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.
+            if phase == .background { WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear") }
         }
     }
 }

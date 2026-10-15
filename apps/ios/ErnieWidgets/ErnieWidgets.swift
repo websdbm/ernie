@@ -123,6 +123,7 @@ struct ErnieReminderWidget: Widget {
 @main
 struct ErnieWidgetsBundle: WidgetBundle {
     var body: some Widget {
+        ErnieBearWidget()
         ErnieReminderWidget()
         ReminderAlarmActivity()
     }

@@ -16,6 +16,7 @@ import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders
 import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
 import { type ToolRulesRoutesOptions, toolRulesRoutes } from './routes/tool-rules.js';
+import { type WidgetRoutesOptions, widgetRoutes } from './routes/widget.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
@@ -43,6 +44,8 @@ export interface BuildServerOptions {
   /** Controllo genitori (0030). */
   readonly guardian?: GuardianRoutesOptions;
   readonly toolRules?: ToolRulesRoutesOptions;
+  /** Riepilogo per il widget grande (15 ott 2026). */
+  readonly widget?: WidgetRoutesOptions;
 }
 
 interface HttpErrorLike {
@@ -119,6 +122,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
+  if (opts.widget) await app.register(widgetRoutes, opts.widget);
   if (opts.family) await app.register(familyRoutes, opts.family);
   if (opts.guardian) await app.register(guardianRoutes, opts.guardian);
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);

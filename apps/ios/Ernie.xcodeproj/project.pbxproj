@@ -33,6 +33,7 @@
 		3383E54C8EE818E4EE28F64A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B910048AA5B7CF4CF88553 /* AppDelegate.swift */; };
 		39AA7E9D4F45C1331F2469C4 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */; };
 		3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5625CB5A1D7224D40E394A01 /* FamilyView.swift */; };
+		3E80F1395E1FEFE00C5465F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 253D37BCE9386A221FC141AA /* Assets.xcassets */; };
 		3F6A6A60642E8F5C1DC50070 /* IconGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A873D448B86F04E46852AD68 /* IconGalleryView.swift */; };
 		4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1072AD1394544857B5BED36D /* ChatModels.swift */; };
 		4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 964663D7C194F32CAB945CD0 /* ShareModel.swift */; };
@@ -52,6 +53,7 @@
 		7C22E2BCE2575F83EA89E592 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD343071ED74C53EE49555CE /* VoiceTests.swift */; };
 		896501B81A339C83B037EE05 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98000DE6D12B55CB9A3223 /* HomeView.swift */; };
+		8993BBC876C8034C122833D9 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6A663AAF174530467149DD /* OnboardingView.swift */; };
 		8DB28567C9E2E8379E8AB13E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */; };
 		8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482E5F1386683C4811B2C6EE /* CardExport.swift */; };
@@ -61,8 +63,10 @@
 		9305F53BC0C8F558B84970D0 /* TurnDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C03A5A6380B56EA47059397 /* TurnDetector.swift */; };
 		930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		953D0378785DCF39D7B18212 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
+		989817D51BF87C6BE9FA8F7D /* ErnieSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */; };
 		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
+		A525AF6B03592F73930C696C /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
 		AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */; };
@@ -85,6 +89,7 @@
 		EF922800E7B15C422336A7C1 /* TranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */; };
 		F53E4F4B5643E6A0A2F32A94 /* ErnieWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F54BB9A4CE55E3CA6D55CC42 /* ShoppingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */; };
+		F56D204BF3A2A8D72010E6C9 /* ErnieBearWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */; };
 		F6200A90D63F4EC2AB9BB8B4 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC094642FF9A09140787A348 /* DocumentScannerView.swift */; };
 		F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58FE4A46EDE5F9A3362F7B15 /* ProtocolClient.swift */; };
 /* End PBXBuildFile section */
@@ -137,6 +142,7 @@
 		0C98000DE6D12B55CB9A3223 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatencyTrace.swift; sourceTree = "<group>"; };
 		1072AD1394544857B5BED36D /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieSummary.swift; sourceTree = "<group>"; };
 		124F4848C59674EF5F7A5CD8 /* Ids.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ids.swift; sourceTree = "<group>"; };
 		12E17EBA84621CA7DC748663 /* DocumentReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentReader.swift; sourceTree = "<group>"; };
 		18135035CD14820BAC03C2C7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -145,6 +151,7 @@
 		1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsView.swift; sourceTree = "<group>"; };
 		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
+		253D37BCE9386A221FC141AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ErnieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		372714292F29616AAC713015 /* DocumentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentComposer.swift; sourceTree = "<group>"; };
 		3B5A05A74A82D7EAD93D989E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -164,6 +171,7 @@
 		5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		5F71764273FF93B42753C6E1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisionNotice.swift; sourceTree = "<group>"; };
+		6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieBearWidget.swift; sourceTree = "<group>"; };
 		6B489B112C1F00ED00928355 /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		6DD07317404B3BEF77505FA3 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
@@ -248,6 +256,9 @@
 		270D444F40A039AF982FF263 /* ErnieWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				253D37BCE9386A221FC141AA /* Assets.xcassets */,
+				6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */,
+				11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */,
 				C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */,
 				D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */,
 				AE75F3860E97C5BFE60E2A14 /* Info.plist */,
@@ -516,6 +527,7 @@
 			buildConfigurationList = 403BF0F1C153D13B9183126E /* Build configuration list for PBXNativeTarget "ErnieWidgets" */;
 			buildPhases = (
 				A640A89E6949E80E58CD4CFD /* Sources */,
+				1ED69CF5349EA580411916CC /* Resources */,
 			);
 			buildRules = (
 			);
@@ -578,6 +590,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		1ED69CF5349EA580411916CC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E80F1395E1FEFE00C5465F2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2891728ACE9841DAA47B5ADF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -607,7 +627,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A525AF6B03592F73930C696C /* Credentials.swift in Sources */,
+				F56D204BF3A2A8D72010E6C9 /* ErnieBearWidget.swift in Sources */,
+				989817D51BF87C6BE9FA8F7D /* ErnieSummary.swift in Sources */,
 				022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */,
+				8993BBC876C8034C122833D9 /* Keychain.swift in Sources */,
 				2A5E6AF978D040998A7842E2 /* ReminderAlarm.swift in Sources */,
 				930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */,
 				953D0378785DCF39D7B18212 /* ShareInbox.swift in Sources */,

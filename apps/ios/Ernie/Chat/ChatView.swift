@@ -79,11 +79,29 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showFamily) { ClosableSheet { FamilyView() } }
+        // Widget dell'orso: «Parla» avvia l'ascolto, «Scrivi» apre la tastiera (anche ad app appena aperta).
+        .onChange(of: model.pendingLink) { consumeLink() }
+        .onChange(of: model.voice != nil) { consumeLink() }
+        .onAppear { consumeLink() }
         .sheet(isPresented: $showProfile) { ClosableSheet { ProfileView() } }
         #if DEBUG
         .sheet(isPresented: $debugIcons) { IconGalleryView() }
         .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
         #endif
+    }
+
+    private func consumeLink() {
+        guard let link = model.pendingLink, let voice = model.voice else { return }
+        model.pendingLink = nil
+        panelOpen = false
+        switch link {
+        case .voice:
+            composing = false
+            voice.startListening()
+        case .chat:
+            if voice.isActive { voice.cancelListening() }
+            composing = true
+        }
     }
 
     /// La schermata di ascolto copre la chat mentre si parla; quando Ernie risponde torna la conversazione.
