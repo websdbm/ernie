@@ -55,6 +55,17 @@ export function nominatimAddress(h: NominatimHit): string {
   return line || (h.display_name ?? '').split(',').slice(0, 3).join(',').trim();
 }
 
+/** Distanza approssimata in metri (equirettangolare: basta per confrontare posti vicini). */
+export function metersBetween(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const rad = Math.PI / 180;
+  const x = (b.lng - a.lng) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.sqrt(x * x + y * y) * 6_371_000;
+}
+
 export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
   const doFetch = opts.fetch ?? globalThis.fetch;
   const ua = opts.userAgent ?? 'Ernie-assistente/0.1 (+https://github.com/websdbm/ernie)';
@@ -103,7 +114,11 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
     });
   };
 
-  const nominatim = async (query: string, near?: { lat: number; lng: number }) => {
+  const nominatimOnce = async (
+    query: string,
+    near: { lat: number; lng: number } | undefined,
+    bounded: boolean,
+  ) => {
     // Una richiesta al secondo, in fila.
     const now = Date.now();
     const wait = Math.max(0, nextSlot - now);
@@ -112,14 +127,14 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
     const params = new URLSearchParams({
       q: query,
       format: 'jsonv2',
-      limit: '5',
+      limit: '6',
       addressdetails: '1',
       'accept-language': 'it',
     });
     if (near) {
-      const d = 0.4;
+      const d = 0.45;
       params.set('viewbox', `${near.lng - d},${near.lat + d},${near.lng + d},${near.lat - d}`);
-      params.set('bounded', '0');
+      params.set('bounded', bounded ? '1' : '0');
     }
     const res = await doFetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       headers: { 'User-Agent': ua, Accept: 'application/json' },
@@ -136,23 +151,35 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
     });
   };
 
+  // Prima entro una cinquantina di chilometri da dove si è (segnalato il 16 ott 2026: «la stazione di Padova»
+  // dava vie di Milano), poi ovunque.
+  const nominatim = async (query: string, near?: { lat: number; lng: number }) => {
+    if (near) {
+      const local = await nominatimOnce(query, near, true);
+      if (local.length) return local;
+    }
+    return nominatimOnce(query, near, false);
+  };
+
   return async (query, near) => {
-    const q = query.trim().slice(0, 200);
+    // «la stazione di Padova» → «stazione di Padova»: l'articolo confonde la ricerca.
+    const q = query
+      .trim()
+      .replace(/^(?:il|lo|la|i|gli|le|l')\s*/iu, '')
+      .slice(0, 200);
     if (!q) return [];
     const key = `${q.toLowerCase()}|${near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : ''}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < 24 * 3_600_000) return hit.value;
     try {
       const raw = opts.googleKey ? await google(q, near) : await nominatim(q, near);
-      // Stesso posto due volte (stesso nome a pochi metri): uno solo.
-      const value = raw.filter(
-        (c, i) =>
-          raw.findIndex(
-            (o) =>
-              o.name === c.name &&
-              Math.abs(o.lat - c.lat) < 0.0005 &&
-              Math.abs(o.lng - c.lng) < 0.0005,
-          ) === i,
+      // Dal più vicino (se si sa dove si è); risultati a meno di 250 m da uno precedente sono lo stesso posto
+      // (la basilica e il suo ufficio informazioni): resta il primo, cioè il più pertinente.
+      const ordered = near
+        ? [...raw].sort((a, b) => metersBetween(a, near) - metersBetween(b, near))
+        : raw;
+      const value = ordered.filter(
+        (c, i) => !ordered.slice(0, i).some((o) => metersBetween(o, c) < 250),
       );
       if (cache.size > 300) cache.delete(cache.keys().next().value as string);
       cache.set(key, { at: Date.now(), value });

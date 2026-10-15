@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createNavigationTools, createPlaceSearch, nominatimAddress } from './navigation.js';
+import {
+  createNavigationTools,
+  createPlaceSearch,
+  metersBetween,
+  nominatimAddress,
+} from './navigation.js';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -67,6 +72,39 @@ describe('«Portami lì»: ricerca dei posti', () => {
       fetch: (async () => json({}, 403)) as never,
     });
     expect(await broken('x y')).toEqual([]);
+  });
+
+  it('vicino a chi chiede: prima entro ~50 km, poi ovunque; dal più vicino; posti a pochi metri uniti; senza articolo', async () => {
+    const urls: string[] = [];
+    const fetch = vi.fn(async (url: string | URL | Request) => {
+      urls.push(String(url));
+      // La ricerca limitata non trova nulla: si allarga.
+      if (String(url).includes('bounded=1')) return json([]);
+      return json([
+        {
+          lat: '45.47',
+          lon: '9.22',
+          name: 'Via Padova',
+          address: { road: 'Via Padova', city: 'Milano' },
+        },
+        {
+          lat: '45.4179',
+          lon: '11.8800',
+          name: 'Padova',
+          address: { road: 'Piazzale della Stazione', city: 'Padova' },
+        },
+        { lat: '45.4181', lon: '11.8803', name: 'Biglietteria', address: { city: 'Padova' } },
+      ]);
+    });
+    const search = createPlaceSearch({ fetch: fetch as never, nominatimIntervalMs: 0 });
+    const r = await search('la stazione di Padova', { lat: 45.4064, lng: 11.8768 });
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain('q=stazione+di+Padova');
+    expect(urls[0]).toContain('bounded=1');
+    expect(r.map((c) => c.name)).toEqual(['Padova', 'Via Padova']);
+    expect(
+      Math.round(metersBetween({ lat: 45.4064, lng: 11.8768 }, { lat: 45.4179, lng: 11.88 })),
+    ).toBeGreaterThan(1000);
   });
 
   it('indirizzo da Nominatim anche senza strada', () => {
