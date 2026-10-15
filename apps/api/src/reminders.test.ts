@@ -328,3 +328,57 @@ describe('promemoria ricorrenti e canali (v1.11)', () => {
     expect(moved?.channels).toEqual({ email: true, alarm: false });
   });
 });
+
+describe('appuntamento con preavviso (v1.13)', () => {
+  it('titolo con l’ora dell’appuntamento, etichetta «[tra …]» nello scatto, eventAt in elenco; decade se l’avviso slitta oltre', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    const at = new Date(Date.now() + 2 * 3_600_000);
+    const eventAt = new Date(Date.now() + 3 * 3_600_000);
+    const r = await store.create(PAPA, {
+      text: 'il dentista',
+      at,
+      timezone: 'Europe/Rome',
+      eventAt,
+    });
+    const hm = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Rome',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(eventAt);
+    expect(r.text).toBe(`Il dentista alle ${hm}`);
+    expect(r.eventAt?.getTime()).toBe(Math.floor(eventAt.getTime() / 1000) * 1000);
+    const row = fa.rows[0];
+    expect(row?.action.type === 'skill' ? row.action.input : '').toBe(
+      `__promemoria__ [tra un'ora] Il dentista alle ${hm}`,
+    );
+    expect((await store.list(PAPA))[0]?.eventAt?.toISOString()).toBe(r.eventAt?.toISOString());
+    // Un appuntamento che ha già l’ora nel testo non la ripete.
+    const twice = await store.create(PAPA, {
+      text: 'riunione alle 10',
+      at,
+      timezone: 'Europe/Rome',
+      eventAt,
+      literalTitle: true,
+    });
+    expect(twice.text).toBe('riunione alle 10');
+    // Avviso spostato dopo l’appuntamento: non è più un preavviso.
+    const moved = await store.update(PAPA, r.id, { at: new Date(eventAt.getTime() + 600_000) });
+    expect(moved).not.toBeNull();
+    expect(moved).not.toHaveProperty('eventAt');
+    // Avviso spostato ma sempre prima: il preavviso resta e l’etichetta si ricalcola.
+    const r2 = await store.create(PAPA, { text: 'visita', at, timezone: 'Europe/Rome', eventAt });
+    const earlier = await store.update(PAPA, r2.id, {
+      at: new Date(eventAt.getTime() - 1_800_000),
+    });
+    expect(earlier?.eventAt?.toISOString()).toBe(r2.eventAt?.toISOString());
+    const row2 = fa.rows.find((a) => a.id === earlier?.id);
+    expect(row2?.action.type === 'skill' ? row2.action.input : '').toContain('[tra 30 minuti]');
+  });
+});

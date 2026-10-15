@@ -117,12 +117,12 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     tint: 'purple',
     summary: 'Promemoria a giorno e ora, con notifica sul telefono.',
     description:
-      'Dimmi «ricordami di … alle 17», «domani alle 9», «tra 20 minuti» o «lunedì alle 8»: all’ora stabilita Ernie si sveglia e ti manda una notifica (e un’email, se la attivi nelle impostazioni). Giorno omesso = oggi. «Che promemoria ho?» e «annulla il promemoria …» per gestirli.',
+      'Dimmi «ricordami di … alle 17», «domani alle 9», «tra 20 minuti» o «lunedì alle 8»: all’ora stabilita Ernie si sveglia e ti manda una notifica (e un’email, se la attivi nelle impostazioni). Per un appuntamento con preavviso: «ho il dentista alle 19, avvisami alle 18» o «un’ora prima». Se lo dici in modo diverso ci pensa Ernie, senza chiederti di ripetere. Giorno omesso = oggi. «Che promemoria ho?» e «annulla il promemoria …» per gestirli.',
     kind: 'deterministic',
-    tools: [],
+    tools: ['reminder_create', 'reminder_list', 'reminder_cancel'],
     examples: [
       'ricordami di uscire alle 17',
-      'ricordami domani alle 9 di chiamare il dentista',
+      'ho il dentista alle 19, avvisami alle 18',
       'che promemoria ho?',
     ],
     defaultAvailable: true,

@@ -366,9 +366,11 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     var channels: ReminderChannels? = nil
     /// v1.11: ricorrenza («ogni venerdì alle 9»); in quel caso `at` è la prossima occorrenza.
     var repeatInfo: ReminderRepeatInfo? = nil
+    /// v1.13: preavviso di un appuntamento: `at` è l'avviso, `eventAt` l'ora dell'appuntamento.
+    var eventAt: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, text, at, status, channels
+        case id, text, at, status, channels, eventAt
         case forLabel = "for"
         case fromLabel = "from"
         case repeatInfo = "repeat"
@@ -394,6 +396,17 @@ struct ReminderRepeatInfo: Codable, Sendable, Equatable {
 struct RemindersBlock: Codable, Sendable, Equatable {
     var title: String
     var reminders: [ReminderItem]
+}
+
+/// Domanda chiusa (v1.13): Ernie propone poche opzioni; il tocco su una manda la sua etichetta come messaggio.
+struct ChoiceOption: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var label: String
+}
+
+struct ChoicesBlock: Codable, Sendable, Equatable {
+    var question: String
+    var options: [ChoiceOption]
 }
 
 /// Fonti (v1.9): pagine dei documenti davvero usate e citate nella risposta, con il passo originale.
@@ -461,6 +474,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case reminders(RemindersBlock)
     case citations(CitationsBlock)
     case health(HealthBlock)
+    case choices(ChoicesBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -491,6 +505,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .citations(try CitationsBlock(from: decoder))
         case "health":
             self = .health(try HealthBlock(from: decoder))
+        case "choices":
+            self = .choices(try ChoicesBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -533,6 +549,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .health(let block):
             try c.encode("health", forKey: .kind)
+            try block.encode(to: encoder)
+        case .choices(let block):
+            try c.encode("choices", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

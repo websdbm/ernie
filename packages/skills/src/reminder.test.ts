@@ -3,11 +3,14 @@ import { SkillRegistry } from './registry.js';
 import {
   createReminderSkill,
   formatWhen,
+  leadQuantity,
+  parseAppointment,
   parseReminderCommand,
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderStore,
   reminderFollowUp,
+  toRemindersBlock,
   UnknownPersonError,
 } from './reminder.js';
 import { localParts, zonedToUtc } from './zoned.js';
@@ -436,5 +439,144 @@ describe('sveglia: promemoria che suona sul telefono, senza email', () => {
       TZ,
     );
     expect(p).toMatchObject({ op: 'create', text: 'Sveglia', alarm: true });
+  });
+});
+
+describe('appuntamento con preavviso (richiesta del 15 ott 2026)', () => {
+  const plan = (t: string) => {
+    const p = parseReminderCommand(t, NOW, TZ);
+    if (p?.op !== 'create') throw new Error(`atteso create per «${t}», avuto ${p?.op ?? 'null'}`);
+    return {
+      text: p.text,
+      at: local(p.at),
+      event: p.eventAt ? local(p.eventAt) : null,
+      assumed: p.assumed,
+    };
+  };
+
+  it('«ho il dentista alle 19, avvertimi alle 18» → avviso alle 18, appuntamento alle 19', () => {
+    expect(plan('Ho il dentista alle 19, avvertimi alle 18.')).toMatchObject({
+      text: 'il dentista',
+      at: '2026-10-11 18:00',
+      event: '2026-10-11 19:00',
+    });
+  });
+
+  it('ora dell’avviso ambigua: «alle 6» per le 7 di sera sono le 18, non le 6 del mattino', () => {
+    expect(plan('ho il dentista alle 7 del pomeriggio, avvisami alle 6')).toMatchObject({
+      at: '2026-10-11 18:00',
+      event: '2026-10-11 19:00',
+    });
+    // Appuntamento di mattina: l’avviso può cadere la sera prima.
+    expect(plan('domani alle 9 ho il dentista, avvisami alle 21')).toMatchObject({
+      at: '2026-10-11 21:00',
+      event: '2026-10-12 09:00',
+    });
+  });
+
+  it('preavviso relativo: mezz’ora, un’ora, un quarto d’ora, due ore, il giorno prima; «prima» = un’ora', () => {
+    expect(plan("domani alle 10 ho la riunione, ricordamelo mezz'ora prima")).toMatchObject({
+      text: 'la riunione',
+      at: '2026-10-12 09:30',
+      event: '2026-10-12 10:00',
+    });
+    expect(plan("avvisami un'ora prima che alle 17 c'è la visita dal medico")).toMatchObject({
+      text: 'la visita dal medico',
+      at: '2026-10-11 16:00',
+      event: '2026-10-11 17:00',
+    });
+    expect(
+      plan("alle 18 devo andare dal commercialista, avvertimi un quarto d'ora prima"),
+    ).toMatchObject({
+      text: 'dal commercialista',
+      at: '2026-10-11 17:45',
+    });
+    expect(plan('lunedì alle 15 ho il colloquio, avvisami due ore prima').at).toBe(
+      '2026-10-12 13:00',
+    );
+    expect(plan('il 20 ottobre alle 11 ho la revisione, ricordamelo il giorno prima').at).toBe(
+      '2026-10-19 11:00',
+    );
+    const bare = plan('ho il dentista alle 19, avvisami prima');
+    expect(bare.at).toBe('2026-10-11 18:00');
+    expect(bare.assumed.join(' ')).toContain("un'ora di preavviso");
+  });
+
+  it('non scatta senza l’ora dell’appuntamento, con un avviso già passato o dopo l’appuntamento', () => {
+    expect(parseAppointment('ho il dentista, avvisami alle 18', NOW, TZ)).toBeNull();
+    // Avviso alle 14 di oggi (già passato alle 15): nessun candidato valido.
+    expect(parseAppointment('ho il dentista alle 16, avvisami alle 14', NOW, TZ)).toBeNull();
+    // Il parser generale resta valido per i promemoria semplici.
+    expect(parseReminderCommand('ricordami alle 18 di chiamare Luca', NOW, TZ)).toMatchObject({
+      op: 'create',
+      text: 'chiamare Luca',
+    });
+    expect(parseReminderCommand('ricordami alle 18 di chiamare Luca', NOW, TZ)).not.toHaveProperty(
+      'eventAt',
+    );
+  });
+
+  it('scatto: «[tra un’ora]» e «[da papà]» in testa, in qualsiasi ordine', () => {
+    expect(parseReminderCommand(`${REMINDER_FIRE_PREFIX}[tra un'ora] Dentista alle 19:00`)).toEqual(
+      {
+        op: 'fire',
+        text: 'Dentista alle 19:00',
+        lead: "tra un'ora",
+      },
+    );
+    expect(
+      parseReminderCommand(`${REMINDER_FIRE_PREFIX}[da papà] [tra 30 minuti] Visita alle 17:00`),
+    ).toEqual({ op: 'fire', text: 'Visita alle 17:00', from: 'papà', lead: 'tra 30 minuti' });
+    expect(parseReminderCommand(`${REMINDER_FIRE_PREFIX}Bere acqua`)).toEqual({
+      op: 'fire',
+      text: 'Bere acqua',
+    });
+  });
+
+  it('quantità del preavviso e blocco con eventAt; risposta della skill', async () => {
+    expect(leadQuantity(60_000)).toBe('un minuto');
+    expect(leadQuantity(30 * 60_000)).toBe('30 minuti');
+    expect(leadQuantity(3_600_000)).toBe("un'ora");
+    expect(leadQuantity(90 * 60_000)).toBe("un'ora e mezza");
+    expect(leadQuantity(2 * 3_600_000)).toBe('2 ore');
+    expect(leadQuantity(24 * 3_600_000)).toBe('un giorno');
+    expect(leadQuantity(135 * 60_000)).toBe('2 ore e 15 minuti');
+
+    const created: Array<Parameters<ReminderStore['create']>[1]> = [];
+    const store: ReminderStore = {
+      create: async (_u, input) => {
+        created.push(input);
+        return {
+          id: '11111111-1111-4111-8111-111111111111',
+          text: 'Dentista alle 19:00',
+          at: input.at,
+          status: 'scheduled',
+          ...(input.eventAt ? { eventAt: input.eventAt } : {}),
+        };
+      },
+      list: async () => [],
+      remove: async () => true,
+      update: async () => null,
+    };
+    const skill = createReminderSkill(store, TZ);
+    const p = parseReminderCommand('ho il dentista alle 19, avvertimi alle 18', NOW, TZ);
+    const reply = await skill.run(p, { userId: 'u1', sessionId: null } as never);
+    expect(created[0]?.eventAt && local(created[0].eventAt)).toBe('2026-10-11 19:00');
+    // formatWhen usa la data reale per «oggi»/«domani»: qui contano l'ora e il preavviso.
+    expect(reply.text).toMatch(
+      /^⏰ Va bene: Dentista alle 19:00\. Ti avviso .* alle 18:00, un'ora prima\.$/,
+    );
+    const block = reply.blocks?.[0];
+    if (block?.kind !== 'reminders') throw new Error('atteso blocco promemoria');
+    expect(block.reminders[0]?.eventAt).toBe('2026-10-11T17:00:00.000Z');
+    const plain = toRemindersBlock([{ id: 'x', text: 'y', at: NOW, status: 'done' }]);
+    if (plain.kind !== 'reminders') throw new Error('atteso blocco promemoria');
+    expect(plain.reminders[0]).not.toHaveProperty('eventAt');
+
+    const fired = await skill.run(
+      parseReminderCommand(`${REMINDER_FIRE_PREFIX}[tra un'ora] Dentista alle 19:00`),
+      { userId: 'u1', sessionId: null } as never,
+    );
+    expect(fired.text).toBe("⏰ Tra un'ora: Dentista alle 19:00");
   });
 });

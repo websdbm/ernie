@@ -81,12 +81,14 @@ import {
   createPgToolRuleStore,
   createRecipeRepository,
   createRecipeTools,
+  createReminderTools,
   createSentinelTools,
   createShoppingListRepository,
   createShoppingTools,
   createToolCallRecorder,
   createWebTools,
   getTimeTool,
+  presentChoicesTool,
   presentRecipesTool,
   ToolRegistry,
 } from '@ernie/tools';
@@ -254,6 +256,7 @@ async function main(): Promise<void> {
   const registry = new ToolRegistry()
     .register(getTimeTool)
     .register(presentRecipesTool)
+    .register(presentChoicesTool)
     .register(createMemorySearchSpec(memories));
   for (const t of createShoppingTools(shopping)) registry.register(t);
   for (const t of createRecipeTools(createRecipeRepository(postgres.pool))) registry.register(t);
@@ -290,6 +293,8 @@ async function main(): Promise<void> {
     maxBudgetUsd: config.automations.maxRunBudgetUsd,
   });
   for (const t of createSentinelTools(sentinelStore)) registry.register(t);
+  // Promemoria in forma libera: il modello li crea con i tool (la skill deterministica resta la via senza modello).
+  for (const t of createReminderTools(reminders)) registry.register(t);
   // Second brain: vault git per utente (remoto facoltativo, es. il repository aperto con Obsidian) + indice.
   const brain = await createBrainRuntime({
     config,
@@ -392,7 +397,7 @@ async function main(): Promise<void> {
       registry,
       executor,
       categories: config.tools.categories,
-      core: ['memory_search', 'get_time', 'present_recipes'],
+      core: ['memory_search', 'get_time', 'present_recipes', 'present_choices'],
     },
     skills: {
       builtin: [

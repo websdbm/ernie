@@ -206,9 +206,10 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         const kidNote = `Questo account è di un ragazzo seguito da un genitore (controllo genitori: il genitore sceglie le skill e può leggere le conversazioni, e il ragazzo lo sa). Usa linguaggio e contenuti adatti alla sua età; su temi delicati rispondi con prudenza e, se serve, suggerisci di parlarne con i genitori.${off.length ? ` Funzioni spente dal genitore: ${off.join(', ')}. Se ne chiede una, spiega con gentilezza che è spenta e che può chiedere al genitore di accenderla.` : ''}`;
         memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${kidNote}` : kidNote;
       }
-      // Il modello diceva «non ho uno strumento per la sveglia»: promemoria e sveglie passano dalla skill Ricordami.
+      // Le frasi standard le prende la skill Ricordami senza modello; in forma libera ci pensa il modello con i tool
+      // (richiesta dell'utente, 15 ott 2026: «mi suggerisce come dovrei scrivere, quindi capisce cosa voglio»).
       const remindersNote =
-        'Promemoria e sveglie: li imposta da sola la skill Ricordami quando la persona dice «ricordami di … alle …» o «svegliami domani alle 6» (la sveglia suona sul telefono, con Posticipa, senza email). Se una richiesta del genere arriva a te, non dire che non puoi: chiedi di ripeterla così, con giorno e ora.';
+        "Promemoria, sveglie e appuntamenti: le frasi standard («ricordami di … alle …», «svegliami domani alle 6») le imposta da sola la skill Ricordami. Se una richiesta del genere arriva a te in forma libera, non spiegare come andrebbe detta e non chiedere di ripeterla: crea tu il promemoria con reminder_create, calcolando data e ora ISO con fuso dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvertimi alle 18», «un'ora prima»): eventAt = ora dell'appuntamento, at = ora dell'avviso. Sveglia: alarm true. «Che promemoria ho?» → reminder_list; annullare → reminder_cancel. Se la richiesta è ambigua tra funzioni diverse (promemoria, sentinella, nota nel second brain, lista della spesa…) o manca un dato essenziale con poche alternative, fai UNA domanda chiusa con present_choices e poi ricava tutto il resto dalla frase originale.";
       memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${remindersNote}` : remindersNote;
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.

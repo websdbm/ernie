@@ -460,6 +460,8 @@ export const RemindersBlock = z.object({
         text: z.string().min(1).max(300),
         at: z.iso.datetime(),
         status: z.enum(['scheduled', 'done', 'cancelled']),
+        /** v1.13: preavviso di un appuntamento: `at` è l'ora dell'avviso, `eventAt` quella dell'appuntamento. */
+        eventAt: z.iso.datetime().optional(),
         /** v1.7 (Famiglia): messo da me a «Giorgio» / messo a me da «papà». */
         for: z.string().min(1).max(60).optional(),
         from: z.string().min(1).max(60).optional(),
@@ -484,6 +486,18 @@ export const RemindersBlock = z.object({
       }),
     )
     .max(50),
+});
+/**
+ * Domanda chiusa (v1.13): quando la richiesta è ambigua tra funzioni diverse o manca un dato essenziale, il modello
+ * propone da 2 a 5 opzioni; l'app le mostra come pulsanti e il tocco invia l'etichetta come messaggio dell'utente.
+ */
+export const ChoicesBlock = z.object({
+  kind: z.literal('choices'),
+  question: z.string().min(1).max(300),
+  options: z
+    .array(z.object({ id: z.string().min(1).max(20), label: z.string().min(1).max(80) }))
+    .min(2)
+    .max(5),
 });
 /** Fonti (v1.9, ricerca 11 S2): pagine dei documenti citate nella risposta e verificate dal server. */
 export const CitationsBlock = z.object({
@@ -547,6 +561,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   RemindersBlock,
   CitationsBlock,
   HealthBlock,
+  ChoicesBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

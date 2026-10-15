@@ -5,6 +5,7 @@ export * from './builtins/health.js';
 export * from './builtins/memory.js';
 export * from './builtins/present.js';
 export * from './builtins/recipes.js';
+export * from './builtins/reminders.js';
 export * from './builtins/sentinels.js';
 export * from './builtins/shopping.js';
 export * from './builtins/time.js';

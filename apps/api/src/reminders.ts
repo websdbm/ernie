@@ -10,6 +10,7 @@ import {
 import type { ContentBlock } from '@ernie/protocol';
 import {
   formatWhen,
+  leadQuantity,
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderChannels,
@@ -70,6 +71,8 @@ interface Meta {
   /** v1.11: ricorrenza (l'automazione ha un trigger cron) e la sua frase per l'email. */
   readonly repeat?: ReminderRepeat;
   readonly repeatLabel?: string;
+  /** v1.13: appuntamento con preavviso, ora dell'appuntamento (ISO); l'automazione scatta prima. */
+  readonly eventAt?: string;
 }
 
 function repeatOf(v: unknown): ReminderRepeat | undefined {
@@ -110,6 +113,9 @@ const metaOf = (a: Automation): Meta => {
     ...(typeof m.spoken === 'string' ? { spoken: m.spoken } : {}),
     ...(repeatOf(m.repeat) ? { repeat: repeatOf(m.repeat) as ReminderRepeat } : {}),
     ...(typeof m.repeatLabel === 'string' ? { repeatLabel: m.repeatLabel } : {}),
+    ...(typeof m.eventAt === 'string' && !Number.isNaN(Date.parse(m.eventAt))
+      ? { eventAt: m.eventAt }
+      : {}),
   };
 };
 
@@ -118,7 +124,7 @@ function textOf(a: Automation): string {
   const raw = input.startsWith(REMINDER_FIRE_PREFIX)
     ? input.slice(REMINDER_FIRE_PREFIX.length)
     : a.title.replace(/^Promemoria(?: da [^:]+)?:\s*/u, '');
-  return raw.replace(/^\[da [^\]]+\]\s*/u, '').trim();
+  return raw.replace(/^(?:\[(?:da|tra) [^\]]+\]\s*)+/u, '').trim();
 }
 
 const isReminder = (a: Automation): boolean =>
@@ -147,6 +153,7 @@ function toReminder(a: Automation, viewer: string, forLabel?: string): Reminder 
     status: 'scheduled' as const,
     ...(meta.channels ? { channels: meta.channels } : {}),
     ...(meta.repeat ? { repeat: meta.repeat } : {}),
+    ...(meta.eventAt ? { eventAt: new Date(meta.eventAt) } : {}),
   };
   if (a.userId === viewer)
     return meta.from && meta.from !== viewer && meta.fromLabel
@@ -188,9 +195,14 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
     const title = meta.fromLabel
       ? `Promemoria da ${meta.fromLabel}: ${text}`
       : `Promemoria: ${text}`;
+    // Preavviso: «[tra un'ora]» così il messaggio all'ora dell'avviso dice quanto manca all'appuntamento.
+    const leadTag =
+      meta.eventAt && Date.parse(meta.eventAt) > at.getTime()
+        ? `[tra ${leadQuantity(Date.parse(meta.eventAt) - at.getTime())}] `
+        : '';
     const input = meta.fromLabel
-      ? `${REMINDER_FIRE_PREFIX}[da ${meta.fromLabel}] ${text}`
-      : `${REMINDER_FIRE_PREFIX}${text}`;
+      ? `${REMINDER_FIRE_PREFIX}[da ${meta.fromLabel}] ${leadTag}${text}`
+      : `${REMINDER_FIRE_PREFIX}${leadTag}${text}`;
     // Ricorrente: trigger cron (lo pianifica il worker al prossimo giro); una tantum: job ritardato subito.
     const trigger = meta.repeat
       ? { type: 'cron' as const, pattern: repeatCron(meta.repeat) }
@@ -290,12 +302,24 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
             ? await deps.title(spoken, { userId, ...(fromLabel ? { fromLabel } : {}) })
             : tidyReminderText(spoken),
         ) || spoken;
+      // Appuntamento con preavviso: l'ora dell'appuntamento finisce nel titolo («Dentista alle 19:00») e nei metadati.
+      const eventAt =
+        input.eventAt && input.eventAt.getTime() > at.getTime()
+          ? new Date(Math.floor(input.eventAt.getTime() / 1000) * 1000)
+          : undefined;
+      const withEvent = (text: string): string => {
+        if (!eventAt || /\balle\s+\d/u.test(text)) return text;
+        const hm = hourMinute(eventAt, input.timezone);
+        return `${text} alle ${String(hm.hour).padStart(2, '0')}:${String(hm.minute).padStart(2, '0')}`;
+      };
+      const eventMeta = eventAt ? { eventAt: eventAt.toISOString() } : {};
       if (!input.forLabel) {
-        const text = input.literalTitle ? spoken : await titled();
+        const text = withEvent(input.literalTitle ? spoken : await titled());
         const a = await insert(userId, text, at, input.timezone, {
           ...(!sameText(spoken, text) ? { spoken } : {}),
           ...(input.repeat ? { repeat: input.repeat } : {}),
           ...(input.channels ? { channels: input.channels } : {}),
+          ...eventMeta,
         });
         return {
           id: a.id,
@@ -304,18 +328,20 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
           status: 'scheduled',
           ...(input.repeat ? { repeat: input.repeat } : {}),
           ...(input.channels ? { channels: input.channels } : {}),
+          ...(eventAt ? { eventAt } : {}),
         };
       }
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
       if (!link) throw new UnknownPersonError(input.forLabel);
       const fromLabel = (await deps.family?.labelFor(link.otherUserId, userId)) ?? 'un familiare';
-      const text = input.literalTitle ? spoken : await titled(fromLabel);
+      const text = withEvent(input.literalTitle ? spoken : await titled(fromLabel));
       const meta: Meta = {
         from: userId,
         fromLabel,
         toLabel: link.label,
         ...(!sameText(spoken, text) ? { spoken } : {}),
         ...(input.repeat ? { repeat: input.repeat } : {}),
+        ...eventMeta,
       };
       const a = await insert(link.otherUserId, text, at, input.timezone, meta);
       await announce(
@@ -324,7 +350,14 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
         fromLabel,
         input.timezone,
       );
-      return { id: a.id, text, at, status: 'scheduled', for: link.label };
+      return {
+        id: a.id,
+        text,
+        at,
+        status: 'scheduled',
+        for: link.label,
+        ...(eventAt ? { eventAt } : {}),
+      };
     },
     async list(userId) {
       const now = Date.now();
@@ -379,10 +412,12 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       const channels = patch.channels
         ? { ...(old.channels ?? {}), ...patch.channels }
         : old.channels;
+      const { eventAt: oldEvent, ...rest } = old;
       const meta: Meta = {
-        ...old,
+        ...rest,
         ...(channels ? { channels } : {}),
         ...(repeat ? { repeat } : {}),
+        ...(oldEvent && Date.parse(oldEvent) > at.getTime() ? { eventAt: oldEvent } : {}),
       };
       await deps.automations.remove(found.owner, id);
       const a = await insert(found.owner, text, at, found.automation.timezone, meta);

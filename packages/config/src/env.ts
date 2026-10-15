@@ -67,7 +67,7 @@ export const envSchema = z.object({
   TOOL_CATEGORIES: z
     .string()
     .default(
-      'utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain,health',
+      'utility,memory,shopping_list,web,presentation,recipes,documents,sentinels,brain,health,reminders',
     ),
   /** Second brain: cartella dei vault (uno per utente), remoti git per utente, chiave di deploy (base64). */
   BRAIN_DIR: z.string().default('./.data/brain'),

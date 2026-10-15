@@ -1,5 +1,30 @@
 [
   {
+    "build": 50,
+    "date": "2026-10-15",
+    "title": "Appuntamenti con preavviso e domande chiuse",
+    "items": [
+      {
+        "icon": "calendar.badge.clock",
+        "title": "«Ho il dentista alle 19, avvisami alle 18»",
+        "detail": "Un appuntamento con preavviso diventa un promemoria che suona prima: funziona con «avvertimi alle 18», «un'ora prima», «mezz'ora prima», «il giorno prima». Nella scheda vedi l'ora dell'appuntamento e il preavviso.",
+        "test": "Di' a Ernie «domani alle 10 ho la riunione, ricordamelo mezz'ora prima» e controlla la scheda."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Promemoria detti a modo tuo",
+        "detail": "Se la frase non è in una delle forme standard, Ernie non ti spiega più come dirla: capisce e crea lui il promemoria (o la sveglia), chiedendo solo quello che manca.",
+        "test": "Prova una frase libera, per esempio «mi avverti verso le sei che poi ho il dentista alle sette?»."
+      },
+      {
+        "icon": "questionmark.bubble",
+        "title": "Domande chiuse quando c'è ambiguità",
+        "detail": "Se non è chiaro se vuoi un promemoria, una sentinella o una nota, Ernie te lo chiede con pochi pulsanti; tocchi la scelta e lui ricava il resto dalla frase che hai già detto.",
+        "test": "Di' qualcosa di ambiguo, tipo «tienimi d'occhio la bolletta della luce», e rispondi col pulsante."
+      }
+    ]
+  },
+  {
     "build": 49,
     "date": "2026-10-14",
     "title": "Inoltro email da più indirizzi",

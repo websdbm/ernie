@@ -31,8 +31,75 @@ struct BlockView: View {
             CitationsCard(block: block)
         case .health(let block):
             HealthCard(block: block)
+        case .choices(let block):
+            ChoicesCard(block: block, conversation: conversation)
         case .unknown:
             EmptyView()
+        }
+    }
+}
+
+// MARK: - Domanda chiusa
+
+/// Opzioni proposte da Ernie quando la richiesta è ambigua: un tocco manda l'etichetta come messaggio.
+/// Dopo la risposta i pulsanti restano visibili ma spenti, con la scelta evidenziata.
+struct ChoicesCard: View {
+    let block: ChoicesBlock
+    var conversation: ConversationStore?
+    @State private var chosen: String?
+
+    var body: some View {
+        ErnieCard(icon: "questionmark.bubble.fill", tint: .reminders, eyebrow: "Dimmi tu", title: block.question) {
+            FlowLayout(spacing: 8) {
+                ForEach(block.options) { option in
+                    Button {
+                        guard chosen == nil, let conversation else { return }
+                        chosen = option.id
+                        conversation.send(option.label, inputMode: "text")
+                    } label: {
+                        Text(option.label)
+                            .font(.subheadline.weight(.medium))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                chosen == option.id ? Color.accentColor.opacity(0.22) : Theme.surfaceMuted,
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().strokeBorder(chosen == option.id ? Color.accentColor : Theme.hairline))
+                            .foregroundStyle(chosen == nil || chosen == option.id ? Theme.ink : Theme.inkSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(chosen != nil || conversation == nil)
+                }
+            }
+        }
+    }
+}
+
+/// Disposizione a righe: le opzioni vanno a capo quando non ci stanno.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for v in subviews {
+            let size = v.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width == .infinity ? x : width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for v in subviews {
+            let size = v.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
@@ -165,6 +232,11 @@ struct RemindersCard: View {
                     Text(Self.when(r) + Self.who(r))
                         .font(.caption)
                         .foregroundStyle(Theme.inkSecondary)
+                    if let event = Self.eventLine(r) {
+                        Label(event, systemImage: "calendar.badge.clock")
+                            .font(.caption)
+                            .foregroundStyle(Theme.inkSecondary)
+                    }
                     if scheduled, let rep = r.repeatInfo {
                         Label(rep.label, systemImage: "repeat")
                             .font(.caption)
@@ -202,6 +274,19 @@ struct RemindersCard: View {
             }
         }
         .opacity(scheduled ? 1 : 0.7)
+    }
+
+    /// Preavviso di un appuntamento: «Appuntamento alle 19:00, avviso un'ora prima».
+    static func eventLine(_ r: ReminderItem) -> String? {
+        guard let raw = r.eventAt, let event = ReminderStore.date(raw), let at = ReminderStore.date(r.at) else { return nil }
+        let time = event.formatted(.dateTime.hour().minute().locale(Locale(identifier: "it_IT")))
+        let minutes = max(1, Int((event.timeIntervalSince(at) / 60).rounded()))
+        let lead: String
+        if minutes < 60 { lead = "\(minutes) minuti" }
+        else if minutes == 60 { lead = "un'ora" }
+        else if minutes % 60 == 0 { lead = minutes == 1440 ? "un giorno" : "\(minutes / 60) ore" }
+        else { lead = "\(minutes / 60) ore e \(minutes % 60) minuti" }
+        return "Appuntamento alle \(time), avviso \(lead) prima"
     }
 
     /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).

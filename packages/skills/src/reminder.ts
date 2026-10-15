@@ -29,6 +29,8 @@ export interface Reminder {
   readonly channels?: ReminderChannels;
   /** Ricorrenza (v1.11): `at` è la prossima occorrenza. */
   readonly repeat?: ReminderRepeat;
+  /** Preavviso di un appuntamento (v1.13): `at` è l'ora dell'avviso, `eventAt` quella dell'appuntamento. */
+  readonly eventAt?: Date;
 }
 
 export interface ReminderChannels {
@@ -59,6 +61,8 @@ export interface ReminderStore {
       channels?: ReminderChannels;
       /** Titolo da tenere com'è, senza riscriverlo con il modello (es. «Sveglia», scelta dell'utente). */
       literalTitle?: boolean;
+      /** Appuntamento con preavviso: ora dell'appuntamento (l'avviso parte ad `at`, prima). */
+      eventAt?: Date;
     },
   ): Promise<Reminder>;
   /** Promemoria futuri ancora attivi, dal più vicino. */
@@ -88,12 +92,14 @@ export type ReminderPlan =
       email?: boolean;
       /** «Svegliami alle 6»: suona come una sveglia sul telefono, senza email. */
       alarm?: boolean;
+      /** «Ho il dentista alle 19, avvisami alle 18»: ora dell'appuntamento (l'avviso è `at`). */
+      eventAt?: Date;
     }
   | { op: 'ask_time'; text: string; who?: string; email?: boolean; alarm?: boolean }
   | { op: 'set_email'; email: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
-  | { op: 'fire'; text: string; from?: string };
+  | { op: 'fire'; text: string; from?: string; lead?: string };
 
 export const REMINDER_FIRE_PREFIX = '__promemoria__ ';
 
@@ -221,6 +227,8 @@ interface Parsed {
   readonly text: string;
   readonly at: Date;
   readonly assumed: string[];
+  /** L'ora è stata detta (non è un relativo «tra 20 minuti» né una stima da giorno senza ora). */
+  readonly timeGiven?: boolean;
 }
 
 /** «Prendere Giorgio» → «prendere Giorgio» dentro una frase (i nomi propri restano maiuscoli). */
@@ -440,11 +448,18 @@ export function parseReminderCommand(
     .replace(/[.!?]+$/gu, '')
     .trim();
   if (text.startsWith(REMINDER_FIRE_PREFIX)) {
-    const body = text.slice(REMINDER_FIRE_PREFIX.length).trim();
-    const from = /^\[da (?<from>[^\]]{1,60})\]\s*(?<rest>.+)$/su.exec(body);
-    return from?.groups?.rest && from.groups.from
-      ? { op: 'fire', text: from.groups.rest.trim(), from: from.groups.from.trim() }
-      : { op: 'fire', text: body };
+    let body = text.slice(REMINDER_FIRE_PREFIX.length).trim();
+    let from: string | undefined;
+    let lead: string | undefined;
+    // Etichette in testa, in qualsiasi ordine: «[da papà]» (Famiglia) e «[tra un'ora]» (preavviso di un appuntamento).
+    for (;;) {
+      const tag = /^\[(?<k>da|tra) (?<v>[^\]]{1,60})\]\s*/u.exec(body);
+      if (!tag?.groups?.v) break;
+      if (tag.groups.k === 'da') from = tag.groups.v.trim();
+      else lead = `tra ${tag.groups.v.trim()}`;
+      body = body.slice(tag[0].length);
+    }
+    return { op: 'fire', text: body, ...(from ? { from } : {}), ...(lead ? { lead } : {}) };
   }
   const lower = text.toLowerCase();
   // «La mia email è …», «cambia la mia email in …», «usa … come email»: va nella scheda anagrafica.
@@ -457,6 +472,8 @@ export function parseReminderCommand(
   if (stated) return { op: 'set_email', email: stated };
   const wake = parseWakeUp(text, now, tz);
   if (wake) return wake;
+  const appointment = parseAppointment(text, now, tz);
+  if (appointment) return appointment;
   if (!/ricorda|promemoria/u.test(lower)) return null;
   if (
     /^(?:che|quali|quanti)\s+promemoria|^(?:i\s+miei|mostra(?:mi)?(?:\s+i)?|elenca(?:mi)?(?:\s+i)?|dimmi\s+i|vedi(?:\s+i)?)\s+(?:miei\s+)?promemoria|^promemoria$|^cosa\s+(?:mi\s+)?devi\s+ricordar/iu.test(
@@ -519,6 +536,128 @@ export function parseReminderCommand(
     ...(who ? { who } : {}),
     ...(email ? { email } : {}),
   };
+}
+
+/** Quantità di tempo di un preavviso: «un'ora», «30 minuti», «2 ore», «un giorno». */
+export function leadQuantity(ms: number): string {
+  const min = Math.max(1, Math.round(ms / 60_000));
+  if (min === 1) return 'un minuto';
+  if (min < 60) return `${min} minuti`;
+  if (min === 90) return "un'ora e mezza";
+  if (min % 1440 === 0) return min === 1440 ? 'un giorno' : `${min / 1440} giorni`;
+  if (min % 60 === 0) return min === 60 ? "un'ora" : `${min / 60} ore`;
+  const h = Math.floor(min / 60);
+  return `${h === 1 ? "un'ora" : `${h} ore`} e ${min % 60} minuti`;
+}
+
+/** «avvisami», «avvertimi», «ricordamelo»…: inizio della clausola del preavviso. */
+const LEAD_TRIGGER =
+  /(?:^|[\s,;])(?:e\s+)?(?:avvisami|avvertimi|ricordamel[oa]|ricordami|avvisa(?:mi)?|avverti(?:mi)?|segnalamelo|mi\s+avvisi|mi\s+avverti|mi\s+ricordi|dammi\s+un\s+avviso|mandami\s+un\s+avviso|fammi\s+un\s+promemoria|mettimi\s+un\s+promemoria|promemoria)\s+/iu;
+/** «un'ora prima», «30 minuti prima», «mezz'ora prima», «un quarto d'ora prima», «il giorno prima», «prima». */
+const REL_LEAD =
+  /^(?:(?:(?<n>\d+|un'|una|un|due|tre|quattro|cinque|dieci|quindici|venti|trenta|quarantacinque)\s*(?<u>minut[oi]|or[ae]|giorn[oi]|quart[oi]\s+d'ora))|(?<half>mezz'\s*ora|mezzora|mezz'ora)|(?<day>il\s+giorno)|(?<bare>un\s+po'))?\s*prima\b/iu;
+/** «alle 18», «per le 6», «alle 17:30», «alle 6 e mezza di sera». */
+const ABS_LEAD =
+  /^(?:alle|all'|per\s+le|verso\s+le|entro\s+le)\s*(?:ore\s+)?(?<h>\d{1,2})(?:[:.,](?<mi>\d{2}))?(?:\s+e\s+(?<frac>mezza|mezzo|un\s+quarto|tre\s+quarti))?(?:\s+(?<ap>di\s+mattina|del\s+mattino|di\s+pomeriggio|del\s+pomeriggio|di\s+sera|della\s+sera|di\s+notte))?(?=\s|$)/iu;
+
+/** «ho il dentista» → «il dentista», «devo andare dal medico» → «dal medico». */
+function stripEventFillers(t: string): string {
+  return t
+    .replace(
+      /^(?:che\s+)?(?:io\s+)?(?:ho|c'è|c'ho|avrò|avrei|abbiamo|avremo|devo\s+(?:andare|essere|fare|portare)|vado|andrò|sono|ci\s+sarebbe|mi\s+aspetta)\s+/iu,
+      '',
+    )
+    .replace(/\s+(?:e|ed|che)$/iu, '')
+    .trim();
+}
+
+/**
+ * Appuntamento con preavviso (richiesta dell'utente, 15 ott 2026): «ho il dentista alle 19, avvertimi alle 18»,
+ * «domani alle 10 ho la riunione, ricordamelo mezz'ora prima», «avvisami un'ora prima che alle 15 c'è la visita».
+ * Servono due tempi: quello dell'appuntamento (con l'ora detta) e quello dell'avviso, assoluto o relativo.
+ * Un'ora assoluta ambigua («avvisami alle 6» per le 19) è letta come la più vicina all'appuntamento (le 18).
+ * Null se non è una frase di questo tipo: ci pensano il parser generale o il modello.
+ */
+export function parseAppointment(input: string, now: Date, tz: string): ReminderPlan | null {
+  const text = ` ${normalizeHourWords(input.replace(/[‘’´`]/gu, "'"))
+    .replace(/\s+/g, ' ')
+    .trim()} `;
+  const trig = LEAD_TRIGGER.exec(text);
+  if (!trig) return null;
+  const after = text.slice(trig.index + trig[0].length);
+  let leadLen = 0;
+  let relMs: number | null = null;
+  let relAssumed: string | null = null;
+  let abs: { hour: number; minute: number; ap: string } | null = null;
+  const rel = REL_LEAD.exec(after);
+  if (rel?.groups) {
+    leadLen = rel[0].length;
+    if (rel.groups.half) relMs = 30 * 60_000;
+    else if (rel.groups.day) relMs = 24 * 3_600_000;
+    else if (rel.groups.u) {
+      const n = /^\d+$/.test(rel.groups.n ?? '')
+        ? Number(rel.groups.n)
+        : (NUM_WORDS[(rel.groups.n ?? '').toLowerCase()] ?? 1);
+      const u = rel.groups.u.toLowerCase();
+      relMs = u.startsWith('min')
+        ? n * 60_000
+        : u.startsWith('or')
+          ? n * 3_600_000
+          : u.startsWith('giorn')
+            ? n * 86_400_000
+            : n * 15 * 60_000;
+    } else {
+      relMs = 3_600_000;
+      relAssumed = "un'ora di preavviso, perché non hai detto quanto prima";
+    }
+  } else {
+    const a = ABS_LEAD.exec(after);
+    if (!a?.groups?.h) return null;
+    leadLen = a[0].length;
+    let minute = a.groups.mi ? Number(a.groups.mi) : 0;
+    const frac = a.groups.frac?.toLowerCase();
+    if (frac?.startsWith('mezz')) minute = 30;
+    else if (frac === 'un quarto') minute = 15;
+    else if (frac === 'tre quarti') minute = 45;
+    abs = { hour: Number(a.groups.h), minute, ap: a.groups.ap?.toLowerCase() ?? '' };
+    if (abs.hour > 23 || minute > 59) return null;
+  }
+  const eventPart = `${text.slice(0, trig.index)} ${after.slice(leadLen)}`
+    .replace(/[,;]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:che|perché|perche|e|ed|ma|poi|allora)\s+/iu, '')
+    .trim();
+  if (!eventPart) return null;
+  const parsed = parseWhen(eventPart, now, tz);
+  if (!parsed || 'needTime' in parsed || !parsed.timeGiven) return null;
+  const eventAt = parsed.at;
+  const what = stripEventFillers(parsed.text);
+  if (!what) return null;
+  const assumed = [...parsed.assumed];
+  let at: Date;
+  if (relMs !== null) {
+    at = new Date(eventAt.getTime() - relMs);
+    if (relAssumed) assumed.push(relAssumed);
+  } else if (abs) {
+    // Candidati: l'ora detta e, se ambigua, la stessa ora del pomeriggio; il giorno dell'appuntamento o quello prima.
+    let hours = [abs.hour];
+    if (/sera|pomeriggio|notte/.test(abs.ap) && abs.hour < 12) hours = [abs.hour + 12];
+    else if (/mattin/.test(abs.ap)) hours = [abs.hour === 12 ? 0 : abs.hour];
+    else if (abs.hour < 12) hours = [abs.hour, abs.hour + 12];
+    const ep = localParts(eventAt, tz);
+    const [py, pm, pd] = addDays(ep.year, ep.month, ep.day, -1);
+    const candidates = [
+      ...hours.map((h) => zonedToUtc(tz, ep.year, ep.month, ep.day, h, abs?.minute ?? 0)),
+      ...hours.map((h) => zonedToUtc(tz, py, pm, pd, h, abs?.minute ?? 0)),
+    ]
+      .filter((t) => t.getTime() < eventAt.getTime() && t.getTime() > now.getTime() + 30_000)
+      .sort((x, y) => y.getTime() - x.getTime());
+    if (!candidates[0]) return null;
+    at = candidates[0];
+  } else return null;
+  if (at.getTime() <= now.getTime() + 30_000 || at.getTime() >= eventAt.getTime()) return null;
+  return { op: 'create', text: what, at, eventAt, assumed };
 }
 
 /**
@@ -663,6 +802,7 @@ export function toRemindersBlock(
       text: r.text.slice(0, 300),
       at: r.at.toISOString(),
       status: r.status,
+      ...(r.eventAt ? { eventAt: r.eventAt.toISOString() } : {}),
       ...(r.for ? { for: r.for.slice(0, 60) } : {}),
       ...(r.from ? { from: r.from.slice(0, 60) } : {}),
       ...(r.channels && (r.channels.email !== undefined || r.channels.alarm !== undefined)
@@ -693,11 +833,12 @@ export function createReminderSkill(
     kind: 'deterministic',
     category: 'reminders',
     description:
-      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; sveglie («svegliami domani alle 6», suonano sul telefono); anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
+      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; appuntamenti con preavviso («ho il dentista alle 19, avvisami alle 18» o «un’ora prima»); sveglie («svegliami domani alle 6», suonano sul telefono); anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
     examples: [
       'ricordami di uscire alle 17',
       'ricordami domani alle 9 di chiamare il dentista',
       'tra 20 minuti ricordami di spegnere il forno',
+      'ho il dentista alle 19, avvisami alle 18',
       'svegliami domani alle 6',
       'ricorda a Giorgio di chiamarmi domani alle 17',
       'che promemoria ho?',
@@ -707,11 +848,17 @@ export function createReminderSkill(
     run: async (plan, ctx): Promise<SkillReply> => {
       const p = plan as ReminderPlan;
       switch (p.op) {
-        case 'fire':
+        case 'fire': {
+          const lead = p.lead ? `${p.lead.charAt(0).toUpperCase()}${p.lead.slice(1)}` : null;
           return {
-            text: p.from ? `⏰ Promemoria da ${p.from}: ${p.text}` : `⏰ Promemoria: ${p.text}`,
+            text: p.from
+              ? `⏰ Promemoria da ${p.from}${p.lead ? `, ${p.lead}` : ''}: ${p.text}`
+              : lead
+                ? `⏰ ${lead}: ${p.text}`
+                : `⏰ Promemoria: ${p.text}`,
             actions: ['fire'],
           };
+        }
         case 'ask_time':
           return {
             text: p.alarm
@@ -738,6 +885,7 @@ export function createReminderSkill(
               timezone,
               ...(p.who ? { forLabel: p.who } : {}),
               ...(p.repeat ? { repeat: p.repeat } : {}),
+              ...(p.eventAt ? { eventAt: p.eventAt } : {}),
               // Sveglia: suona sul telefono e niente email, anche se le email dei promemoria sono accese.
               ...(p.alarm
                 ? { channels: { alarm: true, email: false }, literalTitle: true }
@@ -757,6 +905,14 @@ export function createReminderSkill(
           const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
           const what = lowerFirst(r.text);
           let reply: SkillReply;
+          if (p.eventAt) {
+            const lead = leadQuantity(p.eventAt.getTime() - r.at.getTime());
+            return {
+              text: `⏰ Va bene: ${r.text}. Ti avviso ${formatWhen(r.at, timezone)}, ${lead} prima.${note}`,
+              actions: [`create:${r.id}`],
+              blocks: [toRemindersBlock([r], 'Appuntamento')],
+            };
+          }
           if (p.alarm) {
             const why = r.text.startsWith('Sveglia: ') ? ` (${lowerFirst(r.text.slice(9))})` : '';
             const when = r.repeat
