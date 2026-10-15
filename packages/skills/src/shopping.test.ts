@@ -237,3 +237,17 @@ describe('apostrofo tipografico', () => {
     expect(parseShoppingCommand("cosa c'è nella lista della spesa?")).toEqual({ op: 'list' });
   });
 });
+
+describe('spesa: impegni e frasi che non sono voci (revisione del 16 ott 2026)', () => {
+  it('orari, persone e luoghi non finiscono nella lista; le voci restano', async () => {
+    const { parseShoppingCommand, describeShoppingPlan } = await import('./shopping.js');
+    expect(parseShoppingCommand('devo prendere le medicine alle 20')).toBeNull();
+    expect(parseShoppingCommand('devo prendere Giorgio a scuola')).toBeNull();
+    expect(parseShoppingCommand('devo prendere il pane e il latte')).toMatchObject({ op: 'add' });
+    const plan = parseShoppingCommand('ho preso freddo');
+    // La frase è ancora riconosciuta come spunta, ma il controllo di Jev vede cosa farebbe.
+    expect(plan ? describeShoppingPlan(plan) : null).toBe(
+      'segna come già presi nella lista della spesa: freddo',
+    );
+  });
+});

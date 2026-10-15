@@ -235,7 +235,9 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
             .join('; '),
         );
       const a = parsed.data;
-      validateTrigger(a.trigger, a.timezone);
+      validateTrigger(a.trigger, a.timezone, new Date(), {
+        allowQuietOnce: a.key.startsWith('promemoria_'),
+      });
       if (opts.maxBudgetUsd !== undefined && a.budgetUsd > opts.maxBudgetUsd)
         throw new AutomationValidationError(
           `budget per run oltre il massimo consentito (${opts.maxBudgetUsd} USD)`,

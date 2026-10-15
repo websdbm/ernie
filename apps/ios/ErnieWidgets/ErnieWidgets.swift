@@ -125,6 +125,7 @@ struct ErnieWidgetsBundle: WidgetBundle {
     var body: some Widget {
         ErnieBearWidget()
         ErnieReminderWidget()
+        ErnieFamilyWidget()
         ReminderAlarmActivity()
     }
 }

@@ -63,6 +63,15 @@ describe('validateTrigger', () => {
         new Date('2026-10-11T00:00:00Z'),
       ),
     ).toThrow(/notturna/);
+    // I promemoria valgono anche di notte (una notifica, nessun modello).
+    expect(() =>
+      validateTrigger(
+        { type: 'once', at: '2027-07-01T00:30:00.000Z' },
+        'Europe/Rome',
+        new Date('2026-10-11T00:00:00Z'),
+        { allowQuietOnce: true },
+      ),
+    ).not.toThrow();
     // Lo stesso istante UTC a Tokyo è 09:30: ammesso.
     expect(() =>
       validateTrigger(

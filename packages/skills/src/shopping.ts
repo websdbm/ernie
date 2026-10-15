@@ -182,13 +182,34 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
   const need =
     /^(?:segna(?:mi)? che )?(?:devo|dobbiamo|mi serve|mi servono|ci serve|ci servono|ricordami di)\s+(?:(?:comprare|prendere)\s+)?(?<items>.+?)(?:\s+(?:per|alla|nella|in)\s+(?:la\s+)?(?:spesa|lista(?:\s+della\s+spesa)?))?$/iu;
   const nd = need.exec(text);
-  if (nd?.groups?.items && !/\b(cose|roba|ingredienti)\s+per\b/iu.test(nd.groups.items)) {
+  // «Devo prendere le medicine alle 20», «devo prendere Giorgio a scuola»: impegni, non voci della spesa
+  // (revisione del 16 ott 2026). Orari, giorni e persone li lascia al modello o a Ricordami.
+  const notShopping =
+    /(?:^|\s)(?:alle|all'|per\s+le|entro\s+le)\s*\d|(?:^|\s)(?:domani|dopodomani|stasera|stamattina|oggi|tra\s+\d|fra\s+\d)(?=\s|$)|(?:^|\s)(?:a|da)\s+(?:scuola|casa|lavoro|calcio|danza|piscina)(?=\s|$)/iu;
+  const person = /^(?:prendere\s+)?\p{Lu}\p{Ll}+/u;
+  if (
+    nd?.groups?.items &&
+    !/\b(cose|roba|ingredienti)\s+per\b/iu.test(nd.groups.items) &&
+    !notShopping.test(nd.groups.items) &&
+    !(/prendere\s+\p{Lu}/u.test(text) && person.test(nd.groups.items))
+  ) {
     return withList(
       { op: 'add' as const, items: splitItems(nd.groups.items).map(parseItem) },
       list,
     );
   }
 
+  return null;
+}
+
+/** Cosa farà il piano sulla lista, per il controllo di Jev; null per elenchi e gestione delle liste. */
+export function describeShoppingPlan(p: ShoppingPlan): string | null {
+  const where = 'list' in p && p.list ? ` «${p.list}»` : ' della spesa';
+  if (p.op === 'add')
+    return `aggiunge alla lista${where}: ${p.items.map((i) => (i.quantity ? `${i.quantity} ${i.name}` : i.name)).join(', ')}`;
+  if (p.op === 'remove') return `toglie dalla lista${where}: ${p.names.join(', ')}`;
+  if (p.op === 'check')
+    return `segna come ${p.checked ? 'già presi' : 'da prendere'} nella lista${where}: ${p.names.join(', ')}`;
   return null;
 }
 
@@ -250,6 +271,8 @@ export function createShoppingListSkill(repo: ShoppingListRepository): Determini
       'archivia la lista Esselunga',
     ],
     match: (text) => parseShoppingCommand(text),
+    // Il controllo di Jev sulle voci («ho preso freddo» non è una spunta della lista).
+    describe: (plan) => describeShoppingPlan(plan as ShoppingPlan),
     run: async (plan, ctx): Promise<SkillReply> => {
       const p = plan as ShoppingPlan;
       const u = ctx.userId;

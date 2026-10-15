@@ -160,3 +160,13 @@ describe('skill Messaggi', () => {
     });
   });
 });
+
+describe('nomi nei messaggi (revisione del 16 ott 2026)', () => {
+  it('la seconda parola non è un avverbio o un gerundio', () => {
+    expect(parseMessageCommand('scrivi a zia Anna che arrivo')).toMatchObject({ who: 'zia Anna' });
+    expect(parseMessageCommand('scrivi a Giorgio che arrivo')).toMatchObject({ who: 'Giorgio' });
+    expect(parseMessageCommand('manda un messaggio a papà dicendogli che arrivo')).toMatchObject({
+      who: 'papà',
+    });
+  });
+});

@@ -550,36 +550,53 @@ export function parseWhen(
   rest: string,
   now: Date,
   tz: string,
+  /** Sveglie: «alle 5» è di mattina, non si sposta al pomeriggio. */
+  opts: { morning?: boolean } = {},
 ): Parsed | { needTime: string } | null {
   let text = ` ${normalizeHourWords(rest.replace(/[‘’´`]/gu, "'"))} `;
   const assumed: string[] = [];
   const today = localParts(now, tz);
   let [y, m, d] = [today.year, today.month, today.day];
   let dayGiven = false;
+  /** «Tra 3 giorni» senza ora: la stessa ora di adesso, non le 9. */
+  let keepClock = false;
   let hour: number | null = null;
   let minute = 0;
   let timeGiven = false;
 
-  // Relativo: «tra 20 minuti», «fra un'ora», «tra 2 giorni».
-  const rel =
-    /\s(?:tra|fra)\s+(?<n>\d+|un'|una|un|due|tre|quattro|cinque|sei|dieci|quindici|venti|trenta|quarantacinque|sessanta)\s*(?<u>minut[oi]|or[ae]|giorn[oi]|settiman[ae])\s/iu.exec(
+  // Relativo breve: «tra mezz'ora», «fra un quarto d'ora», «tra tre quarti d'ora».
+  const half =
+    /\s(?:tra|fra)\s+(?:(?<q>un\s+quarto|tre\s+quarti)\s+d'\s*ora|(?<h>mezz'\s*ora|mezzora))(?=[\s,.;!?])/iu.exec(
       text,
     );
+  if (half?.groups) {
+    const min = half.groups.h ? 30 : /^tre/iu.test(half.groups.q ?? '') ? 45 : 15;
+    text = text.replace(half[0], ' ');
+    return { text: clean(text), at: new Date(now.getTime() + min * 60_000), assumed };
+  }
+  // Relativo: «tra 20 minuti», «fra un'ora e mezza», «tra 2 ore e 30 minuti», «tra 10 min», «tra 3 giorni»,
+  // «tra una settimana», «tra un mese».
+  const rel = new RegExp(
+    `\\s(?:tra|fra)\\s+${qty('n')}\\s*(?<u>min(?:ut[oi])?|or[ae]|giorn[oi]|settiman[ae]|mes[ei])(?:\\s+e\\s+(?:(?<half>mezz[oa])|${qty('n2')}\\s*(?:min(?:ut[oi])?)))?(?=[\\s,.;!?])`,
+    'iu',
+  ).exec(text);
   if (rel?.groups) {
-    const n = /^\d+$/.test(rel.groups.n ?? '')
-      ? Number(rel.groups.n)
-      : (NUM_WORDS[(rel.groups.n ?? '').toLowerCase()] ?? 1);
+    const n = qtyValue(rel.groups.n);
     const u = (rel.groups.u ?? '').toLowerCase();
-    const ms = u.startsWith('min')
-      ? n * 60_000
-      : u.startsWith('or')
-        ? n * 3_600_000
-        : u.startsWith('giorn')
-          ? n * 86_400_000
-          : n * 7 * 86_400_000;
-    const at = new Date(now.getTime() + ms);
     text = text.replace(rel[0], ' ');
-    return { text: clean(text), at, assumed };
+    if (u.startsWith('min') || u.startsWith('or')) {
+      const unit = u.startsWith('min') ? 60_000 : 3_600_000;
+      const ms =
+        n * unit +
+        (rel.groups.half ? unit / 2 : 0) +
+        (rel.groups.n2 ? qtyValue(rel.groups.n2) * 60_000 : 0);
+      return { text: clean(text), at: new Date(now.getTime() + ms), assumed };
+    }
+    // Giorni, settimane, mesi: sul calendario (il cambio dell'ora non sposta l'orario), con l'ora detta se c'è.
+    if (u.startsWith('mes')) [y, m, d] = addMonths(y, m, d, n);
+    else [y, m, d] = addDays(y, m, d, u.startsWith('sett') ? n * 7 : n);
+    dayGiven = true;
+    keepClock = true;
   }
 
   // Giorno.
@@ -621,12 +638,13 @@ export function parseWhen(
       text = text.replace(mm[0], ' ');
     }
   }
+  // Giorni della settimana anche senza accento («lunedi»), come si scrive in fretta o arriva dalla dettatura.
   const wd = new RegExp(
-    `\\s(?:(?:il|al|per|di)\\s+)?(?:prossim[oa]\\s+)?(?<w>${WEEKDAYS.join('|')})(?:\\s+prossim[oa])?\\s`,
+    `\\s(?:(?:il|al|per|di)\\s+)?(?:prossim[oa]\\s+)?(?<w>${WEEKDAYS.map((w) => w.replace(/ì$/u, '[iìí]')).join('|')})(?:\\s+prossim[oa])?\\s`,
     'iu',
   ).exec(text);
   if (wd?.groups?.w) {
-    const target = WEEKDAYS.indexOf(wd.groups.w.toLowerCase());
+    const target = WEEKDAYS.indexOf(wd.groups.w.toLowerCase().replace(/[ií]$/u, 'ì'));
     let delta = (target - today.weekday + 7) % 7;
     if (delta === 0) delta = 7; // «lunedì» di lunedì = lunedì prossimo
     [y, m, d] = addDays(today.year, today.month, today.day, delta);
@@ -658,6 +676,45 @@ export function parseWhen(
     dayGiven = true;
     text = text.replace(dn[0], ' ');
   }
+  // «il 23 alle 10»: solo il giorno, di questo mese se non è passato, altrimenti del prossimo.
+  if (!dayGiven) {
+    const dOnly = /\s(?:per\s+il|entro\s+il|il)\s+(?<d>\d{1,2}|primo)\s/iu.exec(text);
+    if (dOnly?.groups?.d) {
+      d = dOnly.groups.d.toLowerCase() === 'primo' ? 1 : Number(dOnly.groups.d);
+      if (d < today.day) [y, m] = m === 12 ? [y + 1, 1] : [y, m + 1];
+      dayGiven = true;
+      text = text.replace(dOnly[0], ' ');
+    }
+  }
+  // Data impossibile («31 novembre», «15/13»): meglio non indovinare, ci pensa il modello.
+  if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) return null;
+
+  // Ora: «alle 17», «alle 17:30», «alle 9 e mezza», «alle 18 e 30», «alle 6 meno un quarto», «alle 7 di sera»,
+  // «alle 8 del mattino». Prima dei momenti della giornata, così «del mattino» resta attaccato all'ora.
+  const tm = new RegExp(
+    `\\s(?:alle|all'|per\\s+le|verso\\s+le|entro\\s+le)\\s*(?:ore\\s+)?(?<h>\\d{1,2})(?:[:.,](?<mi>\\d{2}))?(?:\\s+e\\s+(?:(?<frac>mezza|mezzo|un\\s+quarto|tre\\s+quarti)|(?<emin>\\d{1,2}|${MINUTE_WORDS_RE})(?:\\s+minuti)?))?(?:\\s+meno\\s+(?<meno>un\\s+quarto|\\d{1,2}|${MINUTE_WORDS_RE})(?:\\s+minuti)?)?(?:\\s+(?<ap>di\\s+mattina|del\\s+mattino|di\\s+pomeriggio|del\\s+pomeriggio|di\\s+sera|della\\s+sera|di\\s+notte|della\\s+notte))?\\s`,
+    'iu',
+  ).exec(text);
+  let ap = '';
+  if (tm?.groups?.h) {
+    hour = Number(tm.groups.h);
+    minute = tm.groups.mi ? Number(tm.groups.mi) : 0;
+    const frac = tm.groups.frac?.toLowerCase();
+    if (frac?.startsWith('mezz')) minute = 30;
+    else if (frac === 'un quarto') minute = 15;
+    else if (frac === 'tre quarti') minute = 45;
+    if (tm.groups.emin) minute = minuteValue(tm.groups.emin);
+    if (tm.groups.meno) {
+      const less = /quarto/iu.test(tm.groups.meno) ? 15 : minuteValue(tm.groups.meno);
+      if (less > 0 && less < 60) {
+        hour = (hour + 23) % 24;
+        minute = 60 - less;
+      }
+    }
+    ap = tm.groups.ap?.toLowerCase() ?? '';
+    timeGiven = true;
+    text = text.replace(tm[0], ' ');
+  }
 
   // Momenti della giornata (ora predefinita se non detta).
   const periods: Array<[RegExp, number]> = [
@@ -680,27 +737,19 @@ export function parseWhen(
     }
   }
 
-  // Ora: «alle 17», «alle 17:30», «alle 9 e mezza», «alle 7 di sera», «alle ore 8».
-  const tm =
-    /\s(?:alle|all'|per\s+le|verso\s+le|entro\s+le)\s*(?:ore\s+)?(?<h>\d{1,2})(?:[:.,](?<mi>\d{2}))?(?:\s+e\s+(?<frac>mezza|mezzo|un\s+quarto|tre\s+quarti))?(?:\s+(?<ap>di\s+mattina|del\s+mattino|di\s+pomeriggio|del\s+pomeriggio|di\s+sera|della\s+sera|di\s+notte))?\s/iu.exec(
-      text,
-    );
-  if (tm?.groups?.h) {
-    hour = Number(tm.groups.h);
-    minute = tm.groups.mi ? Number(tm.groups.mi) : 0;
-    const frac = tm.groups.frac?.toLowerCase();
-    if (frac?.startsWith('mezz')) minute = 30;
-    else if (frac === 'un quarto') minute = 15;
-    else if (frac === 'tre quarti') minute = 45;
-    const ap = tm.groups.ap?.toLowerCase() ?? '';
-    if (
-      (/sera|pomeriggio|notte/.test(ap) || (periodHour !== null && periodHour >= 15)) &&
+  let smallHour = false;
+  if (hour !== null) {
+    // «Di notte» / «stanotte»: le ore piccole restano piccole («alle 2 di notte» = 02:00), «alle 11 di notte» = 23.
+    const night = /notte/.test(ap) || periodHour === 23;
+    if (night) {
+      if (hour >= 9 && hour < 12) hour += 12;
+    } else if (
+      (/sera|pomeriggio/.test(ap) || (periodHour !== null && periodHour >= 15)) &&
       hour < 12
     )
       hour += 12;
     if (/mattin/.test(ap) && hour === 12) hour = 0;
-    timeGiven = true;
-    text = text.replace(tm[0], ' ');
+    smallHour = !opts.morning && !ap && periodHour === null && hour >= 1 && hour <= 7;
   } else if (periodHour !== null) {
     hour = periodHour;
     // Mezzogiorno e mezzanotte sono orari esatti; mattina, pomeriggio, sera e notte sono stime da dichiarare.
@@ -713,6 +762,10 @@ export function parseWhen(
     if (label[periodHour]) assumed.push(`le ${periodHour} per «${label[periodHour]}»`);
     timeGiven = true;
   }
+  if (hour === null && keepClock) {
+    hour = today.hour;
+    minute = today.minute;
+  }
   if (hour === null || hour > 23 || minute > 59) {
     if (dayGiven) {
       hour = 9;
@@ -722,6 +775,20 @@ export function parseWhen(
     }
   }
   let at = zonedToUtc(tz, y, m, d, hour, minute);
+  // «Alle 4» senza mattina o pomeriggio: se le 4 sono passate e le 16 no, sono le 16; con un giorno detto
+  // («domani alle 3») dall'una alle cinque è più probabile il pomeriggio.
+  // Senza giorno: se l'ora del mattino è ancora da venire oggi resta quella (alle 2 di notte «alle 4» = 04:00),
+  // altrimenti è il pomeriggio, oggi o domani («all'una» detto alle 15 = domani alle 13).
+  if (smallHour) {
+    const passed = at.getTime() <= now.getTime() + 30_000;
+    if ((!dayGiven && passed) || (dayGiven && hour <= 5)) {
+      hour += 12;
+      at = zonedToUtc(tz, y, m, d, hour, minute);
+      assumed.push(
+        `le ${hour}${minute ? `:${String(minute).padStart(2, '0')}` : ''} del pomeriggio`,
+      );
+    }
+  }
   if (at.getTime() <= now.getTime() + 30_000 && !dayGiven) {
     [y, m, d] = addDays(y, m, d, 1);
     at = zonedToUtc(tz, y, m, d, hour, minute);
@@ -729,6 +796,46 @@ export function parseWhen(
   }
   if (at.getTime() <= now.getTime()) return null;
   return { text: clean(text), at, assumed, timeGiven } as Parsed;
+}
+
+/** Quantità nei relativi: cifre o parole («un'», «due», «dieci»…). */
+function qty(name: string): string {
+  return `(?<${name}>\\d+|un'|una|un|uno|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|quindici|venti|trenta|quarantacinque|sessanta)`;
+}
+function qtyValue(raw: string | undefined): number {
+  const t = (raw ?? '').toLowerCase();
+  return /^\d+$/.test(t) ? Number(t) : (NUM_WORDS[t] ?? 1);
+}
+/** Minuti in lettere dopo «e» o «meno»: «e trenta», «meno dieci». */
+const MINUTE_WORDS: Record<string, number> = {
+  cinque: 5,
+  dieci: 10,
+  quindici: 15,
+  venti: 20,
+  venticinque: 25,
+  trenta: 30,
+  trentacinque: 35,
+  quaranta: 40,
+  quarantacinque: 45,
+  cinquanta: 50,
+  cinquantacinque: 55,
+};
+const MINUTE_WORDS_RE = Object.keys(MINUTE_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join('|');
+function minuteValue(raw: string): number {
+  const t = raw.toLowerCase();
+  return /^\d+$/.test(t) ? Number(t) : (MINUTE_WORDS[t] ?? 0);
+}
+function daysInMonth(y: number, m: number): number {
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+/** Stesso giorno fra `n` mesi (il 31 diventa l'ultimo del mese se serve). */
+function addMonths(y: number, m: number, d: number, n: number): [number, number, number] {
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return [ny, nm, Math.min(d, daysInMonth(ny, nm))];
 }
 
 /** Riconosce le richieste «ricordami…» e la gestione dei promemoria; null se non è di questo tipo. */
@@ -791,7 +898,7 @@ export function parseReminderCommand(
   // «ricorda a Giorgio di …», «promemoria per Giorgio: …»: a una persona collegata (Famiglia).
   // Con l'orario fra il nome e «di» («ricorda a Giorgio tra 5 minuti di …») basta il nome: prima finiva all'utente.
   const toOther =
-    /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>\S+(?:\s+\S+)?)\s*(?::|,|\s+di\s|\s+che\s)\s*/iu.exec(
+    /(?:^|\s)(?:ricorda\s+(?:a|al|alla|allo|ai|alle|all')|promemoria\s+(?:per|a))\s*(?<who>(?<=\s|')\S+(?:\s+\S+)?)\s*(?::|,|\s+di\s|\s+che\s)\s*/iu.exec(
       text,
     ) ??
     /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>(?!(?:lui|lei|loro|me|te|noi|voi)(?=[\s,.;:!?]|$))\p{L}[\p{L}'’]*)(?=[\s,.;:!?])\s*/iu.exec(
@@ -837,6 +944,9 @@ export function parseReminderCommand(
     };
   const parsed = parseWhen(rest, now, tz);
   if (parsed === null) return null;
+  // «Ricordati che sono allergico alle noci», senza un quando: è un ricordo, non un promemoria (lo gestisce la
+  // memoria del modello).
+  if ('needTime' in parsed && /(?:^|\s)ricordati\s+che\s/iu.test(text)) return null;
   if ('needTime' in parsed)
     return {
       op: 'ask_time',
@@ -902,7 +1012,13 @@ export function parseAppointment(input: string, now: Date, tz: string): Reminder
   // prima», «ricordami alle 18 di chiamare Luca, avvisami 5 minuti prima» (segnalato il 15 ott 2026). Si prova
   // ogni clausola, nell'ordine: vale la prima che dà un appuntamento con il suo preavviso.
   for (const trig of text.matchAll(new RegExp(LEAD_TRIGGER.source, 'giu'))) {
-    const plan = appointmentAt(text, trig.index + trig[0].length, trig.index, now, tz);
+    // Dopo «ricordami» o «promemoria» vale solo un preavviso relativo («10 minuti prima»): «ricordami alle 18 di
+    // chiamare Luca e alle 19 di uscire» sono due promemoria, non un appuntamento alle 19 (revisione del 16 ott).
+    const relOnly =
+      /^(?:e\s+)?(?:ricordami|promemoria|fammi\s+un\s+promemoria|mettimi\s+un\s+promemoria)$/iu.test(
+        trig[0].replace(/^[\s,;]+/u, '').trim(),
+      );
+    const plan = appointmentAt(text, trig.index + trig[0].length, trig.index, now, tz, relOnly);
     if (plan) return plan;
   }
   return null;
@@ -915,6 +1031,7 @@ function appointmentAt(
   trigStart: number,
   now: Date,
   tz: string,
+  relOnly = false,
 ): ReminderPlan | null {
   const after = text.slice(leadStart);
   let leadLen = 0;
@@ -943,6 +1060,7 @@ function appointmentAt(
       relAssumed = "un'ora di preavviso, perché non hai detto quanto prima";
     }
   } else {
+    if (relOnly) return null;
     const a = ABS_LEAD.exec(after);
     if (!a?.groups?.h) return null;
     leadLen = a[0].length;
@@ -1035,7 +1153,7 @@ export function parseWakeUp(text: string, now: Date, tz: string): ReminderPlan |
       repeat: rep.repeat,
       alarm: true,
     };
-  const parsed = parseWhen(normalized, now, tz);
+  const parsed = parseWhen(normalized, now, tz, { morning: true });
   if (parsed === null) return null;
   if ('needTime' in parsed) return { op: 'ask_time', text: note(parsed.needTime), alarm: true };
   return {
@@ -1096,7 +1214,7 @@ export function reminderFollowUp(
     .replace(/[.!?]+$/gu, '')
     .trim();
   if (!t || t.split(/\s+/).length > 8 || /ricorda|promemoria|svegli/iu.test(t)) return null;
-  const parsed = parseWhen(t, now, tz);
+  const parsed = parseWhen(t, now, tz, { morning: a.alarm === true });
   if (!parsed || 'needTime' in parsed) return null;
   const residue = ` ${parsed.text.replace(/[,;:]+/gu, ' ')} `
     .replace(

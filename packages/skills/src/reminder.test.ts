@@ -951,3 +951,94 @@ describe('descrizione del piano per il controllo di Jev', () => {
     );
   });
 });
+
+describe('date e ore come si dicono (revisione del 16 ott 2026)', () => {
+  // NOW = domenica 11 ottobre 2026, 15:00 a Roma.
+  const at = (t: string) => {
+    const p = parseReminderCommand(t, NOW, TZ);
+    return p?.op === 'create' ? `${local(p.at)} | ${p.text}` : (p?.op ?? null);
+  };
+
+  it('ore senza mattina o pomeriggio: il pomeriggio se il mattino è passato', () => {
+    expect(at('ricordami alle 4 di prendere Giorgio')).toBe('2026-10-11 16:00 | prendere Giorgio');
+    expect(at("ricordami all'una di mangiare")).toBe('2026-10-12 13:00 | mangiare');
+    expect(at('ricordami alle 8 di uscire')).toBe('2026-10-12 08:00 | uscire');
+    expect(at('ricordami domani alle 3 di chiamare Luca')).toBe('2026-10-12 15:00 | chiamare Luca');
+  });
+
+  it('relativi: mezz’ora, quarto d’ora, un’ora e mezza, ore e minuti, «min»', () => {
+    expect(at("tra mezz'ora ricordami di spegnere il forno")).toBe(
+      '2026-10-11 15:30 | spegnere il forno',
+    );
+    expect(at("fra un quarto d'ora ricordami di uscire")).toBe('2026-10-11 15:15 | uscire');
+    expect(at("tra un'ora e mezza ricordami di uscire")).toBe('2026-10-11 16:30 | uscire');
+    expect(at('tra 2 ore e 30 minuti ricordami di chiamare')).toBe('2026-10-11 17:30 | chiamare');
+    expect(at('tra 10 min ricordami di girare la pasta')).toBe(
+      '2026-10-11 15:10 | girare la pasta',
+    );
+  });
+
+  it('giorni sul calendario: con l’ora detta, o la stessa ora anche dopo il cambio dell’ora', () => {
+    expect(at('tra 2 giorni alle 18 ricordami di chiamare la banca')).toBe(
+      '2026-10-13 18:00 | chiamare la banca',
+    );
+    expect(at('tra dieci giorni ricordami di pagare')).toBe('2026-10-21 15:00 | pagare');
+    expect(at('tra venti giorni ricordami di pagare')).toBe('2026-10-31 15:00 | pagare');
+    expect(at('tra un mese ricordami di rinnovare')).toBe('2026-11-11 15:00 | rinnovare');
+  });
+
+  it('minuti e «meno», giorni senza accento, solo il giorno del mese, date impossibili', () => {
+    expect(at('ricordami alle 18 e 30 di chiamare il capo')).toBe(
+      '2026-10-11 18:30 | chiamare il capo',
+    );
+    expect(at('ricordami alle diciotto e trenta di chiamare il capo')).toBe(
+      '2026-10-11 18:30 | chiamare il capo',
+    );
+    expect(at('ricordami alle 6 meno un quarto di uscire')).toBe('2026-10-11 17:45 | uscire');
+    expect(at('ricordami lunedi alle 8 di portare la macchina')).toBe(
+      '2026-10-12 08:00 | portare la macchina',
+    );
+    expect(at('ricordami il 23 alle 10 di rinnovare il passaporto')).toBe(
+      '2026-10-23 10:00 | rinnovare il passaporto',
+    );
+    expect(at('ricordami il 31 novembre di pagare')).toBeNull();
+  });
+
+  it('notte e mattina', () => {
+    expect(at('ricordami stanotte alle 2 di controllare il forno')).toBe(
+      '2026-10-12 02:00 | controllare il forno',
+    );
+    expect(at('ricordami alle 2 di notte di controllare il forno')).toBe(
+      '2026-10-12 02:00 | controllare il forno',
+    );
+    expect(at('ricordami alle 11 di notte di chiudere il gas')).toBe(
+      '2026-10-11 23:00 | chiudere il gas',
+    );
+    expect(at('ricordami alle 8 del mattino di fare colazione')).toBe(
+      '2026-10-12 08:00 | fare colazione',
+    );
+  });
+});
+
+describe('frasi ambigue fra skill (revisione del 16 ott 2026)', () => {
+  it('due promemoria non diventano un appuntamento; alla mamma; ricordati che', () => {
+    const p = parseReminderCommand(
+      'ricordami alle 18 di chiamare Luca e alle 19 di uscire',
+      NOW,
+      TZ,
+    );
+    expect(p).not.toHaveProperty('eventAt');
+    expect(
+      parseReminderCommand('ricorda alla mamma di chiamarmi domani alle 17', NOW, TZ),
+    ).toMatchObject({
+      op: 'create',
+      who: 'mamma',
+      text: 'chiamarmi',
+    });
+    expect(parseReminderCommand('ricordati che sono allergico alle noci', NOW, TZ)).toBeNull();
+    // Il preavviso relativo dopo «ricordami» resta valido.
+    expect(
+      parseReminderCommand('ricordami alle 18 di chiamare Luca, avvisami 5 minuti prima', NOW, TZ),
+    ).toHaveProperty('eventAt');
+  });
+});

@@ -45,7 +45,12 @@ export function previousOccurrence(pattern: string, tz: string, now: Date): Date
 }
 
 /** Valida trigger e fuso: pattern cron analizzabile, intervallo minimo 5 minuti, nessuna occorrenza nella fascia notturna. */
-export function validateTrigger(trigger: Trigger, tz: string, now = new Date()): void {
+export function validateTrigger(
+  trigger: Trigger,
+  tz: string,
+  now = new Date(),
+  opts: { allowQuietOnce?: boolean } = {},
+): void {
   if (!isValidTimezone(tz)) throw new TriggerValidationError(`fuso orario non valido: ${tz}`);
   if (trigger.type === 'cron') {
     let next: Date[];
@@ -73,7 +78,9 @@ export function validateTrigger(trigger: Trigger, tz: string, now = new Date()):
     const at = new Date(trigger.at);
     if (at.getTime() <= now.getTime())
       throw new TriggerValidationError("l'istante dell'esecuzione una tantum è già passato");
-    if (QUIET_HOURS.includes(localHour(at, tz)))
+    // I promemoria (una notifica, nessun modello) valgono anche di notte: «svegliami alle 3:30 che ho il volo»
+    // finiva in «errore interno» (revisione del 16 ott 2026).
+    if (!opts.allowQuietOnce && QUIET_HOURS.includes(localHour(at, tz)))
       throw new TriggerValidationError(`l'istante cade nella fascia notturna 01:00–03:59 (${tz})`);
   }
 }

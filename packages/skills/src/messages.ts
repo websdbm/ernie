@@ -62,7 +62,10 @@ const clean = (s: string) =>
 
 const capital = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-const WHO = "(?<who>[\\p{L}][\\p{L}'’]*(?:\\s+[\\p{L}][\\p{L}'’]*)?)";
+// Nome di una o due parole («Giorgio», «zia Anna»); la seconda non può essere un avverbio o un gerundio
+// («Giorgio subito», «papà dicendogli»: revisione del 16 ott 2026).
+const WHO =
+  "(?<who>[\\p{L}][\\p{L}'’]*(?:\\s+(?!(?:subito|adesso|ora|poi|appena|domani|stasera|stamattina|oggi|dicendo\\p{L}*|scrivendo\\p{L}*|per|che|di)(?![\\p{L}]))[\\p{L}][\\p{L}'’]*)?)";
 
 /** Riconosce l'invio di un messaggio a un familiare; null se la frase non è di questo tipo. */
 export function parseMessageCommand(input: string): MessagePlan | null {

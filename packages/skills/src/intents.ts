@@ -58,8 +58,10 @@ const CREATE: readonly RegExp[] = [
 ];
 const LIST =
   /^(?:che|quali)\s+promemoria\s+(?:a\s+evento|legati\s+(?:agli\s+argomenti|a\s+un\s+argomento)|a\s+tema)\s+(?:ho|ci\s+sono)\s*\??$/iu;
+// «A evento» obbligatorio con «di/del»: «cancella il promemoria del dentista» è di Ricordami (revisione del
+// 16 ott 2026); «su/sul…» resta di questa skill anche senza.
 const CANCEL =
-  /^(?:annulla|togli|cancella)\s+(?:il\s+)?promemoria\s+(?:a\s+evento\s+)?(?:su|sul|sulla|sullo|sui|sugli|sulle|di|del|della)\s+(?<what>.+?)[.!]?$/iu;
+  /^(?:annulla|togli|cancella)\s+(?:il\s+)?promemoria\s+(?:a\s+evento\s+(?:su|sul|sulla|sullo|sui|sugli|sulle|di|del|della)|su|sul|sulla|sullo|sui|sugli|sulle)\s+(?<what>.+?)[.!]?$/iu;
 
 export function parseIntentCommand(text: string): IntentPlan | null {
   const t = text

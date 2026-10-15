@@ -7,6 +7,7 @@ import {
   navigateFollowUp,
   type PlaceCandidate,
   parseNavigateCommand,
+  placeLabelOf,
 } from './navigate.js';
 
 const ctx = {
@@ -81,9 +82,22 @@ describe('skill «Portami lì»', () => {
       op: 'go',
       dest: 'casa di Giorgio',
     });
+    // Segnalati dalla revisione del 16 ott 2026: «lavoro» diventava «voro», «all'ospedale» restava con l'articolo.
+    expect(parseNavigateCommand("portami all'ospedale")).toEqual({ op: 'go', dest: 'ospedale' });
+    expect(parseNavigateCommand('portami da Ilaria')).toEqual({ op: 'go', dest: 'Ilaria' });
+    expect(parseNavigateCommand('portami un caffè')).toBeNull();
     expect(parseNavigateCommand('portami lì')).toBeNull();
     expect(parseNavigateCommand('ricordami di andare a casa')).toBeNull();
     expect(parseNavigateCommand('che tempo fa a Padova?')).toBeNull();
+  });
+
+  it('nome del luogo nella scheda: l’articolo solo se è una parola a sé', () => {
+    expect(placeLabelOf('lavoro')).toBe('lavoro');
+    expect(placeLabelOf('il lavoro')).toBe('lavoro');
+    expect(placeLabelOf("l'ufficio")).toBe('ufficio');
+    expect(placeLabelOf('Ilaria')).toBe('ilaria');
+    expect(placeLabelOf('Ikea')).toBe('ikea');
+    expect(placeLabelOf('la mia palestra')).toBe('palestra');
   });
 
   it('link di Google Maps: coordinate se ci sono, altrimenti indirizzo; mezzo e identificativo del posto', () => {

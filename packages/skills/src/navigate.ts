@@ -139,8 +139,11 @@ const MODES: ReadonlyArray<[RegExp, TravelMode]> = [
   ],
 ];
 
-const PREP =
-  "(?:fino\\s+(?:a|al|alla|allo|all')|a|al|allo|alla|ai|agli|alle|all'|in|nel|nello|nella|nei|negli|nelle|nell'|da|dal|dallo|dalla|dai|dagli|dalle|dall'|per|verso|presso)";
+// Preposizione obbligatoria («portami un caffè» non è una destinazione); con l'apostrofo la parola segue attaccata.
+const PREP_WORD =
+  '(?:fino\\s+(?:a|al|alla|allo)|a|al|allo|alla|ai|agli|alle|in|nel|nello|nella|nei|negli|nelle|da|dal|dallo|dalla|dai|dagli|dalle|per|verso|presso)';
+const PREP_APOS = "(?:fino\\s+all'|all'|nell'|dall')";
+const PREP = `(?:${PREP_WORD}\\s+|${PREP_APOS}\\s*)`;
 
 /** Riferimenti al discorso: li risolve il modello, che conosce gli ultimi scambi. */
 const CONTEXTUAL =
@@ -170,15 +173,15 @@ export function parseNavigateCommand(input: string): NavigatePlan | null {
     }
   const patterns = [
     new RegExp(
-      `^(?:mi\\s+)?(?:portami|portaci|accompagnami|accompagnaci|guidami|navigami)(?:\\s+${PREP})?\\s+(?<dest>.+)$`,
+      `^(?:mi\\s+)?(?:portami|portaci|accompagnami|accompagnaci|guidami|navigami)\\s+${PREP}(?<dest>.+)$`,
       'iu',
     ),
     new RegExp(
-      `^(?:avvia\\s+(?:la\\s+)?navigazione|naviga|navigazione|navigatore|indicazioni(?:\\s+stradali)?|percorso|(?:fammi\\s+vedere|mostrami|dammi|apri|trovami)\\s+(?:il\\s+percorso|la\\s+strada|le\\s+indicazioni(?:\\s+stradali)?|il\\s+navigatore|la\\s+mappa))\\s+${PREP}\\s+(?<dest>.+)$`,
+      `^(?:avvia\\s+(?:la\\s+)?navigazione|naviga|navigazione|navigatore|indicazioni(?:\\s+stradali)?|percorso|(?:fammi\\s+vedere|mostrami|dammi|apri|trovami)\\s+(?:il\\s+percorso|la\\s+strada|le\\s+indicazioni(?:\\s+stradali)?|il\\s+navigatore|la\\s+mappa))\\s+${PREP}(?<dest>.+)$`,
       'iu',
     ),
     new RegExp(
-      `^come\\s+(?:ci\\s+)?(?:arrivo|si\\s+arriva|vado|posso\\s+andare|faccio\\s+ad?\\s+(?:arrivare|andare))\\s+${PREP}\\s+(?<dest>.+)$`,
+      `^come\\s+(?:ci\\s+)?(?:arrivo|si\\s+arriva|vado|posso\\s+andare|faccio\\s+ad?\\s+(?:arrivare|andare))\\s+${PREP}(?<dest>.+)$`,
       'iu',
     ),
   ];
@@ -207,11 +210,14 @@ export function looksLikeAddress(text: string): boolean {
 
 /** «a casa» → «casa», «dal dentista» → «dentista»: il nome con cui il luogo può essere nella scheda. */
 export function placeLabelOf(dest: string): string {
-  return dest
-    .toLowerCase()
-    .replace(/^(?:il|lo|la|i|gli|le|l')\s*/u, '')
-    .replace(/^(?:mio|mia|miei|mie)\s+/u, '')
-    .trim();
+  return (
+    dest
+      .toLowerCase()
+      // L'articolo solo se è una parola a sé: «lavoro» resta «lavoro», «Ilaria» resta «ilaria».
+      .replace(/^(?:(?:il|lo|la|i|gli|le)\s+|l'\s*)/u, '')
+      .replace(/^(?:mio|mia|miei|mie)\s+/u, '')
+      .trim()
+  );
 }
 
 const shortAddress = (a: string) => a.split(',').slice(0, 2).join(',').trim();

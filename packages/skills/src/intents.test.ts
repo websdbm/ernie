@@ -41,6 +41,12 @@ describe('promemoria a evento: riconoscimento', () => {
       op: 'cancel',
       what: 'gita',
     });
+    expect(parseIntentCommand('annulla il promemoria a evento del Milan')).toEqual({
+      op: 'cancel',
+      what: 'Milan',
+    });
+    // «del dentista» senza «a evento» è un promemoria di Ricordami.
+    expect(parseIntentCommand('cancella il promemoria del dentista')).toBeNull();
     expect(parseIntentCommand('ricordami di chiamare il dentista alle 17')).toBeNull();
     expect(parseIntentCommand('quando parte il treno?')).toBeNull();
   });
