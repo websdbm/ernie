@@ -137,3 +137,24 @@ notifica; dopo un'ora senza conferma smette e glielo dice. Dati: migrazione 0034
 contatori delle ripetizioni; il destinatario aggiorna solo lettura e conferma; funzioni `family_urgent_due` e
 `family_urgent_expired` per il giro ogni 10 secondi del server). Protocollo v1.17.
 
+
+## Chiarimento interno con Jev (15 ott 2026)
+
+Quando un messaggio è poco chiaro o mal formulato, Ernie non risponde alla cieca. Tre meccanismi, tutti con Jev:
+
+- **Messaggi ambigui** (domanda `ambiguous` di Jev ≥ 0,82: pronomi senza referente, parole storpiate dalla dettatura
+  come «Jeff» per «Jev», date o luoghi con più letture). Il modello leggero, senza ragionamento, scrive fino a 3
+  domande chiuse con le interpretazioni prese dal contesto (persone di Famiglia, luoghi della scheda, ultimi scambi);
+  Jev sceglie con una confidenza. Le risposte sicure (≥ 0,7) diventano una nota per il modello che risponde e una riga
+  in chat «Ho inteso: «lui» = Giorgio», con «Correggi»; i dubbi rimasti, se servono, diventano una domanda a pulsanti.
+- **Correzioni** («no, intendevo…», «non hai capito», o `correction` di Jev ≥ 0,8): stessa procedura sul messaggio
+  corretto, più l'avviso al modello di non ripetere l'errore.
+- **Comandi rapidi delle skill** (Ricordami, Messaggi): prima di eseguire senza modello, la skill descrive a parole
+  cosa farà e Jev ne valuta la fedeltà alla frase (≥ 0,6 si esegue). Se la skill ha capito solo una parte («ricordami
+  alle 18 di chiamare Luca e alle 19 di comprare il pane»), decide il modello con gli strumenti. Quando invece Jev vede
+  una richiesta per una skill che il comando rapido non ha riconosciuto, il modello riceve il suggerimento di usarne
+  gli strumenti.
+
+Soglie tarate su 25 esempi con Jev vero (infrastructure/router/thresholds.json); ogni controllo resta in
+`interpretation_checks` (0035, 0036) per affinarle con i casi reali. Costo: centesimi, solo quando scatta; tempo in più
+circa 0,5 s per i comandi rapidi e 5 s per un chiarimento. Protocollo v1.18 (blocco `interpretation`).
