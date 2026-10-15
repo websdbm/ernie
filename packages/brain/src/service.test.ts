@@ -49,6 +49,7 @@ function memoryIndex(): BrainIndex & { notes: Map<string, BrainNote> } {
         .filter(
           (n) => !q.linkedTo || n.links.some((l) => l.toLowerCase() === q.linkedTo?.toLowerCase()),
         )
+        .filter((n) => !q.type || n.type === q.type)
         .map(sum);
     },
     async get(_u, p) {
@@ -164,6 +165,65 @@ describe('second brain: vault git e servizio', () => {
     expect(sync).toEqual([{ userId: user, changed: 2, conflict: false }]);
     expect(index.notes.get('Idea dal Mac.md')?.links).toEqual(['Casa']);
     expect(edited).toMatchObject([{ fullName: 'Marco Rossi', preferredName: 'Marco' }]);
+  });
+
+  it('luoghi della scheda: una nota per luogo in Luoghi; il testo aggiunto resta; la rinomina sposta la nota', async () => {
+    const index = memoryIndex();
+    const brain = createBrainService({ baseDir: join(tmp, 'vaults-luoghi'), index });
+    const vault = join(tmp, 'vaults-luoghi', user);
+    await brain.writeChiSono(user, {
+      fullName: 'Marco Rossi',
+      family: [],
+      places: [
+        { id: 'p1', label: 'casa', address: 'via Barozzi 4, Padova', lat: 45.41, lng: 11.88 },
+        { id: 'p2', label: 'lavoro', address: 'via Venezia 1, Padova' },
+      ],
+    });
+    const casa = index.notes.get('Luoghi/Casa.md');
+    expect(casa).toMatchObject({
+      type: 'luogo',
+      place: 'via Barozzi 4, Padova',
+      coords: [45.41, 11.88],
+    });
+    expect(casa?.links).toContain('Chi sono');
+    expect(index.notes.get('Luoghi/Lavoro.md')?.place).toBe('via Venezia 1, Padova');
+    expect(index.notes.get('Chi sono.md')?.body).toContain(
+      '## Luoghi\n\n- [[Casa]]: via Barozzi 4, Padova',
+    );
+
+    // In Obsidian la persona collega «Casa» ad altro; poi l'indirizzo cambia nella scheda.
+    const raw = git(vault, 'show', 'HEAD:Luoghi/Casa.md');
+    writeFileSync(join(vault, 'Luoghi/Casa.md'), `${raw.trimEnd()}\n\nQui abita anche [[Emma]].\n`);
+    git(vault, 'add', '-A');
+    git(vault, 'commit', '-m', 'dal Mac');
+    await brain.writeChiSono(user, {
+      fullName: 'Marco Rossi',
+      family: [],
+      places: [
+        { id: 'p1', label: 'casa', address: 'via Roma 3, Padova', lat: 45.4, lng: 11.87 },
+        { id: 'p2', label: 'ufficio', address: 'via Venezia 1, Padova' },
+      ],
+    });
+    const after = git(vault, 'show', 'HEAD:Luoghi/Casa.md');
+    expect(after).toContain('luogo: via Roma 3, Padova');
+    expect(after).toContain('scheda anagrafica (vedi [[Chi sono]]): via Roma 3, Padova.');
+    expect(after).not.toContain('Barozzi');
+    expect(after).toContain('Qui abita anche [[Emma]].');
+    // «lavoro» rinominato «ufficio»: la nota si sposta (stesso id nella scheda), con il titolo nuovo.
+    expect(index.notes.has('Luoghi/Lavoro.md')).toBe(false);
+    expect(index.notes.get('Luoghi/Ufficio.md')?.body).toMatch(/^# Ufficio/u);
+    expect(index.notes.get('Luoghi/Ufficio.md')?.body).toContain('«portami in ufficio»');
+    // Nessun cambiamento: nessun commit nuovo.
+    const head = git(vault, 'rev-parse', 'HEAD');
+    await brain.writeChiSono(user, {
+      fullName: 'Marco Rossi',
+      family: [],
+      places: [
+        { id: 'p1', label: 'casa', address: 'via Roma 3, Padova', lat: 45.4, lng: 11.87 },
+        { id: 'p2', label: 'ufficio', address: 'via Venezia 1, Padova' },
+      ],
+    });
+    expect(git(vault, 'rev-parse', 'HEAD')).toBe(head);
   });
 
   it('i campi della scheda tornano da «Chi sono»', () => {

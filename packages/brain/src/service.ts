@@ -75,6 +75,56 @@ export interface ChiSonoInput extends ChiSonoFields {
     readonly birthDate?: string | null;
     readonly notes?: string | null;
   }>;
+  /**
+   * Luoghi della scheda (richiesta dell'utente, 16 ott 2026: «li dovrei trovare anche nel Second Brain»): una nota
+   * per luogo nella cartella Luoghi, collegata a «Chi sono», da legare ad altri concetti.
+   */
+  readonly places?: ReadonlyArray<{
+    readonly id: string;
+    readonly label: string;
+    readonly address?: string | null;
+    readonly lat?: number | null;
+    readonly lng?: number | null;
+  }>;
+}
+
+/** «casa» → «Casa»: titolo della nota di un luogo della scheda. */
+export function placeNoteTitle(label: string): string {
+  const t = label.trim();
+  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}` : t;
+}
+
+/** Righe che Ernie scrive nella nota di un luogo: si aggiornano quando il luogo cambia, il resto no. */
+function placeNoteLines(pl: { label: string; address?: string | null }): {
+  intro: string;
+  usage: string;
+} {
+  const preps: Record<string, string> = {
+    casa: 'a casa',
+    lavoro: 'al lavoro',
+    ufficio: 'in ufficio',
+    scuola: 'a scuola',
+    palestra: 'in palestra',
+    università: 'all’università',
+  };
+  const at = preps[pl.label] ?? `a ${pl.label}`;
+  return {
+    intro: `Uno dei luoghi della tua scheda anagrafica (vedi [[Chi sono]])${pl.address ? `: ${pl.address}` : ''}.`,
+    usage: `Con Ernie: «ricordami … quando arrivo ${at}», «portami ${at}». Indirizzo e posizione si cambiano nell’app, in Impostazioni › La tua scheda › Luoghi; qui sotto puoi aggiungere quello che vuoi e collegarlo ad altre note.`,
+  };
+}
+
+/** Id del luogo della scheda scritto nelle proprietà della nota (`scheda: "…"`): segue le rinomine. */
+function schedaId(note: BrainNote): string | null {
+  const line = note.extra?.find((l) => /^scheda:\s*/u.test(l));
+  if (!line) return null;
+  const raw = line.replace(/^scheda:\s*/u, '').trim();
+  try {
+    const v = JSON.parse(raw);
+    return typeof v === 'string' ? v : null;
+  } catch {
+    return raw || null;
+  }
 }
 
 const CHI_SONO_KEYS: Array<[keyof ChiSonoFields, string]> = [
@@ -306,7 +356,7 @@ export function createBrainService(opts: BrainServiceOptions) {
     async writeChiSono(userId: string, p: ChiSonoInput): Promise<void> {
       await ready(userId);
       const v = vault(userId);
-      const files: Array<{ path: string; content: string }> = [];
+      const files: Array<{ path: string; content: string | null }> = [];
       const family = p.family.map((m) => {
         const name = m.name?.trim();
         const extra = [
@@ -332,6 +382,10 @@ export function createBrainService(opts: BrainServiceOptions) {
         .map(
           ([k, label]) => `- **${label}:** ${k === 'birthDate' ? italianDate(p[k] ?? '') : p[k]}`,
         );
+      const places = (p.places ?? []).filter((pl) => pl.label.trim());
+      const placeLines = places.map(
+        (pl) => `- [[${placeNoteTitle(pl.label)}]]${pl.address ? `: ${pl.address}` : ''}`,
+      );
       const body = [
         '# Chi sono',
         '',
@@ -340,6 +394,7 @@ export function createBrainService(opts: BrainServiceOptions) {
           : ['Ancora nessun dato: Ernie compila la scheda quando ne parlate.']),
         '',
         ...(family.length ? ['## Famiglia', '', ...family, ''] : []),
+        ...(placeLines.length ? ['## Luoghi', '', ...placeLines, ''] : []),
         '_Generata dalla scheda anagrafica di Ernie. Nome, chiamami, nascita, genere, città e lavoro si possono correggere anche nelle proprietà in testa a questa pagina; la famiglia nell’app, in Impostazioni › La tua scheda._',
       ].join('\n');
       // Tutti i campi, anche vuoti: in Obsidian si vede cosa si può compilare.
@@ -377,9 +432,66 @@ export function createBrainService(opts: BrainServiceOptions) {
           }),
         });
       }
+      // Una nota per luogo in Luoghi: indirizzo e coordinate dalla scheda (che per questi luoghi è la fonte), il
+      // testo resta di chi lo scrive (collegamenti ad altri concetti fatti in Obsidian). Rinomina: la nota segue.
+      const luoghi: BrainNote[] = [];
+      for (const s of await opts.index.list(userId, { type: 'luogo', limit: 200 })) {
+        const raw = await v.read(s.path);
+        if (raw) luoghi.push(parseNote(s.path, raw));
+      }
+      for (const pl of places) {
+        const title = placeNoteTitle(pl.label);
+        const path = pathFor('luogo', title);
+        const coords =
+          typeof pl.lat === 'number' && typeof pl.lng === 'number'
+            ? ([pl.lat, pl.lng] as const)
+            : undefined;
+        const moved = luoghi.find((n) => schedaId(n) === pl.id && n.path !== path);
+        const existing =
+          luoghi.find((n) => n.path === path) ??
+          (moved
+            ? { ...moved, path, title, body: moved.body.replace(/^# .*$/mu, `# ${title}`) }
+            : null);
+        const extra = [
+          ...(existing?.extra ?? []).filter((l) => !/^scheda:/u.test(l)),
+          `scheda: ${JSON.stringify(pl.id)}`,
+        ];
+        const lines = placeNoteLines(pl);
+        const note: BrainNote = existing
+          ? {
+              ...existing,
+              body: existing.body
+                .replace(/^Uno dei luoghi della tua scheda anagrafica .*$/mu, lines.intro)
+                .replace(/^Con Ernie: «ricordami … quando arrivo .*$/mu, lines.usage),
+              ...(pl.address ? { place: pl.address } : {}),
+              ...(coords ? { coords } : {}),
+              links: [...new Set([...existing.links, 'Chi sono'])],
+              extra,
+            }
+          : {
+              path,
+              title,
+              type: 'luogo',
+              created: nowIso(),
+              ...(pl.address ? { place: pl.address } : {}),
+              ...(coords ? { coords } : {}),
+              links: ['Chi sono'],
+              private: false,
+              source: 'scheda',
+              body: [`# ${title}`, '', lines.intro, '', lines.usage].join('\n'),
+              extra,
+            };
+        const content = serializeNote(note);
+        if (moved) files.push({ path: moved.path, content: null });
+        const before = luoghi.find((n) => n.path === path);
+        if (!before || serializeNote(before) !== content) files.push({ path, content });
+      }
       if (old === files[0]?.content && files.length === 1) return;
       await v.commit(files, 'Ernie: aggiornata «Chi sono» dalla scheda');
-      for (const f of files) await opts.index.upsert(userId, parseNote(f.path, f.content));
+      for (const f of files) {
+        if (f.content === null) await opts.index.remove(userId, f.path);
+        else await opts.index.upsert(userId, parseNote(f.path, f.content));
+      }
     },
 
     /**

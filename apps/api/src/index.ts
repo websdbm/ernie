@@ -266,6 +266,8 @@ async function main(): Promise<void> {
         'user',
       );
       companions.invalidateUser(userId);
+      // Anche nel second brain: nota del luogo in Luoghi e sezione in «Chi sono».
+      void brain.refreshChiSono(userId);
       return { label: place.label, address: place.address ?? input.address };
     },
     // «Salva questo posto come …»: posizione del telefono con un nome (lo sposta qui se esiste già).
@@ -291,6 +293,8 @@ async function main(): Promise<void> {
         'user',
       );
       companions.invalidateUser(userId);
+      // Anche nel second brain: nota del luogo in Luoghi e sezione in «Chi sono».
+      void brain.refreshChiSono(userId);
       return { label: place.label, moved: !!before };
     },
     rename: async (userId: string, from: string, to: string) => {
@@ -299,6 +303,8 @@ async function main(): Promise<void> {
       if (!res.ok) return res;
       await profiles.save(userId, res.profile, [res.change], 'user');
       companions.invalidateUser(userId);
+      // Anche nel second brain: nota del luogo in Luoghi e sezione in «Chi sono».
+      void brain.refreshChiSono(userId);
       return { ok: true as const, from: res.from, to: res.to };
     },
     // Luogo nominato ma non nella scheda: lo cerca nelle note del second brain e lo copia nella scheda.
@@ -333,6 +339,8 @@ async function main(): Promise<void> {
         'user',
       );
       companions.invalidateUser(userId);
+      // Anche nel second brain: nota del luogo in Luoghi e sezione in «Chi sono».
+      void brain.refreshChiSono(userId);
       const { meta: _, ...plain } = place;
       return { place: plain, note: found.title };
     },

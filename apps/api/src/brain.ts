@@ -29,6 +29,12 @@ export function chiSonoFromProfile(p: UserProfile): ChiSonoInput {
       ...(m.birthDate ? { birthDate: m.birthDate } : {}),
       ...(m.notes ? { notes: m.notes } : {}),
     })),
+    places: p.places.map((pl) => ({
+      id: pl.id,
+      label: pl.label,
+      ...(pl.address ? { address: pl.address } : {}),
+      ...(pl.lat !== undefined && pl.lng !== undefined ? { lat: pl.lat, lng: pl.lng } : {}),
+    })),
   };
 }
 
