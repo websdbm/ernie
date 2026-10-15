@@ -1,7 +1,18 @@
 name: ernie
 
+# Log con rotazione (revisione del 16 ott 2026): senza, i file json crescono senza limite e a disco pieno si
+# fermano Postgres, l'AOF di Redis e i commit dei vault.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 x-app: &app
   image: ernie-app:local
+  # Node non è più il PID 1: un init raccoglie i processi figli (git, ssh) ed inoltra i segnali.
+  init: true
+  logging: *logging
   build:
     context: .
     dockerfile: infrastructure/docker/Dockerfile
@@ -23,6 +34,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ernie}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ernie}
@@ -40,6 +52,7 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
+    logging: *logging
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     ports:
       - "127.0.0.1:${REDIS_PORT:-6380}:6379"
@@ -63,6 +76,7 @@ services:
     <<: *app
     command: ["node", "apps/api/dist/index.js"]
     restart: unless-stopped
+    stop_grace_period: 20s
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -94,6 +108,8 @@ services:
     <<: *app
     command: ["node", "apps/worker/dist/index.js"]
     restart: unless-stopped
+    # L'arresto ordinato aspetta fino a 15 s le run in corso: Docker non deve ucciderlo prima.
+    stop_grace_period: 30s
     depends_on:
       migrate:
         condition: service_completed_successfully
