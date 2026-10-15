@@ -100,7 +100,10 @@ describe('messaggi urgenti («super snooze»)', () => {
   it('si ripete finché non arriva la conferma; la conferma va al genitore e ferma le ripetizioni', async () => {
     const t = setup();
     expect(await t.messenger.nag()).toEqual({ repeated: 1, expired: 0 });
-    expect(t.pushes.at(-1)).toMatchObject({ to: GIORGIO, msg: { title: '🚨 Urgente da papo' } });
+    expect(t.pushes.at(-1)).toMatchObject({
+      to: GIORGIO,
+      msg: { title: '🚨 Urgente da papo', data: { nag: 1 } },
+    });
     // Solo chi riceve conferma.
     expect(await t.messenger.acknowledge(PAPA, 'm1')).toBeNull();
     const m = await t.messenger.acknowledge(GIORGIO, 'm1');

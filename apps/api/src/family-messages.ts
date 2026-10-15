@@ -268,7 +268,7 @@ export interface FamilyPush {
  * Notifica di un messaggio per chi lo riceve. Gli urgenti hanno titolo e suono propri e si ripetono sostituendo la
  * precedente (stesso identificativo), finché non arriva la conferma di lettura.
  */
-export function familyPush(received: FamilyMessage): FamilyPush {
+export function familyPush(received: FamilyMessage, nag?: number): FamilyPush {
   const body = received.text || '📷 Foto';
   return {
     title: received.urgent ? `🚨 Urgente da ${received.label}` : `✉️ ${received.label}`,
@@ -281,6 +281,8 @@ export function familyPush(received: FamilyMessage): FamilyPush {
       label: received.label,
       image: received.image !== null,
       ...(received.urgent ? { urgent: true } : {}),
+      // Ripetizione di un urgente: il telefono non ricarica il widget ogni volta.
+      ...(nag ? { nag } : {}),
     },
     threadId: `family-${received.otherUserId}`,
     interruptionLevel: 'time-sensitive',
@@ -388,7 +390,7 @@ export function createFamilyMessenger(deps: FamilyMessengerDeps): FamilyMessenge
         const received = await deps.store.get(due.recipientId, due.id).catch(() => null);
         if (!received || received.acknowledgedAt) continue;
         await deps
-          .push?.(due.recipientId, familyPush(received))
+          .push?.(due.recipientId, familyPush(received, due.count))
           .catch((err: unknown) => warn(err, 'ripetizione del messaggio urgente non riuscita'));
         repeated++;
       }

@@ -26,10 +26,9 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             handler = contentHandler
             original = request.content
         }
-        // Le ripetizioni di un urgente hanno lo stesso id: il widget tiene l'ora del primo arrivo.
-        if FamilyLatest.load()?.id != push.id, push.latest.saveIfNewer() {
-            WidgetCenter.shared.reloadTimelines(ofKind: FamilyLatest.widgetKind)
-        }
+        // L'estensione non ha il gruppo app (il portale non lo assegna con la chiave API): il widget «Messaggi»
+        // rilegge l'ultimo messaggio dal server. Le ripetizioni di un urgente non lo ricaricano ogni volta.
+        if !push.urgent || push.firstUrgent { WidgetCenter.shared.reloadTimelines(ofKind: FamilyLatest.widgetKind) }
         let task = Task { [weak self] in
             let photo = push.image ? await Self.downloadPhoto(id: push.id) : nil
             guard let self, !Task.isCancelled,
@@ -136,7 +135,8 @@ struct FamilyPush: Sendable {
     let label: String
     let image: Bool
     let urgent: Bool
-    let latest: FamilyLatest
+    /// Prima notifica di un urgente (le ripetizioni hanno `nag`).
+    let firstUrgent: Bool
 
     init?(_ userInfo: [AnyHashable: Any]) {
         guard let data = userInfo["ernie"] as? [String: Any],
@@ -145,18 +145,12 @@ struct FamilyPush: Sendable {
         let label = (data["label"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Famiglia"
         let image = data["image"] as? Bool ?? false
         let urgent = data["urgent"] as? Bool ?? false
-        let aps = userInfo["aps"] as? [String: Any]
-        let body = ((aps?["alert"] as? [String: Any])?["body"] as? String) ?? ""
-        // Il corpo della notifica ha «📷 » davanti quando c'è una foto: nel widget torna testo semplice.
-        var text = body
-        if image { text = body == "📷 Foto" ? "" : String(body.trimmingPrefix("📷 ")) }
         self.id = id
         self.from = from
         self.label = label
         self.image = image
         self.urgent = urgent
-        self.latest = FamilyLatest(id: id, direction: "in", label: label, text: text, image: image, at: .now,
-                                   urgent: urgent ? true : nil)
+        self.firstUrgent = urgent && data["nag"] == nil
     }
 }
 

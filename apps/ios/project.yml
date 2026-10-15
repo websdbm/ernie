@@ -162,7 +162,8 @@ targets:
     platform: iOS
     sources:
       - path: ErnieNotifications
-      # Foto del messaggio con le credenziali del Keychain condiviso; ultimo messaggio per il widget nel gruppo app.
+      # Foto del messaggio con le credenziali del Keychain condiviso (niente gruppo app: il portale non lo assegna
+      # con la chiave API; il widget rilegge l'ultimo messaggio dal server).
       - path: Ernie/Core/Keychain.swift
       - path: Ernie/Core/Credentials.swift
       - path: Shared/ReminderSnapshot.swift
@@ -181,7 +182,6 @@ targets:
     entitlements:
       path: ErnieNotifications/ErnieNotifications.entitlements
       properties:
-        com.apple.security.application-groups: [group.com.websdbm.ernie]
         keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
     settings:
       base:
