@@ -49,6 +49,14 @@ function fakeAutomations() {
       rows.splice(i, 1);
       return true;
     }),
+    setPlaceTrigger: vi.fn(async (userId: string, id: string, trigger: unknown) => {
+      const i = rows.findIndex((a) => a.userId === userId && a.id === id);
+      const cur = rows[i];
+      if (i < 0 || !cur) return null;
+      const next = { ...cur, trigger } as Automation;
+      rows[i] = next;
+      return next;
+    }),
     mergeMeta: vi.fn(async (userId: string, id: string, patch: Record<string, unknown>) => {
       const i = rows.findIndex((a) => a.userId === userId && a.id === id);
       const cur = rows[i];
@@ -454,8 +462,12 @@ describe('promemoria legati a un luogo (15 ott 2026)', () => {
       }),
     ).rejects.toBeInstanceOf(UnknownPersonError);
     // Luogo rinominato: il promemoria passa al nome nuovo.
+    const before = rows.find((x) => x.trigger.type === 'place')?.id;
     expect(await store.movePlaceReminders(PAPA, 'casa', 'villa')).toBe(1);
-    expect(rows.find((x) => x.trigger.type === 'place')?.trigger).toMatchObject({ label: 'villa' });
+    expect(rows.find((x) => x.trigger.type === 'place')).toMatchObject({
+      id: before,
+      trigger: { label: 'villa' },
+    });
     expect(await store.movePlaceReminders(PAPA, 'casa', 'villa')).toBe(0);
     expect(
       await store.setPlace?.(PAPA, { label: 'lavoro', address: 'corso Italia 10, Roma' }),

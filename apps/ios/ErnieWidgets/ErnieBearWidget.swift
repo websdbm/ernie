@@ -10,16 +10,20 @@ import WidgetKit
 
 // MARK: - Configurazione e interazioni
 
+/// Cosa fa il tocco sul widget. Di base apre Ernie (richiesta dell'utente, 15 ott 2026: «il widget non si apre al
+/// primo tap» — prima l'orso era un pulsante «carezza» e copriva quasi tutto il widget piccolo).
 enum ErnieTapAction: String, AppEnum {
-    case voice, chat
+    case voice, chat, pet
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Al tocco"
     static let caseDisplayRepresentations: [ErnieTapAction: DisplayRepresentation] = [
         .voice: "Parla con Ernie",
         .chat: "Apri la chat",
+        .pet: "Accarezza l'orso (senza aprire)",
     ]
 
-    var url: URL { URL(string: "ernie://\(rawValue)")! }
+    /// Collegamento che apre l'app: la carezza, sulla schermata di blocco e nei pulsanti, vale come «Parla».
+    var url: URL { URL(string: "ernie://\(self == .chat ? "chat" : "voice")")! }
 }
 
 struct ErnieWidgetIntent: WidgetConfigurationIntent {
@@ -226,13 +230,13 @@ struct ErnieBearWidgetView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     Text("Ernie").font(.headline).widgetAccentable()
-                    Image(systemName: entry.tap == .voice ? "mic.fill" : "text.bubble.fill").font(.caption)
+                    Image(systemName: entry.tap == .chat ? "text.bubble.fill" : "mic.fill").font(.caption)
                 }
                 if let next = entry.reminders.first {
                     Text(Fmt.when(next.at)).font(.caption.weight(.semibold)).lineLimit(1)
                     Text(next.text).font(.caption).lineLimit(1)
                 } else {
-                    Text(entry.tap == .voice ? "Tocca e parla" : "Tocca e scrivi").font(.caption).lineLimit(1)
+                    Text(entry.tap == .chat ? "Tocca e scrivi" : "Tocca e parla").font(.caption).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -243,22 +247,29 @@ struct ErnieBearWidgetView: View {
 
     // MARK: Home
 
-    private var small: some View {
-        Button(intent: PetBearIntent()) {
-            WidgetBear(frame: entry.frame, badge: entry.badge, size: 118)
+    /// L'orso: pulsante «carezza» solo se l'utente l'ha scelto; altrimenti il tocco apre Ernie (widgetURL).
+    @ViewBuilder
+    private func bear(size: CGFloat) -> some View {
+        if entry.tap == .pet {
+            Button(intent: PetBearIntent()) {
+                WidgetBear(frame: entry.frame, badge: entry.badge, size: size)
+            }
+            .buttonStyle(.plain)
+        } else {
+            WidgetBear(frame: entry.frame, badge: entry.badge, size: size)
         }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .widgetURL(entry.tap.url)
-        .containerBackground(for: .widget) { ErnieWidgetStyle.background }
+    }
+
+    private var small: some View {
+        bear(size: 118)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .widgetURL(entry.tap.url)
+            .containerBackground(for: .widget) { ErnieWidgetStyle.background }
     }
 
     private var medium: some View {
         HStack(spacing: 14) {
-            Button(intent: PetBearIntent()) {
-                WidgetBear(frame: entry.frame, badge: entry.badge, size: 112)
-            }
-            .buttonStyle(.plain)
+            bear(size: 112)
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Fmt.greeting(entry.date)).font(.headline).foregroundStyle(ErnieWidgetStyle.ink)
@@ -269,16 +280,14 @@ struct ErnieBearWidgetView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .widgetURL(entry.tap.url)
         .containerBackground(for: .widget) { ErnieWidgetStyle.background }
     }
 
     private var large: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Button(intent: PetBearIntent()) {
-                    WidgetBear(frame: entry.frame, badge: entry.badge, size: 64)
-                }
-                .buttonStyle(.plain)
+                bear(size: 64)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Fmt.greeting(entry.date)).font(.headline).foregroundStyle(ErnieWidgetStyle.ink)
                     Text(statusLine).font(.caption).foregroundStyle(ErnieWidgetStyle.inkSecondary).lineLimit(2)
@@ -306,6 +315,7 @@ struct ErnieBearWidgetView: View {
                 .foregroundStyle(ErnieWidgetStyle.inkSecondary)
                 .lineLimit(1)
         }
+        .widgetURL(entry.tap.url)
         .containerBackground(for: .widget) { ErnieWidgetStyle.background }
     }
 

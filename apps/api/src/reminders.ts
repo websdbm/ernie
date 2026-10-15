@@ -295,14 +295,9 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
     let moved = 0;
     for (const a of await deps.automations.list(userId)) {
       if (!isReminder(a) || a.trigger.type !== 'place' || a.trigger.label !== from) continue;
-      const trig = a.trigger;
-      const meta = metaOf(a);
-      await deps.automations.remove(userId, a.id);
-      await insertPlace(userId, textOf(a), { ...trig, label: to }, a.timezone, {
-        ...(meta.channels ? { channels: meta.channels } : {}),
-        ...(meta.spoken ? { spoken: meta.spoken } : {}),
-      });
-      moved++;
+      // Stesso id: le schede in chat continuano a riconoscere il promemoria.
+      if (await deps.automations.setPlaceTrigger(userId, a.id, { ...a.trigger, label: to }))
+        moved++;
     }
     return moved;
   };

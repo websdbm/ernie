@@ -74,6 +74,7 @@ function fakeRepo() {
       automations.push(row);
       return row;
     },
+    setPlaceTrigger: async () => null,
     mergeMeta: async () => null,
     setEnabled: async (u, id, enabled) => {
       const i = automations.findIndex((a) => a.id === id && a.userId === u);

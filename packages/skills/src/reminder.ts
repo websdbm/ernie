@@ -1349,9 +1349,14 @@ export function createReminderSkill(
                     : 'Il nome nuovo non va bene: provane un altro.',
               actions: [],
             };
+          // Le schede già in chat si aggiornano con il nome nuovo (stessi promemoria, stesso id).
+          const moved = res.reminders
+            ? (await store.list(ctx.userId)).filter((r) => r.place?.label === res.to)
+            : [];
           return {
             text: `📍 Fatto: «${res.from}» ora si chiama «${res.to}».${res.reminders ? ` Ho aggiornato anche ${res.reminders === 1 ? 'il promemoria legato' : `i ${res.reminders} promemoria legati`} a quel luogo.` : ''}`,
             actions: ['rename_place'],
+            ...(moved.length ? { blocks: [toRemindersBlock(moved, 'Promemoria')] } : {}),
           };
         }
         case 'set_place': {

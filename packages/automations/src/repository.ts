@@ -168,6 +168,15 @@ export interface AutomationRepository {
   setEnabled(userId: string, id: string, enabled: boolean): Promise<Automation | null>;
   /** Fonde campi nei metadati (es. canali di un promemoria) senza ricreare l'automazione. */
   mergeMeta(userId: string, id: string, patch: Record<string, unknown>): Promise<Automation | null>;
+  /**
+   * Cambia l'innesco di un promemoria legato a un luogo (luogo rinominato) senza cambiarne l'id: le schede in chat
+   * continuano a riconoscerlo. Solo per gli inneschi «place», che il worker non pianifica.
+   */
+  setPlaceTrigger(
+    userId: string,
+    id: string,
+    trigger: Extract<Trigger, { type: 'place' }>,
+  ): Promise<Automation | null>;
   /** Esito definitivo di una run: successo azzera, fallimento incrementa; restituisce il contatore. */
   recordRunOutcome(userId: string, id: string, failed: boolean): Promise<number>;
   /** Stato del controllo economico (hash della pagina, voci viste del feed). */
@@ -279,6 +288,18 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
           `UPDATE automations SET meta = coalesce(meta, '{}'::jsonb) || $3::jsonb, updated_at = now()
            WHERE id = $1 AND user_id = $2 RETURNING ${A_COLS}`,
           [id, userId, JSON.stringify(patch)],
+        );
+        const row = res.rows[0];
+        return row ? toAutomation(row) : null;
+      });
+    },
+
+    async setPlaceTrigger(userId, id, trigger) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<ARow>(
+          `UPDATE automations SET trigger = $3::jsonb, version = version + 1, updated_at = now()
+           WHERE id = $1 AND user_id = $2 AND trigger->>'type' = 'place' RETURNING ${A_COLS}`,
+          [id, userId, JSON.stringify(trigger)],
         );
         const row = res.rows[0];
         return row ? toAutomation(row) : null;
