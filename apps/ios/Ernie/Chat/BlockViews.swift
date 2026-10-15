@@ -35,8 +35,55 @@ struct BlockView: View {
             ChoicesCard(block: block, conversation: conversation)
         case .familyMessage(let block):
             FamilyMessageBubble(message: block)
+        case .interpretation(let block):
+            InterpretationLine(block: block, conversation: conversation)
         case .unknown:
             EmptyView()
+        }
+    }
+}
+
+// MARK: - Interpretazione
+
+/// Chiarimento interno: una riga sola con cosa ha inteso Ernie («Ho inteso: “lui” = Giorgio»). Un tocco apre le
+/// smentite: ognuna manda «No: con “lui” non intendevo Giorgio.», e Ernie riprende la richiesta.
+struct InterpretationLine: View {
+    let block: InterpretationBlock
+    var conversation: ConversationStore?
+    @State private var correcting = false
+    @State private var sent = false
+
+    private var summary: String {
+        block.items.map { "«\($0.about)» = \($0.meaning)" }.joined(separator: " · ")
+    }
+
+    var body: some View {
+        Button { correcting = true } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "text.magnifyingglass")
+                Text("Ho inteso: \(summary)")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                if !sent {
+                    Text("Correggi").fontWeight(.semibold).foregroundStyle(Color.accentColor)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(Theme.inkSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .disabled(sent || conversation == nil)
+        .accessibilityLabel("Ernie ha inteso: \(summary)")
+        .accessibilityHint("Tocca per correggere l'interpretazione")
+        .confirmationDialog("Cosa non era giusto?", isPresented: $correcting, titleVisibility: .visible) {
+            ForEach(block.items, id: \.self) { item in
+                Button("«\(item.about)» non è \(item.meaning)") {
+                    sent = true
+                    conversation?.send("No: con «\(item.about)» non intendevo \(item.meaning).", inputMode: "text")
+                }
+            }
+            Button("Annulla", role: .cancel) {}
         }
     }
 }

@@ -1,6 +1,7 @@
 export * from './agent.js';
 export * from './approvals.js';
 export * from './chunks.js';
+export * from './clarify.js';
 export * from './commands.js';
 export * from './compact.js';
 export * from './emotion.js';

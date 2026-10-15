@@ -10,7 +10,13 @@ import {
   routeCommand,
   type TurnInput,
 } from '@ernie/agent-core';
-import type { DecisionRouter, RouteDecision } from '@ernie/jev-router';
+import {
+  type Clarification,
+  type ClarifyInput,
+  clarificationNote,
+  type DecisionRouter,
+  type RouteDecision,
+} from '@ernie/jev-router';
 import {
   formatMemoryNotices,
   formatProfileNotices,
@@ -41,6 +47,7 @@ import {
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
+import { type ClarificationRecord, interpretationBlock, isCorrection } from '../clarify.js';
 import { formatDeviceContext } from '../device-context.js';
 import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '../documents-flow.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
@@ -99,6 +106,19 @@ export interface ConnectionDeps {
   readonly invalidateCompanion: (sessionId: string) => void;
   readonly router: DecisionRouter;
   readonly decisions: RouterDecisionRecorder;
+  /**
+   * Chiarimento interno (15 ott 2026): se Jev giudica il messaggio poco chiaro o l'utente corregge la risposta
+   * precedente, un modello leggero fa domande chiuse sul testo e Jev risponde; la nota entra nel contesto del turno.
+   */
+  readonly clarify?: {
+    readonly run: (
+      ctx: { userId: string; sessionId: string; requestId: string },
+      input: ClarifyInput,
+    ) => Promise<Clarification | null>;
+    readonly known: (userId: string) => Promise<{ people: string[]; places: string[] }>;
+    readonly record?: (r: ClarificationRecord) => Promise<void>;
+    readonly thresholds: { readonly ambiguity: number; readonly correction: number };
+  };
   /** Ricerca 11, S2: scheda «Fonti» con le pagine citate e verificate a fine turno. */
   readonly citations?: (requestId: string, text: string) => ContentBlock | null;
   /** Ricerca 11, S1: promemoria a evento che scattano sulle parole del messaggio (senza modello). */
@@ -627,6 +647,14 @@ export class ClientConnection {
       this.deps.invalidateCompanion(sessionId);
     }
 
+    const clarifyNote = await this.clarifyTurn(
+      modelText,
+      event.payload.inputMode,
+      decision,
+      sessionId,
+      correlationId,
+    );
+
     const companion = await this.deps.getCompanion(this.auth, this.session);
     if (!companion) {
       await this.sendError(
@@ -766,6 +794,7 @@ export class ClientConnection {
       );
     const interruptedNote = this.takeInterruptedNote();
     if (interruptedNote) contextBlocks.push(interruptedNote);
+    if (clarifyNote) contextBlocks.push(clarifyNote);
     const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
 
     const ac = new AbortController();
@@ -1051,6 +1080,70 @@ export class ClientConnection {
     const unheard = text.slice(cut).trim();
     this.interruptedReply = { heard, unheard };
     this.remember('assistente', `${heard || '(nulla)'} [interrotta dall'utente]`);
+  }
+
+  /**
+   * Chiarimento interno: scatta solo se Jev giudica il messaggio poco chiaro o se l'utente corregge la risposta
+   * precedente. Manda in chat la riga «Ho inteso …» (solo con interpretazioni sicure) e restituisce la nota per il
+   * modello. Qualsiasi errore o ritardo: si risponde senza chiarimento.
+   */
+  private async clarifyTurn(
+    text: string,
+    inputMode: 'text' | 'voice',
+    decision: RouteDecision,
+    sessionId: string,
+    correlationId: string,
+  ): Promise<string | undefined> {
+    const c = this.deps.clarify;
+    if (!c) return undefined;
+    const correcting = isCorrection(text) || (decision.correction ?? 0) >= c.thresholds.correction;
+    const ambiguous = (decision.ambiguity ?? 0) >= c.thresholds.ambiguity;
+    if (!correcting && (!ambiguous || decision.route === 'deterministic')) return undefined;
+    const trigger = correcting ? 'correction' : 'ambiguous';
+    const correctionNote = correcting
+      ? 'L’utente sta correggendo la tua risposta precedente: rileggi la sua richiesta alla luce della correzione e non ripetere lo stesso errore.'
+      : undefined;
+    const base = {
+      userId: this.auth.userId,
+      sessionId,
+      requestId: correlationId,
+      message: text,
+      trigger,
+      ambiguity: decision.ambiguity,
+      correction: decision.correction,
+    } as const;
+    const t0 = Date.now();
+    try {
+      const known = await c.known(this.auth.userId).catch(() => ({ people: [], places: [] }));
+      const result = await c.run(
+        { userId: this.auth.userId, sessionId, requestId: correlationId },
+        {
+          trigger,
+          message: text,
+          inputMode,
+          recentTurns: [...this.recentTurns],
+          people: known.people,
+          places: known.places,
+        },
+      );
+      void c
+        .record?.({ ...base, clarification: result, latencyMs: Date.now() - t0 })
+        .catch(() => {});
+      if (!result) return correctionNote;
+      const block = interpretationBlock(result);
+      if (block)
+        await this.send(
+          'assistant.block',
+          { blockId: `${correlationId}:interpretazione`, block },
+          correlationId,
+        );
+      return clarificationNote(result) ?? correctionNote;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.deps.logger.warn({ err: message, trigger }, 'chiarimento interno non riuscito');
+      void c.record?.({ ...base, latencyMs: Date.now() - t0, error: message }).catch(() => {});
+      return correctionNote;
+    }
   }
 
   /** Nota per il turno successivo sulla risposta interrotta; si consuma una volta sola. */

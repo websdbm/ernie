@@ -65,6 +65,8 @@ describe('buildQuestions', () => {
       'deep_reasoning',
       'needs_memory',
       'risk',
+      'ambiguous',
+      'correction',
       'tool_category',
       'skill_candidate',
     ]);
@@ -75,6 +77,8 @@ describe('buildQuestions', () => {
       'deep_reasoning',
       'needs_memory',
       'risk',
+      'ambiguous',
+      'correction',
     ]);
   });
 });
@@ -93,6 +97,27 @@ describe('mapAnswers', () => {
     expect(d.inputTokens).toBe(898);
     expect(d.jevModel).toBe('typesafe/jev-1.13-20260917');
     expect(d.source).toBe('jev');
+  });
+
+  it('ambiguità e correzione: domande sempre presenti, valori riportati nella decisione', () => {
+    const q = buildQuestions(base);
+    expect(q.ambiguous?.type).toBe('noul');
+    expect(q.correction?.type).toBe('noul');
+    const d = mapAnswers(
+      JevResponse.parse({
+        answers: {
+          ...observed.answers,
+          ambiguous: { type: 'noul', noul: 0.82 },
+          correction: { type: 'noul', noul: 0.1 },
+        },
+      }),
+      base,
+      DEFAULT_THRESHOLDS,
+      10,
+    );
+    expect(d.ambiguity).toBe(0.82);
+    expect(d.correction).toBe(0.1);
+    expect(mapAnswers(observed, base, DEFAULT_THRESHOLDS, 10).ambiguity).toBeUndefined();
   });
 
   it('applica isteresi di classe e deep reasoning → heavy', () => {

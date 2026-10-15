@@ -603,6 +603,19 @@ export const HealthBlock = z.object({
   /** Riassunto deterministico («2 valori fuori intervallo: …»). */
   summary: z.string().max(400).optional(),
 });
+/**
+ * Interpretazione (v1.18, chiarimento interno): quando un messaggio era poco chiaro o correggeva l'assistente,
+ * cosa ha inteso Ernie («“lui” = Giorgio»), dalle risposte sicure di Jev. L'app la mostra in una riga sola; un
+ * tocco permette di smentirla («No: con “lui” non intendevo Giorgio»).
+ */
+export const InterpretationBlock = z.object({
+  kind: z.literal('interpretation'),
+  trigger: z.enum(['ambiguous', 'correction']),
+  items: z
+    .array(z.object({ about: z.string().min(1).max(60), meaning: z.string().min(1).max(120) }))
+    .min(1)
+    .max(4),
+});
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -617,6 +630,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   HealthBlock,
   ChoicesBlock,
   FamilyMessageBlock,
+  InterpretationBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 

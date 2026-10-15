@@ -515,6 +515,17 @@ struct FamilyMessageBlock: Codable, Sendable, Equatable, Identifiable {
     var awaitingAck: Bool { isUrgent && acknowledgedAt == nil }
 }
 
+/// Interpretazione (v1.18, chiarimento interno): cosa ha inteso Ernie in un messaggio poco chiaro o in una correzione.
+struct InterpretationBlock: Codable, Sendable, Equatable {
+    struct Item: Codable, Sendable, Equatable, Hashable {
+        var about: String
+        var meaning: String
+    }
+    /// "ambiguous" o "correction".
+    var trigger: String
+    var items: [Item]
+}
+
 /// Fonti (v1.9): pagine dei documenti davvero usate e citate nella risposta, con il passo originale.
 struct CitationItem: Codable, Sendable, Equatable, Identifiable {
     var documentId: String
@@ -582,6 +593,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case health(HealthBlock)
     case choices(ChoicesBlock)
     case familyMessage(FamilyMessageBlock)
+    case interpretation(InterpretationBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -616,6 +628,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .choices(try ChoicesBlock(from: decoder))
         case "family_message":
             self = .familyMessage(try FamilyMessageBlock(from: decoder))
+        case "interpretation":
+            self = .interpretation(try InterpretationBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -664,6 +678,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .familyMessage(let block):
             try c.encode("family_message", forKey: .kind)
+            try block.encode(to: encoder)
+        case .interpretation(let block):
+            try c.encode("interpretation", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)

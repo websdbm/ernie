@@ -3,5 +3,8 @@
   "needsMemory": 0.75,
   "risk": 0.6,
   "routeConfidence": 0.5,
-  "classConfidence": 0.5
+  "classConfidence": 0.5,
+  "ambiguity": 0.6,
+  "correction": 0.6,
+  "clarifyConfidence": 0.7
 }

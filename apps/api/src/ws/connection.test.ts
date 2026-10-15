@@ -414,6 +414,80 @@ describe('ClientConnection', () => {
 });
 
 describe('ClientConnection: contesto del telefono (v1.10)', () => {
+  it('chiarimento interno: messaggio ambiguo → riga «Ho inteso» in chat e nota nel contesto; chiaro → niente', async () => {
+    const seen: Array<string | undefined> = [];
+    const run = vi.fn(async (_ctx: unknown, input: { trigger: string; people: string[] }) => ({
+      trigger: input.trigger as 'ambiguous',
+      questions: [{ about: 'lui', question: 'Chi è «lui»?', options: ['Giorgio', 'Fabio'] }],
+      answers: [{ about: 'lui', question: 'Chi è «lui»?', meaning: 'Giorgio', confidence: 0.9 }],
+      resolved: [{ about: 'lui', meaning: 'Giorgio', confidence: 0.9 }],
+      unresolved: [],
+      costUsd: 0.0005,
+      latencyMs: 300,
+    }));
+    const record = vi.fn(async () => {});
+    const mk = (decision: Partial<RouteDecision>) => {
+      const s = fakeSocket();
+      const conn = new ClientConnection(
+        s.socket,
+        auth,
+        deps(
+          {
+            clarify: {
+              run: run as never,
+              known: async () => ({ people: ['Giorgio', 'Fabio'], places: ['casa'] }),
+              record,
+              thresholds: { ambiguity: 0.6, correction: 0.6 },
+            },
+            runTurn: async (input: TurnInput) => {
+              seen.push(input.memoryContext);
+              await input.emit('assistant.started', { route: 'llm' });
+              await input.emit('assistant.completed', { finishReason: 'stop' });
+            },
+          },
+          fakeStore(),
+          fakeRouter(decision),
+        ),
+      );
+      return { s, conn, c: client(randomUUID()) };
+    };
+    const a = mk({ ambiguity: 0.85 });
+    await a.conn.handleRaw(a.c.start());
+    await a.conn.handleRaw(a.c.message('ricordagli di portarlo'));
+    await tick();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]?.[1]).toMatchObject({
+      trigger: 'ambiguous',
+      people: ['Giorgio', 'Fabio'],
+    });
+    const line = a.s.sent.find((e) => e.type === 'assistant.block');
+    expect(field<{ kind: string; items: unknown[] }>(line, 'block')).toEqual({
+      kind: 'interpretation',
+      trigger: 'ambiguous',
+      items: [{ about: 'lui', meaning: 'Giorgio' }],
+    });
+    expect(seen[0]).toContain('«lui» = Giorgio');
+    expect(record).toHaveBeenCalledTimes(1);
+
+    // Messaggio chiaro: nessun chiarimento.
+    const b = mk({ ambiguity: 0.1, correction: 0.05 });
+    await b.conn.handleRaw(b.c.start());
+    await b.conn.handleRaw(b.c.message('che ore sono?'));
+    await tick();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(seen[1] ?? '').not.toContain('Chiarimento');
+
+    // Correzione esplicita: scatta anche se Jev non la segnala; se il chiarimento fallisce resta la nota.
+    run.mockRejectedValueOnce(new Error('tempo scaduto'));
+    const d = mk({ ambiguity: 0.1, correction: 0.1 });
+    await d.conn.handleRaw(d.c.start());
+    await d.conn.handleRaw(d.c.message('no, intendevo domani'));
+    await tick();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1]?.[1]).toMatchObject({ trigger: 'correction' });
+    expect(seen[2]).toContain('L’utente sta correggendo');
+  });
+
   it('ora locale e posizione arrivano al modello nel contesto del turno, non nel testo', async () => {
     const st = fakeStore();
     const s = fakeSocket();

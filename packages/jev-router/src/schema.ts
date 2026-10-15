@@ -99,6 +99,10 @@ export const RouteDecision = z.object({
   jevModel: z.string().optional(),
   jevId: z.string().optional(),
   raw: z.record(z.string(), z.unknown()).optional(),
+  /** P(il messaggio si può intendere in più modi nel contesto): fa scattare il chiarimento interno. */
+  ambiguity: z.number().min(0).max(1).optional(),
+  /** P(l'utente sta correggendo un fraintendimento della risposta precedente). */
+  correction: z.number().min(0).max(1).optional(),
 });
 export type RouteDecision = z.infer<typeof RouteDecision>;
 
@@ -111,6 +115,12 @@ export const Thresholds = z.object({
   routeConfidence: z.number().min(0).max(1),
   /** Sotto questa confidenza `model_class` ricade su `standard`. */
   classConfidence: z.number().min(0).max(1),
+  /** Chiarimento interno (16 ott 2026): sopra questa `ambiguity` scatta. Da tarare con interpretation_checks. */
+  ambiguity: z.number().min(0).max(1).default(0.6),
+  /** Sopra questa `correction` il messaggio è trattato come correzione della risposta precedente. */
+  correction: z.number().min(0).max(1).default(0.6),
+  /** Una risposta di Jev al chiarimento conta solo con almeno questa confidenza. */
+  clarifyConfidence: z.number().min(0).max(1).default(0.7),
 });
 export type Thresholds = z.infer<typeof Thresholds>;
 
@@ -120,4 +130,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   risk: 0.45,
   routeConfidence: 0.5,
   classConfidence: 0.5,
+  ambiguity: 0.6,
+  correction: 0.6,
+  clarifyConfidence: 0.7,
 };

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
+  createClarifyQuestioner,
   createConversationMemory,
   createHealthExtractor,
   createMastraStorage,
@@ -29,6 +30,8 @@ import {
   verifiedCitations,
 } from '@ernie/documents';
 import {
+  type ClarifyInput,
+  createClarifier,
   createDecisionRouter,
   createHttpJevClient,
   createRedisDecisionCache,
@@ -111,6 +114,7 @@ import {
   formatTransferProposal,
   transferCandidate,
 } from './brain-transfer.js';
+import { type ClarificationRecord, createClarificationRecorder } from './clarify.js';
 import { createCompanionFactory } from './companion.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { closeLabel, createFamilyRepository } from './family.js';
@@ -652,6 +656,38 @@ async function main(): Promise<void> {
     logger,
   });
 
+  // Chiarimento interno: domande del modello leggero, risposte di Jev (solo con entrambi configurati).
+  const clarificationRecorder = createClarificationRecorder(postgres.pool);
+  const clarifyRecorder = createLlmCallRecorder(postgres.pool, logger);
+  const clarify =
+    gateway && jevClient
+      ? {
+          run: (
+            ctx: { userId: string; sessionId: string; requestId: string },
+            input: ClarifyInput,
+          ) =>
+            createClarifier({
+              jev: jevClient,
+              questioner: createClarifyQuestioner({ gateway, recorder: clarifyRecorder }, ctx),
+              minConfidence: thresholds.clarifyConfidence,
+              timeoutMs: 4_500,
+              ...(config.router.jevModel ? { model: config.router.jevModel } : {}),
+            }).clarify(input),
+          known: async (userId: string) => {
+            const [links, profile] = await Promise.all([
+              family.list(userId).catch(() => []),
+              profiles.get(userId).catch(() => null),
+            ]);
+            return {
+              people: links.map((l) => l.label),
+              places: (profile?.places ?? []).map((p) => p.label),
+            };
+          },
+          record: (r: ClarificationRecord) => clarificationRecorder.record(r),
+          thresholds: { ambiguity: thresholds.ambiguity, correction: thresholds.correction },
+        }
+      : undefined;
+
   // Eventi per utente dal worker (stato delle automazioni) → sessioni connesse in questo processo.
   const connections = new ConnectionRegistry();
   const subscriber = redis.client.duplicate();
@@ -797,6 +833,7 @@ async function main(): Promise<void> {
         invalidateCompanion: (sessionId) => companions.invalidate(sessionId),
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
+        ...(clarify ? { clarify } : {}),
         approvals: { ...approvals, rules: toolRules },
         silentRuns: (userId) => automations.takeSilentRuns(userId, 3),
         // Scheda «Fonti»: pagine citate nella risposta e presenti tra i passaggi del turno.

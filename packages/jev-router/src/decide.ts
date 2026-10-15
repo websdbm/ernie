@@ -36,7 +36,10 @@ export interface RouterOptions {
 
 const CLASS_RANK = { light: 0, standard: 1, heavy: 2 } as const;
 
-/** Le sette domande (03-revisione §6). `tool_category` e `skill_candidate` solo se ci sono opzioni. */
+/**
+ * Le sette domande (03-revisione §6) più due per il chiarimento interno (ambiguità e correzione).
+ * `tool_category` e `skill_candidate` solo se ci sono opzioni.
+ */
 export function buildQuestions(input: RouterInput): Record<string, JevQuestion> {
   const q: Record<string, JevQuestion> = {
     route: {
@@ -82,6 +85,23 @@ export function buildQuestions(input: RouterInput): Record<string, JevQuestion> 
       criteria: {
         true: 'Modifica dati, invia messaggi, spende denaro, tocca salute, finanze o persone terze.',
         false: 'Sola lettura, conversazione o informazione generale.',
+      },
+    },
+    ambiguous: {
+      type: 'noul',
+      instructions:
+        'Considerando gli ultimi scambi, il messaggio si può intendere in modi diversi o contiene parti poco chiare?',
+      criteria: {
+        true: 'Pronomi o riferimenti senza un referente certo, nomi o parole che sembrano errori di dettatura, date o luoghi che possono indicare cose diverse, una richiesta con due letture.',
+        false: 'Si capisce con sicurezza cosa vuole l’utente, anche grazie agli ultimi scambi.',
+      },
+    },
+    correction: {
+      type: 'noul',
+      instructions: 'L’utente sta correggendo un fraintendimento della risposta precedente?',
+      criteria: {
+        true: 'Dice che la risposta non era quella giusta, che intendeva altro, che non è stato capito, o ripete la richiesta precisandola.',
+        false: 'Nuova richiesta, continuazione o conferma della conversazione.',
       },
     },
   };
@@ -168,6 +188,8 @@ export function mapAnswers(
   const risk = noul(res, 'risk') ?? 1;
   const tool = choice(res, 'tool_category');
   const skill = choice(res, 'skill_candidate');
+  const ambiguity = noul(res, 'ambiguous');
+  const correction = noul(res, 'correction');
 
   const routeKind: RouteDecision['route'] =
     route &&
@@ -211,6 +233,8 @@ export function mapAnswers(
     ...(res.model ? { jevModel: res.model } : {}),
     ...(res.id ? { jevId: res.id } : {}),
     raw: res.answers,
+    ...(ambiguity === undefined ? {} : { ambiguity }),
+    ...(correction === undefined ? {} : { correction }),
   };
 }
 
