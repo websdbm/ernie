@@ -219,6 +219,16 @@ export const AvatarEmotionName = z.enum([
   // v1.9: espressioni dell'orso in pixel art (M10), oltre al vocabolario di TalkingHead.
   'surprised',
   'playful',
+  // v1.15: secondo foglio dell'orso (15 ott 2026): occhiali da sole, feroce e altre espressioni.
+  'cool',
+  'fierce',
+  'proud',
+  'laughing',
+  'embarrassed',
+  'confused',
+  'excited',
+  'determined',
+  'worried',
 ]);
 export const AvatarGestureName = z.enum([
   'handup',

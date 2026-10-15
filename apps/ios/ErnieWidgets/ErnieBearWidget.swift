@@ -80,9 +80,15 @@ enum BearFrames {
     /// Espressione a un certo istante: dorme di notte o in pausa, si stupisce prima di un promemoria, altrimenti
     /// alterna neutro, respiro e inclinazioni ogni cinque minuti.
     static func frame(at date: Date, nextReminder: Date?, paused: Bool) -> (Int, String?) {
-        if paused || isNight(date) { return (3, "z") }
+        if paused || isNight(date) {
+            // Appena scesa la notte uno sbadiglio, poi occhi chiusi.
+            let h = Calendar.current.component(.hour, from: date)
+            let m = Calendar.current.component(.minute, from: date)
+            return (h == 23 && m < 10 ? 28 : 3, "z")
+        }
         if let next = nextReminder, next > date, next.timeIntervalSince(date) <= 15 * 60 { return (13, "!") }
-        let cycle = [0, 1, 4, 0, 5, 1, 0, 6]
+        // Più varietà (15 ott 2026): fra neutro e inclinazioni anche occhiali da sole, aria fiera, entusiasmo.
+        let cycle = [0, 1, 4, 16, 0, 5, 29, 1, 0, 6, 19, 0, 17, 1, 31, 0]
         let step = Int(date.timeIntervalSinceReferenceDate / 300) % cycle.count
         return (cycle[step], nil)
     }

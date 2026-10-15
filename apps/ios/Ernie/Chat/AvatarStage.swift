@@ -59,9 +59,12 @@ enum AvatarCaption {
 }
 
 /// L'orso in pixel art animato a fotogrammi (decisione dell'utente: animazioni disegnate, non procedurali).
-/// Sprite sheet 4×4 (`BearSheet`, celle di 256 px): riga 1 idle (neutro, respiro, neutro, battito di ciglia);
+/// Sprite sheet 4×8 (`BearSheet`, celle di 256 px): riga 1 idle (neutro, respiro, neutro, battito di ciglia);
 /// riga 2 ascolto (inclinato a sinistra, a destra) e pensiero (sguardo in alto, con punto interrogativo);
 /// riga 3 bocca (chiusa, socchiusa, aperta, tonda); riga 4 emozioni (felice, sorpreso, triste, occhiolino).
+/// Dal 15 ott 2026 (richiesta dell'utente: «più variabilità, occhiali da sole ed espressione feroce»):
+/// riga 5 occhiali da sole (sorrisetto, sorriso, sopra gli occhiali, scintilla); riga 6 feroce (ringhio, ruggito,
+/// determinato, sbuffi); riga 7 risata, cuori, imbarazzo, confuso; riga 8 sbadiglio, fiero, preoccupato, entusiasta.
 struct PixelBearView: View {
     let state: AgentState
     let mouthOpen: Bool
@@ -73,15 +76,23 @@ struct PixelBearView: View {
     @State private var idleSince = Date()
 
     private static let columns = 4
-    private static let rows = 4
+    private static let rows = 8
+    /// Variante scelta per l'emozione in corso (cambia a ogni emozione nuova).
+    @State private var variant = Int.random(in: 0..<1000)
+
+    /// A riposo, ogni tanto un'espressione diversa per qualche secondo: l'orso non resta sempre uguale.
+    private static let moods = [16, 29, 15, 19, 18, 31, 12]
 
     /// Sequenza di fotogrammi e cadenza per stato.
     private func sequence(asleep: Bool) -> (frames: [Int], tick: Double) {
         switch state {
         case .idle:
-            if asleep { return ([3], 0.8) }
-            // L'espressione resta, con un battito di ciglia breve ogni tanto.
-            if let e = Self.emotionFrame(emotion) { return ([e, e, e, e, e, e, e, 3], 0.6) }
+            // Dorme: occhi chiusi, con uno sbadiglio ogni tanto.
+            if asleep { return ([3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 28, 28], 0.8) }
+            // L'espressione resta, con un battito di ciglia breve ogni tanto (non con occhiali da sole o occhi chiusi).
+            if let e = Self.emotionFrame(emotion, variant: variant) {
+                return (Self.blinks(e) ? [e, e, e, e, e, e, e, 3] : [e], 0.6)
+            }
             return ([0, 0, 1, 1, 0, 0, 0, 3, 0, 0, 0, 1, 1, 0, 3], 0.45)
         case .listening: return ([4, 4, 5, 5], 0.5)
         case .thinking: return ([6, 6, 7, 7, 6, 7], 0.55)
@@ -89,24 +100,56 @@ struct PixelBearView: View {
         }
     }
 
-    /// Fotogramma della riga delle emozioni (felice, sorpreso, triste, occhiolino) per il vocabolario del protocollo.
-    static func emotionFrame(_ emotion: String) -> Int? {
+    /// Fotogrammi possibili per ogni emozione del protocollo: a ogni emozione nuova se ne sceglie uno.
+    static func emotionFrames(_ emotion: String) -> [Int]? {
         switch emotion.lowercased() {
-        case "happy", "love", "felice", "contento", "allegro", "joy": 12
-        case "surprised", "fear", "sorpreso", "stupito", "wow": 13
-        case "sad", "angry", "disgust", "triste", "dispiaciuto", "worried", "preoccupato": 14
-        case "playful", "wink", "scherzoso", "complice": 15
+        case "happy", "felice", "contento", "allegro", "joy": [12, 12, 29]
+        case "love": [25, 12]
+        case "surprised", "sorpreso", "stupito", "wow": [13]
+        case "fear", "worried", "preoccupato": [30]
+        case "sad", "triste", "dispiaciuto": [14]
+        case "disgust": [27]
+        case "playful", "wink", "scherzoso", "complice": [15, 17, 24]
+        case "laughing", "laugh": [24]
+        case "cool": [16, 17, 18, 19]
+        case "proud", "fiero": [29, 19, 16]
+        case "angry", "fierce", "feroce": [20, 21, 23]
+        case "determined": [22, 20]
+        case "embarrassed": [26]
+        case "confused": [27]
+        case "excited": [31, 17]
+        case "sleep", "sleepy": [28]
         default: nil
         }
     }
 
-    /// Piccolo segno sopra l'orso: cuore per l'affetto, «!» per la sorpresa, «z» quando dorme.
-    private func badge(asleep: Bool) -> String? {
+    static func emotionFrame(_ emotion: String, variant: Int = 0) -> Int? {
+        guard let frames = emotionFrames(emotion), !frames.isEmpty else { return nil }
+        return frames[abs(variant) % frames.count]
+    }
+
+    /// Fotogrammi con gli occhi visibili e aperti: solo su questi ha senso il battito di ciglia.
+    private static func blinks(_ frame: Int) -> Bool {
+        ![3, 12, 15, 16, 17, 19, 24, 25, 28, 29, 31].contains(frame)
+    }
+
+    /// Espressione «d'umore» a riposo: in circa un terzo delle finestre di 40 s, per i primi 3 s.
+    private static func mood(at date: Date) -> Int? {
+        let t = date.timeIntervalSinceReferenceDate
+        let slot = Int(t / 40)
+        let h = UInt32(truncatingIfNeeded: slot &* 2_654_435_761)
+        guard h % 3 == 0, t.truncatingRemainder(dividingBy: 40) < 3 else { return nil }
+        return moods[Int(h >> 3) % moods.count]
+    }
+
+    /// Piccolo segno sopra l'orso: cuore per l'affetto (se gli occhi non sono già cuori), «!» per la sorpresa,
+    /// «z» quando dorme.
+    private func badge(asleep: Bool, frame: Int) -> String? {
         if state == .idle && asleep { return "z" }
         guard state == .idle else { return nil }
         switch emotion.lowercased() {
-        case "love": return "❤️"
-        case "surprised", "fear": return "!"
+        case "love": return frame == 25 ? nil : "❤️"
+        case "surprised": return "!"
         default: return nil
         }
     }
@@ -114,19 +157,19 @@ struct PixelBearView: View {
     var body: some View {
         // Ridisegno veloce solo mentre parla (bocca); a riposo bastano 5 fotogrammi al secondo.
         TimelineView(.periodic(from: .now, by: state == .speaking ? 0.12 : 0.2)) { context in
-            let asleep = state == .idle && Self.emotionFrame(emotion) == nil
-                && context.date.timeIntervalSince(idleSince) > Self.sleepAfter
+            let calm = state == .idle && Self.emotionFrame(emotion) == nil
+            let asleep = calm && context.date.timeIntervalSince(idleSince) > Self.sleepAfter
             let seq = sequence(asleep: asleep)
             let step = Int(context.date.timeIntervalSinceReferenceDate / seq.tick) % max(seq.frames.count, 1)
             // Parlato: la bocca segue le parole del sintetizzatore (aperta/chiusa), con una leggera variazione di forma.
             let frame: Int = state == .speaking
                 ? (mouthOpen ? [10, 11, 9][step % 3] : 8)
-                : (seq.frames[step])
+                : (calm && !asleep ? (Self.mood(at: context.date) ?? seq.frames[step]) : seq.frames[step])
             ZStack(alignment: .topTrailing) {
                 SpriteFrame(sheet: "BearSheet", index: frame, columns: Self.columns, rows: Self.rows, size: size)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.12), radius: size > 100 ? 10 : 4, y: size > 100 ? 6 : 2)
-                if let mark = badge(asleep: asleep) {
+                if let mark = badge(asleep: asleep, frame: frame) {
                     // Sale e svanisce a scatti, come il resto dell'animazione in pixel art.
                     let phase = Double(Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 5) / 4
                     Text(mark)
@@ -142,7 +185,10 @@ struct PixelBearView: View {
         }
         .frame(width: size, height: size)
         .onChange(of: state) { idleSince = .now }
-        .onChange(of: emotion) { idleSince = .now }
+        .onChange(of: emotion) {
+            idleSince = .now
+            variant = Int.random(in: 0..<1000)
+        }
         .onChange(of: mouthOpen) { idleSince = .now }
         .accessibilityHidden(true)
     }
