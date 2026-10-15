@@ -13,8 +13,10 @@ struct RemindersView: View {
             .sorted { (ReminderStore.date($0.at) ?? .distantFuture) < (ReminderStore.date($1.at) ?? .distantFuture) }
     }
 
-    private var recurring: [ReminderItem] { scheduled.filter { $0.repeatInfo != nil } }
-    private var oneOff: [ReminderItem] { scheduled.filter { $0.repeatInfo == nil } }
+    private var recurring: [ReminderItem] { scheduled.filter { $0.repeatInfo != nil && $0.place == nil } }
+    private var oneOff: [ReminderItem] { scheduled.filter { $0.repeatInfo == nil && $0.place == nil } }
+    /// Legati a un luogo («quando arrivo a casa»): scattano sul telefono entrando o uscendo dalla zona.
+    private var placed: [ReminderItem] { scheduled.filter { $0.place != nil } }
 
     var body: some View {
         NavigationStack {
@@ -27,6 +29,15 @@ struct RemindersView: View {
                 if !oneOff.isEmpty {
                     Section("In programma") {
                         ForEach(oneOff) { row($0) }
+                    }
+                }
+                if !placed.isEmpty {
+                    Section {
+                        ForEach(placed) { row($0) }
+                    } header: {
+                        Text("In un luogo")
+                    } footer: {
+                        Text("Scattano quando arrivi (o esci) dal luogo, anche con l'app chiusa. I luoghi sono in Impostazioni › La tua scheda.")
                     }
                 }
             }
@@ -85,13 +96,18 @@ struct RemindersView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if let place = r.place, let line = RemindersCard.placeLine(place) {
+                        Label(line.text, systemImage: line.symbol)
+                            .font(.caption)
+                            .foregroundStyle(line.warning ? Color.orange : .secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityHint("Tocca per modificare")
-            ReminderChannelChips(item: r)
+            if r.place == nil { ReminderChannelChips(item: r) }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button("Annulla", systemImage: "xmark.circle", role: .destructive) {

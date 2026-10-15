@@ -102,7 +102,7 @@ export interface ReminderStore {
   findPlace?(
     userId: string,
     label: string,
-  ): Promise<{ label: string; address?: string; located: boolean } | null>;
+  ): Promise<{ label: string; address?: string; located: boolean; fromNote?: string } | null>;
   /** Salva l'indirizzo di un luogo nella scheda («casa mia è in via Roma 3»); null se non riesce. */
   setPlace?(
     userId: string,
@@ -1155,10 +1155,13 @@ export function createReminderSkill(
               // Il messaggio successivo («via Roma 3, Treviso») diventa l'indirizzo del luogo.
               awaiting: { kind: 'place', label: p.place.label },
             };
+          const brain = known?.fromNote
+            ? ` Ho preso «${p.place.label}» dal tuo second brain (nota «${known.fromNote}»${known.address ? `, ${known.address}` : ''}).`
+            : '';
           const where =
             known && !known.located && known.address
-              ? ` Il telefono cerca da solo la posizione di «${known.address}»: puoi controllarla in Impostazioni › La tua scheda › Luoghi.`
-              : ' Scatta sul telefono anche con l’app chiusa.';
+              ? `${brain} Il telefono cerca da solo la posizione${brain ? '' : ` di «${known.address}»`}: puoi controllarla in Impostazioni › La tua scheda › Luoghi.`
+              : `${brain} Scatta sul telefono anche con l’app chiusa.`;
           return { text: `${base}${where}`, actions: [`create:${r.id}`], blocks };
         }
         case 'place_other':

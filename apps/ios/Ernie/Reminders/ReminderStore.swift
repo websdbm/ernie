@@ -1,4 +1,6 @@
+import CoreLocation
 import Foundation
+import MapKit
 import Observation
 import UserNotifications
 import WidgetKit
@@ -28,6 +30,29 @@ final class ReminderStore {
             }
         }
         sync()
+    }
+
+    /// Promemoria legati a un luogo già scattati su questo telefono (poi tolti dal server): la scheda li mostra «scattato».
+    private(set) var firedPlaces: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "reminders.firedPlaces") ?? []) {
+        didSet { UserDefaults.standard.set(Array(firedPlaces.suffix(200)), forKey: "reminders.firedPlaces") }
+    }
+
+    /// Notifiche di posizione programmate qui (identificativi con la zona): se una sparisce senza che l'abbiamo tolta
+    /// noi, è scattata.
+    private var armedPlaces: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "reminders.armedPlaces") ?? []) {
+        didSet { UserDefaults.standard.set(Array(armedPlaces), forKey: "reminders.armedPlaces") }
+    }
+
+    /// Indirizzi già cercati in questa sessione: una ricerca per indirizzo, anche se non trovato.
+    private var geocoded: Set<String> = []
+
+    /// Permesso di posizione sufficiente per le notifiche all'arrivo (basta «mentre usi l'app»; se non è ancora stato
+    /// chiesto lo chiede l'app al primo promemoria per luogo).
+    static var locationAllowed: Bool {
+        switch CLLocationManager().authorizationStatus {
+        case .denied, .restricted: false
+        default: true
+        }
     }
 
     /// Rilegge dal server (all'avvio e al ritorno in primo piano).
@@ -128,6 +153,11 @@ final class ReminderStore {
         }
     }
 
+    static func date(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        return date(iso)
+    }
+
     static func date(_ iso: String) -> Date? {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -167,7 +197,94 @@ final class ReminderStore {
             // Le sveglie scelgono da sole: canale del promemoria, altrimenti l'opzione generale.
             let alarmed = await ReminderAlarms.sync(own)
             await Self.scheduleLocalNotifications(own.filter { !alarmed.contains($0.id) })
+            await self.syncPlaces()
         }
+    }
+
+    // MARK: - promemoria legati a un luogo
+
+    /// Identificativo della notifica di posizione: cambia se cambia la zona (luogo spostato sulla mappa o raggio).
+    private static func placeRequestId(_ r: ReminderItem) -> String? {
+        guard let p = r.place, let lat = p.lat, let lng = p.lng else { return nil }
+        return String(format: "place-%@-%.5f-%.5f-%.0f-%@", r.id, lat, lng, p.radius ?? 150, p.on)
+    }
+
+    /// Notifiche di posizione dei miei promemoria per luogo: cerca le coordinate che mancano (dall'indirizzo, sul
+    /// telefono) e le salva nella scheda, toglie dal server quelli scattati, programma i nuovi.
+    private func syncPlaces() async {
+        let center = UNUserNotificationCenter.current()
+        let mine = { self.items.filter { $0.place != nil && $0.forLabel == nil && $0.status == "scheduled" } }
+        for r in mine() {
+            guard let place = r.place, !place.located, let address = place.address, let placeId = place.placeId,
+                  !geocoded.contains(address) else { continue }
+            geocoded.insert(address)
+            guard let coordinate = await Self.geocode(address) else { continue }
+            setCoordinates(placeId: placeId, coordinate)
+            _ = try? await api?.setPlaceCoordinates(id: placeId, lat: coordinate.latitude, lng: coordinate.longitude)
+        }
+        let current = mine()
+        if current.contains(where: { $0.place?.located == true }) { PlacePermission.requestIfNeeded() }
+        let pending = Set(await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("place-") })
+        var wanted: [String: ReminderItem] = [:]
+        for r in current { if let id = Self.placeRequestId(r) { wanted[id] = r } }
+        // Di troppo (annullati, luogo spostato): li togliamo noi, quindi non contano come scattati.
+        let stale = pending.subtracting(wanted.keys)
+        if !stale.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: Array(stale))
+            armedPlaces.subtract(stale)
+        }
+        // Scattati: programmati qui, non più in attesa, stessa zona; i ripetuti restano.
+        for id in armedPlaces where !pending.contains(id) {
+            armedPlaces.remove(id)
+            guard let r = wanted[id], r.place?.repeats != true else { continue }
+            wanted[id] = nil
+            firedPlaces.insert(r.id)
+            items.removeAll { $0.id == r.id }
+            try? await api?.deleteReminder(id: r.id)
+        }
+        for (id, r) in wanted where !pending.contains(id) {
+            guard let place = r.place, let lat = place.lat, let lng = place.lng else { continue }
+            let maxRadius = CLLocationManager().maximumRegionMonitoringDistance
+            let radius = min(max(place.radius ?? 150, 100), maxRadius > 0 ? maxRadius : 1000)
+            let region = CLCircularRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lng), radius: radius, identifier: id)
+            region.notifyOnEntry = !place.leaving
+            region.notifyOnExit = place.leaving
+            let content = UNMutableNotificationContent()
+            content.title = place.notificationTitle
+            content.body = r.text
+            content.sound = .default
+            content.threadIdentifier = "reminders"
+            content.interruptionLevel = .timeSensitive
+            content.userInfo = ["reminderId": r.id]
+            let trigger = UNLocationNotificationTrigger(region: region, repeats: place.repeats == true)
+            do {
+                try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+                armedPlaces.insert(id)
+            } catch {
+                // Senza permesso di posizione la richiesta non entra: riproviamo alla prossima sincronizzazione.
+            }
+        }
+    }
+
+    /// Coordinate trovate per un luogo: valgono per tutti i promemoria legati a quel luogo.
+    private func setCoordinates(placeId: String, _ c: CLLocationCoordinate2D) {
+        items = items.map { r in
+            guard r.place?.placeId == placeId else { return r }
+            var x = r
+            x.place?.lat = c.latitude
+            x.place?.lng = c.longitude
+            return x
+        }
+    }
+
+    /// Indirizzo → posizione, sul telefono (Mappe di Apple), senza servizi esterni né chiavi.
+    static func geocode(_ address: String) async -> CLLocationCoordinate2D? {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = address
+        request.resultTypes = [.address, .pointOfInterest]
+        guard let response = try? await MKLocalSearch(request: request).start(),
+              let item = response.mapItems.first else { return nil }
+        return item.location.coordinate
     }
 
     private var pendingSync: Task<Void, Never>?

@@ -43,6 +43,8 @@ import {
   enqueueConsolidation,
   enqueueSessionSummary,
   findPlace,
+  MAX_PLACES,
+  normalizePlaceLabel,
   PROFILE_FIELDS,
   recordTurnEpisode,
   renderProfile,
@@ -110,6 +112,7 @@ import { createHealthRuntime } from './health.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createIntentStore } from './intents.js';
+import { pickBrainPlace, placeFromNote } from './places.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { createSentinelStore } from './sentinels.js';
@@ -243,6 +246,41 @@ async function main(): Promise<void> {
       );
       companions.invalidateUser(userId);
       return { label: place.label, address: place.address ?? input.address };
+    },
+    // Luogo nominato ma non nella scheda: lo cerca nelle note del second brain e lo copia nella scheda.
+    fromBrain: async (userId: string, label: string) => {
+      const hits = await brain.service.search(userId, { query: label, limit: 8 });
+      const found = pickBrainPlace(
+        [...hits].sort((a, b) => Number(b.type === 'luogo') - Number(a.type === 'luogo')),
+        label,
+      );
+      const norm = normalizePlaceLabel(label);
+      if (!found || !norm) return null;
+      const current = await profiles.get(userId);
+      if (current.places.length >= MAX_PLACES) return null;
+      const place = {
+        id: randomUUID().slice(0, 8),
+        label: norm,
+        ...(found.address ? { address: found.address } : {}),
+        ...(found.lat !== undefined && found.lng !== undefined
+          ? { lat: found.lat, lng: found.lng }
+          : {}),
+        meta: {
+          source: 'conversation' as const,
+          at: new Date().toISOString(),
+          quote: `dal second brain: ${found.title}`.slice(0, 200),
+        },
+      };
+      const next = { ...current, places: [...current.places, place] };
+      await profiles.save(
+        userId,
+        next,
+        [{ field: 'places', before: null, after: describePlace(place) }],
+        'user',
+      );
+      companions.invalidateUser(userId);
+      const { meta: _, ...plain } = place;
+      return { place: plain, note: found.title };
     },
   };
 
@@ -592,6 +630,13 @@ async function main(): Promise<void> {
       profiles,
       linked: async (userId) =>
         (await family.list(userId)).map((l) => ({ label: l.label, relation: l.relation })),
+      // Luoghi delle note del second brain (cartella Luoghi), da aggiungere alla scheda con un tocco.
+      placeSuggestions: async (userId) =>
+        (await brain.service.list(userId, { type: 'luogo', limit: 50 })).flatMap((n) => {
+          const p = placeFromNote(n);
+          const label = normalizePlaceLabel(n.title);
+          return p && label ? [{ label, ...p }] : [];
+        }),
       onChanged: (userId) => {
         companions.invalidateUser(userId);
         void brain.refreshChiSono(userId);

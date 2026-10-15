@@ -20,6 +20,16 @@ export interface ProfileRoutesOptions {
   readonly linked?: (userId: string) => Promise<readonly { label: string; relation: string }[]>;
   /** La scheda sta nel prefisso dell'agente: dopo una modifica si ricostruiscono gli agenti di sessione. */
   readonly onChanged?: (userId: string) => void;
+  /** Luoghi trovati nelle note del second brain (cartella Luoghi). */
+  readonly placeSuggestions?: (userId: string) => Promise<
+    ReadonlyArray<{
+      label: string;
+      title: string;
+      address?: string;
+      lat?: number;
+      lng?: number;
+    }>
+  >;
 }
 
 function requireAuth(req: FastifyRequest): AuthContext {
@@ -144,6 +154,18 @@ export async function profileRoutes(
       await opts.profiles.save(userId, profile, changes, 'user');
       if (changes.length) opts.onChanged?.(userId);
       return { profile: view(profile), changes: changes.map(describeChange) };
+    });
+
+    // Luoghi del second brain non ancora nella scheda: l'app li propone sotto «Luoghi».
+    api.get('/v1/profile/place-suggestions', async (req) => {
+      const { userId } = requireAuth(req);
+      if (!opts.placeSuggestions) return { suggestions: [] };
+      const [profile, all] = await Promise.all([
+        opts.profiles.get(userId),
+        opts.placeSuggestions(userId).catch(() => []),
+      ]);
+      const taken = new Set(profile.places.map((p) => p.label));
+      return { suggestions: all.filter((s) => !taken.has(s.label)).slice(0, 10) };
     });
 
     // Coordinate trovate dal telefono per un indirizzo detto in chat (geocodifica sul dispositivo).

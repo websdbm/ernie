@@ -35,6 +35,7 @@
 		3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5625CB5A1D7224D40E394A01 /* FamilyView.swift */; };
 		3E80F1395E1FEFE00C5465F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 253D37BCE9386A221FC141AA /* Assets.xcassets */; };
 		3F6A6A60642E8F5C1DC50070 /* IconGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A873D448B86F04E46852AD68 /* IconGalleryView.swift */; };
+		4B1BCB49F3E1F3CDD98091A9 /* PlaceEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226A064044FE204795B8F540 /* PlaceEditor.swift */; };
 		4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1072AD1394544857B5BED36D /* ChatModels.swift */; };
 		4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 964663D7C194F32CAB945CD0 /* ShareModel.swift */; };
 		4F14D88AC2451671828A022F /* EventsCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2589F13E371B721791902AA /* EventsCodingTests.swift */; };
@@ -57,6 +58,7 @@
 		8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6A663AAF174530467149DD /* OnboardingView.swift */; };
 		8DB28567C9E2E8379E8AB13E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */; };
 		8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482E5F1386683C4811B2C6EE /* CardExport.swift */; };
+		8EDE82C5228FE0AB4B4E8AB9 /* PlacePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CE16F21C672E0074F4A59C /* PlacePermission.swift */; };
 		929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5805C7F8E13A9BB5B66DD2A3 /* SentenceSplitter.swift */; };
 		92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E5156E50AC31BC18C2094CD /* ErnieShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		92F79B66DEE7B8A1C40E190E /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A290ACEF62401F040E749BA /* AudioSessionController.swift */; };
@@ -142,6 +144,7 @@
 		0C98000DE6D12B55CB9A3223 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatencyTrace.swift; sourceTree = "<group>"; };
 		1072AD1394544857B5BED36D /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		10CE16F21C672E0074F4A59C /* PlacePermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacePermission.swift; sourceTree = "<group>"; };
 		11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieSummary.swift; sourceTree = "<group>"; };
 		124F4848C59674EF5F7A5CD8 /* Ids.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ids.swift; sourceTree = "<group>"; };
 		12E17EBA84621CA7DC748663 /* DocumentReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentReader.swift; sourceTree = "<group>"; };
@@ -149,6 +152,7 @@
 		1C5F81F2C5E0230E53EE2493 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieApp.swift; sourceTree = "<group>"; };
 		1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		226A064044FE204795B8F540 /* PlaceEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceEditor.swift; sourceTree = "<group>"; };
 		23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsView.swift; sourceTree = "<group>"; };
 		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
 		253D37BCE9386A221FC141AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -310,6 +314,7 @@
 		4E46A961D7A68084BD873471 /* Reminders */ = {
 			isa = PBXGroup;
 			children = (
+				10CE16F21C672E0074F4A59C /* PlacePermission.swift */,
 				56A53493E18F80754F8C51E7 /* ReminderAlarms.swift */,
 				585A161721BF631A7CFAD1DC /* ReminderStore.swift */,
 				6B489B112C1F00ED00928355 /* RemindersView.swift */,
@@ -325,6 +330,7 @@
 				5625CB5A1D7224D40E394A01 /* FamilyView.swift */,
 				A873D448B86F04E46852AD68 /* IconGalleryView.swift */,
 				BB6A663AAF174530467149DD /* OnboardingView.swift */,
+				226A064044FE204795B8F540 /* PlaceEditor.swift */,
 				18135035CD14820BAC03C2C7 /* ProfileView.swift */,
 				CCA2BB9EC2D73383C332B042 /* SecurityView.swift */,
 				8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */,
@@ -691,6 +697,8 @@
 				0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */,
 				0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */,
 				EB5E395A3DDD3D2D37145F98 /* ParentalControlView.swift in Sources */,
+				4B1BCB49F3E1F3CDD98091A9 /* PlaceEditor.swift in Sources */,
+				8EDE82C5228FE0AB4B4E8AB9 /* PlacePermission.swift in Sources */,
 				CD57F0C38F410183F2AFCDA2 /* ProfileView.swift in Sources */,
 				F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */,
 				AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */,

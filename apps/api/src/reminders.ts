@@ -63,6 +63,14 @@ export interface ReminderStoreDeps {
       userId: string,
       input: { label: string; address: string },
     ): Promise<{ label: string; address: string } | null>;
+    /**
+     * Luogo che non è nella scheda ma è in una nota del second brain («dentista» → «Studio dentistico Rossi»):
+     * lo copia nella scheda con quell'etichetta e lo restituisce, con il titolo della nota.
+     */
+    fromBrain?(
+      userId: string,
+      label: string,
+    ): Promise<{ place: ProfilePlace; note: string } | null>;
   };
 }
 
@@ -266,6 +274,17 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
 
   const placesOf = async (userId: string) => (deps.places ? deps.places.list(userId) : []);
 
+  /** Luogo della scheda per etichetta; se manca, lo cerca nel second brain e lo copia nella scheda. */
+  const ensurePlace = async (
+    userId: string,
+    label: string,
+  ): Promise<{ place: ProfilePlace; note?: string } | null> => {
+    const known = placeFor(await placesOf(userId), label);
+    if (known) return { place: known };
+    const found = await deps.places?.fromBrain?.(userId, label).catch(() => null);
+    return found ?? null;
+  };
+
   const insert = async (
     recipient: string,
     text: string,
@@ -379,6 +398,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       if (input.place) {
         // Per ora solo per sé: è il proprio telefono a sapere dove si è.
         if (input.forLabel) throw new UnknownPersonError(input.forLabel);
+        await ensurePlace(userId, input.place.label);
         const text =
           clean(deps.title ? await deps.title(spoken, { userId }) : tidyReminderText(spoken)) ||
           spoken;
@@ -483,12 +503,14 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       );
     },
     async findPlace(userId, label) {
-      const pl = placeFor(await placesOf(userId), label);
-      if (!pl) return null;
+      const found = await ensurePlace(userId, label);
+      if (!found) return null;
+      const pl = found.place;
       return {
         label: pl.label,
         ...(pl.address ? { address: pl.address } : {}),
         located: pl.lat !== undefined && pl.lng !== undefined,
+        ...(found.note ? { fromNote: found.note } : {}),
       };
     },
     ...(deps.places

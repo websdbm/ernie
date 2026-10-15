@@ -32,7 +32,29 @@ struct UserProfileData: Codable, Sendable, Equatable {
     var occupation: String?
     var email: String?
     var family: [ProfileFamilyMember] = []
+    /// Luoghi (casa, lavoro…) per i promemoria «quando arrivo a …»; assenti sui server più vecchi.
+    var places: [ProfilePlace] = []
     var sources: [String: ProfileSource] = [:]
+
+    enum CodingKeys: String, CodingKey {
+        case fullName, preferredName, birthDate, gender, city, occupation, email, family, places, sources
+    }
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fullName = try c.decodeIfPresent(String.self, forKey: .fullName)
+        preferredName = try c.decodeIfPresent(String.self, forKey: .preferredName)
+        birthDate = try c.decodeIfPresent(String.self, forKey: .birthDate)
+        gender = try c.decodeIfPresent(String.self, forKey: .gender)
+        city = try c.decodeIfPresent(String.self, forKey: .city)
+        occupation = try c.decodeIfPresent(String.self, forKey: .occupation)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        family = try c.decodeIfPresent([ProfileFamilyMember].self, forKey: .family) ?? []
+        places = try c.decodeIfPresent([ProfilePlace].self, forKey: .places) ?? []
+        sources = try c.decodeIfPresent([String: ProfileSource].self, forKey: .sources) ?? [:]
+    }
 }
 
 struct LinkedPerson: Codable, Sendable, Equatable, Hashable {
@@ -64,10 +86,26 @@ struct ProfilePutBody: Encodable, Sendable {
     var occupation: String?
     var email: String?
     var family: [Member]
+    var places: [Place]
+
+    struct Place: Encodable, Sendable {
+        var id: String?
+        var label: String
+        var address: String?
+        var lat: Double?
+        var lng: Double?
+        var radius: Double?
+    }
 }
 
 extension ApiClient {
     func profile() async throws -> ProfileResponse { try await request("GET", "/v1/profile") }
+
+    /// Coordinate trovate dal telefono per un luogo della scheda (indirizzo detto in chat).
+    func setPlaceCoordinates(id: String, lat: Double, lng: Double) async throws -> ProfileResponse {
+        struct Body: Encodable { var lat: Double; var lng: Double }
+        return try await request("PATCH", "/v1/profile/places/\(id)", body: Body(lat: lat, lng: lng))
+    }
 
     func saveProfile(_ body: ProfilePutBody) async throws -> ProfileResponse {
         try await request("PUT", "/v1/profile", body: body)
@@ -125,6 +163,9 @@ struct ProfileView: View {
     @State private var error: String?
     @State private var notice: String?
     @State private var editing: ProfileFamilyMember?
+    @State private var editingPlace: ProfilePlace?
+    /// Luoghi trovati nelle note del second brain (cartella Luoghi) e non ancora nella scheda.
+    @State private var suggestions: [PlaceSuggestion] = []
 
     private static let genders = ["uomo", "donna", "non binario", "preferisco non dirlo"]
 
@@ -174,6 +215,8 @@ struct ProfileView: View {
                 Text("Anche gli animali di casa. Scorri a sinistra per togliere.")
             }
 
+            placesSection
+
             if !linked.isEmpty {
                 Section {
                     ForEach(linked, id: \.self) { p in
@@ -214,8 +257,89 @@ struct ProfileView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .sheet(item: Binding(
+            get: { editingPlace.map { EditingPlace(place: $0) } },
+            set: { editingPlace = $0?.place }
+        )) { item in
+            NavigationStack {
+                PlaceEditor(place: item.place) { updated in
+                    if let i = data.places.firstIndex(where: { $0.listId == updated.listId }) {
+                        data.places[i] = updated
+                    } else {
+                        data.places.append(updated)
+                    }
+                    editingPlace = nil
+                } onCancel: {
+                    editingPlace = nil
+                }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    // MARK: luoghi
+
+    private var visibleSuggestions: [PlaceSuggestion] {
+        suggestions.filter { s in !data.places.contains { $0.label == s.label } }
+    }
+
+    @ViewBuilder
+    private var placesSection: some View {
+        Section {
+            if data.places.isEmpty {
+                Text("Nessun luogo ancora: aggiungi casa o il lavoro, oppure di' a Ernie «casa mia è in via …».")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            ForEach(data.places, id: \.listId) { p in
+                Button { editingPlace = p } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: p.located ? "mappin.circle.fill" : "mappin.slash.circle")
+                            .font(.title3)
+                            .foregroundStyle(p.located ? Color.accentColor : Color.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.label.capitalized).foregroundStyle(.primary)
+                            let details = [p.address ?? (p.located ? "posizione sulla mappa" : nil),
+                                           p.located ? nil : "posizione da confermare",
+                                           p.source == "conversation" ? "dalla chat" : nil]
+                                .compactMap { $0 }
+                            if !details.isEmpty {
+                                Text(details.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .onDelete { data.places.remove(atOffsets: $0) }
+            if data.places.count < 10 {
+                Button {
+                    editingPlace = ProfilePlace(label: data.places.contains { $0.label == "casa" } ? "" : "casa")
+                } label: {
+                    Label("Aggiungi luogo", systemImage: "mappin.and.ellipse")
+                }
+            }
+            ForEach(visibleSuggestions) { s in
+                Button {
+                    editingPlace = ProfilePlace(label: s.label, address: s.address, lat: s.lat, lng: s.lng)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.title3)
+                            .foregroundStyle(SkillTint.brain.color)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Dal second brain: \(s.title)").foregroundStyle(.primary)
+                            if let a = s.address { Text(a).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        Spacer()
+                        Image(systemName: "plus.circle").foregroundStyle(Color.accentColor)
+                    }
+                }
+            }
+        } header: {
+            Text("Luoghi")
+        } footer: {
+            Text("Servono ai promemoria «ricordami … quando arrivo a casa». Scorri a sinistra per togliere; tocca per spostare il punto sulla mappa.")
+        }
     }
 
     // MARK: righe
@@ -318,6 +442,7 @@ struct ProfileView: View {
             saved = out.profile
             linked = out.linked ?? []
             error = nil
+            suggestions = (try? await api.placeSuggestions()) ?? []
         } catch {
             self.error = AppModel.describe(error)
         }
@@ -330,7 +455,8 @@ struct ProfileView: View {
         let body = ProfilePutBody(
             fullName: data.fullName, preferredName: data.preferredName, birthDate: data.birthDate,
             gender: data.gender, city: data.city, occupation: data.occupation, email: data.email,
-            family: data.family.map { .init(id: $0.id, name: $0.name, relation: $0.relation, birthDate: $0.birthDate, notes: $0.notes) }
+            family: data.family.map { .init(id: $0.id, name: $0.name, relation: $0.relation, birthDate: $0.birthDate, notes: $0.notes) },
+            places: data.places.map { .init(id: $0.id, label: $0.label, address: $0.address, lat: $0.lat, lng: $0.lng, radius: $0.radius) }
         )
         do {
             let out = try await api.saveProfile(body)
@@ -339,12 +465,20 @@ struct ProfileView: View {
             error = nil
             let changes = out.changes ?? []
             notice = changes.isEmpty ? "Nessuna modifica." : "Salvato. Ernie ne terrà conto da subito."
+            // I promemoria legati ai luoghi prendono subito la posizione nuova.
+            await model.reminders.refresh()
         } catch {
             self.error = AppModel.describe(error)
         }
     }
 
     static func day(_ iso: String) -> String { DocumentsCard.day(iso) }
+}
+
+/// Wrapper identificabile per il foglio di modifica di un luogo.
+private struct EditingPlace: Identifiable {
+    var place: ProfilePlace
+    var id: String { place.listId }
 }
 
 /// Wrapper identificabile per il foglio di modifica di un familiare.

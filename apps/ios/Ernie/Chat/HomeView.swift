@@ -94,7 +94,7 @@ struct HomeView: View {
     private var upcoming: [(item: ReminderItem, date: Date)] {
         model.reminders.items
             .filter { $0.status == "scheduled" }
-            .compactMap { r in Self.parse(r.at).map { (r, $0) } }
+            .compactMap { r in r.at.flatMap(Self.parse).map { (r, $0) } }
             .sorted { $0.1 < $1.1 }
             .prefix(2)
             .map { (item: $0.0, date: $0.1) }

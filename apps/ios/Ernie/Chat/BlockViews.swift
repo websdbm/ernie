@@ -204,7 +204,9 @@ struct RemindersCard: View {
                 return live
             }
             var x = r
-            if r.status == "scheduled" { x.status = isPast(r) ? "done" : "cancelled" }
+            if r.status == "scheduled" {
+                x.status = isPast(r) || model.reminders.firedPlaces.contains(model.reminders.resolve(r.id)) ? "done" : "cancelled"
+            }
             return x
         }
     }
@@ -235,7 +237,11 @@ struct RemindersCard: View {
         let scheduled = r.status == "scheduled"
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
-                ReminderDateTile(date: ReminderStore.date(r.at))
+                if let place = r.place {
+                    ReminderPlaceTile(place: place)
+                } else {
+                    ReminderDateTile(date: ReminderStore.date(r.at))
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(r.text)
                         .font(.body.weight(.semibold))
@@ -255,22 +261,36 @@ struct RemindersCard: View {
                             .font(.caption)
                             .foregroundStyle(Theme.inkSecondary)
                     }
+                    if scheduled, let place = r.place, let line = Self.placeLine(place) {
+                        Label(line.text, systemImage: line.symbol)
+                            .font(.caption)
+                            .foregroundStyle(line.warning ? Color.orange : Theme.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if scheduled {
                 // Con i testi grandi la riga non ci sta: i chip vanno sopra e i comandi sotto, senza spezzare le parole.
-                ViewThatFits(in: .horizontal) {
+                if r.place != nil {
+                    // Legato a un luogo: lo fa scattare il telefono, niente sveglia né email.
                     HStack(spacing: 8) {
-                        ReminderChannelChips(item: r)
-                        Spacer(minLength: 8)
+                        Spacer(minLength: 0)
                         actions(r)
                     }
-                    VStack(alignment: .leading, spacing: 10) {
-                        ReminderChannelChips(item: r)
+                } else {
+                    ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) {
-                            Spacer(minLength: 0)
+                            ReminderChannelChips(item: r)
+                            Spacer(minLength: 8)
                             actions(r)
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            ReminderChannelChips(item: r)
+                            HStack(spacing: 8) {
+                                Spacer(minLength: 0)
+                                actions(r)
+                            }
                         }
                     }
                 }
@@ -320,6 +340,16 @@ struct RemindersCard: View {
         return "Appuntamento alle \(time), avviso \(lead) prima"
     }
 
+    /// Sotto un promemoria per luogo: l'indirizzo, oppure cosa manca perché possa scattare.
+    static func placeLine(_ place: ReminderPlaceInfo) -> (text: String, symbol: String, warning: Bool)? {
+        if !ReminderStore.locationAllowed {
+            return ("Serve il permesso di posizione: Impostazioni › Ernie › Posizione", "location.slash", true)
+        }
+        if place.located { return (place.address ?? "Posizione sulla mappa", "mappin.and.ellipse", false) }
+        if let address = place.address { return ("Cerco la posizione di «\(address)»", "magnifyingglass", false) }
+        return ("Dove si trova «\(place.label)»? Dillo a Ernie o mettilo in La tua scheda › Luoghi", "questionmark.circle", true)
+    }
+
     /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).
     static func who(_ r: ReminderItem) -> String {
         if let f = r.forLabel { return " · per \(f)" }
@@ -328,13 +358,45 @@ struct RemindersCard: View {
     }
 
     static func when(_ r: ReminderItem) -> String {
-        guard let at = ReminderStore.date(r.at) else { return r.at }
+        if let place = r.place {
+            if r.status == "cancelled" { return "annullato" }
+            if r.status == "done" { return "scattato" }
+            return place.phrase.prefix(1).uppercased() + place.phrase.dropFirst()
+        }
+        guard let at = ReminderStore.date(r.at) else { return r.at ?? "" }
         let cal = Calendar.current
         let time = at.formatted(date: .omitted, time: .shortened)
         if r.status == "cancelled" { return "annullato" }
         if cal.isDateInToday(at) { return (at <= .now ? "oggi alle " : "oggi alle ") + time + (at <= .now ? " · scattato" : "") }
         if cal.isDateInTomorrow(at) { return "domani alle \(time)" }
         return at.formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute())
+    }
+}
+
+/// Riquadro a sinistra dei promemoria legati a un luogo: spillo e nome del luogo, nello stile del riquadro della data.
+private struct ReminderPlaceTile: View {
+    let place: ReminderPlaceInfo
+
+    var body: some View {
+        let tint = SkillTint.reminders
+        VStack(spacing: 4) {
+            Image(systemName: place.leaving ? "figure.walk.departure" : "mappin.circle.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(tint.color)
+            Text(place.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 64)
+        .padding(.vertical, 10)
+        .background(tint.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(tint.color.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityHidden(true)
     }
 }
 
@@ -406,9 +468,16 @@ struct ReminderEditForm: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Cosa ti ricordo", text: $draftText)
                 .textFieldStyle(.roundedBorder)
-            DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
-                .datePickerStyle(.compact)
-                .environment(\.locale, Locale(identifier: "it_IT"))
+            if let place = item.place {
+                // Il luogo si cambia dalla scheda (Luoghi): qui solo il testo.
+                Label(place.phrase.prefix(1).uppercased() + place.phrase.dropFirst(), systemImage: "mappin.and.ellipse")
+                    .font(.caption)
+                    .foregroundStyle(Theme.inkSecondary)
+            } else {
+                DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact)
+                    .environment(\.locale, Locale(identifier: "it_IT"))
+            }
             HStack {
                 Button("Salva") { Task { await save() } }
                     .buttonStyle(.borderedProminent).controlSize(.small)
@@ -423,7 +492,7 @@ struct ReminderEditForm: View {
         defer { saving = false }
         let text = draftText.trimmingCharacters(in: .whitespaces)
         let changedText = text != item.text ? text : nil
-        let changedDate = abs((ReminderStore.date(item.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
+        let changedDate = item.place == nil && abs((ReminderStore.date(item.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
         if changedText == nil && changedDate == nil { onDone(); return }
         if await model.reminders.update(item, text: changedText, at: changedDate) { onDone() }
     }

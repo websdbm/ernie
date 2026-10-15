@@ -722,3 +722,37 @@ describe('promemoria legati a un luogo', () => {
     expect(list.text).toContain('- Comprare il latte: quando arrivi a casa');
   });
 });
+
+describe('luogo trovato nel second brain', () => {
+  it('la risposta dice da quale nota viene il luogo', async () => {
+    const store: ReminderStore = {
+      create: async (_u, input) => ({
+        id: '33333333-3333-4333-8333-333333333333',
+        text: 'Chiedere la ricevuta',
+        status: 'scheduled',
+        ...(input.place ? { place: input.place } : {}),
+      }),
+      list: async () => [],
+      remove: async () => true,
+      update: async () => null,
+      findPlace: async () => ({
+        label: 'dentista',
+        address: 'corso Italia 10, Roma',
+        located: false,
+        fromNote: 'Studio dentistico Rossi',
+      }),
+    };
+    const skill = createReminderSkill(store, TZ);
+    const plan = parseReminderCommand(
+      'ricordami di chiedere la ricevuta quando arrivo dal dentista',
+      NOW,
+      TZ,
+    );
+    expect(plan).toMatchObject({ op: 'create_place', place: { label: 'dentista' } });
+    const r = await skill.run(plan, { userId: 'u', sessionId: null, requestId: 'x' });
+    expect(r.text).toContain(
+      'Ho preso «dentista» dal tuo second brain (nota «Studio dentistico Rossi», corso Italia 10, Roma).',
+    );
+    expect(r.awaiting).toBeUndefined();
+  });
+});

@@ -357,8 +357,11 @@ struct DocumentsBlock: Codable, Sendable, Equatable {
 struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     var id: String
     var text: String
-    var at: String
+    /// Assente nei promemoria legati a un luogo (v1.14).
+    var at: String?
     var status: String
+    /// v1.14: promemoria geolocalizzato («quando arrivo a casa»): scatta sul telefono entrando o uscendo dalla zona.
+    var place: ReminderPlaceInfo? = nil
     /// Famiglia (v1.7): messo da me a «Giorgio» / messo a me da «papà».
     var forLabel: String? = nil
     var fromLabel: String? = nil
@@ -370,11 +373,57 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     var eventAt: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, text, at, status, channels, eventAt
+        case id, text, at, status, channels, eventAt, place
         case forLabel = "for"
         case fromLabel = "from"
         case repeatInfo = "repeat"
     }
+}
+
+/// Luogo di un promemoria (v1.14): etichetta della scheda e, quando il luogo ha una posizione, indirizzo e zona.
+struct ReminderPlaceInfo: Codable, Sendable, Equatable {
+    var label: String
+    /// "arrive" (quando arrivo) o "leave" (quando esco).
+    var on: String
+    /// Ogni volta, non solo la prossima.
+    var repeats: Bool? = nil
+    var placeId: String? = nil
+    var address: String? = nil
+    var lat: Double? = nil
+    var lng: Double? = nil
+    var radius: Double? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case label, on, placeId, address, lat, lng, radius
+        case repeats = "repeat"
+    }
+
+    var located: Bool { lat != nil && lng != nil }
+    var leaving: Bool { on == "leave" }
+
+    /// «a casa» / «di casa», «al lavoro» / «dal lavoro»… (stesse forme del server).
+    private var preps: (to: String, from: String) {
+        switch label {
+        case "casa": ("a casa", "di casa")
+        case "lavoro": ("al lavoro", "dal lavoro")
+        case "ufficio": ("in ufficio", "dall'ufficio")
+        case "scuola": ("a scuola", "da scuola")
+        case "palestra": ("in palestra", "dalla palestra")
+        case "università": ("all'università", "dall'università")
+        case "stazione": ("in stazione", "dalla stazione")
+        case "supermercato": ("al supermercato", "dal supermercato")
+        default: ("a \(label)", "da \(label)")
+        }
+    }
+
+    /// «quando arrivi a casa», «ogni volta che esci dal lavoro».
+    var phrase: String {
+        let when = repeats == true ? "ogni volta che" : "quando"
+        return leaving ? "\(when) esci \(preps.from)" : "\(when) arrivi \(preps.to)"
+    }
+
+    /// Titolo della notifica: «Arrivo a casa», «Uscita dal lavoro».
+    var notificationTitle: String { leaving ? "Uscita \(preps.from)" : "Arrivo \(preps.to)" }
 }
 
 /// Canali di un promemoria: `nil` = impostazione generale.
