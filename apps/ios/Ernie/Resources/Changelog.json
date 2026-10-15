@@ -1,5 +1,30 @@
 [
   {
+    "build": 53,
+    "date": "2026-10-15",
+    "title": "Widget dell'orso in Home e sul blocco",
+    "items": [
+      {
+        "icon": "square.grid.2x2.fill",
+        "title": "Tre widget in Home",
+        "detail": "Piccolo: solo l'orso. Medio: l'orso con «Parla» e «Scrivi». Grande: anche i prossimi impegni, le automazioni con la prossima esecuzione e l'ultima attività di Ernie.",
+        "test": "Tieni premuto sulla Home › Modifica › Aggiungi widget › Ernie e prova le tre dimensioni."
+      },
+      {
+        "icon": "lock.fill",
+        "title": "Due widget sulla schermata di blocco",
+        "detail": "Circolare con l'orso e rettangolare con l'orso e il prossimo impegno. Toccandoli Ernie si apre già in ascolto, oppure sulla chat: lo scegli tenendo premuto il widget › Modifica widget › «Al tocco».",
+        "test": "Aggiungi il rettangolare al blocco, toccalo e controlla che Ernie parta in ascolto."
+      },
+      {
+        "icon": "hand.tap.fill",
+        "title": "Un orso che reagisce",
+        "detail": "I widget non possono avere animazioni continue: l'orso cambia espressione nel corso della giornata, si stupisce prima di un promemoria, dorme di notte o quando Ernie è in pausa, e reagisce quando lo tocchi in Home.",
+        "test": "Tocca l'orso nel widget di Home e guarda la sua reazione."
+      }
+    ]
+  },
+  {
     "build": 52,
     "date": "2026-10-15",
     "title": "Nonni in famiglia e skill per persona",

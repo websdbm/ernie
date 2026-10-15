@@ -59,7 +59,17 @@ struct ErnieEntry: TimelineEntry {
         date: .now,
         frame: 12,
         badge: nil,
-        summary: nil,
+        summary: ErnieSummary(
+            generatedAt: .now,
+            status: .init(paused: false, proactive: true, unread: 0),
+            reminders: [],
+            automations: [
+                .init(id: "a", title: "Prezzo dei voli", kind: "sentinella", nextAt: .now.addingTimeInterval(5400), paused: false),
+                .init(id: "b", title: "Lista della spesa del sabato", kind: "automazione", nextAt: .now.addingTimeInterval(86_400 * 2), paused: false),
+            ],
+            activity: .init(title: "Prezzo dei voli", status: "succeeded", at: .now.addingTimeInterval(-1800), quiet: true),
+            counts: .init(reminders: 2, automations: 2)
+        ),
         reminders: [
             .init(id: "1", text: "Chiamare il dentista", at: .now.addingTimeInterval(3600)),
             .init(id: "2", text: "Riunione", at: .now.addingTimeInterval(7200), eventAt: .now.addingTimeInterval(9000)),
@@ -157,16 +167,18 @@ struct WidgetBear: View {
     let badge: String?
     let size: CGFloat
     var ring = true
+    /// Schermata di blocco: l'orso senza il fondo viola (iOS lo disegna in tinta unica, il fondo diventerebbe un disco).
+    var mono = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Image("Bear\(frame)")
+            Image(mono ? "BearMono\(frame)" : "Bear\(frame)")
                 .resizable()
                 .interpolation(.none)
                 .scaledToFit()
                 .clipShape(Circle())
                 .overlay {
-                    if ring { Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: max(1, size / 60)) }
+                    if ring && !mono { Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: max(1, size / 60)) }
                 }
                 .id(frame)
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -202,22 +214,25 @@ struct ErnieBearWidgetView: View {
     private var circular: some View {
         ZStack {
             AccessoryWidgetBackground()
-            WidgetBear(frame: entry.frame, badge: nil, size: 52, ring: false)
+            WidgetBear(frame: entry.frame, badge: nil, size: 54, ring: false, mono: true)
         }
         .widgetURL(entry.tap.url)
         .containerBackground(for: .widget) { Color.clear }
     }
 
     private var rectangular: some View {
-        HStack(spacing: 8) {
-            WidgetBear(frame: entry.frame, badge: nil, size: 44, ring: false)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Ernie").font(.headline).widgetAccentable()
-                Label(entry.tap == .voice ? "Tocca e parla" : "Tocca e scrivi",
-                      systemImage: entry.tap == .voice ? "mic.fill" : "text.bubble.fill")
-                    .font(.caption)
+        HStack(spacing: 6) {
+            WidgetBear(frame: entry.frame, badge: nil, size: 40, ring: false, mono: true)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text("Ernie").font(.headline).widgetAccentable()
+                    Image(systemName: entry.tap == .voice ? "mic.fill" : "text.bubble.fill").font(.caption)
+                }
                 if let next = entry.reminders.first {
-                    Text("\(Fmt.time(next.at)) \(next.text)").font(.caption2).lineLimit(1)
+                    Text(Fmt.when(next.at)).font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(next.text).font(.caption).lineLimit(1)
+                } else {
+                    Text(entry.tap == .voice ? "Tocca e parla" : "Tocca e scrivi").font(.caption).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -386,16 +401,18 @@ struct ErnieBearWidgetView: View {
     }
 }
 
-/// Formati in italiano per i widget.
+/// Formati in italiano per i widget (lingua esplicita: l'estensione non deve dipendere dalle localizzazioni del bundle).
 enum Fmt {
-    static func time(_ d: Date) -> String { d.formatted(date: .omitted, time: .shortened) }
+    private static let locale = Locale(identifier: "it_IT")
+
+    static func time(_ d: Date) -> String { d.formatted(.dateTime.hour().minute().locale(locale)) }
 
     /// «14:30», «domani 9:00», «sab 8:00».
     static func when(_ d: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(d) { return time(d) }
         if cal.isDateInTomorrow(d) { return "domani \(time(d))" }
-        return "\(d.formatted(.dateTime.weekday(.abbreviated))) \(time(d))"
+        return "\(d.formatted(.dateTime.weekday(.abbreviated).locale(locale))) \(time(d))"
     }
 
     static func greeting(_ d: Date) -> String {
