@@ -878,3 +878,42 @@ describe('dare un nome ai luoghi in chat', () => {
     expect(missing.text).toContain('Non trovo un luogo chiamato «piscina»');
   });
 });
+
+describe('«ricordagli» e «domattina» (segnalati il 15 ott 2026)', () => {
+  it('«ricordagli …» non diventa un promemoria per l’utente: lo gestisce il modello con il contesto', () => {
+    expect(
+      parseReminderCommand(
+        'Allora ricordagli fra cinque minuti di venire di là per giocare con noi.',
+        NOW,
+        TZ,
+      ),
+    ).toBeNull();
+    expect(parseReminderCommand('ricordale domani alle 8 la merenda', NOW, TZ)).toBeNull();
+    expect(parseReminderCommand('digli tra 10 minuti di scendere', NOW, TZ)).toBeNull();
+    // Quelli con il nome restano della skill.
+    expect(
+      parseReminderCommand('ricorda a Giorgio tra 5 minuti di venire a giocare', NOW, TZ),
+    ).toMatchObject({
+      op: 'create',
+      who: 'Giorgio',
+    });
+    expect(
+      parseReminderCommand('ricordami tra 5 minuti di chiamare Giorgio', NOW, TZ),
+    ).toMatchObject({
+      op: 'create',
+    });
+  });
+
+  it('«domattina alle 6:45» è domani alle 6:45, senza «domattina» nel testo', () => {
+    const p = parseReminderCommand('Ricorda a Giorgio di svegliarsi alle 6:45 domattina.', NOW, TZ);
+    if (p?.op !== 'create') throw new Error('atteso create');
+    expect(p.text).toBe('svegliarsi');
+    expect(p.who).toBe('Giorgio');
+    const lp = localParts(p.at, TZ);
+    expect([lp.day, lp.hour, lp.minute]).toEqual([12, 6, 45]);
+    expect(p.assumed).toEqual([]);
+    const q = parseReminderCommand('ricordami domattina di comprare il pane', NOW, TZ);
+    if (q?.op !== 'create') throw new Error('atteso create');
+    expect(localParts(q.at, TZ).hour).toBe(9);
+  });
+});

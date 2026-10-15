@@ -1,5 +1,30 @@
 [
   {
+    "build": 57,
+    "date": "2026-10-15",
+    "title": "Correzioni per la famiglia e la Home scura",
+    "items": [
+      {
+        "icon": "person.2.fill",
+        "title": "«Ricordagli…» va alla persona giusta",
+        "detail": "«Ricordagli fra cinque minuti di …» dopo aver parlato di Giorgio ora arriva a Giorgio, non a te. Anche «ricorda a Giorgio tra 5 minuti di …» (con l'orario prima di «di») e «domattina alle 6:45» vengono capiti correttamente.",
+        "test": "Parla di un familiare collegato e poi di' «ricordagli tra due minuti di …»: deve arrivare sul suo telefono."
+      },
+      {
+        "icon": "moon.fill",
+        "title": "Icona scura e colorata",
+        "detail": "L'icona di Ernie ha una versione per la Home scura e una per quella colorata, invece di quella ricavata in automatico da iOS.",
+        "test": "Impostazioni › Sfondo › Personalizza Home › Scuro o Colorato, e guarda l'icona di Ernie."
+      },
+      {
+        "icon": "square.grid.2x2.fill",
+        "title": "L'orso si vede nel widget anche nella Home colorata",
+        "detail": "Con le icone colorate o trasparenti l'orso del widget diventava una sagoma invisibile: ora resta a colori.",
+        "test": "Con la Home colorata o trasparente, guarda il widget di Ernie."
+      }
+    ]
+  },
+  {
     "build": 56,
     "date": "2026-10-15",
     "title": "Ernie più espressivo",

@@ -156,6 +156,9 @@ struct WidgetBear: View {
             Image(mono ? "BearMono\(frame)" : "Bear\(frame)")
                 .resizable()
                 .interpolation(.none)
+                // Home in modalità colorata o trasparente (iOS 18+): senza questo l'immagine diventa una sagoma
+                // in tinta unica e l'orso non si vede (segnalato sull'iPhone di Giorgio, 15 ott 2026).
+                .widgetAccentedRenderingMode(mono ? .accented : .fullColor)
                 .scaledToFit()
                 .clipShape(Circle())
                 .overlay {

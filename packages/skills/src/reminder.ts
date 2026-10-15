@@ -595,6 +595,15 @@ export function parseWhen(
       },
     ],
     [
+      // «domattina» = domani mattina: il giorno qui, la mattina (ora predefinita 9) la danno i momenti della giornata.
+      /\sdomattina\s/iu,
+      () => {
+        [y, m, d] = addDays(y, m, d, 1);
+        dayGiven = true;
+        text = text.replace(/\sdomattina\s/iu, ' mattina ');
+      },
+    ],
+    [
       /\soggi\s/iu,
       () => {
         dayGiven = true;
@@ -776,15 +785,29 @@ export function parseReminderCommand(
   const placed = parsePlaceReminder(text);
   if (placed) return placed;
   // «ricorda a Giorgio di …», «promemoria per Giorgio: …»: a una persona collegata (Famiglia).
+  // Con l'orario fra il nome e «di» («ricorda a Giorgio tra 5 minuti di …») basta il nome: prima finiva all'utente.
   const toOther =
     /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>\S+(?:\s+\S+)?)\s*(?::|,|\s+di\s|\s+che\s)\s*/iu.exec(
       text,
+    ) ??
+    /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>(?!(?:lui|lei|loro|me|te|noi|voi)(?=[\s,.;:!?]|$))\p{L}[\p{L}'’]*)(?=[\s,.;:!?])\s*/iu.exec(
+      text,
     );
   const who = toOther?.groups?.who?.replace(/[,:]+$/u, '').trim() || undefined;
-  // «ricordami …» anche non in testa: «tra 20 minuti ricordami di …», «domani ricordami di …».
+  // «Ricordagli / ricordale / digli di …»: la persona viene dal discorso prima (segnalato il 15 ott 2026: «allora
+  // ricordagli fra cinque minuti…» era finito all'utente). La skill non ha il contesto: decide il modello.
+  if (
+    !toOther &&
+    /(?:^|\s)(?:ricord(?:agli|ale|aglielo|agliela|ateglielo|alo\s+a\s+lui|alo\s+a\s+lei)|ricorda\s+a\s+(?:lui|lei|loro)|digli|dille|avvisalo|avvisala)(?=[\s,.;:!?]|$)/iu.test(
+      text,
+    )
+  )
+    return null;
+  // «ricordami …» anche non in testa: «tra 20 minuti ricordami di …», «domani ricordami di …». La parola deve
+  // finire lì: «ricorda» dentro «ricordagli» non vale.
   const anchor =
     toOther ??
-    /(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?|promemoria)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
+    /(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?|promemoria)(?=[\s,.;:!?]|$)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
       text,
     );
   if (!anchor) return null;
