@@ -108,6 +108,20 @@ export interface ReminderStore {
     userId: string,
     input: { label: string; address: string },
   ): Promise<{ label: string; address: string } | null>;
+  /** «Salva questo posto come …»: posizione del telefono con un nome; null se non riesce. */
+  setPlaceHere?(
+    userId: string,
+    input: { label: string; lat: number; lng: number; accuracyM?: number },
+  ): Promise<{ label: string; moved: boolean } | null>;
+  /** Cambia il nome di un luogo (e dei promemoria legati a lui). */
+  renamePlace?(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<
+    | { ok: true; from: string; to: string; reminders: number }
+    | { ok: false; reason: 'missing' | 'taken' | 'invalid' }
+  >;
 }
 
 export type ReminderPlan =
@@ -131,7 +145,13 @@ export type ReminderPlan =
       op: 'create_place';
       text: string;
       place: { label: string; on: 'arrive' | 'leave'; repeat: boolean };
+      /** Nome più lungo («studio di giulia»): vale se è un luogo della scheda, con il suo testo. */
+      alt?: { label: string; text: string };
     }
+  /** «Salva questo posto come palestra»: la posizione del telefono con un nome. */
+  | { op: 'name_here'; label: string }
+  /** «Rinomina dentista in studio Rossi». */
+  | { op: 'rename_place'; from: string; to: string }
   /** «Ricorda a Giorgio … quando arriva a casa»: per ora i promemoria per luogo valgono solo per sé. */
   | { op: 'place_other'; who?: string }
   | { op: 'set_place'; label: string; address: string }
@@ -151,6 +171,12 @@ const ARRIVE_VERBS =
 const LEAVE_VERBS =
   'esco|uscirò|usciro|lascio|lascerò|lascero|parto|partirò|partiro|vado\\s+via|me\\s+ne\\s+vado';
 const OTHER_VERBS = 'arriva|arriverà|torna|tornerà|rientra|esce|uscirà|lascia|parte|è|sarà';
+/** Come PLACE_RE, ma il luogo può contenere «di» («allo studio di Giulia»): alternativa da verificare sulla scheda. */
+const PLACE_RE_LONG = new RegExp(
+  `(?<when>ogni\\s+volta\\s+che|tutte\\s+le\\s+volte\\s+che|non\\s+appena|quando|appena)\\s+(?<verb>${LEAVE_VERBS}|${ARRIVE_VERBS}|${OTHER_VERBS})\\s+(?<prep>${PLACE_PREP})(?<place>[\\p{L}][\\p{L}']*(?:\\s+[\\p{L}']+){0,4}?)(?=\\s*(?:[,.;:!?]|$)|\\s+(?:ricordami|ricordamelo|ricorda|ricordati|mi|e)\\s)`,
+  'iu',
+);
+
 const PLACE_RE = new RegExp(
   `(?<when>ogni\\s+volta\\s+che|tutte\\s+le\\s+volte\\s+che|non\\s+appena|quando|appena)\\s+(?<verb>${LEAVE_VERBS}|${ARRIVE_VERBS}|${OTHER_VERBS})\\s+(?<prep>${PLACE_PREP})(?<place>[\\p{L}][\\p{L}']*(?:\\s+[\\p{L}']+){0,2}?)(?=\\s*(?:[,.;:!?]|$)|\\s+(?:ricordami|ricordamelo|ricorda|ricordati|di|che|e|mi)\\s)`,
   'iu',
@@ -205,7 +231,8 @@ export function placePhrase(place: Pick<ReminderPlace, 'label' | 'on' | 'repeat'
   const person = PERSON_PLACE.test(place.label) ? personPreposition(place.label) : null;
   const [to, from] = person
     ? [person, person]
-    : (PLACE_WORDS[place.label] ?? [`a ${place.label}`, `da ${place.label}`]);
+    : // Nomi scelti dall'utente («studio di giulia»): tra virgolette, senza indovinare l'articolo.
+      (PLACE_WORDS[place.label] ?? [`a «${place.label}»`, `da «${place.label}»`]);
   const when = place.repeat ? 'ogni volta che' : 'quando';
   return place.on === 'leave' ? `${when} esci ${from}` : `${when} arrivi ${to}`;
 }
@@ -238,31 +265,106 @@ export function parsePlaceReminder(text: string): ReminderPlan | null {
   const repeat = /ogni|tutte/iu.test(m.groups.when ?? '');
   const label = placeLabel(m.groups.place);
   if (!label) return null;
-  const rest = `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`
-    .replace(
-      /(?:^|\s)(?:ricordami|ricordamelo|ricordati|ricorda(?:mi)?|promemoria)\s*(?::|,)?\s*/iu,
-      ' ',
-    )
+  const restOf = (mm: RegExpExecArray) =>
+    `${text.slice(0, mm.index)} ${text.slice(mm.index + mm[0].length)}`
+      .replace(
+        /(?:^|\s)(?:ricordami|ricordamelo|ricordati|ricorda(?:mi)?|promemoria)\s*(?::|,)?\s*/iu,
+        ' ',
+      )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^(?:di|che|,)\s+/iu, '')
+      .replace(/[,;:\s]+$/u, '')
+      .trim();
+  const rest = restOf(m);
+  if (!rest) return null;
+  // Nome più lungo con «di» («studio di Giulia»): si usa se nella scheda c'è un luogo con quel nome.
+  const long = PLACE_RE_LONG.exec(text);
+  const longLabel = long?.groups?.place ? placeLabel(long.groups.place) : '';
+  const longRest = long ? restOf(long) : '';
+  const alt =
+    long && longLabel && longLabel !== label && longLabel.startsWith(label) && longRest
+      ? { label: longLabel, text: longRest }
+      : undefined;
+  return { op: 'create_place', text: rest, place: { label, on, repeat }, ...(alt ? { alt } : {}) };
+}
+
+/** Nome dato dall'utente a un luogo: senza virgolette e punto finale, al più 40 caratteri. */
+function spokenLabel(raw: string | undefined): string {
+  return (raw ?? '')
+    .replace(/^[«"“'‘]+|[»"”'’.!]+$/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/^(?:di|che|,)\s+/iu, '')
-    .replace(/[,;:\s]+$/u, '')
-    .trim();
-  if (!rest) return null;
-  return { op: 'create_place', text: rest, place: { label, on, repeat } };
+    .slice(0, 40);
+}
+
+const HERE =
+  '(?:questo\\s+(?:posto|luogo|indirizzo)|qui|qua|(?:il\\s+posto\\s+)?dove\\s+sono(?:\\s+(?:adesso|ora))?|la\\s+mia\\s+posizione(?:\\s+attuale)?)';
+const AS = '(?:come|con\\s+il\\s+nome(?:\\s+di)?|col\\s+nome(?:\\s+di)?|:)';
+
+/**
+ * Dare un nome a un luogo in chat: «salva questo posto come palestra», «questo posto si chiama casa al mare»,
+ * «chiama studio Rossi il posto in via Verdi 10», «salva via Verdi 10, Milano come studio di Giulia»,
+ * «rinomina dentista in studio Rossi». null se la frase non è di questo tipo.
+ */
+export function parsePlaceNaming(text: string): ReminderPlan | null {
+  const t = text.replace(/[‘’´`]/gu, "'").trim();
+  const here =
+    new RegExp(
+      `^(?:salva|memorizza|segna|registra|chiama|etichetta|nomina)\\s+${HERE}\\s+${AS}?\\s*(?<label>.+)$`,
+      'iu',
+    ).exec(t) ??
+    new RegExp(
+      `^${HERE}\\s+(?:si\\s+chiama|lo\\s+chiamo|chiamalo|è|e')\\s+(?<label>.+)$`,
+      'iu',
+    ).exec(t) ??
+    new RegExp(`^(?:chiama|etichetta)\\s+(?<label>.+?)\\s+${HERE}$`, 'iu').exec(t);
+  if (here?.groups?.label) {
+    const label = spokenLabel(here.groups.label);
+    return label ? { op: 'name_here', label } : null;
+  }
+  const rename =
+    /^(?:rinomina|cambia\s+(?:il\s+)?nome\s+(?:a|al|alla|del|della)?)\s*(?:il\s+luogo\s+|il\s+posto\s+|luogo\s+)?(?<from>.+?)\s+(?:in|come|con)\s+(?<to>.+)$/iu.exec(
+      t,
+    );
+  if (rename?.groups?.from && rename.groups.to) {
+    const from = spokenLabel(rename.groups.from);
+    const to = spokenLabel(rename.groups.to);
+    return from && to ? { op: 'rename_place', from, to } : null;
+  }
+  const addrAs =
+    new RegExp(
+      `^(?:salva|memorizza|segna|chiama|etichetta)\\s+(?:il\\s+posto\\s+(?:in|di|a)\\s+|l'indirizzo\\s+)?(?<addr>.+?)\\s+${AS}\\s*(?<label>.+)$`,
+      'iu',
+    ).exec(t) ??
+    /^(?:chiama|etichetta)\s+(?<label>.+?)\s+(?:il\s+posto|l'indirizzo|il\s+luogo)\s+(?:in|di|a)\s+(?<addr>.+)$/iu.exec(
+      t,
+    );
+  if (addrAs?.groups?.addr && addrAs.groups.label) {
+    const address = addressLike(addrAs.groups.addr);
+    const label = spokenLabel(addrAs.groups.label);
+    if (address && label) return { op: 'set_place', label, address };
+  }
+  return null;
 }
 
 /** «Casa mia è in via Roma 3, Treviso», «abito in via…», «il mio ufficio è in piazza…». */
 function parsePlaceStatement(text: string): ReminderPlan | null {
   const m =
-    /^(?:(?:la\s+|il\s+|l')?(?:mia\s+|mio\s+)?(?<label>casa|ufficio|lavoro|palestra|scuola)(?:\s+(?:mia|mio))?\s+(?:è|e'|si\s+trova|sta)\s+|(?:io\s+)?(?<abito>abito|vivo)\s+)(?<addr>.+)$/iu.exec(
+    /^(?:(?:la\s+|il\s+|lo\s+|l')?(?<mine>mia\s+|mio\s+|nostra\s+|nostro\s+)?(?<label>[\p{L}'][\p{L}' ]{1,38}?)(?<mine2>\s+(?:mia|mio|nostra|nostro))?\s+(?:è|e'|si\s+trova|sta)\s+|(?:io\s+)?(?<abito>abito|vivo)\s+)(?<addr>.+)$/iu.exec(
       text,
     );
   if (!m?.groups?.addr) return null;
   const address = addressLike(m.groups.addr);
   if (!address) return null;
-  const label = m.groups.abito ? 'casa' : placeLabel(m.groups.label ?? '');
-  return label ? { op: 'set_place', label, address } : null;
+  if (m.groups.abito) return { op: 'set_place', label: 'casa', address };
+  const label = placeLabel(m.groups.label ?? '');
+  // Un nome qualsiasi solo se è chiaramente un luogo suo («la mia palestra», «lo studio di Giulia») o uno dei
+  // soliti: «la riunione è in via Roma 3» non deve diventare un luogo.
+  const known =
+    /^(?:casa|ufficio|lavoro|palestra|scuola|università|universita|studio|negozio|bottega|laboratorio|garage|cantina|campagna|seconda casa|casa al mare|casa in montagna)$/u;
+  const ok = known.test(label) || !!m.groups.mine || !!m.groups.mine2 || /\sdi\s/u.test(label);
+  return label && ok ? { op: 'set_place', label, address } : null;
 }
 
 /** Giorni del mese in lettere («il due novembre», «il primo dicembre», «il ventitré»). */
@@ -632,6 +734,8 @@ export function parseReminderCommand(
   const saidAs = /usa\s+(?<e>\S+@\S+)\s+come\s+(?:(?:la\s+)?mia\s+)?(?:e-?mail|mail)/iu.exec(text);
   const stated = normalizeEmailAddress(said?.groups?.e ?? saidAs?.groups?.e);
   if (stated) return { op: 'set_email', email: stated };
+  const named = parsePlaceNaming(text);
+  if (named) return named;
   const placeStated = parsePlaceStatement(text);
   if (placeStated) return placeStated;
   const wake = parseWakeUp(text, now, tz);
@@ -1155,23 +1259,30 @@ export function createReminderSkill(
         case 'create_place': {
           if (!store)
             return { text: 'I promemoria non sono disponibili in questo contesto.', actions: [] };
-          const known = store.findPlace
-            ? await store.findPlace(ctx.userId, p.place.label)
-            : undefined;
-          const r = await store.create(ctx.userId, { text: p.text, timezone, place: p.place });
-          const phrase = placePhrase(p.place);
+          // «Allo studio di Giulia»: il nome lungo vale se è un luogo della scheda; altrimenti quello breve.
+          const longKnown =
+            p.alt && store.findPlace ? await store.findPlace(ctx.userId, p.alt.label) : null;
+          const q =
+            longKnown && p.alt
+              ? { text: p.alt.text, place: { ...p.place, label: p.alt.label } }
+              : { text: p.text, place: p.place };
+          const known =
+            longKnown ??
+            (store.findPlace ? await store.findPlace(ctx.userId, q.place.label) : undefined);
+          const r = await store.create(ctx.userId, { text: q.text, timezone, place: q.place });
+          const phrase = placePhrase(q.place);
           const base = `📍 Va bene: ${phrase} ti ricordo di ${lowerFirst(r.text)}.`;
           const blocks = [toRemindersBlock([r], 'Promemoria')];
           if (known === null)
             return {
-              text: `${base} Però non so ancora dov'è «${p.place.label}»: dimmi l'indirizzo (per esempio «via Roma 3, Treviso») oppure segnalo sulla mappa in Impostazioni › La tua scheda › Luoghi.`,
+              text: `${base} Però non so ancora dov'è «${q.place.label}»: dimmi l'indirizzo (per esempio «via Roma 3, Treviso»), di' «salva questo posto come ${q.place.label}» quando ci sei, oppure segnalo sulla mappa in Impostazioni › La tua scheda › Luoghi.`,
               actions: [`create:${r.id}`],
               blocks,
               // Il messaggio successivo («via Roma 3, Treviso») diventa l'indirizzo del luogo.
-              awaiting: { kind: 'place', label: p.place.label },
+              awaiting: { kind: 'place', label: q.place.label },
             };
           const brain = known?.fromNote
-            ? ` Ho preso «${p.place.label}» dal tuo second brain (nota «${known.fromNote}»${known.address ? `, ${known.address}` : ''}).`
+            ? ` Ho preso «${q.place.label}» dal tuo second brain (nota «${known.fromNote}»${known.address ? `, ${known.address}` : ''}).`
             : '';
           const where =
             known && !known.located && known.address
@@ -1184,6 +1295,65 @@ export function createReminderSkill(
             text: `Per ora i promemoria legati a un luogo valgono solo per te${p.who ? `, non per ${p.who}` : ''}: dimmi per esempio «ricordami di comprare il pane quando arrivo a casa». A ${p.who ?? 'un familiare'} posso mettere un promemoria a un’ora precisa.`,
             actions: [],
           };
+        case 'name_here': {
+          if (!store?.setPlaceHere)
+            return { text: 'Non posso salvare i luoghi in questo contesto.', actions: [] };
+          const loc = ctx.device?.location;
+          if (!loc)
+            return {
+              text: `Non so dove sei adesso: per salvare questo posto come «${p.label}» serve il permesso di posizione per Ernie (Impostazioni › Ernie › Posizione). In alternativa dimmi l'indirizzo, per esempio «${p.label} è in via Roma 3, Treviso».`,
+              actions: [],
+            };
+          const saved = await store.setPlaceHere(ctx.userId, {
+            label: p.label,
+            lat: loc.latitude,
+            lng: loc.longitude,
+            ...(loc.accuracyM !== undefined ? { accuracyM: loc.accuracyM } : {}),
+          });
+          if (!saved)
+            return {
+              text: 'Non sono riuscito a salvare il luogo (ne hai già dieci?). Puoi gestirli in Impostazioni › La tua scheda › Luoghi.',
+              actions: [],
+            };
+          const precision =
+            loc.accuracyM !== undefined
+              ? ` (precisione circa ${Math.max(5, Math.round(loc.accuracyM / 5) * 5)} m)`
+              : '';
+          const pending = (await store.list(ctx.userId)).filter(
+            (r) => r.place?.label === saved.label,
+          );
+          const arrive = placePhrase({ label: saved.label, on: 'arrive' }).replace(
+            /^quando arrivi /u,
+            '',
+          );
+          const tail = pending.length
+            ? ` ${pending.length === 1 ? `Il promemoria «${pending[0]?.text}» scatterà` : `I ${pending.length} promemoria legati a «${saved.label}» scatteranno`} quando arrivi qui.`
+            : ` Ora puoi dire «ricordami di … quando arrivo ${arrive}».`;
+          return {
+            text: `📍 Fatto: ${saved.moved ? `ho spostato «${saved.label}» qui` : `ho chiamato «${saved.label}» il posto dove sei adesso`}${loc.place ? `, a ${loc.place}` : ''}${precision}.${tail} Puoi aggiustare il punto in Impostazioni › La tua scheda › Luoghi.`,
+            actions: ['set_place'],
+            ...(pending.length ? { blocks: [toRemindersBlock(pending, 'Promemoria')] } : {}),
+          };
+        }
+        case 'rename_place': {
+          if (!store?.renamePlace)
+            return { text: 'Non posso rinominare i luoghi in questo contesto.', actions: [] };
+          const res = await store.renamePlace(ctx.userId, p.from, p.to);
+          if (!res.ok)
+            return {
+              text:
+                res.reason === 'missing'
+                  ? `Non trovo un luogo chiamato «${p.from}» nella tua scheda. Puoi vederli in Impostazioni › La tua scheda › Luoghi.`
+                  : res.reason === 'taken'
+                    ? `C'è già un luogo chiamato «${p.to}»: scegli un altro nome o toglilo da Impostazioni › La tua scheda › Luoghi.`
+                    : 'Il nome nuovo non va bene: provane un altro.',
+              actions: [],
+            };
+          return {
+            text: `📍 Fatto: «${res.from}» ora si chiama «${res.to}».${res.reminders ? ` Ho aggiornato anche ${res.reminders === 1 ? 'il promemoria legato' : `i ${res.reminders} promemoria legati`} a quel luogo.` : ''}`,
+            actions: ['rename_place'],
+          };
+        }
         case 'set_place': {
           if (!store?.setPlace)
             return { text: 'Non posso salvare i luoghi in questo contesto.', actions: [] };

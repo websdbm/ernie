@@ -510,6 +510,67 @@ export function upsertPlace(
 }
 
 /**
+ * «Salva questo posto come palestra»: luogo con la posizione del telefono (senza indirizzo, o con quello detto). Se il
+ * nome esiste già lo sposta qui. La zona tiene conto della precisione della posizione (almeno 150 m, al più 500).
+ */
+export function placeHere(
+  profile: UserProfile,
+  input: { label: string; lat: number; lng: number; accuracyM?: number | undefined },
+  meta: SourceMeta,
+): Place | null {
+  const label = normalizePlaceLabel(input.label);
+  if (!label || !validCoords(input.lat, input.lng)) return null;
+  const i = profile.places.findIndex((p) => p.label === label);
+  const old = i >= 0 ? profile.places[i] : undefined;
+  if (!old && profile.places.length >= MAX_PLACES) return null;
+  const fromAccuracy =
+    input.accuracyM !== undefined && input.accuracyM > 100
+      ? Math.min(500, Math.ceil((input.accuracyM * 1.5) / 50) * 50)
+      : undefined;
+  const radius = fromAccuracy ?? old?.radius;
+  const place: Place = {
+    id: old?.id ?? newId(),
+    label,
+    lat: input.lat,
+    lng: input.lng,
+    ...(radius ? { radius } : {}),
+    meta,
+  };
+  if (i >= 0) profile.places[i] = place;
+  else profile.places.push(place);
+  return place;
+}
+
+/**
+ * «Rinomina dentista in studio Rossi»: cambia il nome di un luogo (posizione e indirizzo restano). Errore se il luogo
+ * non c'è o se il nome nuovo è già di un altro luogo.
+ */
+export function renamePlace(
+  current: UserProfile,
+  from: string,
+  to: string,
+  meta: SourceMeta,
+):
+  | { ok: true; profile: UserProfile; from: string; to: string; change: ProfileChange }
+  | { ok: false; reason: 'missing' | 'taken' | 'invalid' } {
+  const place = findPlace(current, from);
+  const label = normalizePlaceLabel(to);
+  if (!label) return { ok: false, reason: 'invalid' };
+  if (!place) return { ok: false, reason: 'missing' };
+  if (label === place.label) return { ok: false, reason: 'invalid' };
+  if (current.places.some((p) => p.label === label && p.id !== place.id))
+    return { ok: false, reason: 'taken' };
+  const renamed: Place = { ...place, label, meta };
+  return {
+    ok: true,
+    profile: { ...current, places: current.places.map((p) => (p.id === place.id ? renamed : p)) },
+    from: place.label,
+    to: label,
+    change: { field: 'places', before: describePlace(place), after: describePlace(renamed) },
+  };
+}
+
+/**
  * Coordinate trovate dal telefono per un indirizzo detto in chat (o corrette): la provenienza resta quella del luogo.
  * Nessun cambiamento se il luogo non c'è o le coordinate non sono valide.
  */

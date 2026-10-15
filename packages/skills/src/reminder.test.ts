@@ -768,3 +768,113 @@ describe('frasi dei luoghi che sono persone', () => {
     expect(placePhrase({ label: 'casa', on: 'arrive' })).toBe('quando arrivi a casa');
   });
 });
+
+describe('dare un nome ai luoghi in chat', () => {
+  it('riconosce posizione attuale, indirizzo con un nome qualsiasi e rinomina', () => {
+    expect(parseReminderCommand('salva questo posto come palestra', NOW, TZ)).toEqual({
+      op: 'name_here',
+      label: 'palestra',
+    });
+    expect(parseReminderCommand('Chiama questo posto «casa al mare»', NOW, TZ)).toEqual({
+      op: 'name_here',
+      label: 'casa al mare',
+    });
+    expect(parseReminderCommand('questo posto si chiama studio di Giulia', NOW, TZ)).toMatchObject({
+      op: 'name_here',
+      label: 'studio di Giulia',
+    });
+    expect(parseReminderCommand('segna dove sono adesso come parcheggio', NOW, TZ)).toMatchObject({
+      label: 'parcheggio',
+    });
+    expect(parseReminderCommand('lo studio di Giulia è in via Verdi 10, Milano', NOW, TZ)).toEqual({
+      op: 'set_place',
+      label: 'studio di giulia',
+      address: 'via Verdi 10, Milano',
+    });
+    expect(parseReminderCommand('la mia piscina è in viale Monza 5', NOW, TZ)).toMatchObject({
+      label: 'piscina',
+    });
+    expect(
+      parseReminderCommand('salva via Garibaldi 12, Padova come bar di Marco', NOW, TZ),
+    ).toEqual({ op: 'set_place', label: 'bar di Marco', address: 'via Garibaldi 12, Padova' });
+    expect(parseReminderCommand('rinomina dentista in studio Rossi', NOW, TZ)).toEqual({
+      op: 'rename_place',
+      from: 'dentista',
+      to: 'studio Rossi',
+    });
+    // Un evento in un indirizzo non è un luogo da salvare.
+    expect(parseReminderCommand('la riunione è in via Roma 3', NOW, TZ)).toBeNull();
+  });
+
+  it('nome lungo usato solo se è nella scheda; posizione attuale salvata dalla skill', async () => {
+    const plan = parseReminderCommand(
+      'ricordami di portare il libro quando arrivo allo studio di Giulia',
+      NOW,
+      TZ,
+    );
+    expect(plan).toMatchObject({
+      op: 'create_place',
+      place: { label: 'studio' },
+      alt: { label: 'studio di giulia', text: 'portare il libro' },
+    });
+    const created: Array<Parameters<ReminderStore['create']>[1]> = [];
+    let here: { label: string; lat: number } | null = null;
+    const store: ReminderStore = {
+      create: async (_u, input) => {
+        created.push(input);
+        return {
+          id: '44444444-4444-4444-8444-444444444444',
+          text: 'Portare il libro',
+          status: 'scheduled',
+          ...(input.place ? { place: input.place } : {}),
+        };
+      },
+      list: async () => [],
+      remove: async () => true,
+      update: async () => null,
+      findPlace: async (_u, label) =>
+        label === 'studio di giulia' ? { label, located: true } : null,
+      setPlaceHere: async (_u, input) => {
+        here = input;
+        return { label: input.label.toLowerCase(), moved: false };
+      },
+      renamePlace: async (_u, from, to) =>
+        from === 'dentista'
+          ? { ok: true, from, to: to.toLowerCase(), reminders: 2 }
+          : { ok: false, reason: 'missing' },
+    };
+    const skill = createReminderSkill(store, TZ);
+    const ctx = { userId: 'u', sessionId: null, requestId: 'x' };
+    const r = await skill.run(plan, ctx);
+    expect(created[0]).toMatchObject({
+      text: 'portare il libro',
+      place: { label: 'studio di giulia' },
+    });
+    expect(r.text).toContain('quando arrivi a «studio di giulia»');
+
+    const noLoc = await skill.run({ op: 'name_here', label: 'palestra' }, ctx);
+    expect(noLoc.text).toContain('serve il permesso di posizione');
+    const ok = await skill.run(
+      { op: 'name_here', label: 'Palestra' },
+      {
+        ...ctx,
+        device: { location: { latitude: 45.4, longitude: 12.3, accuracyM: 23, place: 'Venezia' } },
+      },
+    );
+    expect(here).toMatchObject({ label: 'Palestra', lat: 45.4 });
+    expect(ok.text).toContain(
+      '📍 Fatto: ho chiamato «palestra» il posto dove sei adesso, a Venezia (precisione circa 25 m).',
+    );
+    expect(ok.text).toContain('«ricordami di … quando arrivo in palestra»');
+
+    const renamed = await skill.run(
+      { op: 'rename_place', from: 'dentista', to: 'Studio Rossi' },
+      ctx,
+    );
+    expect(renamed.text).toBe(
+      '📍 Fatto: «dentista» ora si chiama «studio rossi». Ho aggiornato anche i 2 promemoria legati a quel luogo.',
+    );
+    const missing = await skill.run({ op: 'rename_place', from: 'piscina', to: 'mare' }, ctx);
+    expect(missing.text).toContain('Non trovo un luogo chiamato «piscina»');
+  });
+});

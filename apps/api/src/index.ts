@@ -46,7 +46,9 @@ import {
   MAX_PLACES,
   normalizePlaceLabel,
   PROFILE_FIELDS,
+  placeHere,
   recordTurnEpisode,
+  renamePlace,
   renderProfile,
   renderSessionSummary,
   replaceProfileByUser,
@@ -246,6 +248,39 @@ async function main(): Promise<void> {
       );
       companions.invalidateUser(userId);
       return { label: place.label, address: place.address ?? input.address };
+    },
+    // «Salva questo posto come …»: posizione del telefono con un nome (lo sposta qui se esiste già).
+    here: async (
+      userId: string,
+      input: { label: string; lat: number; lng: number; accuracyM?: number },
+    ) => {
+      const current = await profiles.get(userId);
+      const before = findPlace(current, input.label);
+      const next = structuredClone(current);
+      const place = placeHere(next, input, { source: 'user', at: new Date().toISOString() });
+      if (!place) return null;
+      await profiles.save(
+        userId,
+        next,
+        [
+          {
+            field: 'places',
+            before: before ? describePlace(before) : null,
+            after: describePlace(place),
+          },
+        ],
+        'user',
+      );
+      companions.invalidateUser(userId);
+      return { label: place.label, moved: !!before };
+    },
+    rename: async (userId: string, from: string, to: string) => {
+      const current = await profiles.get(userId);
+      const res = renamePlace(current, from, to, { source: 'user', at: new Date().toISOString() });
+      if (!res.ok) return res;
+      await profiles.save(userId, res.profile, [res.change], 'user');
+      companions.invalidateUser(userId);
+      return { ok: true as const, from: res.from, to: res.to };
     },
     // Luogo nominato ma non nella scheda: lo cerca nelle note del second brain e lo copia nella scheda.
     fromBrain: async (userId: string, label: string) => {
@@ -630,6 +665,10 @@ async function main(): Promise<void> {
       profiles,
       linked: async (userId) =>
         (await family.list(userId)).map((l) => ({ label: l.label, relation: l.relation })),
+      // Nome cambiato nell'app: i promemoria legati al vecchio nome lo seguono.
+      onPlaceRenamed: async (userId, from, to) => {
+        await reminders.movePlaceReminders(userId, from, to);
+      },
       // Luoghi delle note del second brain (cartella Luoghi), da aggiungere alla scheda con un tocco.
       placeSuggestions: async (userId) =>
         (await brain.service.list(userId, { type: 'luogo', limit: 50 })).flatMap((n) => {

@@ -7,6 +7,8 @@ import {
   mergeProfile,
   normalizeBirthDate,
   normalizePlaceLabel,
+  placeHere,
+  renamePlace,
   renderProfile,
   replaceProfileByUser,
   setPlaceCoordinates,
@@ -280,5 +282,34 @@ describe('luoghi della scheda (promemoria geolocalizzati)', () => {
     expect(findPlace(p, 'lavoro')?.label).toBe('ufficio');
     expect(normalizePlaceLabel('  La palestra ')).toBe('palestra');
     expect(upsertPlace(p, { label: 'casa', address: '' }, meta)).toBeNull();
+  });
+});
+
+describe('nomi dei luoghi dati in chat', () => {
+  const meta = { source: 'user' as const, at: '2026-10-15T10:00:00.000Z' };
+  it('posizione attuale con un nome (zona dalla precisione) e rinomina', () => {
+    const p = emptyProfile();
+    const a = placeHere(p, { label: 'Casa al mare', lat: 45.5, lng: 12.6, accuracyM: 240 }, meta);
+    expect(a).toMatchObject({ label: 'casa al mare', lat: 45.5, radius: 400 });
+    const moved = placeHere(
+      p,
+      { label: 'casa al mare', lat: 45.51, lng: 12.61, accuracyM: 20 },
+      meta,
+    );
+    expect(moved?.id).toBe(a?.id);
+    expect(moved?.radius).toBe(400);
+    placeHere(p, { label: 'palestra', lat: 45.4, lng: 12.3 }, meta);
+    const r = renamePlace(p, 'Casa al mare', 'Villa', meta);
+    expect(r).toMatchObject({ ok: true, from: 'casa al mare', to: 'villa' });
+    if (!r.ok) throw new Error('atteso ok');
+    expect(r.profile.places.map((x) => x.label)).toEqual(['villa', 'palestra']);
+    expect(renamePlace(r.profile, 'villa', 'palestra', meta)).toEqual({
+      ok: false,
+      reason: 'taken',
+    });
+    expect(renamePlace(r.profile, 'piscina', 'mare', meta)).toEqual({
+      ok: false,
+      reason: 'missing',
+    });
   });
 });

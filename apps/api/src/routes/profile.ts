@@ -20,6 +20,8 @@ export interface ProfileRoutesOptions {
   readonly linked?: (userId: string) => Promise<readonly { label: string; relation: string }[]>;
   /** La scheda sta nel prefisso dell'agente: dopo una modifica si ricostruiscono gli agenti di sessione. */
   readonly onChanged?: (userId: string) => void;
+  /** Un luogo ha cambiato nome nell'app: i promemoria legati al vecchio nome vanno spostati. */
+  readonly onPlaceRenamed?: (userId: string, from: string, to: string) => Promise<void>;
   /** Luoghi trovati nelle note del second brain (cartella Luoghi). */
   readonly placeSuggestions?: (userId: string) => Promise<
     ReadonlyArray<{
@@ -152,6 +154,12 @@ export async function profileRoutes(
         new Date(),
       );
       await opts.profiles.save(userId, profile, changes, 'user');
+      // Stesso luogo (stesso id) con un nome nuovo: i promemoria legati al vecchio nome lo seguono.
+      for (const p of profile.places) {
+        const old = current.places.find((o) => o.id === p.id);
+        if (old && old.label !== p.label)
+          await opts.onPlaceRenamed?.(userId, old.label, p.label).catch(() => undefined);
+      }
       if (changes.length) opts.onChanged?.(userId);
       return { profile: view(profile), changes: changes.map(describeChange) };
     });

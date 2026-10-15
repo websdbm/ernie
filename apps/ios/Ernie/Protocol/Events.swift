@@ -426,7 +426,7 @@ struct ReminderPlaceInfo: Codable, Sendable, Equatable {
         case "università": ("all'università", "dall'università")
         case "stazione": ("in stazione", "dalla stazione")
         case "supermercato": ("al supermercato", "dal supermercato")
-        default: ("a \(label)", "da \(label)")
+        default: ("a «\(label)»", "da «\(label)»")
         }
     }
 

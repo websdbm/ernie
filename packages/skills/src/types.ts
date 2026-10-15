@@ -4,6 +4,15 @@ export interface SkillRunContext {
   readonly userId: string;
   readonly sessionId: string | null;
   readonly requestId: string;
+  /** Posizione del telefono al momento del messaggio (solo con il permesso): «salva questo posto come …». */
+  readonly device?: {
+    readonly location?: {
+      readonly latitude: number;
+      readonly longitude: number;
+      readonly accuracyM?: number;
+      readonly place?: string;
+    };
+  };
 }
 
 export interface SkillReply {

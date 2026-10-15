@@ -71,6 +71,20 @@ export interface ReminderStoreDeps {
       userId: string,
       label: string,
     ): Promise<{ place: ProfilePlace; note: string } | null>;
+    /** «Salva questo posto come …»: posizione del telefono con un nome. */
+    here?(
+      userId: string,
+      input: { label: string; lat: number; lng: number; accuracyM?: number },
+    ): Promise<{ label: string; moved: boolean } | null>;
+    /** Cambia il nome nella scheda (i promemoria li sposta l'archivio). */
+    rename?(
+      userId: string,
+      from: string,
+      to: string,
+    ): Promise<
+      | { ok: true; from: string; to: string }
+      | { ok: false; reason: 'missing' | 'taken' | 'invalid' }
+    >;
   };
 }
 
@@ -244,7 +258,9 @@ function hourMinute(at: Date, tz: string): { hour: number; minute: number } {
   };
 }
 
-export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
+export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
+  movePlaceReminders(userId: string, from: string, to: string): Promise<number>;
+} {
   /** Inserisce l'automazione nell'account del destinatario e accoda il job all'ora stabilita. */
   /** Promemoria legato a un luogo: automazione senza orario, la fa scattare il telefono. */
   const insertPlace = async (
@@ -273,6 +289,23 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
     );
 
   const placesOf = async (userId: string) => (deps.places ? deps.places.list(userId) : []);
+
+  /** Luogo rinominato (in chat o nell'app): i promemoria legati al vecchio nome passano al nuovo. */
+  const movePlaceReminders = async (userId: string, from: string, to: string): Promise<number> => {
+    let moved = 0;
+    for (const a of await deps.automations.list(userId)) {
+      if (!isReminder(a) || a.trigger.type !== 'place' || a.trigger.label !== from) continue;
+      const trig = a.trigger;
+      const meta = metaOf(a);
+      await deps.automations.remove(userId, a.id);
+      await insertPlace(userId, textOf(a), { ...trig, label: to }, a.timezone, {
+        ...(meta.channels ? { channels: meta.channels } : {}),
+        ...(meta.spoken ? { spoken: meta.spoken } : {}),
+      });
+      moved++;
+    }
+    return moved;
+  };
 
   /** Luogo della scheda per etichetta; se manca, lo cerca nel second brain e lo copia nella scheda. */
   const ensurePlace = async (
@@ -519,6 +552,26 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
             deps.places?.set(userId, input) ?? Promise.resolve(null),
         }
       : {}),
+    ...(deps.places?.here
+      ? {
+          setPlaceHere: (
+            userId: string,
+            input: { label: string; lat: number; lng: number; accuracyM?: number },
+          ) => deps.places?.here?.(userId, input) ?? Promise.resolve(null),
+        }
+      : {}),
+    ...(deps.places?.rename
+      ? {
+          renamePlace: async (userId: string, from: string, to: string) => {
+            const res = await deps.places?.rename?.(userId, from, to);
+            if (!res) return { ok: false as const, reason: 'invalid' as const };
+            if (!res.ok) return res;
+            return { ...res, reminders: await movePlaceReminders(userId, res.from, res.to) };
+          },
+        }
+      : {}),
+    movePlaceReminders: (userId: string, from: string, to: string) =>
+      movePlaceReminders(userId, from, to),
     ...(deps.email
       ? {
           emailAddress: (userId: string) => deps.email?.get(userId) ?? Promise.resolve(null),

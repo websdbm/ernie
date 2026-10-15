@@ -53,6 +53,19 @@ export interface ReminderToolStore {
     userId: string,
     input: { label: string; address: string },
   ): Promise<{ label: string; address: string } | null>;
+  /** Posizione attuale del telefono con un nome («salva questo posto come palestra»). */
+  setPlaceHere?(
+    userId: string,
+    input: { label: string; lat: number; lng: number; accuracyM?: number },
+  ): Promise<{ label: string; moved: boolean } | null>;
+  renamePlace?(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<
+    | { ok: true; from: string; to: string; reminders: number }
+    | { ok: false; reason: 'missing' | 'taken' | 'invalid' }
+  >;
 }
 
 const Info = z.object({
@@ -290,10 +303,10 @@ export function createReminderTools(
     }),
     defineTool({
       id: 'place_set',
-      version: '1',
+      version: '2',
       category: 'reminders',
       description:
-        'Salva nella scheda dell’utente l’indirizzo di un suo luogo («casa mia è in via Roma 3, Treviso» → label «casa», address «via Roma 3, Treviso»). Serve ai promemoria legati a un luogo; il telefono trova da solo la posizione sulla mappa. Dopo, conferma in una riga e ricorda che può controllarla in Impostazioni › La tua scheda › Luoghi.',
+        'Dà un nome a un luogo e lo salva nella scheda dell’utente. Con un indirizzo: «casa mia è in via Roma 3, Treviso» → label «casa», address «via Roma 3, Treviso»; «lo studio di Giulia è in via Verdi 10» → label «studio di Giulia». Con la posizione attuale del telefono: «salva questo posto come palestra», «qui è la casa al mare» → label e here true. Serve ai promemoria legati a un luogo; il telefono trova da solo la posizione di un indirizzo. Dopo, conferma in una riga e ricorda che può controllare il punto in Impostazioni › La tua scheda › Luoghi.',
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 5_000,
       inputSchema: z.object({
@@ -301,27 +314,91 @@ export function createReminderTools(
           .string()
           .min(1)
           .max(40)
-          .describe('Nome breve del luogo: «casa», «lavoro», «palestra»…'),
+          .describe(
+            'Nome del luogo come lo dice l’utente: «casa», «palestra», «studio di Giulia»…',
+          ),
         address: z
           .string()
           .min(5)
           .max(160)
+          .optional()
           .describe('Indirizzo come lo dice l’utente: via, numero civico, città'),
+        here: z
+          .boolean()
+          .optional()
+          .describe('true = usa la posizione attuale del telefono («questo posto», «qui»)'),
       }),
-      outputSchema: z.object({ label: z.string(), address: z.string() }),
+      outputSchema: z.object({
+        label: z.string(),
+        address: z.string().optional(),
+        here: z.boolean().optional(),
+      }),
       execute: async (input, ctx) => {
+        const label = input.label.trim().toLowerCase();
+        if (input.here || !input.address) {
+          const loc = ctx.device?.location;
+          if (!input.here)
+            throw new ToolError(
+              'Serve un indirizzo oppure here true (posizione attuale).',
+              'invalid_input',
+            );
+          if (!loc)
+            throw new ToolError(
+              'La posizione del telefono non è disponibile: chiedi all’utente l’indirizzo o di attivare la posizione per Ernie.',
+              'unavailable',
+            );
+          if (!store.setPlaceHere)
+            throw new ToolError('I luoghi non sono disponibili su questo server.', 'unavailable');
+          const saved = await store.setPlaceHere(ctx.userId, {
+            label,
+            lat: loc.latitude,
+            lng: loc.longitude,
+          });
+          if (!saved)
+            throw new ToolError(
+              'Non riesco a salvare il luogo (forse ce ne sono già dieci): chiedi all’utente di gestirli in Impostazioni › La tua scheda › Luoghi.',
+              'invalid_input',
+            );
+          return { label: saved.label, here: true };
+        }
         if (!store.setPlace)
           throw new ToolError('I luoghi non sono disponibili su questo server.', 'unavailable');
-        const saved = await store.setPlace(ctx.userId, {
-          label: input.label.trim().toLowerCase(),
-          address: input.address.trim(),
-        });
+        const saved = await store.setPlace(ctx.userId, { label, address: input.address.trim() });
         if (!saved)
           throw new ToolError(
             'Non riesco a salvare il luogo (forse ce ne sono già dieci): chiedi all’utente di gestirli in Impostazioni › La tua scheda › Luoghi.',
             'invalid_input',
           );
         return saved;
+      },
+    }),
+    defineTool({
+      id: 'place_rename',
+      version: '1',
+      category: 'reminders',
+      description:
+        'Cambia il nome di un luogo della scheda («rinomina dentista in studio Rossi», «chiama la palestra “piscina”»): posizione e promemoria legati restano, con il nome nuovo.',
+      risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
+      timeoutMs: 5_000,
+      inputSchema: z.object({
+        from: z.string().min(1).max(40).describe('Nome attuale del luogo'),
+        to: z.string().min(1).max(40).describe('Nome nuovo'),
+      }),
+      outputSchema: z.object({ from: z.string(), to: z.string(), reminders: z.number() }),
+      execute: async (input, ctx) => {
+        if (!store.renamePlace)
+          throw new ToolError('I luoghi non sono disponibili su questo server.', 'unavailable');
+        const res = await store.renamePlace(ctx.userId, input.from.trim(), input.to.trim());
+        if (!res.ok)
+          throw new ToolError(
+            res.reason === 'missing'
+              ? `Nella scheda non c’è un luogo chiamato «${input.from}».`
+              : res.reason === 'taken'
+                ? `C’è già un luogo chiamato «${input.to}».`
+                : 'Nome non valido.',
+            'invalid_input',
+          );
+        return { from: res.from, to: res.to, reminders: res.reminders };
       },
     }),
   ];

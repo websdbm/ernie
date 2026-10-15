@@ -453,6 +453,10 @@ describe('promemoria legati a un luogo (15 ott 2026)', () => {
         place: { label: 'casa', on: 'arrive' },
       }),
     ).rejects.toBeInstanceOf(UnknownPersonError);
+    // Luogo rinominato: il promemoria passa al nome nuovo.
+    expect(await store.movePlaceReminders(PAPA, 'casa', 'villa')).toBe(1);
+    expect(rows.find((x) => x.trigger.type === 'place')?.trigger).toMatchObject({ label: 'villa' });
+    expect(await store.movePlaceReminders(PAPA, 'casa', 'villa')).toBe(0);
     expect(
       await store.setPlace?.(PAPA, { label: 'lavoro', address: 'corso Italia 10, Roma' }),
     ).toEqual({

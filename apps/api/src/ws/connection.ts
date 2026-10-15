@@ -541,10 +541,23 @@ export class ClientConnection {
         : [];
     const firedNote = formatFiredIntents(fired);
     if (match) {
+      const loc = event.payload.device?.location;
       const raw = await match.skill.run(match.plan, {
         userId: this.auth.userId,
         sessionId,
         requestId: correlationId,
+        ...(loc
+          ? {
+              device: {
+                location: {
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                  ...(loc.accuracyM !== undefined ? { accuracyM: loc.accuracyM } : {}),
+                  ...(loc.place ? { place: loc.place } : {}),
+                },
+              },
+            }
+          : {}),
       });
       const reply = firedNote ? { ...raw, text: `${raw.text}\n\n${firedNote}` } : raw;
       if (raw.awaiting !== undefined)
