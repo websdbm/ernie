@@ -93,6 +93,13 @@ usi l'app») per ogni promemoria il cui luogo ha coordinate. Un indirizzo senza 
 ritorno in primo piano l'app toglie il promemoria dal server; quelli «ogni volta» restano. Per ora valgono solo per sé,
 non per i familiari.
 
+Nomi dati in chat (15 ott 2026): «salva questo posto come palestra», «questo posto si chiama …» (posizione del telefono
+passata alla skill come `device.location`; zona dalla precisione), «lo studio di Giulia è in via …» e «salva via … come …»
+(nome qualsiasi, solo se chiaramente un luogo: possessivo, «di …» o nome comune), «rinomina dentista in studio Rossi»
+(`setPlaceTrigger`: i promemoria legati cambiano luogo senza cambiare id; vale anche per i nomi cambiati nell'app). Nei
+promemoria un nome lungo («allo studio di Giulia») si usa se è nella scheda. Tool `place_set` (address o here) e
+`place_rename`.
+
 Dati: protocollo v1.14 (`place` nel blocco promemoria, `at` facoltativo), nessuna migrazione (luoghi nel JSON della
 scheda, innesco nel JSON dell'automazione).
 

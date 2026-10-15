@@ -1,5 +1,30 @@
 [
   {
+    "build": 55,
+    "date": "2026-10-15",
+    "title": "Nomi ai luoghi in chat e widget che si apre subito",
+    "items": [
+      {
+        "icon": "mappin.and.ellipse",
+        "title": "«Salva questo posto come palestra»",
+        "detail": "Dai un nome al posto dove sei con la posizione del telefono («questo posto si chiama casa al mare»), oppure a un indirizzo con un nome qualsiasi («lo studio di Giulia è in via Verdi 10, Milano»). Poi puoi dire «ricordami … quando arrivo allo studio di Giulia».",
+        "test": "Dove sei adesso, di' a Ernie «salva questo posto come prova» e controlla La tua scheda › Luoghi."
+      },
+      {
+        "icon": "pencil",
+        "title": "Rinomina i luoghi",
+        "detail": "«Rinomina dentista in studio Rossi»: i promemoria legati al luogo seguono il nome nuovo, anche quando lo cambi dalla scheda.",
+        "test": "Rinomina un luogo con un promemoria legato e guarda la scheda in chat che si aggiorna."
+      },
+      {
+        "icon": "hand.tap.fill",
+        "title": "Il widget si apre al primo tocco",
+        "detail": "Toccando l'orso Ernie si apre subito, in ascolto o sulla chat. La carezza all'orso ora è un'opzione: tieni premuto il widget › Modifica widget › «Al tocco» › Accarezza l'orso.",
+        "test": "Con Ernie chiuso, tocca una volta l'orso nel widget piccolo."
+      }
+    ]
+  },
+  {
     "build": 54,
     "date": "2026-10-15",
     "title": "Promemoria quando arrivi in un luogo",
