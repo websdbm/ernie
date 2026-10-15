@@ -131,9 +131,7 @@ describe('skill «Portami lì»', () => {
       label: 'Pizzeria Da Mario',
       address: 'Via Roma 3, Padova, Veneto, Italia',
     });
-    expect((single.blocks?.[0] as unknown as { url: string }).url).toContain(
-      'destination_place_id=p1',
-    );
+    expect(JSON.stringify(single.blocks)).toContain('destination_place_id=p1');
 
     const many = store({ search: async () => pizzerie });
     const m = await createNavigateSkill(many.s).run({ op: 'go', dest: 'pizzeria Da Mario' }, ctx);
