@@ -25,6 +25,8 @@ export interface BrainRoutesOptions {
   readonly inbound?: { readonly secret: string; readonly domain: string };
   /** True se la chiave è nuova (Redis NX): evita note doppie quando Brevo ritenta il webhook. */
   readonly firstSeen?: (key: string, ttlSeconds: number) => Promise<boolean>;
+  /** Toglie il segno di «già vista»: se la scrittura fallisce, il nuovo tentativo di Brevo deve passare. */
+  readonly forget?: (key: string) => Promise<unknown>;
   readonly logger?: Pick<Logger, 'info' | 'warn'>;
 }
 
@@ -165,16 +167,21 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
         opts.logger?.warn({ userId, from: m.from }, 'inoltro email: mittente non riconosciuto');
         continue;
       }
-      if (opts.firstSeen && !(await opts.firstSeen(`brain:inbound:${m.messageId}`, 7 * 86_400)))
-        continue;
+      const seenKey = `brain:inbound:${m.messageId}`;
+      if (opts.firstSeen && !(await opts.firstSeen(seenKey, 7 * 86_400))) continue;
       const { title, body } = emailToNote(m);
-      await opts.brain.write(userId, {
-        title,
-        body,
-        type: 'nota',
-        source: 'email',
-        ...(m.sentOn ? { refersFrom: m.sentOn } : {}),
-      });
+      try {
+        await opts.brain.write(userId, {
+          title,
+          body,
+          type: 'nota',
+          source: 'email',
+          ...(m.sentOn ? { refersFrom: m.sentOn } : {}),
+        });
+      } catch (err) {
+        await opts.forget?.(seenKey).catch(() => {});
+        throw err;
+      }
       saved++;
     }
     return { received: messages.length, saved };

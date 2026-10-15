@@ -14,6 +14,10 @@ import { mergeProfile, type ProfileStore } from './profile.js';
 import type { MemoryRepository } from './repository.js';
 import type { MemoryCategory } from './types.js';
 
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 /** Sottoinsieme dell'API Memory di Mastra usato dal consolidamento. */
 export interface ThreadReader {
   recall(args: {
@@ -318,7 +322,7 @@ export async function consolidateThread(
       ...(job.sessionId ? { sessionId: job.sessionId } : {}),
       note: 'consolidamento',
     },
-    turnDate.toISOString().slice(0, 10),
+    romeDate(turnDate),
   );
   const { inserted, deduplicated, superseded } = stats;
 

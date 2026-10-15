@@ -136,10 +136,13 @@ export async function automationRoutes(
         }
       }
       const idemHeader = header(req.headers['x-idempotency-key']);
+      // Senza chiave del chiamante: corpo + finestra di 5 minuti. Solo l'hash del corpo scartava per sempre le
+      // chiamate con il corpo uguale (un Comando Rapido con corpo vuoto scattava una volta sola).
+      const window = Math.floor(Date.now() / 300_000);
       const idem =
         idemHeader && idemHeader.length <= 128
           ? idemHeader
-          : createHash('sha256').update(raw).digest('hex').slice(0, 32);
+          : createHash('sha256').update(`${window}:${raw}`).digest('hex').slice(0, 32);
       const automation = await opts.repo.get(target.userId, id.data);
       const res = await enqueueRun(
         opts.queue,

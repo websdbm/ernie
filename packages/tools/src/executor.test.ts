@@ -335,6 +335,42 @@ describe('regole «Consenti sempre»', () => {
     ).execute?.({ text: 'd' }, {} as never)) as { error?: string };
     expect(denied.error).toBe('denied');
   });
+
+  it('possibile fuga di dati: la regola non vale e «sempre» non viene offerto', async () => {
+    const audit = memoryToolCallRecorder();
+    const rules = memoryToolRuleStore();
+    const fetchSpec: ToolSpec = {
+      ...echoSpec,
+      id: 'web_fetch',
+      risk: {
+        readsPrivate: false,
+        ingestsUntrusted: true,
+        externalEffect: false,
+        write: false,
+        egress: true,
+      },
+    };
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('web:https://example.com');
+    run.markPrivateRead('memory_search');
+    const events: Array<{ type: EventType; payload: unknown }> = [];
+    const emit = <T extends EventType>(type: T, payload: PayloadInputOf<T>) => {
+      events.push({ type, payload });
+    };
+    const ref: ToolContextRef = { current: ctx(run, emit) };
+    const approvals = { store: memoryApprovalStore(), pending: new PendingApprovals(), ttlMs: 50 };
+    await rules.allow('u', 'web_fetch', 'card');
+    const out = (await createGuardedTool(
+      fetchSpec,
+      { policyRules: {}, approvals, audit, rules, logger },
+      ref,
+    ).execute?.({ text: 'x' }, {} as never)) as { error?: string };
+    expect(out.error).toBe('approval_expired');
+    const asked = events.find((e) => e.type === 'tool.confirmation.requested')?.payload as {
+      allowAlways?: boolean;
+    };
+    expect(asked.allowAlways).toBeUndefined();
+  });
 });
 
 describe('ToolRegistry', () => {

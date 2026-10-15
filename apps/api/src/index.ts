@@ -866,6 +866,7 @@ async function main(): Promise<void> {
         : {}),
       ...(config.brain.inbound ? { inbound: config.brain.inbound } : {}),
       firstSeen: async (key, ttl) => (await redis.client.set(key, '1', 'EX', ttl, 'NX')) === 'OK',
+      forget: (key) => redis.client.del(key),
       logger,
     },
     toolRules: {
@@ -1038,6 +1039,10 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   };
+  // Una promessa rifiutata e non gestita non deve chiudere il processo (Node 24 lo farebbe): si registra.
+  process.on('unhandledRejection', (err) => {
+    logger.error({ err }, 'promessa rifiutata non gestita');
+  });
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
 

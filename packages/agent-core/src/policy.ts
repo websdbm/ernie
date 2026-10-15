@@ -38,7 +38,8 @@ export interface PolicyContext {
 
 export type PolicyVerdict =
   | { readonly kind: 'allow' }
-  | { readonly kind: 'ask'; readonly reason: string }
+  /** `exfiltration`: possibile fuga di dati; «Consenti sempre» non vale, si chiede ogni volta. */
+  | { readonly kind: 'ask'; readonly reason: string; readonly exfiltration?: true }
   | { readonly kind: 'deny'; readonly reason: string };
 
 export const DEFAULT_POLICY_RULES: PolicyRules = {
@@ -69,6 +70,7 @@ export function evaluateToolPolicy(
       kind: 'ask',
       reason:
         "possibile fuga di dati: nella run ci sono contenuti non fidati e dati privati, e questo tool invia i parametri all'esterno (Rule of Two)",
+      exfiltration: true,
     };
   }
   const threshold = rules.riskAskThreshold ?? 0.75;

@@ -91,7 +91,9 @@ export async function registerWs(app: FastifyInstance, opts: WsPluginOptions): P
       const conn = new ClientConnection(socket, auth, opts.connection);
       opts.connections?.add(conn);
       socket.on('message', (data: Buffer | string) => {
-        void conn.handleRaw(data);
+        conn
+          .handleRaw(data)
+          .catch((err: unknown) => req.log.error({ err }, 'messaggio WebSocket non gestito'));
       });
       socket.on('close', () => {
         opts.connections?.remove(conn);

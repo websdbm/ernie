@@ -156,9 +156,10 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
       }
       // Regola «Consenti sempre»: la policy ha chiesto, l'utente ha già risposto sì per questo tool.
       // Nell'audit resta `ask` con `approved = true` e nessun id di approvazione.
+      // Mai per una possibile fuga di dati (revisione del 16 ott 2026): lì si chiede ogni volta.
+      const sticky = verdict.kind === 'ask' && !verdict.exfiltration && !spec.risk.externalEffect;
       const standing =
-        verdict.kind === 'ask' &&
-        !spec.risk.externalEffect &&
+        sticky &&
         deps.rules !== undefined &&
         (await deps.rules.allows(ctx.userId, spec.id).catch(() => false));
       if (standing) approved = true;
@@ -198,7 +199,7 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           ...(preview(input) ? { argsPreview: preview(input) as string } : {}),
           reason: verdict.reason.slice(0, 300),
           expiresAt: created.expiresAt.toISOString(),
-          ...(deps.rules && !spec.risk.externalEffect ? { allowAlways: true } : {}),
+          ...(deps.rules && sticky ? { allowAlways: true } : {}),
         });
         if (deps.approvals.mode === 'deferred') {
           deps.approvals.onDeferred?.({

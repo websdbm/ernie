@@ -3,6 +3,11 @@
  * il nostro webhook con il messaggio già estratto in markdown. L'indirizzo è personale: `<token>@<dominio>`; il
  * mittente deve essere l'email della scheda dell'utente, altrimenti il messaggio si ignora.
  */
+
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 export interface InboundEmail {
   readonly messageId: string;
   /** Token dell'indirizzo di destinazione (parte prima della chiocciola), minuscolo. */
@@ -88,7 +93,7 @@ export function parseInboundPayload(body: unknown, domain: string): InboundEmail
       fromName: str(from?.Name).trim(),
       subject: str(it.Subject),
       text: text.slice(0, 60_000),
-      sentOn: sent && !Number.isNaN(sent.getTime()) ? sent.toISOString().slice(0, 10) : null,
+      sentOn: sent && !Number.isNaN(sent.getTime()) ? romeDate(sent) : null,
       attachments,
     });
   }
@@ -97,7 +102,7 @@ export function parseInboundPayload(body: unknown, domain: string): InboundEmail
 
 /** Nota dal messaggio: titolo dall'oggetto, testo in markdown, allegati elencati (non scaricati). */
 export function emailToNote(m: InboundEmail, now = new Date()): { title: string; body: string } {
-  const day = m.sentOn ?? now.toISOString().slice(0, 10);
+  const day = m.sentOn ?? romeDate(now);
   const title = cleanSubject(m.subject) || `Email del ${day}`;
   const parts = [m.text || '_(messaggio vuoto)_'];
   if (m.attachments.length)

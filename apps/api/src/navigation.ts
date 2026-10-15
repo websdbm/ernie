@@ -165,7 +165,7 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
     // «la stazione di Padova» → «stazione di Padova»: l'articolo confonde la ricerca.
     const q = query
       .trim()
-      .replace(/^(?:il|lo|la|i|gli|le|l')\s*/iu, '')
+      .replace(/^(?:(?:il|lo|la|i|gli|le)\s+|l'\s*)/iu, '')
       .slice(0, 200);
     if (!q) return [];
     const key = `${q.toLowerCase()}|${near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : ''}`;
@@ -242,7 +242,14 @@ export function createNavigationTools(store: NavigateStore) {
       category: 'places',
       description:
         "Cerca un posto o un indirizzo (Google Places o OpenStreetMap), vicino alla posizione dell'utente se disponibile: restituisce fino a 5 candidati con nome, indirizzo e coordinate. Usalo per capire quale posto intende l'utente prima di directions_link; se i candidati sono più di uno e non è chiaro, chiedi con present_choices.",
-      risk: { readsPrivate: false, ingestsUntrusted: true, externalEffect: false, write: false },
+      // La ricerca va a Google o a OpenStreetMap: canale d'uscita per la Rule of Two.
+      risk: {
+        readsPrivate: false,
+        ingestsUntrusted: true,
+        externalEffect: false,
+        write: false,
+        egress: true,
+      },
       timeoutMs: 8_000,
       inputSchema: z.object({
         query: z
@@ -308,7 +315,7 @@ export function createNavigationTools(store: NavigateStore) {
           const saved = await store
             .findPlace(
               ctx.userId,
-              input.destination.toLowerCase().replace(/^(?:il|lo|la|l')\s*/u, ''),
+              input.destination.toLowerCase().replace(/^(?:(?:il|lo|la)\s+|l'\s*)/u, ''),
             )
             .catch(() => null);
           if (saved && (saved.address || saved.lat !== undefined))

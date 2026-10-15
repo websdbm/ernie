@@ -237,7 +237,14 @@ export function createBrainService(opts: BrainServiceOptions) {
       await ready(userId);
       const v = vault(userId);
       const title = input.title.replace(/\s+/g, ' ').trim().slice(0, 120) || 'Senza titolo';
-      const existing = await readNote(userId, title);
+      let existing = await readNote(userId, title);
+      // Titolo con caratteri tolti dal nome del file («Codice: caldaia» → «Codice caldaia.md»): l'indice non lo
+      // ritrova per titolo, ma il file c'è. Si aggiunge in fondo invece di sovrascriverlo (revisione del 16 ott).
+      if (!existing) {
+        const path = pathFor(input.type ?? 'nota', title);
+        const raw = await v.read(path);
+        if (raw !== null) existing = parseNote(path, raw);
+      }
       const mode = input.mode ?? 'create';
       const links = new Set([
         ...(input.links ?? []).map((l) => l.replace(/^\[\[|\]\]$/g, '').trim()).filter(Boolean),

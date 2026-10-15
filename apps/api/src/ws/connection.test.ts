@@ -651,6 +651,21 @@ describe('ClientConnection: travaso proposto (B2)', () => {
   });
 });
 
+describe('ClientConnection: Redis che non risponde', () => {
+  it('se la numerazione degli eventi fallisce, handleRaw non rifiuta (l’API non deve cadere)', async () => {
+    const st = fakeStore();
+    st.store.nextSeq = async () => {
+      throw new Error('Connection is closed.');
+    };
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const conn = new ClientConnection(s.socket, auth, deps({}, st));
+    await expect(conn.handleRaw(c.start())).resolves.toBeUndefined();
+    await expect(conn.handleRaw(c.ping())).resolves.toBeUndefined();
+    await expect(conn.handleRaw('non è json')).resolves.toBeUndefined();
+  });
+});
+
 describe('ClientConnection: domanda in sospeso di una skill', () => {
   it('«alle 9» dopo «a che ora?» crea il promemoria senza passare dal modello', async () => {
     const { SkillRegistry, createReminderSkill } = await import('@ernie/skills');

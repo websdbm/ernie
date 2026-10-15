@@ -226,6 +226,18 @@ describe('second brain: vault git e servizio', () => {
     expect(git(vault, 'rev-parse', 'HEAD')).toBe(head);
   });
 
+  it('titolo con caratteri vietati nel nome del file: la seconda scrittura aggiunge, non sovrascrive', async () => {
+    const index = memoryIndex();
+    const brain = createBrainService({ baseDir: join(tmp, 'vaults-titoli'), index });
+    await brain.write(user, { title: 'Codice: caldaia', body: 'Il codice è 1234.' });
+    // Come dopo un riavvio: l'indice non conosce più il titolo con i due punti.
+    index.notes.clear();
+    await brain.write(user, { title: 'Codice: caldaia', body: 'Cambiato in 5678.' });
+    const raw = git(join(tmp, 'vaults-titoli', user), 'show', 'HEAD:Note/Codice caldaia.md');
+    expect(raw).toContain('Il codice è 1234.');
+    expect(raw).toContain('Cambiato in 5678.');
+  });
+
   it('i campi della scheda tornano da «Chi sono»', () => {
     const fields = parseChiSono({
       path: 'Chi sono.md',

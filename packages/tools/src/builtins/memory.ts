@@ -2,6 +2,10 @@ import type { MemoryRepository } from '@ernie/memory';
 import { z } from 'zod';
 import { defineTool, type ToolSpec } from '../types.js';
 
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 /** Provenienza di un ricordo in parole, per il modello. */
 export function sourceLabel(source: string, confidence: number, seenCount: number): string {
   const base =
@@ -55,7 +59,7 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
           content: h.content,
           category: h.category,
           confidence: h.confidence,
-          date: h.createdAt.toISOString().slice(0, 10),
+          date: romeDate(h.createdAt),
           trusted: h.provenance.trust >= 0.5,
           source: sourceLabel(h.provenance.source, h.confidence, h.seenCount),
         })),

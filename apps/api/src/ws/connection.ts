@@ -512,10 +512,18 @@ export class ClientConnection {
     }
     // La riga dell'allegato precede il testo: il modello la vede subito e non la scambia per un riferimento a documenti passati.
     const modelText = attachmentNotes.length ? `${attachmentNotes.join('\n')}\n\n${text}` : text;
+    // Tetto di spesa: il titolare può alzarlo o toglierlo (0); per gli altri account vale al massimo quello del
+    // server, che un valore personale può solo abbassare (revisione del 16 ott 2026: un account seguito poteva
+    // mettere 0, cioè nessun limite).
+    const own = this.auth.settings.dailyBudgetUsd;
     const budget =
-      typeof this.auth.settings.dailyBudgetUsd === 'number'
-        ? this.auth.settings.dailyBudgetUsd
-        : this.deps.dailyBudgetUsd;
+      this.auth.role === 'owner'
+        ? typeof own === 'number'
+          ? own
+          : this.deps.dailyBudgetUsd
+        : typeof own === 'number' && own > 0
+          ? Math.min(own, this.deps.dailyBudgetUsd)
+          : this.deps.dailyBudgetUsd;
 
     // 1) Router deterministico: comandi riconosciuti → nessuna chiamata a Jev né a un modello.
     const command = routeCommand(text, {
@@ -936,7 +944,10 @@ export class ClientConnection {
       .finally(() => {
         this.activeTurns.delete(correlationId);
         void this.deps.store.touch(this.auth.userId, sessionId).catch(() => {});
-      });
+      })
+      .catch((err: unknown) =>
+        this.deps.logger.error({ err, correlationId }, 'chiusura del turno fallita'),
+      );
   }
 
   /** Risposta locale (comando o skill deterministica): tre eventi, nessuna chiamata a modelli. */
@@ -1287,12 +1298,22 @@ export class ClientConnection {
     return next;
   }
 
+  /**
+   * Errore al client; non rifiuta mai: se Redis non risponde (numerazione degli eventi) l'errore resta nei log.
+   * Prima un breve disservizio di Redis faceva rifiutare anche questo invio, la promessa di `handleRaw` restava
+   * non gestita e l'API si chiudeva (revisione del 16 ott 2026).
+   */
   private sendError(
     code: string,
     message: string,
     retryable: boolean,
     correlationId?: string,
   ): Promise<void> {
-    return this.send('error', { code, message, retryable }, correlationId ?? NULL_UUID, false);
+    return this.send(
+      'error',
+      { code, message, retryable },
+      correlationId ?? NULL_UUID,
+      false,
+    ).catch((err: unknown) => this.deps.logger.warn({ err, code }, 'errore non inviato al client'));
   }
 }

@@ -2,6 +2,10 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { MemoryRepository } from './repository.js';
 
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 /** Descrittore per il Policy Engine: legge dati privati, nessun effetto esterno, nessuna scrittura. */
 export const MEMORY_SEARCH_POLICY = {
   id: 'memory_search',
@@ -45,7 +49,7 @@ export function createMemorySearchTool(repo: MemoryRepository, userId: string) {
           content: h.content,
           category: h.category,
           confidence: h.confidence,
-          date: h.createdAt.toISOString().slice(0, 10),
+          date: romeDate(h.createdAt),
           trusted: h.provenance.trust >= 0.5,
         })),
       };

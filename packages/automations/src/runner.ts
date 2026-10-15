@@ -39,6 +39,10 @@ import type { AutomationRepository, RunFinish } from './repository.js';
 import { isTooLate } from './schedule.js';
 import type { Automation, AutomationRun, GuidedAction, RunJobData } from './schema.js';
 
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 type ModelClass = 'light' | 'standard' | 'heavy';
 const CLASS_ORDER: Record<ModelClass, number> = { light: 0, standard: 1, heavy: 2 };
 const minClass = (a: ModelClass, b: ModelClass): ModelClass =>
@@ -354,7 +358,11 @@ async function finish(
           automationId: automation.id,
           status: updated.status,
         },
-        threadId: 'automations',
+        // Promemoria: stesso identificativo della notifica locale programmata dall'app («reminder-<id>»), così la
+        // push la sostituisce invece di arrivare come secondo banner (revisione del 16 ott 2026).
+        ...(automation.key.startsWith('promemoria_')
+          ? { threadId: 'reminders', collapseId: `reminder-${automation.id}` }
+          : { threadId: 'automations' }),
       });
     } catch (err) {
       deps.logger.warn({ err, runId: run.id }, 'notifica non salvata o non inviata');
@@ -816,7 +824,7 @@ export async function notifyDeadLetter(
   data: RunJobData,
   message: string,
 ): Promise<boolean> {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = romeDate(new Date());
   const key = `ernie:auto:deadletter:${data.automationId}:${day}`;
   const first = await deps.redis.set(key, '1', 'EX', 86_400, 'NX');
   if (first !== 'OK') return false;

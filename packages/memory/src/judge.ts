@@ -11,6 +11,10 @@ import type {
   TemporalKind,
 } from './types.js';
 
+/** Giorno «YYYY-MM-DD» a Roma (i container sono in UTC: tra mezzanotte e le 2 la data UTC è ancora ieri). */
+const romeDate = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+
 /**
  * Giudice delle contraddizioni con validità temporale (ricerca 11, M1; algoritmo di Graphiti adattato).
  * Il modello SEGNALA la relazione tra un fatto nuovo e i ricordi vicini (ragionamento prima, nel dubbio
@@ -109,7 +113,7 @@ export interface ApplyDeps {
   readonly judge: Judge | null;
 }
 
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const ymd = (d: Date) => romeDate(d);
 
 /**
  * Inserisce i fatti nuovi passando dal giudice. Restituisce le statistiche; gli eventi di sostituzione e di
