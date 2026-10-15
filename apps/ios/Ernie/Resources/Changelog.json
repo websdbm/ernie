@@ -1,5 +1,36 @@
 [
   {
+    "build": 60,
+    "date": "2026-10-16",
+    "title": "Portami lì e un Ernie che capisce meglio",
+    "items": [
+      {
+        "icon": "location.north.line.fill",
+        "title": "Portami lì",
+        "detail": "«Portami a casa», «portami in via Roma 3, Treviso», «come arrivo dal dentista?», «indicazioni per la stazione a piedi»: Ernie prepara il percorso in Google Maps dalla posizione in cui sei, con l'anteprima della mappa (c'è anche Apple Mappe). Usa i luoghi della tua scheda e del second brain; se un posto ha più risultati ti fa scegliere con un tocco.",
+        "test": "Di' «portami a casa» e poi il nome di un posto della tua città, e apri il percorso in Google Maps."
+      },
+      {
+        "icon": "text.magnifyingglass",
+        "title": "Capisce le frasi poco chiare",
+        "detail": "Se un messaggio si può intendere in più modi, o se lo correggi («no, intendevo…»), Ernie si fa delle domande sul testo e Jev risponde dal contesto. Sotto la risposta compare «Ho inteso: …», con «Correggi» se non era giusto.",
+        "test": "Scrivi una frase con un «lui» o un nome storpiato, poi correggi Ernie con «no, intendevo…»."
+      },
+      {
+        "icon": "checkmark.shield.fill",
+        "title": "Comandi rapidi controllati",
+        "detail": "Quando un promemoria o un messaggio viene capito solo in parte (due promemoria nella stessa frase, un preavviso), Jev se ne accorge e la richiesta la esegue il modello per intero. «Ricordami domani di uscire alle 17. Ricordamelo 10 minuti prima» ora avvisa alle 16:50.",
+        "test": "Di' «ricordami alle 18 di chiamare Luca e alle 19 di comprare il pane»: devono nascere due promemoria."
+      },
+      {
+        "icon": "brain.head.profile",
+        "title": "I tuoi luoghi nel second brain",
+        "detail": "Casa, lavoro e gli altri luoghi della scheda hanno una nota nella cartella Luoghi, collegata a «Chi sono»: puoi legarli ad altre note in Obsidian. Se cambi un indirizzo nella scheda la nota si aggiorna, e quello che hai scritto tu resta.",
+        "test": "Apri il second brain e guarda la cartella Luoghi."
+      }
+    ]
+  },
+  {
     "build": 59,
     "date": "2026-10-15",
     "title": "Messaggi ben in vista e super snooze",

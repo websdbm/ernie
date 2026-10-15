@@ -37,6 +37,8 @@ struct BlockView: View {
             FamilyMessageBubble(message: block)
         case .interpretation(let block):
             InterpretationLine(block: block, conversation: conversation)
+        case .directions(let block):
+            DirectionsCard(block: block)
         case .unknown:
             EmptyView()
         }

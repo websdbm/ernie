@@ -515,6 +515,17 @@ struct FamilyMessageBlock: Codable, Sendable, Equatable, Identifiable {
     var awaitingAck: Bool { isUrgent && acknowledgedAt == nil }
 }
 
+/// Indicazioni stradali (v1.19, «Portami lì»): luogo, indirizzo, coordinate per l'anteprima e link di Google Maps.
+struct DirectionsBlock: Codable, Sendable, Equatable {
+    var label: String
+    var address: String?
+    var lat: Double?
+    var lng: Double?
+    /// driving, walking, bicycling, transit.
+    var mode: String
+    var url: String
+}
+
 /// Interpretazione (v1.18, chiarimento interno): cosa ha inteso Ernie in un messaggio poco chiaro o in una correzione.
 struct InterpretationBlock: Codable, Sendable, Equatable {
     struct Item: Codable, Sendable, Equatable, Hashable {
@@ -594,6 +605,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case choices(ChoicesBlock)
     case familyMessage(FamilyMessageBlock)
     case interpretation(InterpretationBlock)
+    case directions(DirectionsBlock)
     case unknown(kind: String)
 
     private enum CodingKeys: String, CodingKey { case kind, query, results, title, items, recipes }
@@ -630,6 +642,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .familyMessage(try FamilyMessageBlock(from: decoder))
         case "interpretation":
             self = .interpretation(try InterpretationBlock(from: decoder))
+        case "directions":
+            self = .directions(try DirectionsBlock(from: decoder))
         default:
             self = .unknown(kind: kind)
         }
@@ -681,6 +695,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .interpretation(let block):
             try c.encode("interpretation", forKey: .kind)
+            try block.encode(to: encoder)
+        case .directions(let block):
+            try c.encode("directions", forKey: .kind)
             try block.encode(to: encoder)
         case .unknown(let kind):
             try c.encode(kind, forKey: .kind)
