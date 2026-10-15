@@ -103,3 +103,18 @@ promemoria un nome lungo («allo studio di Giulia») si usa se è nella scheda. 
 Dati: protocollo v1.14 (`place` nel blocco promemoria, `at` facoltativo), nessuna migrazione (luoghi nel JSON della
 scheda, innesco nel JSON dell'automazione).
 
+## Messaggi in famiglia (15 ott 2026)
+
+Messaggi brevi fra persone collegate in Famiglia, dentro la chat di Ernie: «scrivi a Giorgio che la cena è pronta»,
+«manda un messaggio a papà: arrivo», «rispondi a papà: ok» (skill «Messaggi», senza modello); in forma libera («di' a
+Giorgio di venire a cena») il modello usa `family_message_send` e scrive il testo rivolto alla persona. Dal «+» ›
+«Messaggio a un familiare» e da «Rispondi» sotto ogni messaggio ricevuto si manda anche una foto (libreria o fotocamera,
+ridotta a 1600 px sul telefono, senza metadati). Il messaggio compare con un fumetto suo (sabbia ricevuto, verde acqua
+mandato) e un'etichetta a busta con il nome che chi legge dà all'altro (family_links); chi riceve ha una notifica push
+«✉️ <nome>» e la scheda in diretta se l'app è aperta, altrimenti la trova alla riapertura. Un nome quasi uguale a uno
+collegato («papi» per «papo») viene proposto con un pulsante, mai scelto da soli.
+
+Dati: migrazione 0033 (`family_messages`, foto in bytea, RLS: mittente e destinatario leggono, scrive solo il mittente a
+una persona collegata, il destinatario segna la lettura). API: `POST/GET /v1/family/messages`,
+`GET /v1/family/messages/:id/image`, `POST /v1/family/messages/read`. Protocollo v1.16 (blocco `family_message`).
+

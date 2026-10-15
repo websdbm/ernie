@@ -1,5 +1,30 @@
 [
   {
+    "build": 58,
+    "date": "2026-10-15",
+    "title": "Messaggi in famiglia",
+    "items": [
+      {
+        "icon": "envelope.fill",
+        "title": "Scrivi ai familiari dalla chat",
+        "detail": "«Scrivi a Giorgio che la cena è pronta», «manda un messaggio a papà: arrivo»: il messaggio arriva nella sua chat di Ernie con una notifica. Ha un fumetto tutto suo con un'etichetta a busta: «da …» con il nome che lui ti ha dato, «a …» per quelli che mandi tu.",
+        "test": "Scrivi «scrivi a <nome di un familiare collegato> che …» e controlla sul suo telefono."
+      },
+      {
+        "icon": "arrowshape.turn.up.left.fill",
+        "title": "Rispondi con un tocco",
+        "detail": "Sotto ogni messaggio ricevuto c'è «Rispondi»: si apre la risposta già indirizzata.",
+        "test": "Tocca «Rispondi» su un messaggio ricevuto e manda una risposta."
+      },
+      {
+        "icon": "photo.on.rectangle",
+        "title": "Anche con una foto",
+        "detail": "Dal «+» › «Messaggio a un familiare» puoi aggiungere una foto dalla libreria o scattarla. Viene ridotta sul telefono e senza dati di posizione; chi la riceve la apre a schermo intero.",
+        "test": "Manda una foto a un familiare e aprila dal suo telefono."
+      }
+    ]
+  },
+  {
     "build": 57,
     "date": "2026-10-15",
     "title": "Correzioni per la famiglia e la Home scura",
