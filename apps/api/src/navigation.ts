@@ -179,7 +179,12 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
         ? [...raw].sort((a, b) => metersBetween(a, near) - metersBetween(b, near))
         : raw;
       const value = ordered.filter(
-        (c, i) => !ordered.slice(0, i).some((o) => metersBetween(o, c) < 250),
+        (c, i) =>
+          !ordered
+            .slice(0, i)
+            .some(
+              (o) => metersBetween(o, c) < 250 || (o.name === c.name && o.address === c.address),
+            ),
       );
       if (cache.size > 300) cache.delete(cache.keys().next().value as string);
       cache.set(key, { at: Date.now(), value });
