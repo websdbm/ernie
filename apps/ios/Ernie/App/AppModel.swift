@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import UIKit
 import UserNotifications
+import WidgetKit
 
 /// Azioni dei widget dell'orso: «Parla» apre l'app in ascolto, «Scrivi» apre la tastiera della chat.
 enum AppLink: Equatable {
@@ -98,6 +99,26 @@ final class AppModel {
         Credentials.clear()
         credentials = nil
         inbox.reset()
+        resetLocalState()
+    }
+
+    /// All'uscita non resta niente dell'account sul telefono (revisione del 16 ott 2026: le sveglie suonavano ancora,
+    /// chi entrava dopo vedeva le chat precedenti e un urgente del vecchio account non si chiudeva più).
+    private func resetLocalState() {
+        TranscriptStore().clearAll()
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        Task { await ReminderAlarms.cancelAll() }
+        reminders.clear()
+        urgent.clearAll()
+        ReminderSnapshot(items: [], updatedAt: .now).save()
+        FamilyLatest.clear()
+        if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ReminderSnapshot.appGroup) {
+            try? FileManager.default.removeItem(at: group.appendingPathComponent("widget-summary.json"))
+        }
+        UserDefaults.standard.removeObject(forKey: "family.messages.lastSeen")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func newConversation() {

@@ -26,6 +26,11 @@ struct FamilyLatest: Codable, Sendable, Equatable {
             .appendingPathComponent(fileName)
     }
 
+    /// Uscita dall'account: il widget non mostra più l'ultimo messaggio.
+    static func clear() {
+        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+    }
+
     static func load() -> FamilyLatest? {
         guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()

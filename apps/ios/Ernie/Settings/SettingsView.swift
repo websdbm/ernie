@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var killSwitch = false
+    @State private var confirmSignOut = false
     @State private var busy = false
     @State private var message: String?
 
@@ -237,10 +238,16 @@ struct SettingsView: View {
                     LabeledContent("Ruolo", value: model.profile?.role ?? "—")
                     if let v = model.profile?.server?.version { LabeledContent("Versione server", value: v) }
                     LabeledContent("Versione app", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
-                    Button("Esci", role: .destructive) {
-                        model.signOut()
-                        dismiss()
-                    }
+                    Button("Esci", role: .destructive) { confirmSignOut = true }
+                        .confirmationDialog("Uscire dall’account?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                            Button("Esci", role: .destructive) {
+                                model.signOut()
+                                dismiss()
+                            }
+                            Button("Annulla", role: .cancel) {}
+                        } message: {
+                            Text("Dal telefono si tolgono le conversazioni, i promemoria programmati e le sveglie di questo account. Per rientrare servirà di nuovo la chiave.")
+                        }
                 }
                 if let message { Section { Text(message).font(.footnote).foregroundStyle(.secondary) } }
             }

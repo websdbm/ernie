@@ -36,6 +36,12 @@ final class FamilyUrgentStore {
         save()
     }
 
+    /// Uscita dall'account: nessun urgente del vecchio account resta a tutto schermo.
+    func clearAll() {
+        pending = []
+        save()
+    }
+
     /// Dal pulsante del fumetto: lo porta davanti.
     func show(_ m: FamilyMessageBlock) {
         guard m.awaitingAck, m.incoming else { return }

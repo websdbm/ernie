@@ -16,6 +16,12 @@ enum ReminderAlarms {
 
     static var authorization: AlarmManager.AuthorizationState { AlarmManager.shared.authorizationState }
 
+    /// Uscita dall'account: tutte le sveglie di Ernie, in qualsiasi stato.
+    static func cancelAll() async {
+        let manager = AlarmManager.shared
+        for alarm in (try? manager.alarms) ?? [] { try? manager.cancel(id: alarm.id) }
+    }
+
     /// Allinea le sveglie ai promemoria futuri; restituisce gli id coperti da una sveglia (niente notifica doppia).
     /// Ogni promemoria può scegliere (v1.11): `alarm == true` suona anche con l'opzione generale spenta,
     /// `alarm == false` resta una notifica anche con l'opzione accesa.

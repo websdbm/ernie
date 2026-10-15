@@ -42,6 +42,8 @@ struct RootView: View {
                 Task { await model.processShareInbox() }
                 // Promemoria rimessi in pari: anche quelli legati a un luogo scattati mentre l'app era chiusa.
                 Task { await model.reminders.refresh() }
+                // Le schede delle automazioni (approvazioni, esiti) arrivate mentre l'app era in background.
+                Task { await model.inbox.refresh() }
                 Task { await model.syncFamilyMessages() }
             }
             // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.

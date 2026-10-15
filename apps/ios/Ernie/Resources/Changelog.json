@@ -1,5 +1,42 @@
 [
   {
+    "build": 61,
+    "date": "2026-10-16",
+    "title": "Revisione notturna: più affidabile e più veloce",
+    "items": [
+      {
+        "icon": "bolt.fill",
+        "title": "Risposte più economiche nelle conversazioni lunghe",
+        "detail": "Ernie rilegge dalla memoria veloce del modello la parte già vista della conversazione invece di rimandarla ogni volta: dal terzo messaggio in poi il costo scende di circa cinque volte.",
+        "test": "Fai una conversazione di qualche messaggio: deve funzionare come prima."
+      },
+      {
+        "icon": "wifi.exclamationmark",
+        "title": "Niente più «ci penso» infinito",
+        "detail": "Se la connessione cade mentre Ernie risponde, al ritorno il turno si chiude da solo e i messaggi scritti nel frattempo partono. Stop sblocca sempre; i messaggi in attesa sopravvivono alla chiusura dell'app.",
+        "test": "Scrivi a Ernie, metti in modalità aereo durante la risposta e poi riattiva la rete."
+      },
+      {
+        "icon": "clock.fill",
+        "title": "Promemoria detti in modo naturale",
+        "detail": "«Tra mezz'ora», «fra un quarto d'ora», «tra un'ora e mezza», «alle 18 e 30», «alle 6 meno un quarto», «lunedi» senza accento, «il 23 alle 10», «alle 4» (di pomeriggio se il mattino è passato), sveglie alle 3:30 per il volo. Un promemoria arriva una volta sola, non doppio.",
+        "test": "Prova «tra un quarto d'ora ricordami di …» e «ricordami alle 18 e 30 di …»."
+      },
+      {
+        "icon": "person.crop.circle.badge.xmark",
+        "title": "Uscire dall'account pulito",
+        "detail": "«Esci» chiede conferma e toglie dal telefono conversazioni, promemoria programmati, sveglie e widget dell'account.",
+        "test": "Solo se vuoi: Impostazioni › Esci, poi rientra con la chiave."
+      },
+      {
+        "icon": "envelope.badge.fill",
+        "title": "Widget «Messaggi in famiglia» davvero disponibile",
+        "detail": "Il widget annunciato nella 59 ora compare nella galleria dei widget, per la schermata di blocco e la Home.",
+        "test": "Aggiungi il widget «Messaggi in famiglia» alla schermata di blocco."
+      }
+    ]
+  },
+  {
     "build": 60,
     "date": "2026-10-16",
     "title": "Portami lì e un Ernie che capisce meglio",

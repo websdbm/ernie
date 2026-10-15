@@ -59,6 +59,8 @@ final class ConversationStore {
         items = loadedItems
         lastSeq = loadedSeq
         client = ProtocolClient(credentials: credentials, sessionId: sid, lastSeq: loadedSeq)
+        // Messaggi rimasti «in attesa» quando l'app è stata chiusa: partono appena c'è la connessione.
+        outbox = Self.pendingOutbox(loadedItems)
         wireSpeaker()
         inbox.onCards = { [weak self] cards in self?.merge(cards) }
     }
@@ -88,6 +90,8 @@ final class ConversationStore {
         Task { await client.disconnect() }
     }
 
+    private static let noSession = "00000000-0000-0000-0000-000000000000"
+
     /// Una sola ripresa automatica da `session_forbidden` per avvio (evita cicli se il server rifiuta anche la nuova).
     private var recoveredForeignSession = false
 
@@ -107,6 +111,8 @@ final class ConversationStore {
         _ = speaker.stop()
         activeCorrelationId = nil
         agentState = .idle
+        // I messaggi in coda appartenevano alla conversazione di prima: non devono partire in questa.
+        outbox = []
         items = []
         lastSeq = -1
         sessionId = Ids.new()
@@ -137,6 +143,7 @@ final class ConversationStore {
         lastSeq = file.lastSeq
         sessionId = target
         transcript.setCurrent(target)
+        outbox = Self.pendingOutbox(items)
         let seq = file.lastSeq
         Task { await client.switchSession(to: target, lastSeq: seq) }
     }
@@ -153,6 +160,17 @@ final class ConversationStore {
     private struct Outgoing { let messageId: String; let text: String; let inputMode: String; let attachments: [DocumentRef] }
     private var outbox: [Outgoing] = []
     var queuedCount: Int { outbox.count }
+
+    /// Coda ricostruita dai fumetti segnati «in attesa» (gli allegati non si salvano: partono senza).
+    private static func pendingOutbox(_ items: [ChatItem]) -> [Outgoing] {
+        items.compactMap { item in
+            guard case .message(let m) = item, m.role == .user, m.queued == true else { return nil }
+            return Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: [])
+        }
+    }
+
+    /// Ultimo evento ricevuto per il turno aperto: senza notizie per troppo tempo il turno si chiude da solo.
+    private var turnActivityAt = Date.distantPast
 
     func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = []) {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -185,7 +203,9 @@ final class ConversationStore {
         }
         activeCorrelationId = correlationId
         activeInputMode = out.inputMode
+        turnActivityAt = .now
         agentState = .thinking
+        watchTurn(correlationId)
         if currentTrace == nil || out.inputMode == "text" { currentTrace = LatencyTrace() }
         currentTrace?.mark(.messageSent)
         persist()
@@ -198,8 +218,76 @@ final class ConversationStore {
                 )
                 try await client.send(.userMessage(payload), correlationId: correlationId)
             } catch {
-                self.fail("Invio non riuscito: \(error.localizedDescription)")
+                // Non è partito (connessione assente o in ripresa): torna in coda e riparte da solo alla
+                // riconnessione, invece di lasciare il turno aperto per sempre.
+                self.backToQueue(out, correlationId: correlationId)
             }
+        }
+    }
+
+    private func backToQueue(_ out: Outgoing, correlationId: String) {
+        if let i = items.firstIndex(where: { $0.id == out.messageId }), case .message(var m) = items[i] {
+            m.queued = true
+            items[i] = .message(m)
+        }
+        outbox.insert(out, at: 0)
+        if activeCorrelationId == correlationId { activeCorrelationId = nil }
+        lastError = "Non sono collegato: lo mando appena torna la connessione."
+        closeTrace()
+        recomputeState()
+        persist()
+    }
+
+    /// Turno senza notizie (connessione persa a metà, server riavviato): dopo due minuti si chiude da solo, tranne
+    /// mentre aspetta una conferma dell'utente.
+    private func watchTurn(_ correlationId: String) {
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(20))
+                guard let self, self.activeCorrelationId == correlationId else { return }
+                let waiting = self.items.contains { item in
+                    if case .confirmation(let c) = item { return c.correlationId == correlationId && c.decision == nil }
+                    return false
+                }
+                if !waiting, Date().timeIntervalSince(self.turnActivityAt) > 120 {
+                    self.interruptTurn(correlationId)
+                    return
+                }
+            }
+        }
+    }
+
+    /// Chiude in locale un turno di cui il server non manderà più la fine (revisione del 16 ott 2026: dopo una
+    /// disconnessione si restava su «ci penso» per sempre e i nuovi messaggi aspettavano senza partire).
+    private func interruptTurn(_ correlationId: String) {
+        guard activeCorrelationId == correlationId else { return }
+        if let i = items.lastIndex(where: { if case .message(let m) = $0 { return m.role == .assistant && m.correlationId == correlationId }; return false }),
+           case .message(var m) = items[i] {
+            m.isStreaming = false
+            m.cancelled = true
+            items[i] = .message(m)
+        } else {
+            items.append(.message(ChatMessage(id: Ids.new(), correlationId: Ids.new(), role: .system, text: "La risposta si è persa per un problema di connessione: riprova.", createdAt: .now)))
+        }
+        activeCorrelationId = nil
+        closeTrace()
+        recomputeState()
+        persist()
+        drainOutbox()
+    }
+
+    /// Riconnessione: parte la coda; il turno aperto, se nella ripresa non arriva niente, era perso.
+    private func onReconnected() {
+        lastError = nil
+        if let corr = activeCorrelationId {
+            let since = Date.now
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                guard let self, self.activeCorrelationId == corr, self.turnActivityAt < since else { return }
+                self.interruptTurn(corr)
+            }
+        } else {
+            drainOutbox()
         }
     }
 
@@ -230,6 +318,12 @@ final class ConversationStore {
         let spokenThrough = speaker.stop()
         if let corr = activeCorrelationId {
             Task { try? await client.send(.userCancel(UserCancelPayload(targetCorrelationId: corr, spokenThroughIndex: spokenThrough))) }
+            // Se il server non conosce più quel turno non risponde: Stop deve sbloccare comunque.
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                guard let self, self.activeCorrelationId == corr, !self.speaker.isSpeaking else { return }
+                self.interruptTurn(corr)
+            }
         }
         agentState = isListening ? .listening : .idle
     }
@@ -314,7 +408,9 @@ final class ConversationStore {
     private func handle(_ signal: ProtocolClient.Signal) {
         switch signal {
         case .state(let s):
+            let wasConnected = connection == .connected
             connection = s
+            if s == .connected, !wasConnected { onReconnected() }
         case .gap(let expected, let received):
             Log.net.info("buco di sequenza: atteso \(expected) ricevuto \(received)")
         case .event(let e):
@@ -323,7 +419,10 @@ final class ConversationStore {
     }
 
     private func apply(_ e: AgentEvent) {
+        // Eventi di un'altra conversazione (risposta in corso quando si è aperta «Nuova conversazione»): fuori.
+        if e.sessionId != sessionId, e.sessionId != Self.noSession { return }
         lastSeq = max(lastSeq, e.seq)
+        if e.correlationId == activeCorrelationId { turnActivityAt = .now }
         switch e.payload {
         case .sessionStarted(let p):
             if let replayed = p.replayed, replayed > 0 { Log.net.info("ripresa: \(replayed) eventi rinviati") }

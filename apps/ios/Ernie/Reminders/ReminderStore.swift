@@ -56,8 +56,34 @@ final class ReminderStore {
     }
 
     /// Rilegge dal server (all'avvio e al ritorno in primo piano).
+    /// Uscita dall'account: niente promemoria in memoria né luoghi già scattati.
+    func clear() {
+        items = []
+        firedPlaces = []
+        armedPlaces = []
+    }
+
+    /// Le schede promemoria in chat chiedono la rilettura appena compaiono: all'apertura partivano decine di
+    /// richieste insieme (revisione del 16 ott 2026). Una alla volta, e non più di una ogni 15 secondi se non serve.
+    private var refreshing: Task<Void, Never>?
+    private var lastRefreshAt = Date.distantPast
+
+    func refreshIfStale() async {
+        if Date().timeIntervalSince(lastRefreshAt) < 15 { return }
+        await refresh()
+    }
+
     func refresh() async {
+        if let running = refreshing { return await running.value }
+        let task = Task { await self.reload() }
+        refreshing = task
+        await task.value
+        refreshing = nil
+    }
+
+    private func reload() async {
         guard let api else { return }
+        lastRefreshAt = .now
         do {
             // Una rilettura partita prima della cancellazione di un promemoria per luogo appena scattato non lo
             // deve riportare in vita (né riprogrammarne la notifica).

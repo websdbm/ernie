@@ -75,7 +75,12 @@ private extension CharacterSet {
 
 @MainActor
 enum FamilyImageCache {
-    private static var memory: [String: UIImage] = [:]
+    /// In memoria al più una trentina di foto decodificate (circa 10 MB l'una): il resto si rilegge dal disco.
+    private static let memory: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 30
+        return c
+    }()
 
     private static func fileURL(_ id: String) -> URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -84,13 +89,13 @@ enum FamilyImageCache {
     }
 
     static func image(id: String, api: ApiClient?) async -> UIImage? {
-        if let m = memory[id] { return m }
+        if let m = memory.object(forKey: id as NSString) { return m }
         if let url = fileURL(id), let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
-            memory[id] = img
+            memory.setObject(img, forKey: id as NSString)
             return img
         }
         guard let api, let data = try? await api.familyMessageImage(id: id), let img = UIImage(data: data) else { return nil }
-        memory[id] = img
+        memory.setObject(img, forKey: id as NSString)
         if let url = fileURL(id) {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? data.write(to: url, options: .atomic)
@@ -100,7 +105,7 @@ enum FamilyImageCache {
 
     /// Foto appena mandata: subito in cache, senza riscaricarla.
     static func store(_ data: Data, id: String) {
-        if let img = UIImage(data: data) { memory[id] = img }
+        if let img = UIImage(data: data) { memory.setObject(img, forKey: id as NSString) }
         if let url = fileURL(id) {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? data.write(to: url, options: .atomic)

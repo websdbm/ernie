@@ -279,7 +279,7 @@ struct RemindersCard: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: editing)
-        .task { await model.reminders.refresh() }
+        .task { await model.reminders.refreshIfStale() }
     }
 
     /// Una riga: riquadro data a sinistra, testo e dettagli; sotto canali e comandi, poi il form di modifica se aperto.
