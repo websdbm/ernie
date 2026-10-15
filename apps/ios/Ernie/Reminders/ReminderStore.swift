@@ -22,7 +22,7 @@ final class ReminderStore {
     /// Blocchi `reminders` in arrivo: aggiorna la copia, le notifiche locali e il widget.
     func apply(_ block: ContentBlock) {
         guard case .reminders(let b) = block else { return }
-        for r in b.reminders {
+        for r in b.reminders where !firedPlaces.contains(r.id) {
             if r.status == "scheduled" {
                 if let i = items.firstIndex(where: { $0.id == r.id }) { items[i] = r } else { items.append(r) }
             } else {
@@ -59,7 +59,9 @@ final class ReminderStore {
     func refresh() async {
         guard let api else { return }
         do {
-            items = try await api.reminders()
+            // Una rilettura partita prima della cancellazione di un promemoria per luogo appena scattato non lo
+            // deve riportare in vita (né riprogrammarne la notifica).
+            items = try await api.reminders().filter { !firedPlaces.contains($0.id) }
             lastError = nil
             sync()
         } catch {
@@ -213,7 +215,11 @@ final class ReminderStore {
     /// telefono) e le salva nella scheda, toglie dal server quelli scattati, programma i nuovi.
     private func syncPlaces() async {
         let center = UNUserNotificationCenter.current()
-        let mine = { self.items.filter { $0.place != nil && $0.forLabel == nil && $0.status == "scheduled" } }
+        let mine = {
+            self.items.filter {
+                $0.place != nil && $0.forLabel == nil && $0.status == "scheduled" && !self.firedPlaces.contains($0.id)
+            }
+        }
         for r in mine() {
             guard let place = r.place, !place.located, let address = place.address, let placeId = place.placeId,
                   !geocoded.contains(address) else { continue }

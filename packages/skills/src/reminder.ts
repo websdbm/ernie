@@ -188,9 +188,24 @@ const PLACE_WORDS: Record<string, readonly [string, string]> = {
   supermercato: ['al supermercato', 'dal supermercato'],
 };
 
+/** Persone e professioni: si va «dal dentista», «dalla nonna», «dai nonni», non «a dentista». */
+const PERSON_PLACE =
+  /^(?:\p{L}+ista|medico|dottore|dottoressa|parrucchiere|parrucchiera|barbiere|meccanico|veterinario|avvocato|notaio|fisioterapista|psicologo|psicologa|nonno|nonna|nonni|zio|zia|zii|mamma|papà|papa|suocera|suocero|suoceri|amico|amica|amici)$/u;
+
+/** Preposizioni per un luogo che è una persona: «dal dentista», «dallo psicologo», «dalla nonna», «dai nonni». */
+function personPreposition(label: string): string {
+  if (/^(?:nonni|zii|suoceri|amici)$/u.test(label)) return `dai ${label}`;
+  if (/a$/u.test(label) && !/ista$/u.test(label)) return `dalla ${label}`;
+  if (/^(?:s[^aeiou]|z|ps|gn)/u.test(label)) return `dallo ${label}`;
+  return `dal ${label}`;
+}
+
 /** «quando arrivi a casa», «ogni volta che esci dal lavoro» (seconda persona, per le risposte). */
 export function placePhrase(place: Pick<ReminderPlace, 'label' | 'on' | 'repeat'>): string {
-  const [to, from] = PLACE_WORDS[place.label] ?? [`a ${place.label}`, `da ${place.label}`];
+  const person = PERSON_PLACE.test(place.label) ? personPreposition(place.label) : null;
+  const [to, from] = person
+    ? [person, person]
+    : (PLACE_WORDS[place.label] ?? [`a ${place.label}`, `da ${place.label}`]);
   const when = place.repeat ? 'ogni volta che' : 'quando';
   return place.on === 'leave' ? `${when} esci ${from}` : `${when} arrivi ${to}`;
 }

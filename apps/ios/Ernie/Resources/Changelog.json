@@ -1,5 +1,30 @@
 [
   {
+    "build": 54,
+    "date": "2026-10-15",
+    "title": "Promemoria quando arrivi in un luogo",
+    "items": [
+      {
+        "icon": "mappin.and.ellipse",
+        "title": "«Ricordami … quando arrivo a casa»",
+        "detail": "I promemoria possono scattare quando arrivi in un luogo o quando lo lasci: «quando esco dal lavoro», «ogni volta che arrivo in palestra». La notifica arriva anche con l'app chiusa.",
+        "test": "Di' a Ernie «ricordami di comprare il latte quando arrivo a casa» e guarda la scheda con il luogo."
+      },
+      {
+        "icon": "house.fill",
+        "title": "Luoghi nella tua scheda",
+        "detail": "In La tua scheda › Luoghi aggiungi casa, lavoro e gli altri posti: cerchi l'indirizzo, sposti il punto sulla mappa e scegli quanto è grande la zona. Puoi anche dirlo in chat: «casa mia è in via …».",
+        "test": "Apri La tua scheda › Luoghi › Aggiungi luogo e prova la ricerca dell'indirizzo e la mappa."
+      },
+      {
+        "icon": "brain.head.profile",
+        "title": "Luoghi presi dal second brain",
+        "detail": "Se nomini un luogo che non è nella scheda («quando arrivo dal dentista»), Ernie lo cerca nelle note del second brain e lo aggiunge con il suo indirizzo. Le note della cartella Luoghi compaiono anche come suggerimenti nella scheda.",
+        "test": "Con una nota sul tuo dentista nel second brain, di' «ricordami di chiedere la ricevuta quando arrivo dal dentista»."
+      }
+    ]
+  },
+  {
     "build": 53,
     "date": "2026-10-15",
     "title": "Widget dell'orso in Home e sul blocco",

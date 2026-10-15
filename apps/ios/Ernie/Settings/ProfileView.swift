@@ -281,7 +281,9 @@ struct ProfileView: View {
     // MARK: luoghi
 
     private var visibleSuggestions: [PlaceSuggestion] {
-        suggestions.filter { s in !data.places.contains { $0.label == s.label } }
+        suggestions.filter { s in
+            !data.places.contains { $0.label == s.label || ($0.address != nil && $0.address?.lowercased() == s.address?.lowercased()) }
+        }
     }
 
     @ViewBuilder

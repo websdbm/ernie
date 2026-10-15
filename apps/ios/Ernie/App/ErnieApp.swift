@@ -34,7 +34,11 @@ struct RootView: View {
         .onOpenURL { url in model.pendingLink = AppLink(url: url) }
         .onChange(of: scenePhase) { _, phase in
             // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.
-            if phase == .active { Task { await model.processShareInbox() } }
+            if phase == .active {
+                Task { await model.processShareInbox() }
+                // Promemoria rimessi in pari: anche quelli legati a un luogo scattati mentre l'app era chiusa.
+                Task { await model.reminders.refresh() }
+            }
             // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.
             if phase == .background { WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear") }
         }

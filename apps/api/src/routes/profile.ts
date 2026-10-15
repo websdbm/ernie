@@ -164,8 +164,19 @@ export async function profileRoutes(
         opts.profiles.get(userId),
         opts.placeSuggestions(userId).catch(() => []),
       ]);
-      const taken = new Set(profile.places.map((p) => p.label));
-      return { suggestions: all.filter((s) => !taken.has(s.label)).slice(0, 10) };
+      // Già nella scheda: stessa etichetta o stesso indirizzo (es. «dentista» preso da «Studio dentistico Rossi»).
+      const fold = (s: string | undefined) =>
+        (s ?? '')
+          .toLowerCase()
+          .replace(/[\s,.]+/g, ' ')
+          .trim();
+      const labels = new Set(profile.places.map((p) => p.label));
+      const addresses = new Set(profile.places.map((p) => fold(p.address)).filter(Boolean));
+      return {
+        suggestions: all
+          .filter((s) => !labels.has(s.label) && !(s.address && addresses.has(fold(s.address))))
+          .slice(0, 10),
+      };
     });
 
     // Coordinate trovate dal telefono per un indirizzo detto in chat (geocodifica sul dispositivo).

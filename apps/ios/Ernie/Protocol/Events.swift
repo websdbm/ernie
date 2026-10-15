@@ -401,9 +401,23 @@ struct ReminderPlaceInfo: Codable, Sendable, Equatable {
     var located: Bool { lat != nil && lng != nil }
     var leaving: Bool { on == "leave" }
 
+    /// Persone e professioni (stesse regole del server): «dal dentista», «dalla nonna», «dai nonni».
+    private var personPrep: String? {
+        let persons: Set<String> = ["medico", "dottore", "dottoressa", "parrucchiere", "parrucchiera", "barbiere", "meccanico",
+                                    "veterinario", "avvocato", "notaio", "fisioterapista", "psicologo", "psicologa", "nonno", "nonna",
+                                    "nonni", "zio", "zia", "zii", "mamma", "papà", "papa", "suocera", "suocero", "suoceri",
+                                    "amico", "amica", "amici"]
+        guard label.hasSuffix("ista") || persons.contains(label) else { return nil }
+        if ["nonni", "zii", "suoceri", "amici"].contains(label) { return "dai \(label)" }
+        if label.hasSuffix("a") && !label.hasSuffix("ista") { return "dalla \(label)" }
+        if label.range(of: "^(s[^aeiou]|z|ps|gn)", options: .regularExpression) != nil { return "dallo \(label)" }
+        return "dal \(label)"
+    }
+
     /// «a casa» / «di casa», «al lavoro» / «dal lavoro»… (stesse forme del server).
     private var preps: (to: String, from: String) {
-        switch label {
+        if let p = personPrep { return (p, p) }
+        return switch label {
         case "casa": ("a casa", "di casa")
         case "lavoro": ("al lavoro", "dal lavoro")
         case "ufficio": ("in ufficio", "dall'ufficio")

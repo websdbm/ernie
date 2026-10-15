@@ -76,3 +76,23 @@ un invito come nonno o nonna può dire cosa è per lui chi lo invita (figlio, ni
 Dati: migrazione 0032 (parentele estese, `family_invites.allowed_skills`, `guardianships.relation`,
 `family_invite_preview` con le skill, `family_accept_invite` con la parentela scelta da chi accetta). API:
 `GET /v1/family/skill-profiles`, `allowedSkills` in `POST /v1/family/invites`, `relation` in `POST /v1/family/accept`.
+
+## Promemoria legati a un luogo (15 ott 2026)
+
+«Ricordami di comprare il latte quando arrivo a casa», «quando esco dal lavoro ricordami le chiavi», «ogni volta che arrivo
+in palestra…». I luoghi stanno nella scheda anagrafica (Luoghi): etichetta, indirizzo, posizione e zona (100–500 m). Si
+aggiungono dall'app (ricerca indirizzi di Mappe, punto sulla mappa, posizione attuale), dalla chat («casa mia è in via
+Roma 3, Treviso», salvato dalla skill senza modello o dal tool `place_set`) o dall'estrattore della memoria. Un luogo
+nominato e assente dalla scheda si cerca nelle note del second brain (preferite quelle di tipo «luogo») e si copia nella
+scheda con il suo indirizzo; le note della cartella Luoghi compaiono anche come suggerimenti nell'app.
+
+Il server non sa dove si trova il telefono: il promemoria è un'automazione con innesco `place` (mai eseguita dal
+worker), e il telefono programma una notifica di posizione (`UNLocationNotificationTrigger`, basta il permesso «mentre
+usi l'app») per ogni promemoria il cui luogo ha coordinate. Un indirizzo senza coordinate viene cercato sul telefono
+(MapKit) e le coordinate tornano alla scheda (`PATCH /v1/profile/places/:id`). Quando una notifica una tantum scatta, al
+ritorno in primo piano l'app toglie il promemoria dal server; quelli «ogni volta» restano. Per ora valgono solo per sé,
+non per i familiari.
+
+Dati: protocollo v1.14 (`place` nel blocco promemoria, `at` facoltativo), nessuna migrazione (luoghi nel JSON della
+scheda, innesco nel JSON dell'automazione).
+

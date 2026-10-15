@@ -756,3 +756,15 @@ describe('luogo trovato nel second brain', () => {
     expect(r.awaiting).toBeUndefined();
   });
 });
+
+describe('frasi dei luoghi che sono persone', () => {
+  it('«dal dentista», «dalla nonna», «dai nonni», «dallo psicologo»', () => {
+    expect(placePhrase({ label: 'dentista', on: 'arrive' })).toBe('quando arrivi dal dentista');
+    expect(placePhrase({ label: 'nonna', on: 'leave' })).toBe('quando esci dalla nonna');
+    expect(placePhrase({ label: 'nonni', on: 'arrive', repeat: true })).toBe(
+      'ogni volta che arrivi dai nonni',
+    );
+    expect(placePhrase({ label: 'psicologo', on: 'arrive' })).toBe('quando arrivi dallo psicologo');
+    expect(placePhrase({ label: 'casa', on: 'arrive' })).toBe('quando arrivi a casa');
+  });
+});
