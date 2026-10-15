@@ -505,8 +505,14 @@ struct FamilyMessageBlock: Codable, Sendable, Equatable, Identifiable {
     var image: Image?
     var replyTo: String?
     var at: String
+    /// v1.17: urgente («super snooze», da un genitore a un figlio): suona finché chi riceve non conferma.
+    var urgent: Bool? = nil
+    var acknowledgedAt: String? = nil
 
     var incoming: Bool { direction == "in" }
+    var isUrgent: Bool { urgent == true }
+    /// Urgente non ancora confermato.
+    var awaitingAck: Bool { isUrgent && acknowledgedAt == nil }
 }
 
 /// Fonti (v1.9): pagine dei documenti davvero usate e citate nella risposta, con il passo originale.

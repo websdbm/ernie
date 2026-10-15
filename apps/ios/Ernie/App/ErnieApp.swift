@@ -31,6 +31,10 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.credentials == nil)
+        // Messaggio urgente da confermare: copre tutto finché non si conferma di averlo letto.
+        .fullScreenCover(item: Binding(get: { model.credentials == nil ? nil : model.urgent.current }, set: { _ in })) { m in
+            UrgentMessageCover(message: m).environment(model)
+        }
         .onOpenURL { url in model.pendingLink = AppLink(url: url) }
         .onChange(of: scenePhase) { _, phase in
             // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.

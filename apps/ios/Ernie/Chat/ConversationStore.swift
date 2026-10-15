@@ -20,6 +20,8 @@ final class ConversationStore {
     var composerSuggestion: String?
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
     var onBlock: ((ContentBlock) -> Void)?
+    /// Ogni messaggio in famiglia che entra nella chat (gli urgenti vanno a tutto schermo).
+    var onFamilyMessage: ((FamilyMessageBlock) -> Void)?
     /// Turno chiuso del tutto (risposta finita e voce terminata): la conversazione continua riapre il microfono.
     var onSettled: (() -> Void)?
 
@@ -510,12 +512,21 @@ final class ConversationStore {
 
     /// Messaggio in famiglia (ricevuto o mandato): una volta sola per id, in fondo alla conversazione.
     func addFamily(_ m: FamilyMessageBlock) {
-        let known = items.contains { item in
+        FamilyMessageSync.noteSeen(m)
+        FamilyLatest(block: m)?.saveAndReload()
+        onFamilyMessage?(m)
+        let index = items.firstIndex { item in
             if case .family(let f) = item { return f.id == m.id }
             return false
         }
-        FamilyMessageSync.noteSeen(m)
-        guard !known else { return }
+        if let index {
+            // Già nella chat: si aggiorna (conferma di lettura di un urgente).
+            if case .family(let f) = items[index], f != m {
+                items[index] = .family(m)
+                persist()
+            }
+            return
+        }
         items.append(.family(m))
         persist()
         if m.incoming { FamilyMessageSync.pendingRead.insert(m.id) }

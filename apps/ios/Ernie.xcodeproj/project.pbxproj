@@ -11,6 +11,8 @@
 		022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */; };
 		064BA644DFD42668E74976B1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F71764273FF93B42753C6E1 /* Theme.swift */; };
 		072027F14DC8984C8D8DFD0E /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
+		08E6402FAF1BDEB99D25F429 /* FamilyUrgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 860E218E32A82AC0C49756A5 /* FamilyUrgent.swift */; };
+		09718FD74781734D1FEF82A6 /* ErnieNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 21F1479C50742BE5670EC030 /* ErnieNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
 		0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */; };
@@ -35,6 +37,7 @@
 		3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5625CB5A1D7224D40E394A01 /* FamilyView.swift */; };
 		3E80F1395E1FEFE00C5465F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 253D37BCE9386A221FC141AA /* Assets.xcassets */; };
 		3F6A6A60642E8F5C1DC50070 /* IconGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A873D448B86F04E46852AD68 /* IconGalleryView.swift */; };
+		49F26F0E064105E1C6D5B91D /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		4B1BCB49F3E1F3CDD98091A9 /* PlaceEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226A064044FE204795B8F540 /* PlaceEditor.swift */; };
 		4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1072AD1394544857B5BED36D /* ChatModels.swift */; };
 		4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 964663D7C194F32CAB945CD0 /* ShareModel.swift */; };
@@ -44,13 +47,17 @@
 		55F57038942759D2E611CCAE /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		561D42B9AB9454058424BA69 /* ChangeServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */; };
 		57434EFF796701A96C505E8D /* SidePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F58EACDFBE9E63C81E0664 /* SidePanel.swift */; };
+		57CA461302687C34EF0E7259 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		57CF0DA18B43EAD53CA6D4E8 /* DocumentReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E17EBA84621CA7DC748663 /* DocumentReader.swift */; };
 		5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585A161721BF631A7CFAD1DC /* ReminderStore.swift */; };
+		5B6CB32ACCE85CC8179D5861 /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
 		5FF485EC222D3B0637EA3B53 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */; };
 		620DDDD97BD030CF92AA4CEC /* Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C358554D2B07798B83D777 /* Events.swift */; };
 		6590EC7D53515010D1ECD772 /* ListeningOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */; };
+		67A5643AF64062BDE70C78F0 /* urgente.caf in Resources */ = {isa = PBXBuildFile; fileRef = 266564419C782195CD262B34 /* urgente.caf */; };
 		6A942790FE46EB1F7F086645 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */; };
 		6CAEF47782ACD38098DB1986 /* RemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B489B112C1F00ED00928355 /* RemindersView.swift */; };
+		70F576096E0CECC26049E63E /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		7C22E2BCE2575F83EA89E592 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD343071ED74C53EE49555CE /* VoiceTests.swift */; };
 		896501B81A339C83B037EE05 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98000DE6D12B55CB9A3223 /* HomeView.swift */; };
@@ -73,9 +80,11 @@
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
 		AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */; };
+		B0B554C488FBF0023B3E9475 /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
 		B11EC2252AE06CD8D2BB1294 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D05B4674194F94566A5561 /* Log.swift */; };
 		B97D35C0A50FFFDA8F981585 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA2FF63BFF2CB0C2696ED81 /* ApiClient.swift */; };
 		BBDEEC2608B0EBCBAFA19BF2 /* Ids.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124F4848C59674EF5F7A5CD8 /* Ids.swift */; };
+		BFA5F40D64C007CA647CE8EC /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
 		C325109281E152FF2237FE4E /* DocumentComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372714292F29616AAC713015 /* DocumentComposer.swift */; };
 		C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4361E7F7124014F0D94B4EA2 /* ChatView.swift */; };
 		CA3A02FCE4BA1759D6946282 /* Changelog.json in Resources */ = {isa = PBXBuildFile; fileRef = DEB47AF47D4704A70EE3D728 /* Changelog.json */; };
@@ -87,6 +96,7 @@
 		E7585979677E79EA572D5506 /* ErnieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */; };
 		E8BCEEAC1864E35B6BCB3B6B /* SkillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */; };
 		EB5E395A3DDD3D2D37145F98 /* ParentalControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82549447C64CA13CDFF851D7 /* ParentalControlView.swift */; };
+		EC3B6E8981AAE6E1125920EC /* ErnieFamilyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F03D0188054458FDFAFA7A /* ErnieFamilyWidget.swift */; };
 		EC6B4F06442C52D95B789AFF /* ReminderAlarms.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A53493E18F80754F8C51E7 /* ReminderAlarms.swift */; };
 		EDFFD3F17C1C405CAC3B387C /* TtsMarkerProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0318A65C146A510647B4A7A4 /* TtsMarkerProbe.swift */; };
 		EF922800E7B15C422336A7C1 /* TranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */; };
@@ -95,9 +105,17 @@
 		F56D204BF3A2A8D72010E6C9 /* ErnieBearWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */; };
 		F6200A90D63F4EC2AB9BB8B4 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC094642FF9A09140787A348 /* DocumentScannerView.swift */; };
 		F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58FE4A46EDE5F9A3362F7B15 /* ProtocolClient.swift */; };
+		FF4F9F966F0A30D04553D5BF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A18A5CFA61621D60BC1C9AA /* NotificationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		791D6406C13AA1B9987A1951 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C31EB1EDA452E6E8522D9ED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6C4D7441F32649A325A7B26F;
+			remoteInfo = ErnieNotifications;
+		};
 		803C6C05DD0D32D10B780040 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0C31EB1EDA452E6E8522D9ED /* Project object */;
@@ -130,6 +148,7 @@
 			files = (
 				F53E4F4B5643E6A0A2F32A94 /* ErnieWidgets.appex in Embed Foundation Extensions */,
 				92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */,
+				09718FD74781734D1FEF82A6 /* ErnieNotifications.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -141,6 +160,7 @@
 		06D05B4674194F94566A5561 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		098CFF2AFD305C74A2B897D4 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
+		0A18A5CFA61621D60BC1C9AA /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		0AA2FF63BFF2CB0C2696ED81 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
 		0C98000DE6D12B55CB9A3223 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatencyTrace.swift; sourceTree = "<group>"; };
@@ -149,14 +169,17 @@
 		11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieSummary.swift; sourceTree = "<group>"; };
 		124F4848C59674EF5F7A5CD8 /* Ids.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ids.swift; sourceTree = "<group>"; };
 		12E17EBA84621CA7DC748663 /* DocumentReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentReader.swift; sourceTree = "<group>"; };
+		13F03D0188054458FDFAFA7A /* ErnieFamilyWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieFamilyWidget.swift; sourceTree = "<group>"; };
 		18135035CD14820BAC03C2C7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		1C5F81F2C5E0230E53EE2493 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		1E5DCD4EF6F8ECD8AB8287B0 /* ErnieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieApp.swift; sourceTree = "<group>"; };
 		1FFADAD5A45BAB405D0589F4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		21F1479C50742BE5670EC030 /* ErnieNotifications.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ErnieNotifications.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		226A064044FE204795B8F540 /* PlaceEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceEditor.swift; sourceTree = "<group>"; };
 		23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsView.swift; sourceTree = "<group>"; };
 		2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainView.swift; sourceTree = "<group>"; };
 		253D37BCE9386A221FC141AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		266564419C782195CD262B34 /* urgente.caf */ = {isa = PBXFileReference; path = urgente.caf; sourceTree = "<group>"; };
 		2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ErnieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		35F871845638AB7AFEDC916C /* FamilyMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyMessages.swift; sourceTree = "<group>"; };
 		372714292F29616AAC713015 /* DocumentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentComposer.swift; sourceTree = "<group>"; };
@@ -164,6 +187,7 @@
 		3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningOverlay.swift; sourceTree = "<group>"; };
 		4361E7F7124014F0D94B4EA2 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStore.swift; sourceTree = "<group>"; };
+		46F7BFE68638A12185371716 /* ErnieNotifications.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieNotifications.entitlements; sourceTree = "<group>"; };
 		482E5F1386683C4811B2C6EE /* CardExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardExport.swift; sourceTree = "<group>"; };
 		4C582BDD29CFEE84A945F289 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeServerView.swift; sourceTree = "<group>"; };
@@ -190,6 +214,7 @@
 		81AF98DF9BED3D01480A522D /* SpeechInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechInput.swift; sourceTree = "<group>"; };
 		82549447C64CA13CDFF851D7 /* ParentalControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentalControlView.swift; sourceTree = "<group>"; };
 		85F58EACDFBE9E63C81E0664 /* SidePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidePanel.swift; sourceTree = "<group>"; };
+		860E218E32A82AC0C49756A5 /* FamilyUrgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyUrgent.swift; sourceTree = "<group>"; };
 		87E1A49827F8D4E27EBDB62D /* ErnieShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieShare.entitlements; sourceTree = "<group>"; };
 		88B910048AA5B7CF4CF88553 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		89A03E811988D4217D0911B5 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
@@ -201,6 +226,7 @@
 		96165AA5F1E4F3A76F4C85E2 /* Ernie.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Ernie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		964663D7C194F32CAB945CD0 /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
 		9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderingTests.swift; sourceTree = "<group>"; };
+		9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyLatest.swift; sourceTree = "<group>"; };
 		A873D448B86F04E46852AD68 /* IconGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconGalleryView.swift; sourceTree = "<group>"; };
 		A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		AC094642FF9A09140787A348 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
@@ -223,6 +249,7 @@
 		DEB47AF47D4704A70EE3D728 /* Changelog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Changelog.json; sourceTree = "<group>"; };
 		E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshot.swift; sourceTree = "<group>"; };
 		ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		F98569EC83462874DC99E673 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -239,6 +266,7 @@
 			isa = PBXGroup;
 			children = (
 				96165AA5F1E4F3A76F4C85E2 /* Ernie.app */,
+				21F1479C50742BE5670EC030 /* ErnieNotifications.appex */,
 				7E5156E50AC31BC18C2094CD /* ErnieShare.appex */,
 				2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */,
 				900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */,
@@ -264,6 +292,7 @@
 			children = (
 				253D37BCE9386A221FC141AA /* Assets.xcassets */,
 				6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */,
+				13F03D0188054458FDFAFA7A /* ErnieFamilyWidget.swift */,
 				11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */,
 				C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */,
 				D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */,
@@ -303,9 +332,20 @@
 			path = Ernie;
 			sourceTree = "<group>";
 		};
+		418B000C55F32B38BA1E169A /* ErnieNotifications */ = {
+			isa = PBXGroup;
+			children = (
+				46F7BFE68638A12185371716 /* ErnieNotifications.entitlements */,
+				F98569EC83462874DC99E673 /* Info.plist */,
+				0A18A5CFA61621D60BC1C9AA /* NotificationService.swift */,
+			);
+			path = ErnieNotifications;
+			sourceTree = "<group>";
+		};
 		456CAB0711BA5BF64F2E8AD8 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */,
 				DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */,
 				E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */,
 				06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */,
@@ -391,6 +431,7 @@
 			isa = PBXGroup;
 			children = (
 				35F871845638AB7AFEDC916C /* FamilyMessages.swift */,
+				860E218E32A82AC0C49756A5 /* FamilyUrgent.swift */,
 				82549447C64CA13CDFF851D7 /* ParentalControlView.swift */,
 				601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */,
 			);
@@ -401,6 +442,7 @@
 			isa = PBXGroup;
 			children = (
 				DEB47AF47D4704A70EE3D728 /* Changelog.json */,
+				266564419C782195CD262B34 /* urgente.caf */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -409,6 +451,7 @@
 			isa = PBXGroup;
 			children = (
 				39E00D3D640F9F37578B10F3 /* Ernie */,
+				418B000C55F32B38BA1E169A /* ErnieNotifications */,
 				C276C0BAEAC53420E54F0FFD /* ErnieShare */,
 				22A9BBE23A356BA082DEC987 /* ErnieTests */,
 				270D444F40A039AF982FF263 /* ErnieWidgets */,
@@ -510,6 +553,23 @@
 			productReference = 2EBDA1FB476B5F75E1CA9DAD /* ErnieTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		6C4D7441F32649A325A7B26F /* ErnieNotifications */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 39898981CB0063A6C7EB82D3 /* Build configuration list for PBXNativeTarget "ErnieNotifications" */;
+			buildPhases = (
+				15B5BD21813594FA166929E1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ErnieNotifications;
+			packageProductDependencies = (
+			);
+			productName = ErnieNotifications;
+			productReference = 21F1479C50742BE5670EC030 /* ErnieNotifications.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		8CC7C7ADDDD26B459C5BCC7A /* Ernie */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 750289069D7BAA7EB9840786 /* Build configuration list for PBXNativeTarget "Ernie" */;
@@ -523,6 +583,7 @@
 			dependencies = (
 				9FCA3399E6872D3721349F84 /* PBXTargetDependency */,
 				7A70B6CA4F0E8390EFB7A406 /* PBXTargetDependency */,
+				80ADABEC1ED62589E7B357E8 /* PBXTargetDependency */,
 			);
 			name = Ernie;
 			packageProductDependencies = (
@@ -566,6 +627,10 @@
 						DevelopmentTeam = 76X78MBPR3;
 						ProvisioningStyle = Automatic;
 					};
+					6C4D7441F32649A325A7B26F = {
+						DevelopmentTeam = 76X78MBPR3;
+						ProvisioningStyle = Automatic;
+					};
 					8CC7C7ADDDD26B459C5BCC7A = {
 						DevelopmentTeam = 76X78MBPR3;
 						ProvisioningStyle = Automatic;
@@ -593,6 +658,7 @@
 				8CC7C7ADDDD26B459C5BCC7A /* Ernie */,
 				F37FC99C560F390D372EBF73 /* ErnieWidgets */,
 				2E2D83049C6BA651CC6F13CE /* ErnieShare */,
+				6C4D7441F32649A325A7B26F /* ErnieNotifications */,
 				699B84F9AE2D3047E49E6F7F /* ErnieTests */,
 			);
 		};
@@ -613,6 +679,7 @@
 			files = (
 				2E2AE0CB0F0095940BFD3079 /* Assets.xcassets in Resources */,
 				CA3A02FCE4BA1759D6946282 /* Changelog.json in Resources */,
+				67A5643AF64062BDE70C78F0 /* urgente.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -632,14 +699,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		15B5BD21813594FA166929E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70F576096E0CECC26049E63E /* Credentials.swift in Sources */,
+				B0B554C488FBF0023B3E9475 /* FamilyLatest.swift in Sources */,
+				57CA461302687C34EF0E7259 /* Keychain.swift in Sources */,
+				FF4F9F966F0A30D04553D5BF /* NotificationService.swift in Sources */,
+				49F26F0E064105E1C6D5B91D /* ReminderSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A640A89E6949E80E58CD4CFD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				A525AF6B03592F73930C696C /* Credentials.swift in Sources */,
 				F56D204BF3A2A8D72010E6C9 /* ErnieBearWidget.swift in Sources */,
+				EC3B6E8981AAE6E1125920EC /* ErnieFamilyWidget.swift in Sources */,
 				989817D51BF87C6BE9FA8F7D /* ErnieSummary.swift in Sources */,
 				022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */,
+				BFA5F40D64C007CA647CE8EC /* FamilyLatest.swift in Sources */,
 				8993BBC876C8034C122833D9 /* Keychain.swift in Sources */,
 				2A5E6AF978D040998A7842E2 /* ReminderAlarm.swift in Sources */,
 				930D0D6E0E03B7D0567C5D29 /* ReminderSnapshot.swift in Sources */,
@@ -684,7 +765,9 @@
 				F6200A90D63F4EC2AB9BB8B4 /* DocumentScannerView.swift in Sources */,
 				E7585979677E79EA572D5506 /* ErnieApp.swift in Sources */,
 				620DDDD97BD030CF92AA4CEC /* Events.swift in Sources */,
+				5B6CB32ACCE85CC8179D5861 /* FamilyLatest.swift in Sources */,
 				A36E1423BE378890A7324F0F /* FamilyMessages.swift in Sources */,
+				08E6402FAF1BDEB99D25F429 /* FamilyUrgent.swift in Sources */,
 				3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */,
 				107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */,
 				896501B81A339C83B037EE05 /* HomeView.swift in Sources */,
@@ -742,6 +825,11 @@
 			isa = PBXTargetDependency;
 			target = 8CC7C7ADDDD26B459C5BCC7A /* Ernie */;
 			targetProxy = 803C6C05DD0D32D10B780040 /* PBXContainerItemProxy */;
+		};
+		80ADABEC1ED62589E7B357E8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6C4D7441F32649A325A7B26F /* ErnieNotifications */;
+			targetProxy = 791D6406C13AA1B9987A1951 /* PBXContainerItemProxy */;
 		};
 		9FCA3399E6872D3721349F84 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1025,6 +1113,48 @@
 			};
 			name = Release;
 		};
+		E5808548E8F79A75BEEE01BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ErnieNotifications/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.websdbm.ernie.notifications;
+				PRODUCT_NAME = ErnieNotifications;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		EEC40046F2CBACF903E9ED4E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ErnieNotifications/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.websdbm.ernie.notifications;
+				PRODUCT_NAME = ErnieNotifications;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		F90008BBBACB2E9203CCEF8B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1056,6 +1186,15 @@
 			buildConfigurations = (
 				310B8543D120D52C8787A026 /* Debug */,
 				C415B0DB26506A4EE0A488CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		39898981CB0063A6C7EB82D3 /* Build configuration list for PBXNativeTarget "ErnieNotifications" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5808548E8F79A75BEEE01BA /* Debug */,
+				EEC40046F2CBACF903E9ED4E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

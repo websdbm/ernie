@@ -101,6 +101,9 @@ struct ChatView: View {
         case .chat:
             if voice.isActive { voice.cancelListening() }
             composing = true
+        case .family:
+            if voice.isActive { voice.cancelListening() }
+            composing = false
         }
     }
 

@@ -44,6 +44,13 @@ struct FamilyView: View {
             } footer: {
                 Text("Di' «ricorda a \(links.first?.label ?? "Giorgio") di …»: il promemoria arriva sul suo telefono. Ognuno vede solo i propri dati; scorri a sinistra per scollegare.")
             }
+            if !links.isEmpty {
+                Section {
+                    FamilyNotificationStatus()
+                } header: {
+                    Text("Messaggi sulla schermata di blocco")
+                }
+            }
             if !supervised.isEmpty {
                 Section {
                     ForEach(supervised) { c in

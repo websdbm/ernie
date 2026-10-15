@@ -60,6 +60,10 @@
 	<string>La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

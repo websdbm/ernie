@@ -34,6 +34,17 @@ struct ErnieSummary: Codable, Sendable, Equatable {
         var quiet: Bool
     }
 
+    /// Ultimo messaggio in famiglia (server ≥ build 59).
+    struct Family: Codable, Sendable, Equatable {
+        var id: String
+        var direction: String
+        var label: String
+        var text: String
+        var image: Bool
+        var at: Date
+        var urgent: Bool?
+    }
+
     struct Counts: Codable, Sendable, Equatable {
         var reminders: Int
         var automations: Int
@@ -45,6 +56,7 @@ struct ErnieSummary: Codable, Sendable, Equatable {
     var automations: [Automation]
     var activity: Activity?
     var counts: Counts
+    var family: Family?
 
     private static let fileName = "widget-summary.json"
 

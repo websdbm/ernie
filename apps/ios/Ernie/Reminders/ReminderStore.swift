@@ -170,7 +170,9 @@ final class ReminderStore {
 
     /// Riallinea notifiche, sveglie e widget (anche dopo il cambio dell'opzione «come sveglia»).
     func sync() {
-        let future = items.compactMap { r -> ReminderSnapshot.Item? in
+        // Solo i miei: quelli messi a un familiare suonano sul suo telefono e non vanno nel widget come se fossero
+        // miei (segnalazione dell'utente, 15 ott 2026: «me lo segna come per me»).
+        let future = items.filter { $0.forLabel == nil }.compactMap { r -> ReminderSnapshot.Item? in
             guard let at = Self.date(r.at), at > .now else { return nil }
             // Ricorrenti settimanali e giornalieri: giorni, ora e minuti per la sveglia e la notifica ripetute.
             let rep = r.repeatInfo
@@ -188,9 +190,7 @@ final class ReminderStore {
         .sorted { $0.at < $1.at }
         ReminderSnapshot(items: future, updatedAt: .now).save()
         WidgetCenter.shared.reloadAllTimelines()
-        // Suonano solo i miei: quelli messi a un familiare suonano sul suo telefono.
-        let mine = Set(items.filter { $0.forLabel == nil }.map(\.id))
-        let own = future.filter { mine.contains($0.id) }
+        let own = future
         // In fila: all'avvio arrivano insieme la rilettura e i blocchi della chat; in parallelo chiederebbero
         // il permesso più volte e potrebbero programmare due volte la stessa sveglia.
         let previous = pendingSync

@@ -253,6 +253,7 @@ struct RemindersCard: View {
                     Text(Self.when(r) + Self.who(r))
                         .font(.caption)
                         .foregroundStyle(Theme.inkSecondary)
+                    if let other = r.forLabel { ReminderForBadge(label: other) }
                     if let event = Self.eventLine(r) {
                         Label(event, systemImage: "calendar.badge.clock")
                             .font(.caption)
@@ -352,10 +353,9 @@ struct RemindersCard: View {
         return ("Dove si trova «\(place.label)»? Dillo a Ernie o mettilo in La tua scheda › Luoghi", "questionmark.circle", true)
     }
 
-    /// Famiglia: «· per Giorgio» (messo da me a lui) o «· da papà» (messo a me).
+    /// Famiglia: «· da papà» (messo a me). Quelli messi da me a un familiare hanno il loro riquadro (ReminderForBadge).
     static func who(_ r: ReminderItem) -> String {
-        if let f = r.forLabel { return " · per \(f)" }
-        if let f = r.fromLabel { return " · da \(f)" }
+        if let f = r.fromLabel, r.forLabel == nil { return " · da \(f)" }
         return ""
     }
 
@@ -1726,5 +1726,21 @@ struct ShoppingListsCard: View {
         if l.bought > 0 { parts.append("\(l.bought) \(l.bought == 1 ? "presa" : "prese")") }
         if l.archived { parts.append("archiviata") }
         return parts.joined(separator: " · ")
+    }
+}
+
+
+/// Promemoria messo da me a un familiare: si vede subito che non è mio e che suona sul suo telefono.
+struct ReminderForBadge: View {
+    let label: String
+
+    var body: some View {
+        Label("Per \(label) · suona sul suo telefono", systemImage: "person.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(SkillTint.reminders.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(SkillTint.reminders.color.opacity(0.12), in: Capsule())
+            .accessibilityLabel("Promemoria per \(label), suona sul suo telefono")
     }
 }

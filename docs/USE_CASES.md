@@ -118,3 +118,22 @@ Dati: migrazione 0033 (`family_messages`, foto in bytea, RLS: mittente e destina
 una persona collegata, il destinatario segna la lettura). API: `POST/GET /v1/family/messages`,
 `GET /v1/family/messages/:id/image`, `POST /v1/family/messages/read`. Protocollo v1.16 (blocco `family_message`).
 
+**Ben in vista sulla schermata di blocco** (build 59). La notifica di un messaggio è urgente (`interruption-level:
+time-sensitive`: resta in cima al blocco e passa i Full immersion, se la persona lo permette) e ha la categoria
+`FAMILY_MESSAGE` con «Rispondi» scritto dalla notifica, senza aprire l'app. L'estensione `ErnieNotifications` la
+trasforma in notifica di comunicazione (INSendMessageIntent: nome di chi scrive e iniziale su un cerchio sabbia, come in
+Messaggi), allega la foto scaricata con le credenziali del Keychain condiviso e aggiorna il widget «Messaggi in
+famiglia» (schermata di blocco rettangolare e in linea, Home piccolo e medio: l'ultimo messaggio mandato o ricevuto).
+In Impostazioni › Famiglia l'app mostra se le notifiche arrivano sul blocco e se le urgenti sono permesse.
+
+**Super snooze** (build 59, solo da un genitore a un figlio: relazione «figlio» nel collegamento di chi scrive, anche
+nella policy RLS). Dal foglio di composizione (interruttore «Urgente») o a voce: «manda un messaggio urgente a Giorgio:
+…», «super snooze a Giorgio: …», «urgente: scrivi a Giorgio che …»; il tool del modello ha `urgent`. Sul telefono del
+figlio la notifica «🚨 Urgente da papà» con un suono d'allarme si ripete (stessa `apns-collapse-id`, quindi una sola
+in elenco) ogni 30 secondi per 15 minuti, poi ogni minuto fino a un'ora; l'app si apre su una schermata rossa con
+vibrazione continua che si chiude solo dopo il tempo di lettura tenendo premuto «Ho letto» (`POST
+/v1/family/messages/:id/ack`). Il genitore vede «In attesa di conferma» e poi «Letto e confermato alle …», con una
+notifica; dopo un'ora senza conferma smette e glielo dice. Dati: migrazione 0034 (`urgent`, `acknowledged_at`,
+contatori delle ripetizioni; il destinatario aggiorna solo lettura e conferma; funzioni `family_urgent_due` e
+`family_urgent_expired` per il giro ogni 10 secondi del server). Protocollo v1.17.
+

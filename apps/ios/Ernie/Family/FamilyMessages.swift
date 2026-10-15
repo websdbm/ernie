@@ -1,6 +1,8 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import UserNotifications
+import WidgetKit
 
 // MARK: - API (REST /v1/family/messages, server ≥ 0033)
 
@@ -16,15 +18,18 @@ extension ApiClient {
         return out.messages
     }
 
-    func sendFamilyMessage(to: String, text: String, image: (data: Data, width: Int, height: Int)?, replyTo: String?) async throws -> FamilyMessageBlock {
+    func sendFamilyMessage(
+        to: String, text: String, image: (data: Data, width: Int, height: Int)?, replyTo: String?, urgent: Bool = false
+    ) async throws -> FamilyMessageBlock {
         struct Img: Encodable { var mime: String; var data: String; var width: Int; var height: Int }
-        struct Body: Encodable { var to: String; var text: String; var replyTo: String?; var image: Img? }
+        struct Body: Encodable { var to: String; var text: String; var replyTo: String?; var image: Img?; var urgent: Bool? }
         struct Out: Decodable { var message: FamilyMessageBlock }
         let body = Body(
             to: to,
             text: text,
             replyTo: replyTo,
-            image: image.map { Img(mime: "image/jpeg", data: $0.data.base64EncodedString(), width: $0.width, height: $0.height) }
+            image: image.map { Img(mime: "image/jpeg", data: $0.data.base64EncodedString(), width: $0.width, height: $0.height) },
+            urgent: urgent ? true : nil
         )
         let out: Out = try await request("POST", "/v1/family/messages", body: body)
         return out.message
@@ -41,6 +46,14 @@ extension ApiClient {
             throw ApiError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, code: "image", message: "foto non disponibile")
         }
         return data
+    }
+
+    /// Conferma di lettura di un messaggio urgente (v1.17): il telefono smette di suonare, chi l'ha mandato lo sa.
+    func acknowledgeFamilyMessage(id: String) async throws -> FamilyMessageBlock {
+        struct Empty: Encodable {}
+        struct Out: Decodable { var message: FamilyMessageBlock }
+        let out: Out = try await request("POST", "/v1/family/messages/\(id)/ack", body: Empty())
+        return out.message
     }
 
     func markFamilyMessagesRead(ids: [String]) async throws {
@@ -163,16 +176,21 @@ struct FamilyMessageBubble: View {
     @State private var replying = false
 
     private var tint: SkillTint { message.incoming ? .shopping : .sentinels }
+    private var urgentRed: Color { Theme.dynamic(light: 0xDC2626, dark: 0xF87171) }
 
     var body: some View {
         HStack {
             if !message.incoming { Spacer(minLength: 40) }
             VStack(alignment: message.incoming ? .leading : .trailing, spacing: 8) {
-                EnvelopeTag(
-                    text: message.incoming ? "da \(message.label)" : "a \(message.label)",
-                    tint: tint.color,
-                    fill: tint.soft
-                )
+                HStack(spacing: 6) {
+                    if !message.incoming, message.isUrgent { urgentTag }
+                    EnvelopeTag(
+                        text: message.incoming ? "da \(message.label)" : "a \(message.label)",
+                        tint: tint.color,
+                        fill: tint.soft
+                    )
+                    if message.incoming, message.isUrgent { urgentTag }
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     if message.image != nil { photo }
                     if !message.text.isEmpty {
@@ -180,6 +198,7 @@ struct FamilyMessageBubble: View {
                             .foregroundStyle(Theme.ink)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if message.isUrgent { urgentStatus }
                     HStack(spacing: 10) {
                         Text(Self.time(message.at))
                             .font(.caption2)
@@ -213,7 +232,7 @@ struct FamilyMessageBubble: View {
                         topTrailingRadius: message.incoming ? 20 : 6,
                         style: .continuous
                     )
-                    .strokeBorder(tint.color.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(message.awaitingAck ? urgentRed : tint.color.opacity(0.3), lineWidth: message.awaitingAck ? 2 : 1)
                 )
             }
             if message.incoming { Spacer(minLength: 40) }
@@ -227,6 +246,39 @@ struct FamilyMessageBubble: View {
         }
         .fullScreenCover(isPresented: $showImage) {
             FamilyImageViewer(image: image) { showImage = false }
+        }
+    }
+
+    private var urgentTag: some View {
+        Label("URGENTE", systemImage: "exclamationmark.triangle.fill")
+            .font(.caption2.weight(.heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(urgentRed.opacity(message.awaitingAck ? 1 : 0.55), in: Capsule())
+    }
+
+    /// Stato della conferma: per chi l'ha mandato «in attesa» / «letto alle …»; per chi lo riceve il pulsante.
+    @ViewBuilder
+    private var urgentStatus: some View {
+        if let ack = message.acknowledgedAt {
+            Label(message.incoming ? "Hai confermato alle \(Self.time(ack))" : "Letto e confermato alle \(Self.time(ack))",
+                  systemImage: "checkmark.seal.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SkillTint.recipes.color)
+        } else if message.incoming {
+            Button { model.urgent.show(message) } label: {
+                Label("Conferma di averlo letto", systemImage: "hand.tap.fill")
+                    .font(.caption.weight(.bold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(urgentRed)
+            .controlSize(.small)
+        } else {
+            Label("In attesa di conferma: il suo telefono continua a suonare", systemImage: "bell.and.waves.left.and.right.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(urgentRed)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -296,6 +348,8 @@ struct FamilyComposerSheet: View {
     struct Recipient: Hashable, Identifiable {
         var userId: String
         var label: String
+        /// Cosa è per me («figlio», «genitore»…): gli urgenti solo ai figli.
+        var relation: String? = nil
         var id: String { userId }
     }
 
@@ -312,7 +366,13 @@ struct FamilyComposerSheet: View {
     @State private var showCamera = false
     @State private var sending = false
     @State private var error: String?
+    @State private var urgent = false
+    /// Parentela del destinatario scelto (anche per le risposte, dal collegamento).
+    @State private var relations: [String: String] = [:]
     @FocusState private var focused: Bool
+
+    /// «Super snooze» solo da un genitore a un figlio (richiesta dell'utente, 15 ott 2026).
+    private var canUrgent: Bool { to.map { relations[$0.userId] == "figlio" } ?? false }
 
     private var canSend: Bool {
         to != nil && !sending && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || picked != nil)
@@ -361,6 +421,20 @@ struct FamilyComposerSheet: View {
                 } footer: {
                     Text("Arriva nella sua chat di Ernie con una notifica, e può risponderti.")
                 }
+                if canUrgent {
+                    Section {
+                        Toggle(isOn: $urgent) {
+                            Label {
+                                Text("Urgente (super snooze)")
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                            }
+                        }
+                        .tint(.red)
+                    } footer: {
+                        Text("Il suo telefono continua a suonare e vibrare finché non apre il messaggio e conferma di averlo letto. Ti avviso quando lo fa.")
+                    }
+                }
                 if let error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
             }
             .navigationTitle(replyTo == nil ? "Messaggio" : "Rispondi")
@@ -390,9 +464,11 @@ struct FamilyComposerSheet: View {
     }
 
     private func load() async {
-        if let preset { to = preset; focused = true; return }
+        if let preset { to = preset; focused = true }
         guard let api = model.api, let family = try? await api.family() else { return }
-        recipients = family.links.map { Recipient(userId: $0.otherUserId, label: $0.label) }
+        relations = Dictionary(family.links.map { ($0.otherUserId, $0.relation) }, uniquingKeysWith: { a, _ in a })
+        guard preset == nil else { return }
+        recipients = family.links.map { Recipient(userId: $0.otherUserId, label: $0.label, relation: $0.relation) }
         if recipients.count == 1 { to = recipients.first }
         focused = true
     }
@@ -407,7 +483,8 @@ struct FamilyComposerSheet: View {
                 to: to.userId,
                 text: text.trimmingCharacters(in: .whitespacesAndNewlines),
                 image: prepared,
-                replyTo: replyTo
+                replyTo: replyTo,
+                urgent: urgent && canUrgent
             )
             if let prepared { FamilyImageCache.store(prepared.data, id: sent.id) }
             model.conversation?.addFamily(sent)
@@ -470,5 +547,66 @@ enum FamilyMessageSync {
         for m in list { conversation.addFamily(m) }
         let ids = Array(pendingRead)
         if !ids.isEmpty, (try? await api.markFamilyMessagesRead(ids: ids)) != nil { pendingRead.subtract(ids) }
+    }
+}
+
+// MARK: - widget «Messaggi» e permessi delle notifiche
+
+extension FamilyLatest {
+    init?(block m: FamilyMessageBlock) {
+        guard let at = FamilyLatest.date(m.at) else { return nil }
+        self.init(id: m.id, direction: m.direction, label: m.label, text: m.text, image: m.image != nil, at: at,
+                  urgent: m.awaitingAck ? true : nil)
+    }
+
+    /// Aggiorna il widget della schermata di blocco se è il messaggio più recente.
+    func saveAndReload() {
+        if saveIfNewer() { WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind) }
+    }
+}
+
+/// Come arrivano i messaggi sul blocco: dipende dai permessi delle notifiche, che decide la persona nelle
+/// Impostazioni di iOS. In Famiglia si mostra cosa manca, con il collegamento alle impostazioni di Ernie.
+struct FamilyNotificationStatus: View {
+    @State private var settings: (allowed: Bool, lockScreen: Bool, timeSensitive: Bool)?
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        Group {
+            if let s = settings {
+                if s.allowed && s.lockScreen {
+                    Label(s.timeSensitive
+                          ? "I messaggi arrivano sulla schermata di blocco, in evidenza."
+                          : "I messaggi arrivano sulla schermata di blocco. Attiva «Notifiche urgenti» per tenerli in cima anche con Full immersion.",
+                          systemImage: "lock.iphone")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if !s.timeSensitive { settingsButton }
+                } else {
+                    Label(s.allowed
+                          ? "Le notifiche di Ernie non compaiono sulla schermata di blocco: i messaggi dei familiari si vedono solo aprendo l'app."
+                          : "Le notifiche di Ernie sono spente: i messaggi dei familiari si vedono solo aprendo l'app.",
+                          systemImage: "bell.slash")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                    settingsButton
+                }
+            }
+        }
+        .task { await load() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await load() } } }
+    }
+
+    private var settingsButton: some View {
+        Button("Apri le impostazioni delle notifiche") {
+            if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+        }
+        .font(.footnote)
+    }
+
+    private func load() async {
+        let s = await UNUserNotificationCenter.current().notificationSettings()
+        let allowed = s.authorizationStatus == .authorized || s.authorizationStatus == .provisional
+        settings = (allowed, s.lockScreenSetting == .enabled, s.timeSensitiveSetting == .enabled)
     }
 }

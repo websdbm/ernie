@@ -5,13 +5,15 @@ import UserNotifications
 
 /// Azioni dei widget dell'orso: «Parla» apre l'app in ascolto, «Scrivi» apre la tastiera della chat.
 enum AppLink: Equatable {
-    case voice, chat
+    case voice, chat, family
 
     init?(url: URL) {
         guard url.scheme == "ernie" else { return nil }
         switch url.host() {
         case "voice": self = .voice
         case "chat": self = .chat
+        // Widget «Messaggi»: la conversazione, dove c'è il fumetto con «Rispondi».
+        case "family": self = .family
         default: return nil
         }
     }
@@ -27,6 +29,8 @@ final class AppModel {
     private(set) var conversation: ConversationStore?
     private(set) var voice: VoiceController?
     let inbox = InboxStore()
+    /// Messaggi urgenti da confermare («super snooze»): a tutto schermo finché non si conferma.
+    let urgent = FamilyUrgentStore()
     let speaker = Speaker()
     /// Allegato in preparazione (skill «Documenti»): lettura sul telefono e caricamento del testo.
     let documents = DocumentComposer()
@@ -150,8 +154,14 @@ final class AppModel {
     /// per volta entra nel documento della barra di scrittura, con la richiesta già pronta da inviare.
     /// Gli elementi non riusciti restano in coda per la prossima apertura.
     /// Messaggi in famiglia nuovi dal server (avvio, primo piano, notifica).
-    func syncFamilyMessages() async {
+    /// `urgentId`: notifica di un urgente; se la sincronizzazione non lo porta (già visto in chat), lo si cerca.
+    func syncFamilyMessages(urgentId: String? = nil) async {
         await FamilyMessageSync.sync(api: api, conversation: conversation)
+        if let urgentId, !urgent.pending.contains(where: { $0.id == urgentId }),
+           let recent = try? await api?.familyMessages(since: nil, limit: 30),
+           let m = recent.first(where: { $0.id == urgentId }) {
+            urgent.note(m)
+        }
     }
 
     func processShareInbox() async {
@@ -231,6 +241,7 @@ final class AppModel {
         if profile == nil { profile = try? await api.me() }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
+        store.onFamilyMessage = { [urgent] m in urgent.note(m) }
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
         documents.configure(api: api)

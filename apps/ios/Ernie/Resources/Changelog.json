@@ -1,5 +1,42 @@
 [
   {
+    "build": 59,
+    "date": "2026-10-15",
+    "title": "Messaggi ben in vista e super snooze",
+    "items": [
+      {
+        "icon": "lock.iphone",
+        "title": "Messaggi in evidenza sulla schermata di blocco",
+        "detail": "I messaggi dei familiari arrivano come quelli di Messaggi: nome e iniziale di chi scrive in grande, la foto in anteprima, in cima al blocco come notifica urgente (passano anche con Full immersion, se lo permetti). In Impostazioni › Famiglia vedi se i permessi sono a posto.",
+        "test": "Blocca il telefono e fatti mandare un messaggio da un familiare: controlla nome, iniziale e foto."
+      },
+      {
+        "icon": "arrowshape.turn.up.left.fill",
+        "title": "Rispondi dalla notifica",
+        "detail": "Tieni premuta la notifica di un messaggio e scegli «Rispondi»: la risposta parte senza aprire l'app.",
+        "test": "Rispondi a un messaggio direttamente dalla notifica e controlla che arrivi."
+      },
+      {
+        "icon": "exclamationmark.triangle.fill",
+        "title": "Super snooze: messaggi urgenti ai figli",
+        "detail": "Solo dai genitori ai figli. Nel «+» › «Messaggio a un familiare» attiva «Urgente», oppure di' «manda un messaggio urgente a Giorgio: …». Il suo telefono suona e vibra ogni 30 secondi, e l'app si apre su una schermata rossa che si chiude solo tenendo premuto «Ho letto». Tu vedi «Letto e confermato alle …» e ricevi una notifica; se dopo un'ora non ha confermato, te lo dice.",
+        "test": "Manda un urgente a tuo figlio: il suo telefono deve continuare a suonare finché non conferma."
+      },
+      {
+        "icon": "envelope.badge.fill",
+        "title": "Widget «Messaggi in famiglia»",
+        "detail": "Sulla schermata di blocco o in Home: l'ultimo messaggio mandato o ricevuto, «da papà» / «a Giorgio», in rosso se è un urgente da confermare.",
+        "test": "Aggiungi il widget alla schermata di blocco e mandati un messaggio."
+      },
+      {
+        "icon": "person.fill",
+        "title": "Promemoria per i familiari a parte",
+        "detail": "Quelli che metti a un familiare non finiscono più nel tuo widget dei promemoria e nell'elenco stanno in «Per i familiari», con «Per Giorgio · suona sul suo telefono».",
+        "test": "Di' «ricorda a Giorgio di … domani alle 7» e controlla l'elenco e il widget."
+      }
+    ]
+  },
+  {
     "build": 58,
     "date": "2026-10-15",
     "title": "Messaggi in famiglia",

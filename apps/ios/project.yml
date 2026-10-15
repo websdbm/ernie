@@ -30,6 +30,8 @@ targets:
         embed: true
       - target: ErnieShare
         embed: true
+      - target: ErnieNotifications
+        embed: true
     info:
       path: Ernie/Info.plist
       properties:
@@ -51,6 +53,8 @@ targets:
         NSSupportsLiveActivities: true
         NSLocalNetworkUsageDescription: "Per raggiungere il tuo server Ernie quando è sulla stessa rete Wi-Fi."
         UIBackgroundModes: [remote-notification]
+        # Notifiche di comunicazione dei messaggi in famiglia (nome e iniziali di chi scrive, come Messaggi).
+        NSUserActivityTypes: [INSendMessageIntent]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         ITSAppUsesNonExemptEncryption: false
@@ -66,6 +70,10 @@ targets:
         com.apple.security.application-groups: [group.com.websdbm.ernie]
         # Credenziali nel Keychain condiviso con il foglio «Condividi con Ernie» (vedi Keychain.swift).
         keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
+        # Messaggi in famiglia ben evidenti sul blocco: urgenti (restano in cima, passano i Full immersion) e
+        # notifiche di comunicazione (richiesta dell'utente, 15 ott 2026).
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.developer.usernotifications.communication: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie
@@ -149,6 +157,41 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
+  ErnieNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ErnieNotifications
+      # Foto del messaggio con le credenziali del Keychain condiviso; ultimo messaggio per il widget nel gruppo app.
+      - path: Ernie/Core/Keychain.swift
+      - path: Ernie/Core/Credentials.swift
+      - path: Shared/ReminderSnapshot.swift
+      - path: Shared/FamilyLatest.swift
+    info:
+      path: ErnieNotifications/Info.plist
+      properties:
+        CFBundleDisplayName: Notifiche di Ernie
+        CFBundleDevelopmentRegion: it
+        CFBundleLocalizations: [it]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: ErnieNotifications/ErnieNotifications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.websdbm.ernie]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.notifications
+        PRODUCT_NAME: ErnieNotifications
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
   ErnieTests:
     type: bundle.unit-test
     platform: iOS
@@ -167,6 +210,7 @@ schemes:
         Ernie: all
         ErnieWidgets: all
         ErnieShare: all
+        ErnieNotifications: all
         ErnieTests: [test]
     run:
       config: Debug
