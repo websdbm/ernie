@@ -898,9 +898,25 @@ export function parseAppointment(input: string, now: Date, tz: string): Reminder
   const text = ` ${normalizeHourWords(input.replace(/[‘’´`]/gu, "'"))
     .replace(/\s+/g, ' ')
     .trim()} `;
-  const trig = LEAD_TRIGGER.exec(text);
-  if (!trig) return null;
-  const after = text.slice(trig.index + trig[0].length);
+  // Il preavviso può stare dopo un primo «ricordami»: «Ricordami domani di uscire alle 17. Ricordamelo 10 minuti
+  // prima», «ricordami alle 18 di chiamare Luca, avvisami 5 minuti prima» (segnalato il 15 ott 2026). Si prova
+  // ogni clausola, nell'ordine: vale la prima che dà un appuntamento con il suo preavviso.
+  for (const trig of text.matchAll(new RegExp(LEAD_TRIGGER.source, 'giu'))) {
+    const plan = appointmentAt(text, trig.index + trig[0].length, trig.index, now, tz);
+    if (plan) return plan;
+  }
+  return null;
+}
+
+/** Appuntamento con il preavviso che comincia a `leadStart` (dopo «avvisami»); la clausola inizia a `trigStart`. */
+function appointmentAt(
+  text: string,
+  leadStart: number,
+  trigStart: number,
+  now: Date,
+  tz: string,
+): ReminderPlan | null {
+  const after = text.slice(leadStart);
   let leadLen = 0;
   let relMs: number | null = null;
   let relAssumed: string | null = null;
@@ -938,9 +954,12 @@ export function parseAppointment(input: string, now: Date, tz: string): Reminder
     abs = { hour: Number(a.groups.h), minute, ap: a.groups.ap?.toLowerCase() ?? '' };
     if (abs.hour > 23 || minute > 59) return null;
   }
-  const eventPart = `${text.slice(0, trig.index)} ${after.slice(leadLen)}`
-    .replace(/[,;]+/g, ' ')
+  const eventPart = `${text.slice(0, trigStart)} ${after.slice(leadLen)}`
+    .replace(/[,;.!?]+/g, ' ')
     .replace(/\s+/g, ' ')
+    .trim()
+    // Il primo «ricordami (di)» non fa parte dell'appuntamento.
+    .replace(/(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?)(?=\s|$)\s*(?:di\s)?/iu, ' ')
     .trim()
     .replace(/^(?:che|perché|perche|e|ed|ma|poi|allora)\s+/iu, '')
     .trim();
@@ -1163,6 +1182,22 @@ export function toRemindersBlock(
   };
 }
 
+/** Il piano a parole, per il controllo di Jev: chi, cosa, quando (con preavviso e ricorrenza). */
+export function describeReminderPlan(p: ReminderPlan, tz: string, now = new Date()): string | null {
+  const forWho = (who?: string) => (who ? `per ${who}` : 'per l’utente');
+  if (p.op === 'create') {
+    const kind = p.alarm ? 'sveglia' : 'promemoria';
+    const event = p.eventAt
+      ? `, preavviso di un appuntamento ${formatWhen(p.eventAt, tz, now)}`
+      : '';
+    const repeat = p.repeat ? `, ${repeatLabel(p.repeat)}` : '';
+    return `${kind} «${p.text}» ${forWho(p.who)} ${formatWhen(p.at, tz, now)}${event}${repeat}`;
+  }
+  if (p.op === 'create_place')
+    return `promemoria «${p.text}» per l’utente quando ${p.place.on === 'leave' ? 'esce da' : 'arriva a'} «${p.place.label}»`;
+  return null;
+}
+
 export function createReminderSkill(
   store: ReminderStore | null,
   timezone = 'Europe/Rome',
@@ -1186,6 +1221,7 @@ export function createReminderSkill(
     ],
     match: (text) => parseReminderCommand(text, new Date(), timezone),
     followUp: (awaiting, text) => reminderFollowUp(awaiting, text, new Date(), timezone),
+    describe: (plan) => describeReminderPlan(plan as ReminderPlan, timezone),
     run: async (plan, ctx): Promise<SkillReply> => {
       const p = plan as ReminderPlan;
       switch (p.op) {

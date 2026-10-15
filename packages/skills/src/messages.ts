@@ -138,6 +138,12 @@ export function createMessagesSkill(sender: FamilyMessageSender | null): Determi
     ],
     match: (text) => parseMessageCommand(text),
     followUp: (awaiting, text) => messageFollowUp(awaiting, text),
+    describe: (plan) => {
+      const p = plan as MessagePlan;
+      return p.op === 'send'
+        ? `messaggio${p.urgent ? ' urgente (suona finché non conferma)' : ''} a «${p.who}» con il testo «${p.text}»`
+        : null;
+    },
     run: async (plan, ctx): Promise<SkillReply> => {
       const p = plan as MessagePlan;
       if (p.op === 'ask_text')

@@ -499,6 +499,21 @@ describe('appuntamento con preavviso (richiesta del 15 ott 2026)', () => {
     expect(plan('il 20 ottobre alle 11 ho la revisione, ricordamelo il giorno prima').at).toBe(
       '2026-10-19 11:00',
     );
+    // Segnalato dall'utente il 15 ott 2026: «ricordami» in testa e il preavviso in una seconda frase.
+    expect(
+      plan(
+        'Ricordami domani di uscire alle 17:00 per andare a prendere il treno. ricordamelo 10 minuti prima.',
+      ),
+    ).toMatchObject({
+      text: 'uscire per andare a prendere il treno',
+      at: '2026-10-12 16:50',
+      event: '2026-10-12 17:00',
+    });
+    expect(plan('ricordami alle 18 di chiamare Luca, avvisami 5 minuti prima')).toMatchObject({
+      text: 'chiamare Luca',
+      at: '2026-10-11 17:55',
+      event: '2026-10-11 18:00',
+    });
     const bare = plan('ho il dentista alle 19, avvisami prima');
     expect(bare.at).toBe('2026-10-11 18:00');
     expect(bare.assumed.join(' ')).toContain("un'ora di preavviso");
@@ -915,5 +930,24 @@ describe('«ricordagli» e «domattina» (segnalati il 15 ott 2026)', () => {
     const q = parseReminderCommand('ricordami domattina di comprare il pane', NOW, TZ);
     if (q?.op !== 'create') throw new Error('atteso create');
     expect(localParts(q.at, TZ).hour).toBe(9);
+  });
+});
+
+describe('descrizione del piano per il controllo di Jev', () => {
+  it('chi, cosa, quando, preavviso; niente per elenchi e domande', async () => {
+    const { describeReminderPlan } = await import('./reminder.js');
+    const p = parseReminderCommand(
+      'Ricordami domani di uscire alle 17:00 per andare a prendere il treno. ricordamelo 10 minuti prima.',
+      NOW,
+      TZ,
+    );
+    expect(describeReminderPlan(p as never, TZ, NOW)).toBe(
+      'promemoria «uscire per andare a prendere il treno» per l’utente domani alle 16:50, preavviso di un appuntamento domani alle 17:00',
+    );
+    expect(describeReminderPlan({ op: 'list' }, TZ, NOW)).toBeNull();
+    const other = parseReminderCommand('ricorda a Giorgio di chiamarmi domani alle 17', NOW, TZ);
+    expect(describeReminderPlan(other as never, TZ, NOW)).toMatch(
+      /^promemoria «.+» per Giorgio domani alle 17:00$/,
+    );
   });
 });

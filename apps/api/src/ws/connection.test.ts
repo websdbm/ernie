@@ -709,6 +709,69 @@ describe('ClientConnection: domanda in sospeso di una skill', () => {
   });
 });
 
+describe('ClientConnection: controllo dei comandi rapidi (Jev)', () => {
+  it('comando non fedele alla frase → niente comando rapido, decide il modello con la nota; fedele → si esegue', async () => {
+    const { SkillRegistry, createReminderSkill } = await import('@ernie/skills');
+    const created: Array<{ text: string }> = [];
+    const store = {
+      create: async (_u: string, r: { text: string; at: Date }) => {
+        created.push(r);
+        return { id: 'r1', text: r.text, at: r.at, status: 'scheduled' as const };
+      },
+      list: async () => [],
+      remove: async () => false,
+      update: async () => null,
+    };
+    const registry = new SkillRegistry();
+    registry.register(createReminderSkill(store as never));
+    const contexts: Array<string | undefined> = [];
+    const checks: Array<{ planned: string }> = [];
+    let faithful = 0.15;
+    const record = vi.fn(async () => {});
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps({
+        skills: { registryFor: async () => registry },
+        skillCheck: {
+          run: async (input) => {
+            checks.push(input);
+            return { faithful, costUsd: 0.00003, latencyMs: 400 };
+          },
+          threshold: 0.5,
+          record,
+        },
+        runTurn: async (input: TurnInput) => {
+          contexts.push(input.memoryContext);
+          await input.emit('assistant.started', { route: 'llm' });
+          await input.emit('assistant.completed', { finishReason: 'stop' });
+        },
+      }),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(
+      c.message('ricordami alle 18 di chiamare Luca e anche di comprare il pane alle 19'),
+    );
+    await tick();
+    expect(checks[0]?.planned).toMatch(/^promemoria «.+» per l’utente /);
+    expect(created).toHaveLength(0);
+    expect(contexts[0]).toContain('Il comando rapido della funzione «ricordami» aveva capito');
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: 'skill',
+        skill: expect.objectContaining({ faithful: 0.15 }),
+      }),
+    );
+    faithful = 0.92;
+    await conn.handleRaw(c.message('ricordami alle 18 di chiamare Luca'));
+    await tick();
+    expect(created.map((r) => r.text)).toEqual(['chiamare Luca']);
+    expect(contexts).toHaveLength(1);
+  });
+});
+
 describe('ClientConnection: routing', () => {
   it('un comando è risolto senza Jev né modello e viene registrato come deterministico', async () => {
     const st = fakeStore();

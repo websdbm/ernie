@@ -116,11 +116,13 @@ export const Thresholds = z.object({
   /** Sotto questa confidenza `model_class` ricade su `standard`. */
   classConfidence: z.number().min(0).max(1),
   /** Chiarimento interno (16 ott 2026): sopra questa `ambiguity` scatta. Da tarare con interpretation_checks. */
-  ambiguity: z.number().min(0).max(1).default(0.6),
+  ambiguity: z.number().min(0).max(1).default(0.82),
   /** Sopra questa `correction` il messaggio è trattato come correzione della risposta precedente. */
-  correction: z.number().min(0).max(1).default(0.6),
+  correction: z.number().min(0).max(1).default(0.8),
   /** Una risposta di Jev al chiarimento conta solo con almeno questa confidenza. */
   clarifyConfidence: z.number().min(0).max(1).default(0.7),
+  /** Comando rapido di una skill: sotto questa probabilità di essere fedele alla frase, decide il modello. */
+  skillFaithful: z.number().min(0).max(1).default(0.6),
 });
 export type Thresholds = z.infer<typeof Thresholds>;
 
@@ -130,7 +132,10 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   risk: 0.45,
   routeConfidence: 0.5,
   classConfidence: 0.5,
-  ambiguity: 0.6,
-  correction: 0.6,
+  // Tarate il 15 ott 2026 su 25 esempi con Jev vero (ambigui 0,85–0,93 contro chiari ≤ 0,80; correzioni 0,97
+  // contro ≤ 0,68; comandi rapidi fedeli ≥ 0,83 contro incompleti ≤ 0,46).
+  ambiguity: 0.82,
+  correction: 0.8,
   clarifyConfidence: 0.7,
+  skillFaithful: 0.6,
 };

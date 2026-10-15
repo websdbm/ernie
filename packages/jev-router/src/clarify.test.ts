@@ -5,6 +5,7 @@ import {
   clarifyQuestions,
   clarifyState,
   createClarifier,
+  createSkillCheck,
   type Questioner,
 } from './clarify.js';
 import { createMockJevClient } from './client.js';
@@ -104,5 +105,29 @@ describe('chiarimento interno', () => {
     await expect(
       createClarifier({ jev: slow, questioner, minConfidence: 0.7, timeoutMs: 30 }).clarify(input),
     ).rejects.toThrow();
+  });
+
+  it('controllo dei comandi rapidi: Jev dice quanto il piano è fedele alla frase', async () => {
+    let seen: Record<string, unknown> = {};
+    const jev = createMockJevClient((req) => {
+      seen = req.state;
+      return { faithful: { type: 'noul', noul: 0.12 } };
+    });
+    const r = await createSkillCheck({ jev }).check({
+      message: 'Ricordami domani di uscire alle 17 per il treno. Ricordamelo 10 minuti prima.',
+      planned: 'promemoria «Prendere il treno» per l’utente domani alle 17:00',
+      inputMode: 'text',
+      recentTurns: [],
+    });
+    expect(r?.faithful).toBe(0.12);
+    expect(seen.planned_action).toContain('Prendere il treno');
+    expect(
+      await createSkillCheck({ jev: null }).check({
+        message: 'x',
+        planned: 'y',
+        inputMode: 'text',
+        recentTurns: [],
+      }),
+    ).toBeNull();
   });
 });

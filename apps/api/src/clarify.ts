@@ -44,12 +44,15 @@ export interface ClarificationRecord {
   readonly sessionId: string | null;
   readonly requestId: string;
   readonly message: string;
-  readonly trigger: 'ambiguous' | 'correction';
+  readonly trigger: 'ambiguous' | 'correction' | 'skill';
   readonly ambiguity?: number | undefined;
   readonly correction?: number | undefined;
   readonly clarification?: Clarification | null;
   readonly latencyMs?: number;
   readonly error?: string;
+  /** Controllo di un comando rapido: la skill, cosa avrebbe fatto, quanto era fedele secondo Jev. */
+  readonly skill?: { readonly id: string; readonly planned: string; readonly faithful?: number };
+  readonly costUsd?: number;
 }
 
 /** Una riga di interpretation_checks per ogni chiarimento tentato (anche fallito), per tarare le soglie. */
@@ -61,8 +64,8 @@ export function createClarificationRecorder(pool: Pool) {
         client.query(
           `INSERT INTO interpretation_checks
              (user_id, session_id, request_id, trigger, message, ambiguity, correction, questions, answers, resolved,
-              cost_usd, latency_ms, error)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+              cost_usd, latency_ms, error, skill_id, planned, faithful)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
           [
             r.userId,
             r.sessionId,
@@ -74,9 +77,12 @@ export function createClarificationRecorder(pool: Pool) {
             JSON.stringify(c?.questions ?? []),
             JSON.stringify(c?.answers ?? []),
             c?.resolved.length ?? 0,
-            c?.costUsd ?? 0,
+            c?.costUsd ?? r.costUsd ?? 0,
             c?.latencyMs ?? r.latencyMs ?? 0,
             r.error?.slice(0, 300) ?? null,
+            r.skill?.id ?? null,
+            r.skill?.planned.slice(0, 600) ?? null,
+            r.skill?.faithful ?? null,
           ],
         ),
       );

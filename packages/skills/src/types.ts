@@ -41,6 +41,11 @@ export interface DeterministicSkill {
   readonly run: (plan: unknown, ctx: SkillRunContext) => Promise<SkillReply>;
   /** Risposta alla domanda in sospeso (`awaiting`): un piano eseguibile, oppure null se non c'entra. */
   readonly followUp?: (awaiting: unknown, text: string) => unknown | null;
+  /**
+   * Cosa farà il piano, in italiano semplice, per il controllo di Jev prima di eseguirlo senza modello (solo per le
+   * azioni: null per elenchi, domande e piani che non serve controllare).
+   */
+  readonly describe?: (plan: unknown) => string | null;
 }
 
 /** Skill guidata: istruzioni in markdown + tool consentiti; eseguita dal modello della sessione. */

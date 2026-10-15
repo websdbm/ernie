@@ -4,7 +4,8 @@
   "risk": 0.6,
   "routeConfidence": 0.5,
   "classConfidence": 0.5,
-  "ambiguity": 0.6,
-  "correction": 0.6,
-  "clarifyConfidence": 0.7
+  "ambiguity": 0.82,
+  "correction": 0.8,
+  "clarifyConfidence": 0.7,
+  "skillFaithful": 0.6
 }

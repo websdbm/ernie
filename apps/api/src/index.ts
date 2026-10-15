@@ -35,7 +35,9 @@ import {
   createDecisionRouter,
   createHttpJevClient,
   createRedisDecisionCache,
+  createSkillCheck,
   DEFAULT_THRESHOLDS,
+  type SkillCheckInput,
   Thresholds,
 } from '@ernie/jev-router';
 import {
@@ -688,6 +690,20 @@ async function main(): Promise<void> {
         }
       : undefined;
 
+  // Controllo dei comandi rapidi delle skill (promemoria, messaggi): Jev confronta il piano con la frase.
+  const skillChecker = createSkillCheck({
+    jev: jevClient,
+    timeoutMs: 1_800,
+    ...(config.router.jevModel ? { model: config.router.jevModel } : {}),
+  });
+  const skillCheck = jevClient
+    ? {
+        run: (input: SkillCheckInput) => skillChecker.check(input),
+        threshold: thresholds.skillFaithful,
+        record: (r: ClarificationRecord) => clarificationRecorder.record(r),
+      }
+    : undefined;
+
   // Eventi per utente dal worker (stato delle automazioni) → sessioni connesse in questo processo.
   const connections = new ConnectionRegistry();
   const subscriber = redis.client.duplicate();
@@ -834,6 +850,7 @@ async function main(): Promise<void> {
         router,
         decisions: createRouterDecisionRecorder(postgres.pool, logger),
         ...(clarify ? { clarify } : {}),
+        ...(skillCheck ? { skillCheck } : {}),
         approvals: { ...approvals, rules: toolRules },
         silentRuns: (userId) => automations.takeSilentRuns(userId, 3),
         // Scheda «Fonti»: pagine citate nella risposta e presenti tra i passaggi del turno.

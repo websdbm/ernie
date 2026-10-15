@@ -198,3 +198,80 @@ export function clarificationNote(c: Clarification): string | null {
     );
   return lines.length ? lines.join('\n') : null;
 }
+
+/**
+ * Controllo dei comandi rapidi (richiesta dell'utente, 15 ott 2026: «Jev deve aiutare l'utente che non formula i
+ * messaggi nella maniera più corretta»). Prima di eseguire senza modello un comando riconosciuto da una skill
+ * (promemoria, messaggio), Jev confronta quello che la skill ha capito con la frase: se ne ignora o travisa una
+ * parte, la richiesta passa al modello con gli strumenti. Esempio reale: «Ricordami domani di uscire alle 17 per
+ * il treno. Ricordamelo 10 minuti prima» era diventato «Prendere il treno, domani alle 17».
+ */
+export interface SkillCheckInput {
+  readonly message: string;
+  /** Cosa farà la skill, in italiano semplice («promemoria “Prendere il treno” domani alle 17:00»). */
+  readonly planned: string;
+  readonly inputMode: 'text' | 'voice';
+  readonly recentTurns: readonly string[];
+  /** Ora locale dell'utente («giovedì 15 ottobre 2026, 23:32»): serve a verificare «tra 20 minuti», «domani». */
+  readonly nowLocal?: string;
+}
+
+export interface SkillCheckResult {
+  /** P(il comando fa esattamente quello che chiede l'utente). */
+  readonly faithful: number;
+  readonly costUsd: number;
+  readonly latencyMs: number;
+}
+
+export function skillCheckQuestions(): Record<string, JevQuestion> {
+  return {
+    faithful: {
+      type: 'noul',
+      instructions:
+        'Il comando che sta per essere eseguito (planned_action) fa esattamente quello che chiede il messaggio dell’utente?',
+      criteria: {
+        true: 'Sì: stessa azione, stessa persona, stesso orario o luogo, e nessuna parte della richiesta è ignorata.',
+        false:
+          'No: ignora o travisa una parte della richiesta (un preavviso, un secondo orario, la persona, un secondo compito, una condizione) oppure fa un’azione diversa.',
+      },
+    },
+  };
+}
+
+export function createSkillCheck(opts: {
+  readonly jev: JevClient | null;
+  readonly model?: string;
+  readonly timeoutMs?: number;
+}) {
+  const timeoutMs = opts.timeoutMs ?? 1_800;
+  return {
+    async check(input: SkillCheckInput): Promise<SkillCheckResult | null> {
+      if (!opts.jev) return null;
+      const t0 = Date.now();
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), timeoutMs);
+      try {
+        const res = await opts.jev.decide(
+          {
+            ...(opts.model ? { model: opts.model } : {}),
+            state: {
+              user_message: input.message.slice(0, 2000),
+              input_mode: input.inputMode,
+              planned_action: input.planned.slice(0, 400),
+              ...(input.nowLocal ? { now: input.nowLocal } : {}),
+              recent_turns: input.recentTurns.slice(-4),
+            },
+            questions: skillCheckQuestions(),
+          },
+          { signal: ac.signal },
+        );
+        const a = res.answers.faithful;
+        if (a?.type !== 'noul') return null;
+        return { faithful: a.noul, costUsd: res.usage?.cost ?? 0, latencyMs: Date.now() - t0 };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+export type SkillCheck = ReturnType<typeof createSkillCheck>;

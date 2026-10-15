@@ -16,6 +16,8 @@ import {
   clarificationNote,
   type DecisionRouter,
   type RouteDecision,
+  type SkillCheckInput,
+  type SkillCheckResult,
 } from '@ernie/jev-router';
 import {
   formatMemoryNotices,
@@ -118,6 +120,15 @@ export interface ConnectionDeps {
     readonly known: (userId: string) => Promise<{ people: string[]; places: string[] }>;
     readonly record?: (r: ClarificationRecord) => Promise<void>;
     readonly thresholds: { readonly ambiguity: number; readonly correction: number };
+  };
+  /**
+   * Controllo dei comandi rapidi (15 ott 2026): prima di eseguire senza modello un'azione riconosciuta da una skill,
+   * Jev confronta quello che la skill ha capito con la frase; se non è fedele, decide il modello con gli strumenti.
+   */
+  readonly skillCheck?: {
+    readonly run: (input: SkillCheckInput) => Promise<SkillCheckResult | null>;
+    readonly threshold: number;
+    readonly record?: (r: ClarificationRecord) => Promise<void>;
   };
   /** Ricerca 11, S2: scheda «Fonti» con le pagine citate e verificate a fine turno. */
   readonly citations?: (requestId: string, text: string) => ContentBlock | null;
@@ -552,8 +563,21 @@ export class ClientConnection {
         if (plan) followUpMatch = { skill, plan };
       }
     }
-    const match =
-      followUpMatch ?? (attachments.length === 0 ? (skills?.match(text) ?? null) : null);
+    let match = followUpMatch ?? (attachments.length === 0 ? (skills?.match(text) ?? null) : null);
+    // Il comando rapido ha capito tutta la frase? Se no, la richiesta passa al modello (le risposte a una domanda
+    // della skill, «alle 9», sono brevi: non si controllano).
+    let skillNote: string | undefined;
+    if (match && !followUpMatch) {
+      skillNote = await this.checkSkillPlan(
+        match,
+        text,
+        event.payload.inputMode,
+        sessionId,
+        correlationId,
+        event.payload.device?.timezone,
+      );
+      if (skillNote) match = null;
+    }
     // Promemoria a evento: confronto full-text del messaggio, mai sulla frase che ne crea uno.
     const fired =
       this.deps.intents && attachments.length === 0 && match?.skill.id !== 'promemoria_evento'
@@ -795,6 +819,16 @@ export class ClientConnection {
     const interruptedNote = this.takeInterruptedNote();
     if (interruptedNote) contextBlocks.push(interruptedNote);
     if (clarifyNote) contextBlocks.push(clarifyNote);
+    if (skillNote) contextBlocks.push(skillNote);
+    // Jev vede una richiesta per una skill che il comando rapido non ha riconosciuto (frase insolita o storpiata).
+    const missed =
+      !skillNote && decision.route === 'skill' && decision.skillId
+        ? skills?.get(decision.skillId)
+        : undefined;
+    if (missed?.kind === 'deterministic')
+      contextBlocks.push(
+        `La richiesta sembra per la funzione «${missed.id}» (${missed.description.slice(0, 160)}) anche se non è detta nella forma solita: eseguila con i suoi strumenti, interpretando con buon senso parole storpiate, incomplete o in ordine diverso.`,
+      );
     const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
 
     const ac = new AbortController();
@@ -1143,6 +1177,69 @@ export class ClientConnection {
       this.deps.logger.warn({ err: message, trigger }, 'chiarimento interno non riuscito');
       void c.record?.({ ...base, latencyMs: Date.now() - t0, error: message }).catch(() => {});
       return correctionNote;
+    }
+  }
+
+  /**
+   * Controllo di Jev su un comando rapido: restituisce la nota per il modello se il comando non è fedele alla
+   * frase (e allora non va eseguito), altrimenti undefined. Senza Jev, in ritardo o con errori: si esegue.
+   */
+  private async checkSkillPlan(
+    match: { skill: DeterministicSkill; plan: unknown },
+    text: string,
+    inputMode: 'text' | 'voice',
+    sessionId: string,
+    correlationId: string,
+    timezone?: string,
+  ): Promise<string | undefined> {
+    const check = this.deps.skillCheck;
+    const planned = check && match.skill.describe ? match.skill.describe(match.plan) : null;
+    if (!check || !planned) return undefined;
+    const base = {
+      userId: this.auth.userId,
+      sessionId,
+      requestId: correlationId,
+      message: text,
+      trigger: 'skill',
+    } as const;
+    const t0 = Date.now();
+    try {
+      const r = await check.run({
+        message: text,
+        planned,
+        inputMode,
+        recentTurns: [...this.recentTurns],
+        nowLocal: new Intl.DateTimeFormat('it-IT', {
+          timeZone: timezone ?? 'Europe/Rome',
+          dateStyle: 'full',
+          timeStyle: 'short',
+        }).format(new Date()),
+      });
+      void check
+        .record?.({
+          ...base,
+          skill: { id: match.skill.id, planned, ...(r ? { faithful: r.faithful } : {}) },
+          latencyMs: r?.latencyMs ?? Date.now() - t0,
+          ...(r ? { costUsd: r.costUsd } : {}),
+        })
+        .catch(() => {});
+      if (!r || r.faithful >= check.threshold) return undefined;
+      return `Il comando rapido della funzione «${match.skill.id}» aveva capito: ${planned}. Un controllo ha visto che non corrisponde del tutto alla richiesta dell’utente, quindi non è stato eseguito: eseguila tu con gli strumenti, rispettando ogni dettaglio (orari, preavvisi, persone, condizioni, più compiti nella stessa frase). Non parlare di questo controllo.`;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.deps.logger.warn(
+        { err: message, skill: match.skill.id },
+        'controllo del comando rapido non riuscito',
+      );
+      void check
+        .record?.({
+          ...base,
+          skill: { id: match.skill.id, planned },
+          latencyMs: Date.now() - t0,
+          error: message,
+        })
+        .catch(() => {});
+      return undefined;
     }
   }
 
