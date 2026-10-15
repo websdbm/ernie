@@ -56,6 +56,35 @@ export interface ReminderStoreDeps {
   };
   /** Titolo breve dalla frase detta (modello leggero con ripiego deterministico); senza, pulizia deterministica. */
   readonly title?: (text: string, ctx: { userId: string; fromLabel?: string }) => Promise<string>;
+  /** Luoghi della scheda anagrafica (promemoria geolocalizzati): lettura e salvataggio di un indirizzo. */
+  readonly places?: {
+    list(userId: string): Promise<readonly ProfilePlace[]>;
+    set(
+      userId: string,
+      input: { label: string; address: string },
+    ): Promise<{ label: string; address: string } | null>;
+  };
+}
+
+/** Luogo della scheda come serve ai promemoria (etichetta già normalizzata). */
+export interface ProfilePlace {
+  readonly id: string;
+  readonly label: string;
+  readonly address?: string;
+  readonly lat?: number;
+  readonly lng?: number;
+  readonly radius?: number;
+}
+
+const PLACE_ALIASES: Record<string, string> = { ufficio: 'lavoro', lavoro: 'ufficio' };
+
+/** Luogo per etichetta, con «ufficio» e «lavoro» intercambiabili. */
+function placeFor(places: readonly ProfilePlace[], label: string): ProfilePlace | undefined {
+  const alias = PLACE_ALIASES[label];
+  return (
+    places.find((p) => p.label === label) ??
+    (alias ? places.find((p) => p.label === alias) : undefined)
+  );
 }
 
 const KEY_PREFIX = 'promemoria_';
@@ -130,7 +159,7 @@ function textOf(a: Automation): string {
 const isReminder = (a: Automation): boolean =>
   a.key.startsWith(KEY_PREFIX) &&
   a.enabled &&
-  (a.trigger.type === 'once' || a.trigger.type === 'cron');
+  (a.trigger.type === 'once' || a.trigger.type === 'cron' || a.trigger.type === 'place');
 
 /** Quando suona: l'istante delle una tantum, la prossima occorrenza delle ricorrenti. */
 function nextAt(a: Automation, now = new Date()): Date | null {
@@ -141,11 +170,36 @@ function nextAt(a: Automation, now = new Date()): Date | null {
 }
 
 /** Vista di un'automazione-promemoria per chi guarda: propria (eventualmente «da papà») o messa a un altro. */
-function toReminder(a: Automation, viewer: string, forLabel?: string): Reminder | null {
+function toReminder(
+  a: Automation,
+  viewer: string,
+  forLabel?: string,
+  places: readonly ProfilePlace[] = [],
+): Reminder | null {
   if (!isReminder(a)) return null;
+  const meta = metaOf(a);
+  if (a.trigger.type === 'place') {
+    // Legato a un luogo: niente ora; indirizzo e zona dalla scheda (assenti finché il luogo non ha una posizione).
+    if (a.userId !== viewer) return null;
+    const pl = placeFor(places, a.trigger.label);
+    return {
+      id: a.id,
+      text: textOf(a),
+      status: 'scheduled',
+      place: {
+        label: a.trigger.label,
+        on: a.trigger.on,
+        ...(a.trigger.repeat ? { repeat: true } : {}),
+        ...(pl ? { placeId: pl.id } : {}),
+        ...(pl?.address ? { address: pl.address } : {}),
+        ...(pl?.lat !== undefined && pl.lng !== undefined ? { lat: pl.lat, lng: pl.lng } : {}),
+        ...(pl ? { radius: pl.radius ?? 150 } : {}),
+      },
+      ...(meta.channels ? { channels: meta.channels } : {}),
+    };
+  }
   const at = nextAt(a);
   if (!at) return null;
-  const meta = metaOf(a);
   const base = {
     id: a.id,
     text: textOf(a),
@@ -184,6 +238,34 @@ function hourMinute(at: Date, tz: string): { hour: number; minute: number } {
 
 export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
   /** Inserisce l'automazione nell'account del destinatario e accoda il job all'ora stabilita. */
+  /** Promemoria legato a un luogo: automazione senza orario, la fa scattare il telefono. */
+  const insertPlace = async (
+    recipient: string,
+    text: string,
+    place: { label: string; on: 'arrive' | 'leave'; repeat?: boolean },
+    timezone: string,
+    meta: Meta,
+  ): Promise<Automation> =>
+    deps.automations.create(
+      recipient,
+      {
+        key: `${KEY_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        title: `Promemoria: ${text}`.slice(0, 120),
+        trigger: { type: 'place', label: place.label, on: place.on, repeat: place.repeat === true },
+        timezone,
+        budgetUsd: 0,
+        catchUp: 'none',
+        jitterSeconds: 0,
+        notify: true,
+        enabled: true,
+        action: { type: 'skill', skillId: 'ricordami', input: `${REMINDER_FIRE_PREFIX}${text}` },
+        meta,
+      },
+      { knownTools: deps.knownTools, maxBudgetUsd: deps.maxBudgetUsd },
+    );
+
+  const placesOf = async (userId: string) => (deps.places ? deps.places.list(userId) : []);
+
   const insert = async (
     recipient: string,
     text: string,
@@ -265,10 +347,10 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
           kind: 'family_reminder',
           dedupeKey: `family_reminder:${r.id}`,
           title: `${fromLabel} ti ha messo un promemoria`,
-          body: `${r.text} (${formatWhen(r.at, timezone)})`,
+          body: r.at ? `${r.text} (${formatWhen(r.at, timezone)})` : r.text,
           payload: {
             reminderId: r.id,
-            at: r.at.toISOString(),
+            ...(r.at ? { at: r.at.toISOString() } : {}),
             block: toRemindersBlock([r], `Promemoria da ${fromLabel}`),
           },
           evidence: { source: 'family', refs: [`automations:${r.id}`] },
@@ -282,8 +364,8 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
       await deps.automations.notify(recipient, {
         kind: 'reminder.assigned',
         title: `${fromLabel} ti ha messo un promemoria`,
-        body: `${r.text} (${formatWhen(r.at, timezone)})`,
-        payload: { reminderId: r.id, at: r.at.toISOString() },
+        body: r.at ? `${r.text} (${formatWhen(r.at, timezone)})` : r.text,
+        payload: { reminderId: r.id, ...(r.at ? { at: r.at.toISOString() } : {}) },
       });
       await deps.notifyRecipient?.(recipient, toRemindersBlock([r], `Promemoria da ${fromLabel}`));
     } catch {
@@ -294,6 +376,26 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
   return {
     async create(userId, input) {
       const spoken = clean(input.text);
+      if (input.place) {
+        // Per ora solo per sé: è il proprio telefono a sapere dove si è.
+        if (input.forLabel) throw new UnknownPersonError(input.forLabel);
+        const text =
+          clean(deps.title ? await deps.title(spoken, { userId }) : tidyReminderText(spoken)) ||
+          spoken;
+        const a = await insertPlace(userId, text, input.place, input.timezone, {
+          ...(!sameText(spoken, text) ? { spoken } : {}),
+          ...(input.channels ? { channels: input.channels } : {}),
+        });
+        return (
+          toReminder(a, userId, undefined, await placesOf(userId)) ?? {
+            id: a.id,
+            text,
+            status: 'scheduled',
+            place: input.place,
+          }
+        );
+      }
+      if (!input.at) throw new Error('promemoria senza ora né luogo');
       const at = new Date(Math.floor(input.at.getTime() / 1000) * 1000);
       // Titolo breve dalla frase detta; dal punto di vista di chi lo riceve («chiamarmi» → «Chiamare papà»).
       const titled = async (fromLabel?: string) =>
@@ -362,18 +464,39 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
     async list(userId) {
       const now = Date.now();
       const out: Reminder[] = [];
+      const places = await placesOf(userId);
       const consider = (all: Automation[], forLabel?: string) => {
         for (const a of all) {
-          const r = toReminder(a, userId, forLabel);
-          if (r && r.at.getTime() >= now - 60_000) out.push(r);
+          const r = toReminder(a, userId, forLabel, places);
+          if (r && (!r.at || r.at.getTime() >= now - 60_000)) out.push(r);
         }
       };
       consider(await deps.automations.list(userId));
       if (deps.family)
         for (const link of await deps.family.list(userId))
           consider(await deps.automations.list(link.otherUserId), link.label);
-      return out.sort((x, y) => x.at.getTime() - y.at.getTime());
+      // Prima quelli con l'ora, dal più vicino; poi quelli legati a un luogo.
+      return out.sort(
+        (x, y) =>
+          (x.at?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+          (y.at?.getTime() ?? Number.MAX_SAFE_INTEGER),
+      );
     },
+    async findPlace(userId, label) {
+      const pl = placeFor(await placesOf(userId), label);
+      if (!pl) return null;
+      return {
+        label: pl.label,
+        ...(pl.address ? { address: pl.address } : {}),
+        located: pl.lat !== undefined && pl.lng !== undefined,
+      };
+    },
+    ...(deps.places
+      ? {
+          setPlace: (userId: string, input: { label: string; address: string }) =>
+            deps.places?.set(userId, input) ?? Promise.resolve(null),
+        }
+      : {}),
     ...(deps.email
       ? {
           emailAddress: (userId: string) => deps.email?.get(userId) ?? Promise.resolve(null),
@@ -394,7 +517,22 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore {
         const merged = { ...(metaOf(found.automation).channels ?? {}), ...patch.channels };
         const a = await deps.automations.mergeMeta(found.owner, id, { channels: merged });
         if (!a) return null;
-        return toReminder(a, userId, found.forLabel);
+        return toReminder(a, userId, found.forLabel, await placesOf(userId));
+      }
+      // Legato a un luogo: si cambia solo il testo (stesso luogo); con un'ora diventa un promemoria normale.
+      const trig = found.automation.trigger;
+      if (trig.type === 'place' && !patch.at) {
+        const text = clean(patch.text ?? textOf(found.automation));
+        if (!text) return null;
+        const old = metaOf(found.automation);
+        const channels = patch.channels
+          ? { ...(old.channels ?? {}), ...patch.channels }
+          : old.channels;
+        await deps.automations.remove(found.owner, id);
+        const a = await insertPlace(found.owner, text, trig, found.automation.timezone, {
+          ...(channels ? { channels } : {}),
+        });
+        return toReminder(a, userId, undefined, await placesOf(userId));
       }
       // Testo o ora: le automazioni una tantum non si modificano, si sostituiscono (nuovo id), così il job
       // ritardato è coerente.

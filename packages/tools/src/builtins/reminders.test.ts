@@ -21,7 +21,8 @@ function fakeStore() {
       const r: ReminderToolInfo = {
         id: `id-${created.length}`,
         text: input.eventAt ? `${input.text} alle 19:00` : input.text,
-        at: input.at,
+        ...(input.at ? { at: input.at } : {}),
+        ...(input.place ? { place: input.place } : {}),
         ...(input.eventAt ? { eventAt: input.eventAt } : {}),
         ...(input.forLabel ? { for: input.forLabel } : {}),
       };
@@ -29,6 +30,7 @@ function fakeStore() {
       return r;
     },
     list: async () => items,
+    setPlace: async (_u, input) => (input.label === 'pieno' ? null : input),
     remove: async (_u, id) => {
       const i = items.findIndex((x) => x.id === id);
       if (i < 0) return false;
@@ -104,5 +106,35 @@ describe('tool dei promemoria per il modello', () => {
     });
     expect(await cancel.execute({ id: 'nope' }, ctx())).toEqual({ removed: false });
     expect(list.present?.({}, { reminders: [] })).toBeNull();
+  });
+});
+
+describe('promemoria legati a un luogo e luoghi della scheda', () => {
+  it('reminder_create con place: niente ora, solo per l’utente; place_set salva l’indirizzo', async () => {
+    const { store, created } = fakeStore();
+    const tools = createReminderTools(store);
+    const create = tools.find((t) => t.id === 'reminder_create');
+    const placeSet = tools.find((t) => t.id === 'place_set');
+    if (!create || !placeSet) throw new Error('tool mancanti');
+    const out = (await create.execute(
+      { text: 'Comprare il pane', place: { label: 'Casa', on: 'arrive' } },
+      ctx('Europe/Rome'),
+    )) as { place?: { label: string; on: string } };
+    expect(out.place).toEqual({ label: 'casa', on: 'arrive' });
+    expect(created.at(-1)).toMatchObject({ place: { label: 'casa', on: 'arrive' } });
+    expect(created.at(-1)?.at).toBeUndefined();
+    await expect(
+      create.execute(
+        { text: 'Compiti', place: { label: 'casa', on: 'arrive' }, forLabel: 'Giorgio' },
+        ctx(),
+      ),
+    ).rejects.toThrow(/solo per l’utente/);
+    await expect(create.execute({ text: 'Senza niente' }, ctx())).rejects.toThrow(/`at`/);
+    expect(
+      await placeSet.execute({ label: 'Casa', address: 'via Roma 3, Treviso' }, ctx()),
+    ).toEqual({ label: 'casa', address: 'via Roma 3, Treviso' });
+    await expect(
+      placeSet.execute({ label: 'pieno', address: 'via Verdi 1, Milano' }, ctx()),
+    ).rejects.toThrow(/dieci/);
   });
 });

@@ -10,11 +10,24 @@ export const EventTrigger = z.object({
   type: z.literal('event'),
   eventName: z.string().regex(/^[a-z][a-z0-9_.]{2,63}$/),
 });
+/**
+ * Promemoria geolocalizzato (15 ott 2026): scatta sul telefono quando si arriva in un luogo della scheda
+ * anagrafica (o quando lo si lascia). Il server non lo esegue: posizione e indirizzo si leggono dalla scheda
+ * per etichetta, così spostare «casa» sulla mappa sposta anche i promemoria.
+ */
+export const PlaceTrigger = z.object({
+  type: z.literal('place'),
+  label: z.string().min(1).max(40),
+  on: z.enum(['arrive', 'leave']),
+  /** Ogni volta, non solo la prossima. */
+  repeat: z.boolean().default(false),
+});
 export const Trigger = z.discriminatedUnion('type', [
   CronTrigger,
   OnceTrigger,
   WebhookTrigger,
   EventTrigger,
+  PlaceTrigger,
 ]);
 export type Trigger = z.infer<typeof Trigger>;
 

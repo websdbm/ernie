@@ -84,6 +84,16 @@ export const ExtractedProfile = z.object({
     )
     .nullable()
     .optional(),
+  /** Luoghi suoi con indirizzo («casa mia è in via Roma 3»), per i promemoria geolocalizzati. */
+  places: z
+    .array(
+      z.object({
+        label: z.string().nullable().optional(),
+        address: z.string().nullable().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
   /** Le parole della persona da cui vengono i dati (breve citazione). */
   evidence: z.string().nullable().optional(),
 });
@@ -121,7 +131,9 @@ SCHEDA ANAGRAFICA (campo profile): compilala solo con dati che la persona dice E
 fullName (nome e cognome), preferredName (come vuole essere chiamata: «chiamami Ale»), birthDate (YYYY-MM-DD; --MM-DD se dice
 solo giorno e mese; un'età NON è una data di nascita), gender (come si descrive: uomo, donna, …), city (dove vive),
 occupation (lavoro), email (il SUO indirizzo email, solo se lo detta come proprio; mai indirizzi di altri). family: persone della sua famiglia (anche animali) con name, relation rispetto a lei (moglie, figlio,
-madre, cane…), birthDate se detta, notes brevissime. evidence: le sue parole, al massimo 160 caratteri.
+madre, cane…), birthDate se detta, notes brevissime. places: luoghi suoi di cui dice l'INDIRIZZO (casa, lavoro, palestra,
+scuola dei figli…): label breve e minuscola («casa», «lavoro»), address come lo dice (via, numero civico, città); senza
+indirizzo niente luogo. evidence: le sue parole, al massimo 160 caratteri.
 Tutto ciò che non è detto è null; se nel batch non ci sono dati anagrafici, profile è null. I dati che metti in profile
 NON vanno ripetuti in facts.`;
 

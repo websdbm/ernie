@@ -313,7 +313,7 @@ describe('promemoria ricorrenti e canali (v1.11)', () => {
     expect((queue.add as ReturnType<typeof vi.fn>).mock.calls.length).toBe(addsBefore);
     const [listed] = await store.list(PAPA);
     expect(listed?.repeat).toEqual({ kind: 'weekly', weekdays: [5], hour: 9, minute: 0 });
-    expect(listed?.at.getTime()).toBeGreaterThan(Date.now());
+    expect(listed?.at?.getTime()).toBeGreaterThan(Date.now());
     expect(
       new Intl.DateTimeFormat('it-IT', { weekday: 'long', timeZone: 'Europe/Rome' }).format(
         listed?.at,
@@ -380,5 +380,84 @@ describe('appuntamento con preavviso (v1.13)', () => {
     expect(earlier?.eventAt?.toISOString()).toBe(r2.eventAt?.toISOString());
     const row2 = fa.rows.find((a) => a.id === earlier?.id);
     expect(row2?.action.type === 'skill' ? row2.action.input : '').toContain('[tra 30 minuti]');
+  });
+});
+
+describe('promemoria legati a un luogo (15 ott 2026)', () => {
+  it('senza ora né job: luogo dalla scheda per etichetta, in fondo all’elenco; testo modificabile, stesso luogo', async () => {
+    const { repo, rows } = fakeAutomations();
+    const places: Array<{
+      id: string;
+      label: string;
+      address?: string;
+      lat?: number;
+      lng?: number;
+    }> = [{ id: 'p1', label: 'casa', address: 'via Roma 3, Treviso' }];
+    const store = createReminderStore({
+      automations: repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 0.05,
+      family: fakeFamily(),
+      places: {
+        list: async () => places,
+        set: async (_u, input) => {
+          places.push({ id: 'p2', ...input });
+          return input;
+        },
+      },
+    });
+    const addsBefore = (queue.add as ReturnType<typeof vi.fn>).mock.calls.length;
+    const r = await store.create(PAPA, {
+      text: 'comprare il latte',
+      timezone: 'Europe/Rome',
+      place: { label: 'casa', on: 'arrive' },
+    });
+    expect(r.at).toBeUndefined();
+    expect(r.place).toMatchObject({
+      label: 'casa',
+      on: 'arrive',
+      placeId: 'p1',
+      address: 'via Roma 3, Treviso',
+    });
+    expect(rows.at(-1)?.trigger).toEqual({
+      type: 'place',
+      label: 'casa',
+      on: 'arrive',
+      repeat: false,
+    });
+    expect((queue.add as ReturnType<typeof vi.fn>).mock.calls.length).toBe(addsBefore);
+
+    await store.create(PAPA, { text: 'uscire', at: future, timezone: 'Europe/Rome' });
+    const list = await store.list(PAPA);
+    expect(list.map((x) => x.text)).toEqual(['Uscire', 'Comprare il latte']);
+    // Coordinate trovate dal telefono: compaiono nell'elenco.
+    places[0] = { ...places[0], id: 'p1', label: 'casa', lat: 45.66, lng: 12.24 };
+    expect((await store.list(PAPA))[1]?.place).toMatchObject({
+      lat: 45.66,
+      lng: 12.24,
+      radius: 150,
+    });
+    expect(await store.findPlace?.(PAPA, 'casa')).toMatchObject({ located: true });
+    expect(await store.findPlace?.(PAPA, 'palestra')).toBeNull();
+
+    const edited = await store.update(PAPA, r.id, { text: 'comprare il pane' });
+    expect(edited?.text).toBe('comprare il pane');
+    expect(edited?.place).toMatchObject({ label: 'casa', on: 'arrive' });
+    // A un familiare: per ora no.
+    await expect(
+      store.create(PAPA, {
+        text: 'compiti',
+        timezone: 'Europe/Rome',
+        forLabel: 'Giorgio',
+        place: { label: 'casa', on: 'arrive' },
+      }),
+    ).rejects.toBeInstanceOf(UnknownPersonError);
+    expect(
+      await store.setPlace?.(PAPA, { label: 'lavoro', address: 'corso Italia 10, Roma' }),
+    ).toEqual({
+      label: 'lavoro',
+      address: 'corso Italia 10, Roma',
+    });
   });
 });

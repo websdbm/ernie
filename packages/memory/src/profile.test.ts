@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   describeBirthDate,
   emptyProfile,
+  findPlace,
   formatProfileNotices,
   mergeProfile,
   normalizeBirthDate,
+  normalizePlaceLabel,
   renderProfile,
   replaceProfileByUser,
+  setPlaceCoordinates,
+  upsertPlace,
 } from './profile.js';
 
 const at = new Date('2026-10-13T10:00:00Z');
@@ -199,5 +203,82 @@ describe('scheda anagrafica: email', () => {
     expect(r.profile.email).toBe('ufficio@example.com');
     expect(r.conflicts[0]).toMatchObject({ field: 'email', after: 'altro@example.com' });
     expect(renderProfile(edited, at)).toContain('Email: ufficio@example.com');
+  });
+});
+
+describe('luoghi della scheda (promemoria geolocalizzati)', () => {
+  const at = new Date('2026-10-15T10:00:00Z');
+  it('dalla chat: aggiunge o aggiorna l’indirizzo e azzera le coordinate; non tocca quelli scritti nell’app', () => {
+    const first = mergeProfile(
+      emptyProfile(),
+      { places: [{ label: 'Casa mia', address: 'via Roma 3, Treviso' }, { label: 'lavoro' }] },
+      { source: 'conversation', at },
+    );
+    expect(first.profile.places).toMatchObject([{ label: 'casa', address: 'via Roma 3, Treviso' }]);
+    expect(first.changes).toHaveLength(1);
+    const id = first.profile.places[0]?.id ?? '';
+    const located = setPlaceCoordinates(first.profile, id, { lat: 45.66, lng: 12.24 });
+    expect(located.profile.places[0]).toMatchObject({
+      lat: 45.66,
+      lng: 12.24,
+      address: 'via Roma 3, Treviso',
+    });
+    expect(setPlaceCoordinates(first.profile, 'nessuno', { lat: 45, lng: 12 }).changes).toEqual([]);
+    expect(setPlaceCoordinates(first.profile, id, { lat: 0, lng: 0 }).changes).toEqual([]);
+
+    const moved = mergeProfile(
+      located.profile,
+      { places: [{ label: 'casa', address: 'via Verdi 10, Treviso' }] },
+      { source: 'conversation', at },
+    );
+    expect(moved.profile.places[0]).toMatchObject({ id, address: 'via Verdi 10, Treviso' });
+    expect(moved.profile.places[0]?.lat).toBeUndefined();
+
+    // Scritto dall'utente nell'app (con la mappa): la chat non lo cambia, segnala il contrasto.
+    const byUser = replaceProfileByUser(
+      moved.profile,
+      {
+        fields: {},
+        family: [],
+        places: [
+          {
+            id,
+            label: 'Casa',
+            address: 'via Verdi 10, Treviso',
+            lat: 45.67,
+            lng: 12.25,
+            radius: 300,
+          },
+        ],
+      },
+      at,
+    );
+    expect(byUser.profile.places[0]).toMatchObject({ label: 'casa', lat: 45.67, radius: 300 });
+    const fromChat = mergeProfile(
+      byUser.profile,
+      { places: [{ label: 'casa', address: 'via Bianchi 1, Treviso' }] },
+      { source: 'conversation', at },
+    );
+    expect(fromChat.profile.places[0]?.address).toBe('via Verdi 10, Treviso');
+    expect(fromChat.conflicts[0]).toMatchObject({ field: 'places', conflict: true });
+
+    // Un'app vecchia (senza luoghi nella richiesta) non li cancella.
+    const oldApp = replaceProfileByUser(byUser.profile, { fields: {}, family: [] }, at);
+    expect(oldApp.profile.places).toHaveLength(1);
+    expect(findPlace(oldApp.profile, 'la casa')?.id).toBe(id);
+    expect(renderProfile(oldApp.profile, at)).toContain('Luoghi: casa: via Verdi 10, Treviso');
+  });
+
+  it('upsertPlace e normalizePlaceLabel', () => {
+    const p = emptyProfile();
+    const meta = { source: 'conversation' as const, at: at.toISOString() };
+    expect(
+      upsertPlace(p, { label: 'Il mio ufficio', address: 'corso Italia 10, Roma' }, meta),
+    ).toMatchObject({
+      label: 'ufficio',
+    });
+    expect(findPlace(p, 'lavoro')?.label).toBe('ufficio');
+    expect(normalizePlaceLabel('  La palestra ')).toBe('palestra');
+    expect(upsertPlace(p, { label: 'casa', address: '' }, meta)).toBeNull();
   });
 });

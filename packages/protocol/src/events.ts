@@ -458,8 +458,25 @@ export const RemindersBlock = z.object({
       z.object({
         id: z.uuid(),
         text: z.string().min(1).max(300),
-        at: z.iso.datetime(),
+        /** Assente nei promemoria legati a un luogo (v1.14), che non hanno un'ora. */
+        at: z.iso.datetime().optional(),
         status: z.enum(['scheduled', 'done', 'cancelled']),
+        /**
+         * v1.14: promemoria geolocalizzato («quando arrivo a casa»): scatta sul telefono entrando (o uscendo)
+         * nella zona del luogo della scheda. Indirizzo e coordinate mancano finché il luogo non ha una posizione.
+         */
+        place: z
+          .object({
+            label: z.string().min(1).max(40),
+            on: z.enum(['arrive', 'leave']),
+            repeat: z.boolean().optional(),
+            placeId: z.string().max(40).optional(),
+            address: z.string().max(160).optional(),
+            lat: z.number().min(-90).max(90).optional(),
+            lng: z.number().min(-180).max(180).optional(),
+            radius: z.number().min(50).max(2000).optional(),
+          })
+          .optional(),
         /** v1.13: preavviso di un appuntamento: `at` è l'ora dell'avviso, `eventAt` quella dell'appuntamento. */
         eventAt: z.iso.datetime().optional(),
         /** v1.7 (Famiglia): messo da me a «Giorgio» / messo a me da «papà». */

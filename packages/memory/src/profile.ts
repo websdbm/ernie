@@ -60,6 +60,42 @@ export const FamilyMember = z.object({
 });
 export type FamilyMember = z.infer<typeof FamilyMember>;
 
+/**
+ * Luogo della persona (15 ott 2026): «casa», «lavoro», «palestra»… con indirizzo e posizione. Serve ai promemoria
+ * geolocalizzati («ricordami … quando arrivo a casa»). L'indirizzo può arrivare dalla chat senza coordinate: le
+ * aggiunge il telefono (geocodifica sul dispositivo) o l'utente sulla mappa.
+ */
+export const Place = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().min(1).max(40),
+  address: z.string().max(160).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  /** Raggio della zona in metri (100–1000; senza: 150). */
+  radius: z.number().int().min(50).max(2000).optional(),
+  meta: SourceMeta,
+});
+export type Place = z.infer<typeof Place>;
+
+export const PLACE_RADIUS_DEFAULT = 150;
+export const MAX_PLACES = 10;
+
+/** Etichetta di un luogo in forma breve e confrontabile: «Casa mia» → «casa», «il mio ufficio» → «ufficio». */
+export function normalizePlaceLabel(label: string | null | undefined): string | undefined {
+  if (typeof label !== 'string') return undefined;
+  const t = label
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:(?:la|il|lo|i|le|gli)\s+|l['’]\s*)/u, '')
+    .replace(/^(?:mia|mio|nostra|nostro)\s+/u, '')
+    .replace(/\s+(?:mia|mio|nostra|nostro)$/u, '')
+    .replace(/^(?:(?:la|il|lo)\s+|l['’]\s*)/u, '')
+    .trim();
+  if (!t || PLACEHOLDER.test(t)) return undefined;
+  return t.slice(0, 40);
+}
+
 export const UserProfile = z.object({
   fullName: z.string().max(80).optional(),
   preferredName: z.string().max(40).optional(),
@@ -70,11 +106,12 @@ export const UserProfile = z.object({
   /** Indirizzo per le email dei promemoria (unica fonte; le impostazioni la ricopiano). */
   email: z.string().max(120).optional(),
   family: z.array(FamilyMember).max(20).default([]),
+  places: z.array(Place).max(MAX_PLACES).default([]),
   meta: z.record(z.string(), SourceMeta).default({}),
 });
 export type UserProfile = z.infer<typeof UserProfile>;
 
-export const emptyProfile = (): UserProfile => ({ family: [], meta: {} });
+export const emptyProfile = (): UserProfile => ({ family: [], places: [], meta: {} });
 
 /** Proposta di aggiornamento (dall'estrattore o dall'app): campi assenti o null = nessuna informazione. */
 export interface ProfileUpdate {
@@ -91,6 +128,14 @@ export interface ProfileUpdate {
         readonly relation?: string | null | undefined;
         readonly birthDate?: string | null | undefined;
         readonly notes?: string | null | undefined;
+      }>
+    | null
+    | undefined;
+  /** Luoghi detti in chat («casa mia è in via Roma 3»): etichetta e indirizzo, senza coordinate. */
+  readonly places?:
+    | ReadonlyArray<{
+        readonly label?: string | null | undefined;
+        readonly address?: string | null | undefined;
       }>
     | null
     | undefined;
@@ -199,10 +244,31 @@ export function mergeProfile(
   const next: UserProfile = {
     ...current,
     family: current.family.map((m) => ({ ...m })),
+    places: current.places.map((p) => ({ ...p })),
     meta: { ...current.meta },
   };
   const changes: ProfileChange[] = [];
   const conflicts: ProfileChange[] = [];
+
+  for (const proposal of update.places ?? []) {
+    const label = normalizePlaceLabel(proposal.label);
+    const address = clean(proposal.address, 160);
+    if (!label || !address) continue;
+    const existing = next.places.find((p) => p.label === label);
+    if (existing && fold(existing.address) === fold(address)) continue;
+    if (existing && lockedByUser(existing.meta, opts.source)) {
+      conflicts.push({
+        field: 'places',
+        before: describePlace(existing),
+        after: `${label}: ${address}`,
+        conflict: true,
+      });
+      continue;
+    }
+    const before = existing ? describePlace(existing) : null;
+    const place = upsertPlace(next, { label, address }, meta);
+    if (place) changes.push({ field: 'places', before, after: describePlace(place) });
+  }
 
   for (const field of PROFILE_FIELDS) {
     const raw = update[field];
@@ -286,11 +352,22 @@ export function replaceProfileByUser(
       birthDate?: string | null | undefined;
       notes?: string | null | undefined;
     }>;
+    /** Assente (app vecchia): i luoghi restano com'erano. */
+    places?:
+      | ReadonlyArray<{
+          id?: string | undefined;
+          label: string;
+          address?: string | null | undefined;
+          lat?: number | null | undefined;
+          lng?: number | null | undefined;
+          radius?: number | null | undefined;
+        }>
+      | undefined;
   },
   at: Date,
 ): { profile: UserProfile; changes: ProfileChange[] } {
   const meta: SourceMeta = { source: 'user', at: at.toISOString() };
-  const next: UserProfile = { family: [], meta: {} };
+  const next: UserProfile = { family: [], places: [], meta: {} };
   const changes: ProfileChange[] = [];
   for (const field of PROFILE_FIELDS) {
     const value = normalizeField(field, edited.fields[field], at);
@@ -338,7 +415,133 @@ export function replaceProfileByUser(
   }
   for (const removed of byId.values())
     changes.push({ field: 'family', before: describeMember(removed), after: null });
+  if (!edited.places) next.places = current.places.map((p) => ({ ...p }));
+  else {
+    const placesById = new Map(current.places.map((p) => [p.id, p]));
+    const seen = new Set<string>();
+    for (const e of edited.places.slice(0, MAX_PLACES)) {
+      const label = normalizePlaceLabel(e.label);
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      const old = e.id ? placesById.get(e.id) : undefined;
+      const address = clean(e.address, 160);
+      const coords =
+        typeof e.lat === 'number' && typeof e.lng === 'number' && validCoords(e.lat, e.lng)
+          ? { lat: e.lat, lng: e.lng }
+          : {};
+      const radius = typeof e.radius === 'number' ? clampRadius(e.radius) : undefined;
+      const draft = {
+        id: old?.id ?? newId(),
+        label,
+        ...(address ? { address } : {}),
+        ...coords,
+        ...(radius ? { radius } : {}),
+      };
+      const same =
+        old &&
+        old.label === draft.label &&
+        old.address === draft.address &&
+        old.lat === draft.lat &&
+        old.lng === draft.lng &&
+        old.radius === draft.radius;
+      const place: Place = { ...draft, meta: same && old ? old.meta : meta };
+      next.places.push(place);
+      if (!same)
+        changes.push({
+          field: 'places',
+          before: old ? describePlace(old) : null,
+          after: describePlace(place),
+        });
+      if (old) placesById.delete(old.id);
+    }
+    for (const removed of placesById.values())
+      changes.push({ field: 'places', before: describePlace(removed), after: null });
+  }
   return { profile: next, changes };
+}
+
+const validCoords = (lat: number, lng: number) =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  Math.abs(lat) <= 90 &&
+  Math.abs(lng) <= 180 &&
+  !(lat === 0 && lng === 0);
+
+const clampRadius = (r: number) => Math.round(Math.min(1000, Math.max(100, r)));
+
+/** Luogo per etichetta («casa», «Casa mia», «il lavoro»). */
+export function findPlace(profile: UserProfile, label: string): Place | undefined {
+  const wanted = normalizePlaceLabel(label);
+  if (!wanted) return undefined;
+  return (
+    profile.places.find((p) => p.label === wanted) ??
+    // «ufficio» e «lavoro» indicano di solito lo stesso posto.
+    (wanted === 'ufficio' || wanted === 'lavoro'
+      ? profile.places.find((p) => p.label === (wanted === 'ufficio' ? 'lavoro' : 'ufficio'))
+      : undefined)
+  );
+}
+
+/**
+ * Crea o aggiorna un luogo con un indirizzo (dalla chat o dal tool `place_set`): un indirizzo nuovo cancella le
+ * coordinate vecchie, che il telefono ricalcola. Modifica `profile` sul posto; null se i luoghi sono già al massimo.
+ */
+export function upsertPlace(
+  profile: UserProfile,
+  input: { label: string; address: string },
+  meta: SourceMeta,
+): Place | null {
+  const label = normalizePlaceLabel(input.label);
+  const address = clean(input.address, 160);
+  if (!label || !address) return null;
+  const i = profile.places.findIndex((p) => p.label === label);
+  const old = i >= 0 ? profile.places[i] : undefined;
+  if (!old && profile.places.length >= MAX_PLACES) return null;
+  const place: Place = {
+    id: old?.id ?? newId(),
+    label,
+    address,
+    ...(old?.radius ? { radius: old.radius } : {}),
+    meta,
+  };
+  if (i >= 0) profile.places[i] = place;
+  else profile.places.push(place);
+  return place;
+}
+
+/**
+ * Coordinate trovate dal telefono per un indirizzo detto in chat (o corrette): la provenienza resta quella del luogo.
+ * Nessun cambiamento se il luogo non c'è o le coordinate non sono valide.
+ */
+export function setPlaceCoordinates(
+  current: UserProfile,
+  id: string,
+  coords: { lat: number; lng: number; address?: string | undefined },
+): { profile: UserProfile; changes: ProfileChange[] } {
+  const place = current.places.find((p) => p.id === id);
+  if (!place || !validCoords(coords.lat, coords.lng)) return { profile: current, changes: [] };
+  const address = clean(coords.address, 160) ?? place.address;
+  const updated: Place = {
+    ...place,
+    lat: coords.lat,
+    lng: coords.lng,
+    ...(address ? { address } : {}),
+  };
+  const next: UserProfile = {
+    ...current,
+    places: current.places.map((p) => (p.id === id ? updated : p)),
+  };
+  return {
+    profile: next,
+    changes: [{ field: 'places', before: describePlace(place), after: describePlace(updated) }],
+  };
+}
+
+/** «casa: via Roma 3, Treviso» (con «posizione da confermare» se mancano le coordinate). */
+export function describePlace(p: Pick<Place, 'label' | 'address' | 'lat' | 'lng'>): string {
+  const where =
+    p.address ?? (p.lat !== undefined ? 'posizione sulla mappa' : 'indirizzo da indicare');
+  return `${p.label}: ${where}`;
 }
 
 const MONTHS = [
@@ -429,6 +632,8 @@ export function renderProfile(
   if (profile.email) lines.push(`Email: ${profile.email}`);
   if (profile.family.length)
     lines.push(`Famiglia: ${profile.family.map((m) => describeMember(m, now)).join('; ')}`);
+  if (profile.places.length)
+    lines.push(`Luoghi: ${profile.places.map((p) => describePlace(p)).join('; ')}`);
   if (!lines.length) return '';
   if (audience === 'user') return lines.map((l) => `- ${l}`).join('\n');
   return [
@@ -440,7 +645,11 @@ export function renderProfile(
 /** Riepilogo dei cambiamenti in una riga, per gli avvisi e per l'app. */
 export function describeChange(c: ProfileChange): string {
   const label =
-    c.field === 'family' ? 'famiglia' : (PROFILE_LABELS[c.field as ProfileField] ?? c.field);
+    c.field === 'family'
+      ? 'famiglia'
+      : c.field === 'places'
+        ? 'luoghi'
+        : (PROFILE_LABELS[c.field as ProfileField] ?? c.field);
   const show = (v: string | null) =>
     v && c.field === 'birthDate' ? describeBirthDate(v) : (v ?? '');
   if (c.conflict)

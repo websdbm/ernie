@@ -1,8 +1,10 @@
 import {
   describeChange,
+  PLACE_RADIUS_DEFAULT,
   PROFILE_FIELDS,
   type ProfileStore,
   replaceProfileByUser,
+  setPlaceCoordinates,
   type UserProfile,
 } from '@ernie/memory';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -48,6 +50,28 @@ const PutBody = z
       )
       .max(20)
       .default([]),
+    /** Luoghi (15 ott 2026): assenti dalle app vecchie, che così non li cancellano. */
+    places: z
+      .array(
+        z.object({
+          id: z.string().max(40).optional(),
+          label: z.string().min(1).max(40),
+          address: text(160),
+          lat: z.number().min(-90).max(90).nullable().optional(),
+          lng: z.number().min(-180).max(180).nullable().optional(),
+          radius: z.number().min(50).max(2000).nullable().optional(),
+        }),
+      )
+      .max(10)
+      .optional(),
+  })
+  .strict();
+
+const CoordsBody = z
+  .object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    address: z.string().max(160).optional(),
   })
   .strict();
 
@@ -64,6 +88,16 @@ function view(p: UserProfile) {
       notes: m.notes ?? null,
       source: m.meta.source,
       at: m.meta.at,
+    })),
+    places: p.places.map((pl) => ({
+      id: pl.id,
+      label: pl.label,
+      address: pl.address ?? null,
+      lat: pl.lat ?? null,
+      lng: pl.lng ?? null,
+      radius: pl.radius ?? PLACE_RADIUS_DEFAULT,
+      source: pl.meta.source,
+      at: pl.meta.at,
     })),
     sources: Object.fromEntries(
       Object.entries(p.meta).map(([k, m]) => [
@@ -100,12 +134,32 @@ export async function profileRoutes(
           error: 'invalid_body',
           message: b.error.issues[0]?.message ?? 'scheda non valida',
         });
-      const { family, ...fields } = b.data;
+      const { family, places, ...fields } = b.data;
       const current = await opts.profiles.get(userId);
-      const { profile, changes } = replaceProfileByUser(current, { fields, family }, new Date());
+      const { profile, changes } = replaceProfileByUser(
+        current,
+        { fields, family, ...(places ? { places } : {}) },
+        new Date(),
+      );
       await opts.profiles.save(userId, profile, changes, 'user');
       if (changes.length) opts.onChanged?.(userId);
       return { profile: view(profile), changes: changes.map(describeChange) };
+    });
+
+    // Coordinate trovate dal telefono per un indirizzo detto in chat (geocodifica sul dispositivo).
+    api.patch('/v1/profile/places/:id', async (req, reply) => {
+      const { userId } = requireAuth(req);
+      const id = (req.params as { id: string }).id;
+      const b = CoordsBody.safeParse(req.body);
+      if (!b.success)
+        return reply.code(400).send({ error: 'invalid_body', message: 'attesi lat e lng' });
+      const current = await opts.profiles.get(userId);
+      const { profile, changes } = setPlaceCoordinates(current, id, b.data);
+      if (!changes.length)
+        return reply.code(404).send({ error: 'not_found', message: 'luogo inesistente' });
+      await opts.profiles.save(userId, profile, changes, 'user');
+      opts.onChanged?.(userId);
+      return { profile: view(profile) };
     });
   });
 }

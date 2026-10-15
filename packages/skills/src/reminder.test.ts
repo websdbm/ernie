@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SkillRegistry } from './registry.js';
 import {
+  addressLike,
   createReminderSkill,
   formatWhen,
   leadQuantity,
   parseAppointment,
   parseReminderCommand,
+  placePhrase,
   REMINDER_FIRE_PREFIX,
   type Reminder,
   type ReminderStore,
@@ -139,7 +141,7 @@ describe('promemoria a una persona collegata (Famiglia)', () => {
         return {
           id: '00000000-0000-4000-8000-000000000009',
           text: input.text,
-          at: input.at,
+          ...(input.at ? { at: input.at } : {}),
           status: 'scheduled' as const,
           ...(input.forLabel ? { for: input.forLabel } : {}),
         };
@@ -172,7 +174,7 @@ describe('skill ricordami', () => {
         const r: Reminder = {
           id: `00000000-0000-4000-8000-00000000000${saved.length + 1}`,
           text: input.text,
-          at: input.at,
+          ...(input.at ? { at: input.at } : {}),
           status: 'scheduled',
         };
         saved.push(r);
@@ -220,10 +222,10 @@ describe('titolo e frase di conferma dei promemoria', () => {
   it('nessuna parentesi annidata: le stime in una frase a parte', async () => {
     const { createReminderSkill } = await import('./reminder.js');
     const store = {
-      create: async (_u: string, i: { text: string; at: Date }) => ({
+      create: async (_u: string, i: { text: string; at?: Date }) => ({
         id: 'r1',
         text: 'Prendere Giorgio e portarlo alla visita',
-        at: i.at,
+        ...(i.at ? { at: i.at } : {}),
         status: 'scheduled' as const,
       }),
       list: async () => [],
@@ -329,7 +331,7 @@ describe('promemoria: email nella scheda', () => {
         return {
           id: 'r1',
           text: i.text,
-          at: i.at,
+          ...(i.at ? { at: i.at } : {}),
           status: 'scheduled',
           ...(i.channels ? { channels: i.channels } : {}),
         };
@@ -408,10 +410,10 @@ describe('sveglia: promemoria che suona sul telefono, senza email', () => {
   });
 
   it('la skill crea il promemoria con sveglia accesa ed email spenta, e lo dice', async () => {
-    const create = vi.fn(async (_u: string, input: { text: string; at: Date }) => ({
+    const create = vi.fn(async (_u: string, input: { text: string; at?: Date }) => ({
       id: '00000000-0000-4000-8000-000000000009',
       text: input.text,
-      at: input.at,
+      ...(input.at ? { at: input.at } : {}),
       status: 'scheduled' as const,
     }));
     const store: ReminderStore = {
@@ -549,7 +551,7 @@ describe('appuntamento con preavviso (richiesta del 15 ott 2026)', () => {
         return {
           id: '11111111-1111-4111-8111-111111111111',
           text: 'Dentista alle 19:00',
-          at: input.at,
+          ...(input.at ? { at: input.at } : {}),
           status: 'scheduled',
           ...(input.eventAt ? { eventAt: input.eventAt } : {}),
         };
@@ -578,5 +580,145 @@ describe('appuntamento con preavviso (richiesta del 15 ott 2026)', () => {
       { userId: 'u1', sessionId: null } as never,
     );
     expect(fired.text).toBe("⏰ Tra un'ora: Dentista alle 19:00");
+  });
+});
+
+describe('promemoria legati a un luogo', () => {
+  it('riconosce arrivo, uscita, «ogni volta» e il luogo in qualsiasi punto della frase', () => {
+    expect(
+      parseReminderCommand('ricordami di comprare il latte quando arrivo a casa', NOW, TZ),
+    ).toEqual({
+      op: 'create_place',
+      text: 'comprare il latte',
+      place: { label: 'casa', on: 'arrive', repeat: false },
+    });
+    expect(
+      parseReminderCommand('Quando arrivo al lavoro ricordami di chiamare Marco.', NOW, TZ),
+    ).toMatchObject({
+      op: 'create_place',
+      text: 'chiamare Marco',
+      place: { label: 'lavoro', on: 'arrive' },
+    });
+    expect(parseReminderCommand('quando esco di casa ricordami le chiavi', NOW, TZ)).toMatchObject({
+      text: 'le chiavi',
+      place: { label: 'casa', on: 'leave' },
+    });
+    expect(
+      parseReminderCommand('ricordami quando torno a casa mia di chiamare la mamma', NOW, TZ),
+    ).toMatchObject({
+      text: 'chiamare la mamma',
+      place: { label: 'casa', on: 'arrive' },
+    });
+    expect(
+      parseReminderCommand('ogni volta che arrivo in palestra ricordami di bere', NOW, TZ),
+    ).toMatchObject({
+      place: { label: 'palestra', on: 'arrive', repeat: true },
+    });
+    expect(
+      parseReminderCommand("ricordami di stampare quando arrivo all'ufficio", NOW, TZ),
+    ).toMatchObject({
+      place: { label: 'ufficio' },
+    });
+    expect(
+      parseReminderCommand('ricorda a Giorgio di fare i compiti quando arriva a casa', NOW, TZ),
+    ).toEqual({
+      op: 'place_other',
+      who: 'Giorgio',
+    });
+    // Le richieste con un'ora restano com'erano.
+    expect(parseReminderCommand('ricordami di uscire alle 17', NOW, TZ)).toMatchObject({
+      op: 'create',
+    });
+  });
+
+  it('salva un indirizzo detto in chat solo se sembra un indirizzo', () => {
+    expect(parseReminderCommand('casa mia è in via Roma 3, Treviso', NOW, TZ)).toEqual({
+      op: 'set_place',
+      label: 'casa',
+      address: 'via Roma 3, Treviso',
+    });
+    expect(parseReminderCommand('abito in piazza Duomo 1 a Milano', NOW, TZ)).toMatchObject({
+      label: 'casa',
+      address: 'piazza Duomo 1 a Milano',
+    });
+    expect(
+      parseReminderCommand('il mio ufficio è in corso Italia 10, Roma', NOW, TZ),
+    ).toMatchObject({
+      label: 'ufficio',
+    });
+    expect(parseReminderCommand('lavoro in banca', NOW, TZ)).toBeNull();
+    expect(parseReminderCommand('casa mia è bellissima', NOW, TZ)).toBeNull();
+    expect(addressLike('Via Garibaldi 12')).toBe('Via Garibaldi 12');
+    expect(placePhrase({ label: 'casa', on: 'arrive' })).toBe('quando arrivi a casa');
+    expect(placePhrase({ label: 'lavoro', on: 'leave', repeat: true })).toBe(
+      'ogni volta che esci dal lavoro',
+    );
+  });
+
+  it('luogo sconosciuto: crea il promemoria e chiede l’indirizzo; la risposta lo salva', async () => {
+    const created: Array<Parameters<ReminderStore['create']>[1]> = [];
+    let place: { label: string; address: string } | null = null;
+    const store: ReminderStore = {
+      create: async (_u, input) => {
+        created.push(input);
+        return {
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Comprare il latte',
+          status: 'scheduled',
+          ...(input.place ? { place: input.place } : {}),
+        };
+      },
+      list: async () =>
+        place
+          ? [
+              {
+                id: '22222222-2222-4222-8222-222222222222',
+                text: 'Comprare il latte',
+                status: 'scheduled' as const,
+                place: { label: 'casa', on: 'arrive' as const, address: place.address },
+              },
+            ]
+          : [],
+      remove: async () => true,
+      update: async () => null,
+      findPlace: async () =>
+        place ? { label: 'casa', address: place.address, located: false } : null,
+      setPlace: async (_u, input) => {
+        place = input;
+        return input;
+      },
+    };
+    const skill = createReminderSkill(store, TZ);
+    const ctx = { userId: 'u', sessionId: null, requestId: 'x' };
+    const plan = parseReminderCommand(
+      'ricordami di comprare il latte quando arrivo a casa',
+      NOW,
+      TZ,
+    );
+    const r1 = await skill.run(plan, ctx);
+    expect(r1.text).toContain('📍 Va bene: quando arrivi a casa ti ricordo di comprare il latte.');
+    expect(r1.text).toContain("non so ancora dov'è «casa»");
+    expect(r1.awaiting).toEqual({ kind: 'place', label: 'casa' });
+    expect(created[0]).toMatchObject({ place: { label: 'casa', on: 'arrive' } });
+    expect(created[0]?.at).toBeUndefined();
+    const block = r1.blocks?.[0];
+    if (block?.kind !== 'reminders') throw new Error('atteso un blocco promemoria');
+    expect(block.reminders[0]).toMatchObject({ place: { label: 'casa', on: 'arrive' } });
+    expect(block.reminders[0]?.at).toBeUndefined();
+
+    const follow = reminderFollowUp(r1.awaiting, 'via Roma 3, Treviso', NOW, TZ);
+    expect(follow).toEqual({ op: 'set_place', label: 'casa', address: 'via Roma 3, Treviso' });
+    expect(reminderFollowUp(r1.awaiting, 'boh, non lo so', NOW, TZ)).toBeNull();
+    const r2 = await skill.run(follow, ctx);
+    expect(r2.text).toContain('📍 Fatto: «casa» è in via Roma 3, Treviso.');
+    expect(r2.text).toContain('Il promemoria «Comprare il latte» scatterà quando arrivi lì.');
+
+    // Luogo noto ma non ancora sulla mappa: il telefono cerca la posizione.
+    const r3 = await skill.run(plan, ctx);
+    expect(r3.text).toContain('Il telefono cerca da solo la posizione di «via Roma 3, Treviso»');
+    expect(r3.awaiting).toBeUndefined();
+
+    const list = await skill.run({ op: 'list' }, ctx);
+    expect(list.text).toContain('- Comprare il latte: quando arrivi a casa');
   });
 });

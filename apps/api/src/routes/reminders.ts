@@ -20,8 +20,9 @@ function requireAuth(req: FastifyRequest): AuthContext {
 const json = (r: Reminder) => ({
   id: r.id,
   text: r.text,
-  at: r.at.toISOString(),
+  ...(r.at ? { at: r.at.toISOString() } : {}),
   status: r.status,
+  ...(r.place ? { place: r.place } : {}),
   ...(r.for ? { for: r.for } : {}),
   ...(r.from ? { from: r.from } : {}),
   ...(r.channels ? { channels: r.channels } : {}),

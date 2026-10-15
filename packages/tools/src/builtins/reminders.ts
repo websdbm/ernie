@@ -8,10 +8,23 @@ import { defineTool, ToolError, type ToolSpec } from '../types.js';
  * sera, mi avverti un'oretta prima?») il modello non deve spiegare come andrebbe detta, ma creare lui il
  * promemoria con questi tool. L'archivio vero è quello delle automazioni; qui c'è solo l'interfaccia.
  */
+export interface ReminderToolPlace {
+  readonly label: string;
+  readonly on: 'arrive' | 'leave';
+  readonly repeat?: boolean;
+  readonly placeId?: string;
+  readonly address?: string;
+  readonly lat?: number;
+  readonly lng?: number;
+  readonly radius?: number;
+}
+
 export interface ReminderToolInfo {
   readonly id: string;
   readonly text: string;
-  readonly at: Date;
+  /** Assente nei promemoria legati a un luogo. */
+  readonly at?: Date;
+  readonly place?: ReminderToolPlace;
   /** Appuntamento con preavviso: ora dell'appuntamento (`at` è l'avviso). */
   readonly eventAt?: Date;
   readonly for?: string;
@@ -24,7 +37,8 @@ export interface ReminderToolStore {
     userId: string,
     input: {
       text: string;
-      at: Date;
+      at?: Date;
+      place?: { label: string; on: 'arrive' | 'leave'; repeat?: boolean };
       timezone: string;
       eventAt?: Date;
       forLabel?: string;
@@ -34,12 +48,25 @@ export interface ReminderToolStore {
   ): Promise<ReminderToolInfo>;
   list(userId: string): Promise<ReminderToolInfo[]>;
   remove(userId: string, id: string): Promise<boolean>;
+  /** Salva l'indirizzo di un luogo nella scheda anagrafica («casa», «lavoro»). */
+  setPlace?(
+    userId: string,
+    input: { label: string; address: string },
+  ): Promise<{ label: string; address: string } | null>;
 }
 
 const Info = z.object({
   id: z.string(),
   text: z.string(),
-  at: z.string(),
+  at: z.string().optional(),
+  place: z
+    .object({
+      label: z.string(),
+      on: z.enum(['arrive', 'leave']),
+      repeat: z.boolean().optional(),
+      address: z.string().optional(),
+    })
+    .optional(),
   eventAt: z.string().optional(),
   for: z.string().optional(),
   from: z.string().optional(),
@@ -49,7 +76,17 @@ type InfoOut = z.infer<typeof Info>;
 const toInfo = (r: ReminderToolInfo): InfoOut => ({
   id: r.id,
   text: r.text,
-  at: r.at.toISOString(),
+  ...(r.at ? { at: r.at.toISOString() } : {}),
+  ...(r.place
+    ? {
+        place: {
+          label: r.place.label,
+          on: r.place.on,
+          ...(r.place.repeat ? { repeat: true } : {}),
+          ...(r.place.address ? { address: r.place.address } : {}),
+        },
+      }
+    : {}),
   ...(r.eventAt ? { eventAt: r.eventAt.toISOString() } : {}),
   ...(r.for ? { for: r.for } : {}),
   ...(r.from ? { from: r.from } : {}),
@@ -62,8 +99,23 @@ function block(items: readonly ReminderToolInfo[], title: string): ContentBlock 
     reminders: items.slice(0, 50).map((r) => ({
       id: r.id,
       text: r.text.slice(0, 300),
-      at: r.at.toISOString(),
+      ...(r.at ? { at: r.at.toISOString() } : {}),
       status: 'scheduled' as const,
+      ...(r.place
+        ? {
+            place: {
+              label: r.place.label.slice(0, 40),
+              on: r.place.on,
+              ...(r.place.repeat ? { repeat: true } : {}),
+              ...(r.place.placeId ? { placeId: r.place.placeId } : {}),
+              ...(r.place.address ? { address: r.place.address.slice(0, 160) } : {}),
+              ...(r.place.lat !== undefined && r.place.lng !== undefined
+                ? { lat: r.place.lat, lng: r.place.lng }
+                : {}),
+              ...(r.place.radius ? { radius: r.place.radius } : {}),
+            },
+          }
+        : {}),
       ...(r.eventAt ? { eventAt: r.eventAt.toISOString() } : {}),
       ...(r.for ? { for: r.for.slice(0, 60) } : {}),
       ...(r.from ? { from: r.from.slice(0, 60) } : {}),
@@ -100,7 +152,7 @@ export function createReminderTools(
       version: '1',
       category: 'reminders',
       description:
-        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
+        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa (`at`) oppure quando arriva in un luogo o lo lascia (`place`, es. «quando arrivo a casa»: label «casa», on «arrive»; «ogni volta che» = repeat true). I luoghi sono quelli della scheda (casa, lavoro…): se l'utente ha appena detto l'indirizzo, salvalo prima con place_set. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 8_000,
       inputSchema: z.object({
@@ -109,7 +161,24 @@ export function createReminderTools(
           .min(1)
           .max(200)
           .describe('Cosa ricordare, breve e senza l’ora (es. «Dentista», «Chiamare Luca»)'),
-        at: z.iso.datetime({ offset: true }).describe('Istante dell’avviso, ISO 8601 con fuso'),
+        at: z.iso
+          .datetime({ offset: true })
+          .optional()
+          .describe(
+            'Istante dell’avviso, ISO 8601 con fuso (assente se il promemoria è legato a un luogo)',
+          ),
+        place: z
+          .object({
+            label: z
+              .string()
+              .min(1)
+              .max(40)
+              .describe('Luogo della scheda: «casa», «lavoro», «palestra»…'),
+            on: z.enum(['arrive', 'leave']).describe('arrive = quando arriva, leave = quando esce'),
+            repeat: z.boolean().optional().describe('true = ogni volta, non solo la prossima'),
+          })
+          .optional()
+          .describe('Promemoria legato a un luogo, al posto di `at`'),
         eventAt: z.iso
           .datetime({ offset: true })
           .optional()
@@ -126,6 +195,24 @@ export function createReminderTools(
       }),
       outputSchema: Info,
       execute: async (input, ctx) => {
+        const timezone = zoneOf(ctx.device?.timezone, fallbackTz);
+        if (input.place) {
+          if (input.forLabel)
+            throw new ToolError(
+              'I promemoria legati a un luogo valgono solo per l’utente, non per i familiari: proponi un’ora precisa.',
+              'invalid_input',
+            );
+          const label = input.place.label.trim().toLowerCase();
+          const r = await store.create(ctx.userId, {
+            text: input.text,
+            timezone,
+            place: { label, on: input.place.on, ...(input.place.repeat ? { repeat: true } : {}) },
+          });
+          lastCreated.set(ctx.userId, r);
+          return toInfo(r);
+        }
+        if (!input.at)
+          throw new ToolError('Serve `at` (un’ora) oppure `place` (un luogo).', 'invalid_input');
         const at = new Date(input.at);
         if (at.getTime() <= Date.now() + 30_000)
           throw new ToolError(
@@ -138,7 +225,6 @@ export function createReminderTools(
             'L’appuntamento (eventAt) deve venire dopo l’avviso (at).',
             'invalid_input',
           );
-        const timezone = zoneOf(ctx.device?.timezone, fallbackTz);
         try {
           const r = await store.create(ctx.userId, {
             text: input.text,
@@ -201,6 +287,42 @@ export function createReminderTools(
       inputSchema: z.object({ id: z.string().min(1).max(80) }),
       outputSchema: z.object({ removed: z.boolean() }),
       execute: async (input, ctx) => ({ removed: await store.remove(ctx.userId, input.id) }),
+    }),
+    defineTool({
+      id: 'place_set',
+      version: '1',
+      category: 'reminders',
+      description:
+        'Salva nella scheda dell’utente l’indirizzo di un suo luogo («casa mia è in via Roma 3, Treviso» → label «casa», address «via Roma 3, Treviso»). Serve ai promemoria legati a un luogo; il telefono trova da solo la posizione sulla mappa. Dopo, conferma in una riga e ricorda che può controllarla in Impostazioni › La tua scheda › Luoghi.',
+      risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
+      timeoutMs: 5_000,
+      inputSchema: z.object({
+        label: z
+          .string()
+          .min(1)
+          .max(40)
+          .describe('Nome breve del luogo: «casa», «lavoro», «palestra»…'),
+        address: z
+          .string()
+          .min(5)
+          .max(160)
+          .describe('Indirizzo come lo dice l’utente: via, numero civico, città'),
+      }),
+      outputSchema: z.object({ label: z.string(), address: z.string() }),
+      execute: async (input, ctx) => {
+        if (!store.setPlace)
+          throw new ToolError('I luoghi non sono disponibili su questo server.', 'unavailable');
+        const saved = await store.setPlace(ctx.userId, {
+          label: input.label.trim().toLowerCase(),
+          address: input.address.trim(),
+        });
+        if (!saved)
+          throw new ToolError(
+            'Non riesco a salvare il luogo (forse ce ne sono già dieci): chiedi all’utente di gestirli in Impostazioni › La tua scheda › Luoghi.',
+            'invalid_input',
+          );
+        return saved;
+      },
     }),
   ];
 }

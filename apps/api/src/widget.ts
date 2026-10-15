@@ -66,8 +66,12 @@ export function buildWidgetSummary(input: {
   unread: number;
 }): WidgetSummary {
   const { now } = input;
+  // Solo quelli con un'ora: i promemoria legati a un luogo non hanno un «prossimo» da mostrare.
   const upcoming = input.reminders
-    .filter((r) => r.status === 'scheduled' && !r.for && r.at.getTime() > now.getTime() - 60_000)
+    .filter(
+      (r): r is Reminder & { at: Date } =>
+        r.status === 'scheduled' && !r.for && !!r.at && r.at.getTime() > now.getTime() - 60_000,
+    )
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const active = input.automations
     .filter((a) => a.enabled && !a.key.startsWith(REMINDER_KEY))

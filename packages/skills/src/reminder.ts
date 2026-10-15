@@ -19,7 +19,10 @@ import { addDays, localParts, zonedToUtc } from './zoned.js';
 export interface Reminder {
   readonly id: string;
   readonly text: string;
-  readonly at: Date;
+  /** Quando suona; assente nei promemoria legati a un luogo. */
+  readonly at?: Date;
+  /** Promemoria geolocalizzato (15 ott 2026): scatta arrivando nel luogo (o lasciandolo). */
+  readonly place?: ReminderPlace;
   readonly status: 'scheduled' | 'done' | 'cancelled';
   /** Promemoria messo da me a una persona collegata (Famiglia): la sua etichetta («Giorgio»). */
   readonly for?: string;
@@ -31,6 +34,20 @@ export interface Reminder {
   readonly repeat?: ReminderRepeat;
   /** Preavviso di un appuntamento (v1.13): `at` è l'ora dell'avviso, `eventAt` quella dell'appuntamento. */
   readonly eventAt?: Date;
+}
+
+export interface ReminderPlace {
+  /** Etichetta del luogo nella scheda anagrafica («casa», «lavoro»). */
+  readonly label: string;
+  readonly on: 'arrive' | 'leave';
+  /** Ogni volta, non solo la prossima. */
+  readonly repeat?: boolean;
+  /** Dalla scheda, per il telefono: assenti finché il luogo non ha indirizzo o posizione. */
+  readonly placeId?: string;
+  readonly address?: string;
+  readonly lat?: number;
+  readonly lng?: number;
+  readonly radius?: number;
 }
 
 export interface ReminderChannels {
@@ -52,7 +69,10 @@ export interface ReminderStore {
     userId: string,
     input: {
       text: string;
-      at: Date;
+      /** Ora del promemoria; assente se è legato a un luogo (`place`). */
+      at?: Date;
+      /** Promemoria geolocalizzato: scatta arrivando nel luogo della scheda (o lasciandolo). */
+      place?: { label: string; on: 'arrive' | 'leave'; repeat?: boolean };
       timezone: string;
       forLabel?: string;
       /** Ricorrente: `at` è la prima occorrenza. */
@@ -78,6 +98,16 @@ export interface ReminderStore {
   emailAddress?(userId: string): Promise<string | null>;
   /** Salva o sostituisce l'email nella scheda anagrafica (detta dall'utente). */
   setEmail?(userId: string, email: string): Promise<boolean>;
+  /** Luogo della scheda per etichetta; null se non c'è (i promemoria per luogo chiedono l'indirizzo). */
+  findPlace?(
+    userId: string,
+    label: string,
+  ): Promise<{ label: string; address?: string; located: boolean } | null>;
+  /** Salva l'indirizzo di un luogo nella scheda («casa mia è in via Roma 3»); null se non riesce. */
+  setPlace?(
+    userId: string,
+    input: { label: string; address: string },
+  ): Promise<{ label: string; address: string } | null>;
 }
 
 export type ReminderPlan =
@@ -97,11 +127,128 @@ export type ReminderPlan =
     }
   | { op: 'ask_time'; text: string; who?: string; email?: boolean; alarm?: boolean }
   | { op: 'set_email'; email: string }
+  | {
+      op: 'create_place';
+      text: string;
+      place: { label: string; on: 'arrive' | 'leave'; repeat: boolean };
+    }
+  /** «Ricorda a Giorgio … quando arriva a casa»: per ora i promemoria per luogo valgono solo per sé. */
+  | { op: 'place_other'; who?: string }
+  | { op: 'set_place'; label: string; address: string }
   | { op: 'list' }
   | { op: 'cancel'; what: string }
   | { op: 'fire'; text: string; from?: string; lead?: string };
 
 export const REMINDER_FIRE_PREFIX = '__promemoria__ ';
+
+// ---------- luoghi ----------
+
+// Con l'apostrofo il luogo segue attaccato («all'ufficio»); le altre preposizioni vogliono uno spazio dopo.
+const PLACE_PREP =
+  "(?:(?:all|dall|nell|sull)'|(?:allo|alla|al|ai|in|nello|nella|nel|dallo|dalla|dal|da|di|a)\\s+)";
+const ARRIVE_VERBS =
+  'arrivo|arriverò|arrivero|sono|sarò|saro|torno|tornerò|tornero|rientro|rientrerò|rientrero|entro|entrerò|passo|vado';
+const LEAVE_VERBS =
+  'esco|uscirò|usciro|lascio|lascerò|lascero|parto|partirò|partiro|vado\\s+via|me\\s+ne\\s+vado';
+const OTHER_VERBS = 'arriva|arriverà|torna|tornerà|rientra|esce|uscirà|lascia|parte|è|sarà';
+const PLACE_RE = new RegExp(
+  `(?<when>ogni\\s+volta\\s+che|tutte\\s+le\\s+volte\\s+che|non\\s+appena|quando|appena)\\s+(?<verb>${LEAVE_VERBS}|${ARRIVE_VERBS}|${OTHER_VERBS})\\s+(?<prep>${PLACE_PREP})(?<place>[\\p{L}][\\p{L}']*(?:\\s+[\\p{L}']+){0,2}?)(?=\\s*(?:[,.;:!?]|$)|\\s+(?:ricordami|ricordamelo|ricorda|ricordati|di|che|e|mi)\\s)`,
+  'iu',
+);
+
+/** Testo che sembra un indirizzo (via, piazza… o un numero civico): evita di salvare «lavoro in banca». */
+export function addressLike(raw: string): string | undefined {
+  const t = raw
+    .replace(/[‘’´`]/gu, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:è|e'|in|a|al|alla|nel|nella|si\s+trova\s+in)\s+/iu, '')
+    .replace(/[.!]+$/u, '')
+    .trim();
+  if (t.length < 5 || t.length > 160) return undefined;
+  if (
+    /\d/u.test(t) ||
+    /^(?:via|viale|v\.le|piazza|p\.za|piazzale|corso|c\.so|strada|vicolo|largo|località|loc\.|contrada|frazione|borgo|lungomare|lungotevere)\b/iu.test(
+      t,
+    )
+  )
+    return t;
+  return undefined;
+}
+
+/** Preposizioni per i luoghi più comuni: «a casa» / «di casa», «al lavoro» / «dal lavoro»… */
+const PLACE_WORDS: Record<string, readonly [string, string]> = {
+  casa: ['a casa', 'di casa'],
+  lavoro: ['al lavoro', 'dal lavoro'],
+  ufficio: ['in ufficio', "dall'ufficio"],
+  scuola: ['a scuola', 'da scuola'],
+  palestra: ['in palestra', 'dalla palestra'],
+  università: ["all'università", "dall'università"],
+  stazione: ['in stazione', 'dalla stazione'],
+  supermercato: ['al supermercato', 'dal supermercato'],
+};
+
+/** «quando arrivi a casa», «ogni volta che esci dal lavoro» (seconda persona, per le risposte). */
+export function placePhrase(place: Pick<ReminderPlace, 'label' | 'on' | 'repeat'>): string {
+  const [to, from] = PLACE_WORDS[place.label] ?? [`a ${place.label}`, `da ${place.label}`];
+  const when = place.repeat ? 'ogni volta che' : 'quando';
+  return place.on === 'leave' ? `${when} esci ${from}` : `${when} arrivi ${to}`;
+}
+
+/** Etichetta breve dal luogo detto: «casa mia» → «casa», «l'ufficio» → «ufficio». */
+function placeLabel(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/^(?:l'|la\s+|il\s+|lo\s+)/u, '')
+    .replace(/\s+(?:mia|mio|nostra|nostro)$/u, '')
+    .replace(/^(?:mia|mio|nostra|nostro)\s+/u, '')
+    .trim();
+}
+
+/**
+ * «Ricordami di … quando arrivo a casa», «quando esco dal lavoro ricordami …», «ogni volta che arrivo in palestra…».
+ * null se la frase non lega il promemoria a un luogo.
+ */
+export function parsePlaceReminder(text: string): ReminderPlan | null {
+  const m = PLACE_RE.exec(text);
+  if (!m?.groups?.verb || !m.groups.place) return null;
+  const verb = m.groups.verb.toLowerCase().replace(/\s+/g, ' ');
+  const toOther = /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>\S+)/iu.exec(text)
+    ?.groups?.who;
+  if (new RegExp(`^(?:${OTHER_VERBS})$`, 'iu').test(verb) || toOther)
+    return { op: 'place_other', ...(toOther ? { who: toOther.replace(/[,:]+$/u, '') } : {}) };
+  const on: 'arrive' | 'leave' = new RegExp(`^(?:${LEAVE_VERBS})$`, 'iu').test(verb)
+    ? 'leave'
+    : 'arrive';
+  const repeat = /ogni|tutte/iu.test(m.groups.when ?? '');
+  const label = placeLabel(m.groups.place);
+  if (!label) return null;
+  const rest = `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`
+    .replace(
+      /(?:^|\s)(?:ricordami|ricordamelo|ricordati|ricorda(?:mi)?|promemoria)\s*(?::|,)?\s*/iu,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:di|che|,)\s+/iu, '')
+    .replace(/[,;:\s]+$/u, '')
+    .trim();
+  if (!rest) return null;
+  return { op: 'create_place', text: rest, place: { label, on, repeat } };
+}
+
+/** «Casa mia è in via Roma 3, Treviso», «abito in via…», «il mio ufficio è in piazza…». */
+function parsePlaceStatement(text: string): ReminderPlan | null {
+  const m =
+    /^(?:(?:la\s+|il\s+|l')?(?:mia\s+|mio\s+)?(?<label>casa|ufficio|lavoro|palestra|scuola)(?:\s+(?:mia|mio))?\s+(?:è|e'|si\s+trova|sta)\s+|(?:io\s+)?(?<abito>abito|vivo)\s+)(?<addr>.+)$/iu.exec(
+      text,
+    );
+  if (!m?.groups?.addr) return null;
+  const address = addressLike(m.groups.addr);
+  if (!address) return null;
+  const label = m.groups.abito ? 'casa' : placeLabel(m.groups.label ?? '');
+  return label ? { op: 'set_place', label, address } : null;
+}
 
 /** Giorni del mese in lettere («il due novembre», «il primo dicembre», «il ventitré»). */
 const DAY_WORDS: Record<string, number> = Object.fromEntries(
@@ -470,6 +617,8 @@ export function parseReminderCommand(
   const saidAs = /usa\s+(?<e>\S+@\S+)\s+come\s+(?:(?:la\s+)?mia\s+)?(?:e-?mail|mail)/iu.exec(text);
   const stated = normalizeEmailAddress(said?.groups?.e ?? saidAs?.groups?.e);
   if (stated) return { op: 'set_email', email: stated };
+  const placeStated = parsePlaceStatement(text);
+  if (placeStated) return placeStated;
   const wake = parseWakeUp(text, now, tz);
   if (wake) return wake;
   const appointment = parseAppointment(text, now, tz);
@@ -486,6 +635,9 @@ export function parseReminderCommand(
       text,
     );
   if (cancel) return { op: 'cancel', what: clean(cancel.groups?.what ?? 'tutti') };
+  // «…quando arrivo a casa»: legato a un luogo della scheda, senza ora.
+  const placed = parsePlaceReminder(text);
+  if (placed) return placed;
   // «ricorda a Giorgio di …», «promemoria per Giorgio: …»: a una persona collegata (Famiglia).
   const toOther =
     /(?:^|\s)(?:ricorda\s+a|promemoria\s+(?:per|a))\s+(?<who>\S+(?:\s+\S+)?)\s*(?::|,|\s+di\s|\s+che\s)\s*/iu.exec(
@@ -741,6 +893,14 @@ export function reminderFollowUp(
     email?: unknown;
     alarm?: unknown;
   } | null;
+  // Risposta a «dov'è casa?»: un indirizzo (via, piazza o numero civico) per quel luogo.
+  if (a?.kind === 'place') {
+    const label = (awaiting as { label?: unknown }).label;
+    const address = addressLike(input);
+    return typeof label === 'string' && label && address
+      ? { op: 'set_place', label, address }
+      : null;
+  }
   // Risposta a «qual è la tua email?»: basta che nel messaggio ci sia un indirizzo valido.
   if (a?.kind === 'email') {
     const found = /\S+@\S+/u.exec(input);
@@ -800,8 +960,23 @@ export function toRemindersBlock(
     reminders: reminders.slice(0, 50).map((r) => ({
       id: r.id,
       text: r.text.slice(0, 300),
-      at: r.at.toISOString(),
+      ...(r.at ? { at: r.at.toISOString() } : {}),
       status: r.status,
+      ...(r.place
+        ? {
+            place: {
+              label: r.place.label.slice(0, 40),
+              on: r.place.on,
+              ...(r.place.repeat ? { repeat: true } : {}),
+              ...(r.place.placeId ? { placeId: r.place.placeId } : {}),
+              ...(r.place.address ? { address: r.place.address.slice(0, 160) } : {}),
+              ...(r.place.lat !== undefined && r.place.lng !== undefined
+                ? { lat: r.place.lat, lng: r.place.lng }
+                : {}),
+              ...(r.place.radius ? { radius: r.place.radius } : {}),
+            },
+          }
+        : {}),
       ...(r.eventAt ? { eventAt: r.eventAt.toISOString() } : {}),
       ...(r.for ? { for: r.for.slice(0, 60) } : {}),
       ...(r.from ? { from: r.from.slice(0, 60) } : {}),
@@ -833,13 +1008,15 @@ export function createReminderSkill(
     kind: 'deterministic',
     category: 'reminders',
     description:
-      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; appuntamenti con preavviso («ho il dentista alle 19, avvisami alle 18» o «un’ora prima»); sveglie («svegliami domani alle 6», suonano sul telefono); anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
+      'Promemoria a giorno e ora: «ricordami di … alle 17», «domani alle 9», «tra 20 minuti»; legati a un luogo della scheda («quando arrivo a casa», «quando esco dal lavoro»); appuntamenti con preavviso («ho il dentista alle 19, avvisami alle 18» o «un’ora prima»); sveglie («svegliami domani alle 6», suonano sul telefono); anche a una persona collegata («ricorda a Giorgio di …»); elenco e annullamento.',
     examples: [
       'ricordami di uscire alle 17',
       'ricordami domani alle 9 di chiamare il dentista',
       'tra 20 minuti ricordami di spegnere il forno',
       'ho il dentista alle 19, avvisami alle 18',
       'svegliami domani alle 6',
+      'ricordami di comprare il pane quando arrivo a casa',
+      'casa mia è in via Roma 3, Treviso',
       'ricorda a Giorgio di chiamarmi domani alle 17',
       'che promemoria ho?',
     ],
@@ -904,11 +1081,12 @@ export function createReminderSkill(
           // Le stime dette in una frase a parte, senza parentesi annidate.
           const note = p.assumed.length ? ` Ho inteso ${p.assumed.join(' e ')}.` : '';
           const what = lowerFirst(r.text);
+          const at = r.at ?? p.at;
           let reply: SkillReply;
           if (p.eventAt) {
-            const lead = leadQuantity(p.eventAt.getTime() - r.at.getTime());
+            const lead = leadQuantity(p.eventAt.getTime() - at.getTime());
             return {
-              text: `⏰ Va bene: ${r.text}. Ti avviso ${formatWhen(r.at, timezone)}, ${lead} prima.${note}`,
+              text: `⏰ Va bene: ${r.text}. Ti avviso ${formatWhen(at, timezone)}, ${lead} prima.${note}`,
               actions: [`create:${r.id}`],
               blocks: [toRemindersBlock([r], 'Appuntamento')],
             };
@@ -916,8 +1094,8 @@ export function createReminderSkill(
           if (p.alarm) {
             const why = r.text.startsWith('Sveglia: ') ? ` (${lowerFirst(r.text.slice(9))})` : '';
             const when = r.repeat
-              ? `${repeatLabel(r.repeat)}, la prima volta ${formatWhen(r.at, timezone)}`
-              : formatWhen(r.at, timezone);
+              ? `${repeatLabel(r.repeat)}, la prima volta ${formatWhen(at, timezone)}`
+              : formatWhen(at, timezone);
             return {
               text: `⏰ Sveglia ${when}${why}.${note} Suona sul telefono come una sveglia, con Posticipa; niente email.`,
               actions: [`create:${r.id}`],
@@ -926,7 +1104,7 @@ export function createReminderSkill(
           }
           if (r.repeat) {
             const label = repeatLabel(r.repeat);
-            const first = `La prima volta ${formatWhen(r.at, timezone)}.`;
+            const first = `La prima volta ${formatWhen(at, timezone)}.`;
             reply = r.for
               ? {
                   text: `🔁 Va bene: ${label} ricordo a ${r.for} di ${what}. ${first}${note} Arriva sul suo telefono.`,
@@ -940,13 +1118,13 @@ export function createReminderSkill(
                 };
           } else if (r.for)
             reply = {
-              text: `⏰ Va bene: ricordo a ${r.for} di ${what} ${formatWhen(r.at, timezone)}.${note} Il promemoria arriva sul suo telefono.`,
+              text: `⏰ Va bene: ricordo a ${r.for} di ${what} ${formatWhen(at, timezone)}.${note} Il promemoria arriva sul suo telefono.`,
               actions: [`create:${r.id}`],
               blocks: [toRemindersBlock([r], `Promemoria per ${r.for}`)],
             };
           else
             reply = {
-              text: `⏰ Va bene: ti ricordo di ${what} ${formatWhen(r.at, timezone)}.${note}`,
+              text: `⏰ Va bene: ti ricordo di ${what} ${formatWhen(at, timezone)}.${note}`,
               actions: [`create:${r.id}`],
               blocks: [toRemindersBlock([r], 'Promemoria')],
             };
@@ -958,6 +1136,56 @@ export function createReminderSkill(
               awaiting: { kind: 'email' },
             };
           return reply;
+        }
+        case 'create_place': {
+          if (!store)
+            return { text: 'I promemoria non sono disponibili in questo contesto.', actions: [] };
+          const known = store.findPlace
+            ? await store.findPlace(ctx.userId, p.place.label)
+            : undefined;
+          const r = await store.create(ctx.userId, { text: p.text, timezone, place: p.place });
+          const phrase = placePhrase(p.place);
+          const base = `📍 Va bene: ${phrase} ti ricordo di ${lowerFirst(r.text)}.`;
+          const blocks = [toRemindersBlock([r], 'Promemoria')];
+          if (known === null)
+            return {
+              text: `${base} Però non so ancora dov'è «${p.place.label}»: dimmi l'indirizzo (per esempio «via Roma 3, Treviso») oppure segnalo sulla mappa in Impostazioni › La tua scheda › Luoghi.`,
+              actions: [`create:${r.id}`],
+              blocks,
+              // Il messaggio successivo («via Roma 3, Treviso») diventa l'indirizzo del luogo.
+              awaiting: { kind: 'place', label: p.place.label },
+            };
+          const where =
+            known && !known.located && known.address
+              ? ` Il telefono cerca da solo la posizione di «${known.address}»: puoi controllarla in Impostazioni › La tua scheda › Luoghi.`
+              : ' Scatta sul telefono anche con l’app chiusa.';
+          return { text: `${base}${where}`, actions: [`create:${r.id}`], blocks };
+        }
+        case 'place_other':
+          return {
+            text: `Per ora i promemoria legati a un luogo valgono solo per te${p.who ? `, non per ${p.who}` : ''}: dimmi per esempio «ricordami di comprare il pane quando arrivo a casa». A ${p.who ?? 'un familiare'} posso mettere un promemoria a un’ora precisa.`,
+            actions: [],
+          };
+        case 'set_place': {
+          if (!store?.setPlace)
+            return { text: 'Non posso salvare i luoghi in questo contesto.', actions: [] };
+          const saved = await store.setPlace(ctx.userId, { label: p.label, address: p.address });
+          if (!saved)
+            return {
+              text: 'Non sono riuscito a salvare il luogo (ne hai già dieci?). Puoi gestirli in Impostazioni › La tua scheda › Luoghi.',
+              actions: [],
+            };
+          const pending = (await store.list(ctx.userId)).filter(
+            (r) => r.place?.label === saved.label,
+          );
+          const tail = pending.length
+            ? ` ${pending.length === 1 ? `Il promemoria «${pending[0]?.text}» scatterà` : `I ${pending.length} promemoria legati a «${saved.label}» scatteranno`} quando arrivi lì.`
+            : '';
+          return {
+            text: `📍 Fatto: «${saved.label}» è in ${saved.address}.${tail} Il telefono trova la posizione da solo; puoi controllarla sulla mappa in Impostazioni › La tua scheda › Luoghi.`,
+            actions: ['set_place'],
+            ...(pending.length ? { blocks: [toRemindersBlock(pending, 'Promemoria')] } : {}),
+          };
         }
         case 'set_email': {
           if (!store?.setEmail)
@@ -983,6 +1211,8 @@ export function createReminderSkill(
             text: `Hai ${list.length} promemoria:\n${list
               .map((r) => {
                 const who = r.for ? `, per ${r.for}` : r.from ? `, da ${r.from}` : '';
+                if (r.place || !r.at)
+                  return `- ${r.text}${who}: ${r.place ? placePhrase(r.place) : 'senza ora'}`;
                 const when = r.repeat
                   ? `${repeatLabel(r.repeat)}, la prossima ${formatWhen(r.at, timezone)}`
                   : formatWhen(r.at, timezone);
@@ -1005,6 +1235,7 @@ export function createReminderSkill(
             const hm = /(?:delle|alle)\s+(\d{1,2})(?:[:.](\d{2}))?/u.exec(what);
             targets = list.filter((r) => {
               if (hm) {
+                if (!r.at) return false;
                 const lp = localParts(r.at, timezone);
                 return (
                   lp.hour === Number(hm[1]) && lp.minute === (hm[2] ? Number(hm[2]) : lp.minute)

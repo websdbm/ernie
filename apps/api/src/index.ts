@@ -39,13 +39,16 @@ import {
   createOpenAIEmbedder,
   createProfileStore,
   createSessionSummaryStore,
+  describePlace,
   enqueueConsolidation,
   enqueueSessionSummary,
+  findPlace,
   PROFILE_FIELDS,
   recordTurnEpisode,
   renderProfile,
   renderSessionSummary,
   replaceProfileByUser,
+  upsertPlace,
 } from '@ernie/memory';
 import {
   buildProfiles,
@@ -205,10 +208,47 @@ async function main(): Promise<void> {
       void brain.refreshChiSono(userId);
     }
     return true;
+  }; // Luoghi della scheda per i promemoria geolocalizzati («ricordami … quando arrivo a casa»).
+  const reminderPlaces = {
+    list: async (userId: string) =>
+      (await profiles.get(userId)).places.map((p) => ({
+        id: p.id,
+        label: p.label,
+        ...(p.address ? { address: p.address } : {}),
+        ...(p.lat !== undefined && p.lng !== undefined ? { lat: p.lat, lng: p.lng } : {}),
+        ...(p.radius ? { radius: p.radius } : {}),
+      })),
+    set: async (userId: string, input: { label: string; address: string }) => {
+      const current = await profiles.get(userId);
+      const next = structuredClone(current);
+      const place = upsertPlace(next, input, {
+        source: 'conversation',
+        at: new Date().toISOString(),
+        quote: input.address.slice(0, 200),
+      });
+      if (!place) return null;
+      const before = findPlace(current, input.label);
+      // Revisione già comunicata: la conferma l'ha appena data la skill (o il modello) in chat.
+      await profiles.save(
+        userId,
+        next,
+        [
+          {
+            field: 'places',
+            before: before ? describePlace(before) : null,
+            after: describePlace(place),
+          },
+        ],
+        'user',
+      );
+      companions.invalidateUser(userId);
+      return { label: place.label, address: place.address ?? input.address };
+    },
   };
 
   const reminders = createReminderStore({
     automations,
+    places: reminderPlaces,
     email: {
       get: async (userId) => (await profiles.get(userId)).email ?? null,
       set: setProfileEmail,
