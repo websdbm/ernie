@@ -4,9 +4,9 @@ Copia notturna del server staging3 sul disco «SSD 2TB» del Mac Studio. È la s
 
 - `ernie-backup.sh`: la copia. Scarica database, second brain, Redis, `.env` e commit; cifra con age; verifica; ruota (14 giornaliere più 8 settimanali).
 - `install-mac.sh`: crea le chiavi age se mancano, installa lo script in `~/.local/bin`, l'app «Ernie Backup» in `~/Applications` e il LaunchAgent `com.alessandro.ernie-backup` (ogni notte alle 04:15).
+- `LEGGIMI.txt`: copiato nella cartella dei backup.
 
 Il LaunchAgent lancia l'app, e l'app lancia lo script. macOS dà l'accesso al disco esterno programma per programma: lanciato direttamente da launchd, `age` otteneva il permesso e `mv`/`rm` no. L'app invece lo prende una volta sola per tutto ciò che avvia. La prima volta compare «Ernie Backup vorrebbe accedere ai file su un volume rimovibile»: si risponde «Consenti». L'app non va ricreata, altrimenti macOS lo chiede di nuovo; aggiornare lo script basta.
-- `LEGGIMI.txt`: copiato nella cartella dei backup.
 
 Chiavi in `~/Backups/Ernie-staging3/` (fuori dal disco esterno): `age-identity.txt` è la privata, `age-recipient.txt` la pubblica. Della privata serve una seconda copia in un posto sicuro, per esempio il gestore di password.
 
