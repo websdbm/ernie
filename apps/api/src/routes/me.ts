@@ -48,6 +48,17 @@ const SettingsPatch = z
   })
   .strict();
 
+const DiagnosticBody = z
+  .object({
+    kind: z.enum(['crash', 'hang', 'cpu', 'disk', 'launch', 'other']),
+    appVersion: z.string().max(40).optional(),
+    osVersion: z.string().max(80).optional(),
+    periodStart: z.iso.datetime({ offset: true }).optional(),
+    periodEnd: z.iso.datetime({ offset: true }).optional(),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
 function requireAuth(req: FastifyRequest): AuthContext {
   const a = req.auth;
   if (!a)
@@ -158,6 +169,33 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
         return reply.code(404).send({ error: 'not_found', message: 'parola inesistente' });
       opts.onStyleChanged?.(auth.userId);
       return reply.code(204).send();
+    });
+
+    // Rapporti di iOS (MetricKit): blocchi e chiusure per errore con gli stack, mandati al primo avvio successivo.
+    api.post('/v1/diagnostics', { bodyLimit: 2_000_000 }, async (req, reply) => {
+      const auth = requireAuth(req);
+      const b = DiagnosticBody.safeParse(req.body);
+      if (!b.success) return badRequest(reply, 'atteso { kind, payload, appVersion?, osVersion? }');
+      const size = JSON.stringify(b.data.payload).length;
+      if (size > 1_500_000)
+        return reply.code(413).send({ error: 'too_large', message: 'rapporto troppo grande' });
+      await withUser(opts.pool, auth.userId, (c) =>
+        c.query(
+          `INSERT INTO client_diagnostics (user_id, kind, app_version, os_version, period_start, period_end, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            auth.userId,
+            b.data.kind,
+            b.data.appVersion ?? null,
+            b.data.osVersion ?? null,
+            b.data.periodStart ?? null,
+            b.data.periodEnd ?? null,
+            JSON.stringify(b.data.payload),
+          ],
+        ),
+      );
+      req.log.info({ userId: auth.userId, kind: b.data.kind, size }, 'rapporto di iOS ricevuto');
+      return reply.code(201).send({ ok: true });
     });
 
     api.post('/v1/devices', async (req, reply) => {
