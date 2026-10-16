@@ -1,0 +1,27 @@
+BACKUP DI ERNIE - server staging3 (100.91.204.102)
+Destinazione: SSD esterno SSD 2TB, cartella Backups/Ernie-staging3.
+
+Ogni notte alle 04:15 (ora del Mac) il Mac Studio scarica dal server una copia di Ernie e la salva qui come
+AAAAMMGGTHHMMSSZ.tar.gz.age, un archivio cifrato con age. Dentro ci sono:
+  ernie.dump      il database (pg_dump formato custom: utenti, conversazioni, memoria, promemoria, automazioni...)
+  brain.tar.gz    il second brain (le note di ogni utente)
+  redis.rdb       le code dei lavori (BullMQ)
+  env             il file .env del server, con tutte le chiavi: per questo l'archivio è cifrato
+  commit.txt      la versione del codice in produzione
+  SHA256SUMS      le impronte dei file
+
+La ricevuta .verified.json accanto a ogni archivio documenta la verifica fatta subito dopo il salvataggio:
+decifratura autenticata, impronte, lettura del dump con pg_restore, numero di tabelle e di note.
+Si conservano le ultime 14 copie e una per settimana per altre 8 settimane.
+
+CHIAVE DI RECUPERO
+La chiave privata NON si trova su questo disco: è sul Mac Studio in
+/Users/alessandro/Backups/Ernie-staging3/age-identity.txt, leggibile solo dall'utente.
+Conservane una seconda copia in un gestore di password o in un altro luogo sicuro: senza la chiave privata gli
+archivi non sono recuperabili, anche se il disco è integro. Non inviarla al server e non pubblicarla in chat.
+
+La copia automatica richiede il Mac Studio acceso, la rete Tailscale attiva e questo disco montato. Il programma
+controlla l'identità del disco e si ferma se manca, senza ripiegare sul disco interno. Se qualcosa va storto
+compare una notifica sul Mac; il registro è in ~/Library/Logs/ernie-backup/backup.log.
+
+Come ripristinare: infrastructure/backup/README.md nel repository di Ernie.
