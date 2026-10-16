@@ -3,7 +3,11 @@ import { z } from 'zod';
 export const ModelClass = z.enum(['light', 'standard', 'heavy']);
 export type ModelClass = z.infer<typeof ModelClass>;
 
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+/**
+ * `none` lascia il ragionamento al provider (sui modelli 5.x a volte ragionano lo stesso); `off` lo spegne davvero
+ * (16 ott 2026: nei turni standard la prima risposta passava da 2,2 a 5,7 s quando il modello ragionava).
+ */
+export type ReasoningEffort = 'off' | 'none' | 'low' | 'medium' | 'high';
 
 export interface ClassProfile {
   readonly modelClass: ModelClass;
@@ -66,6 +70,8 @@ export interface ClassModelIds {
   readonly light: string;
   readonly standard: string;
   readonly heavy: string;
+  /** Ragionamento dei turni standard (MODEL_STANDARD_REASONING): `off` per risposte più rapide, `low` come prima. */
+  readonly standardReasoning?: ReasoningEffort;
 }
 
 export function buildProfiles(ids: ClassModelIds): Readonly<Record<ModelClass, ClassProfile>> {
@@ -81,7 +87,7 @@ export function buildProfiles(ids: ClassModelIds): Readonly<Record<ModelClass, C
       modelClass: 'standard',
       modelId: ids.standard,
       maxOutputTokens: 4_096,
-      reasoning: 'low',
+      reasoning: ids.standardReasoning ?? 'low',
       maxSteps: 6,
     },
     heavy: {

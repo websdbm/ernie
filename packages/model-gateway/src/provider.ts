@@ -28,6 +28,7 @@ export interface ResolvedModel {
 }
 
 function reasoningBody(effort: ReasoningEffort): Record<string, unknown> {
+  if (effort === 'off') return { reasoning: { enabled: false } };
   // Sui modelli 5.x il ragionamento è attivo di default: 'none' lo lascia al provider senza
   // aggiungere parametri (aggiungerne uno cambia la chiave di cache, spike M2.1 D1).
   return effort === 'none' ? {} : { reasoning: { effort } };
@@ -122,7 +123,11 @@ export function createModelGateway(opts: GatewayOptions) {
             anthropic: {
               ...(params.providerOptions?.anthropic ?? {}),
               cacheControl: { type: 'ephemeral' },
-              ...(profile.reasoning === 'none' ? {} : { effort: profile.reasoning }),
+              ...(profile.reasoning === 'off'
+                ? { thinking: { type: 'disabled' } }
+                : profile.reasoning === 'none'
+                  ? {}
+                  : { effort: profile.reasoning }),
             },
           },
         }),

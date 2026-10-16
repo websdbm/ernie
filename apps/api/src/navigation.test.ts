@@ -107,6 +107,21 @@ describe('«Portami lì»: ricerca dei posti', () => {
     ).toBeGreaterThan(1000);
   });
 
+  it('Google con un errore (API non attiva): si ripiega su OpenStreetMap', async () => {
+    const fetch = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('places.googleapis.com')
+        ? json({ error: { code: 403 } }, 403)
+        : json([{ lat: '45.41', lon: '11.88', name: 'Stazione', address: { city: 'Padova' } }]),
+    );
+    const search = createPlaceSearch({
+      googleKey: 'k',
+      fetch: fetch as never,
+      nominatimIntervalMs: 0,
+    });
+    expect((await search('stazione di Padova')).map((c) => c.name)).toEqual(['Stazione']);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('indirizzo da Nominatim anche senza strada', () => {
     expect(
       nominatimAddress({

@@ -46,6 +46,8 @@ export const envSchema = z.object({
   MODEL_LIGHT: z.string().min(1).default('anthropic/claude-haiku-5.5'),
   MODEL_STANDARD: z.string().min(1).default('anthropic/claude-sonnet-5.5'),
   MODEL_HEAVY: z.string().min(1).default('anthropic/claude-opus-5.5'),
+  /** Ragionamento dei turni standard: off (più rapido, 16 ott 2026) o low (come prima). */
+  MODEL_STANDARD_REASONING: z.enum(['off', 'none', 'low', 'medium']).default('off'),
   JEV_MODEL: z.string().min(1).default('typesafe/jev-1.13'),
   JEV_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(1500),
   ROUTER_CACHE_TTL_S: z.coerce.number().int().min(0).default(600),
@@ -126,7 +128,12 @@ export interface AppConfig {
   readonly ws: { readonly allowedOrigins: readonly string[] };
   readonly llm: {
     readonly dailyBudgetUsd: number;
-    readonly models: { readonly light: string; readonly standard: string; readonly heavy: string };
+    readonly models: {
+      readonly light: string;
+      readonly standard: string;
+      readonly heavy: string;
+      readonly standardReasoning: 'off' | 'none' | 'low' | 'medium';
+    };
   };
   readonly memory: {
     readonly embeddingModel: string;
@@ -254,7 +261,12 @@ export function toAppConfig(env: Env): AppConfig {
     },
     llm: {
       dailyBudgetUsd: env.LLM_DAILY_BUDGET_USD,
-      models: { light: env.MODEL_LIGHT, standard: env.MODEL_STANDARD, heavy: env.MODEL_HEAVY },
+      models: {
+        light: env.MODEL_LIGHT,
+        standard: env.MODEL_STANDARD,
+        heavy: env.MODEL_HEAVY,
+        standardReasoning: env.MODEL_STANDARD_REASONING,
+      },
     },
     redis: { url: env.REDIS_URL },
     memory: {

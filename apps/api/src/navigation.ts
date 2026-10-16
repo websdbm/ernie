@@ -172,7 +172,19 @@ export function createPlaceSearch(opts: PlaceSearchOptions = {}): PlaceSearch {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < 24 * 3_600_000) return hit.value;
     try {
-      const raw = opts.googleKey ? await google(q, near) : await nominatim(q, near);
+      // Google se c'è la chiave; se risponde con un errore (API non attiva, quota), OpenStreetMap.
+      let raw: readonly PlaceCandidate[];
+      if (opts.googleKey) {
+        try {
+          raw = await google(q, near);
+        } catch (err) {
+          opts.logger?.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'Google Places non disponibile: uso OpenStreetMap',
+          );
+          raw = await nominatim(q, near);
+        }
+      } else raw = await nominatim(q, near);
       // Dal più vicino (se si sa dove si è); risultati a meno di 250 m da uno precedente sono lo stesso posto
       // (la basilica e il suo ufficio informazioni): resta il primo, cioè il più pertinente.
       const ordered = near
