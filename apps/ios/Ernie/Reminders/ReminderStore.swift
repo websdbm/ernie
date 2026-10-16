@@ -29,7 +29,19 @@ final class ReminderStore {
                 items.removeAll { $0.id == r.id }
             }
         }
-        sync()
+        scheduleSync()
+    }
+
+    /// Tante schede insieme (16 ott 2026: dieci promemoria creati in un solo turno, l'app di Giorgio si è bloccata):
+    /// una sola sincronizzazione di notifiche, sveglie e widget dopo l'ultima.
+    private var syncDebounce: Task<Void, Never>?
+    private func scheduleSync() {
+        syncDebounce?.cancel()
+        syncDebounce = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.sync()
+        }
     }
 
     /// Promemoria legati a un luogo già scattati su questo telefono (poi tolti dal server): la scheda li mostra «scattato».

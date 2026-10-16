@@ -480,6 +480,18 @@ final class ConversationStore {
             onBlock?(p.block)
             if case .unknown = p.block { break }
             upsertAssistant(for: e.correlationId) { m in
+                // Più promemoria creati nello stesso turno: una scheda sola con tutti, non una per promemoria.
+                if case .reminders(let incoming) = p.block,
+                   let i = m.blocks.firstIndex(where: { if case .reminders = $0 { return true }; return false }),
+                   case .reminders(var merged) = m.blocks[i] {
+                    for r in incoming.reminders {
+                        if let j = merged.reminders.firstIndex(where: { $0.id == r.id }) { merged.reminders[j] = r }
+                        else { merged.reminders.append(r) }
+                    }
+                    if merged.reminders.count > 1, merged.title == incoming.title { merged.title = "Promemoria impostati" }
+                    m.blocks[i] = .reminders(merged)
+                    return
+                }
                 if !m.blocks.contains(p.block) { m.blocks.append(p.block) }
             }
         case .avatarEmotion(let p):

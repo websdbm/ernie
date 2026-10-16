@@ -1,5 +1,30 @@
 [
   {
+    "build": 63,
+    "date": "2026-10-16",
+    "title": "Più stabile",
+    "items": [
+      {
+        "icon": "checklist",
+        "title": "Tanti promemoria insieme, senza blocchi",
+        "detail": "Quando Ernie crea molti promemoria in una volta (per esempio uno al giorno per due settimane), li mostra in una scheda sola e aggiorna sveglie, notifiche e widget una volta sola: prima l'app poteva bloccarsi.",
+        "test": "Chiedi «ricordami alle 7:55 di uscire nei giorni di scuola delle prossime due settimane»."
+      },
+      {
+        "icon": "stethoscope",
+        "title": "Rapporti automatici dei problemi",
+        "detail": "Se l'app si blocca o si chiude per un errore, al successivo avvio manda il rapporto tecnico di iOS (senza il testo delle conversazioni): così il problema si trova e si corregge anche a distanza.",
+        "test": "Niente da fare: se qualcosa va storto, riapri l'app."
+      },
+      {
+        "icon": "envelope.badge.shield.half.filled",
+        "title": "Nessun messaggio ripetuto",
+        "detail": "Ernie non rimanda più di sua iniziativa un messaggio già partito: lo stesso testo alla stessa persona riparte solo se lo chiedi tu.",
+        "test": "Manda un messaggio a un familiare e poi continua a parlare d'altro con Ernie."
+      }
+    ]
+  },
+  {
     "build": 62,
     "date": "2026-10-16",
     "title": "Come parla Ernie",

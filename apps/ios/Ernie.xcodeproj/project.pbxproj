@@ -68,6 +68,7 @@
 		8E07061F1D800D7A294DF603 /* DirectionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304F43BBDD3A21364CD93225 /* DirectionsCard.swift */; };
 		8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482E5F1386683C4811B2C6EE /* CardExport.swift */; };
 		8EDE82C5228FE0AB4B4E8AB9 /* PlacePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CE16F21C672E0074F4A59C /* PlacePermission.swift */; };
+		9117D08D032FDF526EFCAC9D /* DiagnosticsReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D01A54F963F34DF905AEFF /* DiagnosticsReporter.swift */; };
 		929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5805C7F8E13A9BB5B66DD2A3 /* SentenceSplitter.swift */; };
 		92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E5156E50AC31BC18C2094CD /* ErnieShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		92F79B66DEE7B8A1C40E190E /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A290ACEF62401F040E749BA /* AudioSessionController.swift */; };
@@ -204,6 +205,7 @@
 		5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		5F71764273FF93B42753C6E1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisionNotice.swift; sourceTree = "<group>"; };
+		67D01A54F963F34DF905AEFF /* DiagnosticsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporter.swift; sourceTree = "<group>"; };
 		6AA882C33FB821D18C91F449 /* ErnieBearWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieBearWidget.swift; sourceTree = "<group>"; };
 		6B489B112C1F00ED00928355 /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -402,6 +404,7 @@
 			children = (
 				482E5F1386683C4811B2C6EE /* CardExport.swift */,
 				7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */,
+				67D01A54F963F34DF905AEFF /* DiagnosticsReporter.swift */,
 				124F4848C59674EF5F7A5CD8 /* Ids.swift */,
 				6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */,
 				0D97AF0622A145E21A4AFBC7 /* LatencyTrace.swift */,
@@ -765,6 +768,7 @@
 				25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */,
 				7C22E2BCE2575F83EA89E592 /* Credentials.swift in Sources */,
 				0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */,
+				9117D08D032FDF526EFCAC9D /* DiagnosticsReporter.swift in Sources */,
 				A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */,
 				8E07061F1D800D7A294DF603 /* DirectionsCard.swift in Sources */,
 				C325109281E152FF2237FE4E /* DocumentComposer.swift in Sources */,

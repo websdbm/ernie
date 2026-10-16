@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories([Self.familyCategory, Self.urgentCategory])
+        // Rapporti di iOS su blocchi e chiusure per errore: al server, per la diagnosi.
+        DiagnosticsReporter.shared.start()
         return true
     }
 
