@@ -25,6 +25,15 @@ struct SettingsView: View {
     /// Evita che il caricamento iniziale (che imposta i selettori) salvi di nuovo le impostazioni.
     @State private var proactiveLoaded = false
 
+    static func styleTitle(_ id: String?) -> String {
+        switch id {
+        case "scherzoso": "Scherzoso"
+        case "essenziale": "Essenziale"
+        case "antico": "Antico"
+        default: "Neutro"
+        }
+    }
+
     static func time(_ hhmm: String) -> Date {
         let parts = hhmm.split(separator: ":").compactMap { Int($0) }
         var c = DateComponents()
@@ -96,6 +105,19 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("Nome, come vuoi essere chiamato, compleanno, famiglia: Ernie la compila mentre parlate e puoi correggerla.")
+                }
+                Section {
+                    NavigationLink {
+                        StyleView()
+                    } label: {
+                        LabeledContent {
+                            Text(Self.styleTitle(model.profile?.settings["conversationStyle"]?.stringValue))
+                        } label: {
+                            Label("Come parla Ernie", systemImage: "text.quote")
+                        }
+                    }
+                } footer: {
+                    Text("Lo stile (neutro, scherzoso, essenziale, antico) e le parole che Ernie impara da te.")
                 }
                 Section("Voce") {
                     Toggle("Risposte a voce", isOn: Binding(

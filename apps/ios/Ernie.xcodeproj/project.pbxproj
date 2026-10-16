@@ -59,6 +59,7 @@
 		6CAEF47782ACD38098DB1986 /* RemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B489B112C1F00ED00928355 /* RemindersView.swift */; };
 		70F576096E0CECC26049E63E /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		7C22E2BCE2575F83EA89E592 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
+		7FE6B143B6EB5698C61E6D83 /* StyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5700506AF1CE47020C9191C /* StyleView.swift */; };
 		85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD343071ED74C53EE49555CE /* VoiceTests.swift */; };
 		896501B81A339C83B037EE05 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98000DE6D12B55CB9A3223 /* HomeView.swift */; };
 		8993BBC876C8034C122833D9 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
@@ -238,6 +239,7 @@
 		B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlineDiagram.swift; sourceTree = "<group>"; };
 		BB6A663AAF174530467149DD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
+		C5700506AF1CE47020C9191C /* StyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleView.swift; sourceTree = "<group>"; };
 		C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceContextProvider.swift; sourceTree = "<group>"; };
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -379,6 +381,7 @@
 				CCA2BB9EC2D73383C332B042 /* SecurityView.swift */,
 				8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */,
 				23DC1DF3A7C22631C2D5C162 /* SkillsView.swift */,
+				C5700506AF1CE47020C9191C /* StyleView.swift */,
 				5EA792FFF7EFFB8E46AC5A12 /* WhatsNewView.swift */,
 			);
 			path = Settings;
@@ -807,6 +810,7 @@
 				E8BCEEAC1864E35B6BCB3B6B /* SkillsView.swift in Sources */,
 				2BD898CA68FA16C2D2E06585 /* Speaker.swift in Sources */,
 				0FF1543917647B64B8F67004 /* SpeechInput.swift in Sources */,
+				7FE6B143B6EB5698C61E6D83 /* StyleView.swift in Sources */,
 				A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */,
 				5422E1784BA6E9BDE114CE27 /* Theme.swift in Sources */,
 				EF922800E7B15C422336A7C1 /* TranscriptStore.swift in Sources */,

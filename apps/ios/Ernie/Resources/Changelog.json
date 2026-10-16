@@ -1,5 +1,42 @@
 [
   {
+    "build": 62,
+    "date": "2026-10-16",
+    "title": "Come parla Ernie",
+    "items": [
+      {
+        "icon": "text.quote",
+        "title": "Quattro stili per Ernie",
+        "detail": "Neutro, Scherzoso, Essenziale o Antico, un nobile erudito d'altri tempi. Lo scegli in Impostazioni › Come parla Ernie o a voce («parlami in modo antico», «rispondi corto», «torna normale») e vale ovunque: chat, voce, avvisi e titoli dei promemoria.",
+        "test": "Di' «parlami in modo antico», fai una domanda, poi «torna normale»."
+      },
+      {
+        "icon": "character.bubble",
+        "title": "Ernie impara le tue parole",
+        "detail": "Le espressioni che usi spesso («ci sta», «papo», «top»…) Ernie le annota dopo tre volte in due conversazioni e le riusa quando calzano. Le vedi e le cancelli in Impostazioni › Come parla Ernie; parolacce mai.",
+        "test": "Usa per qualche giorno le tue espressioni e guarda cosa compare in «Parole che Ernie ha imparato da te»."
+      },
+      {
+        "icon": "shield.lefthalf.filled",
+        "title": "Per i genitori",
+        "detail": "Nel controllo genitori vedi lo stile scelto da tuo figlio e le parole che Ernie ha imparato da lui, e puoi spegnere l'apprendimento.",
+        "test": "Famiglia › il figlio seguito › «Come parla Ernie a …»."
+      },
+      {
+        "icon": "hare.fill",
+        "title": "Più veloce dopo una domanda difficile",
+        "detail": "Dopo una domanda complessa Ernie usa il modello più potente, ma alla seconda domanda semplice di fila torna a quello rapido: la risposta arriva in circa due secondi invece di cinque o sei.",
+        "test": "Chiedi un confronto («quale conviene e perché?»), poi due domande semplici."
+      },
+      {
+        "icon": "map.fill",
+        "title": "Posti cercati con Google",
+        "detail": "«Portami lì» cerca i posti con Google Maps e propone le sedi da scegliere quando sono più di una.",
+        "test": "Di' «portami all'ospedale San Raffaele»."
+      }
+    ]
+  },
+  {
     "build": 61,
     "date": "2026-10-16",
     "title": "Revisione notturna: più affidabile e più veloce",

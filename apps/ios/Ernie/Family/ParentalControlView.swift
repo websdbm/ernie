@@ -37,6 +37,8 @@ struct ParentalControlView: View {
     @State private var error: String?
     @State private var releasing = false
     @State private var confirmRelease = false
+    /// Come gli parla Ernie: stile scelto da lui e parole imparate (16 ott 2026).
+    @State private var style: ChildStyle?
 
     init(child: SupervisedChild, onReleased: @escaping () -> Void = {}) {
         self.child = child
@@ -73,6 +75,40 @@ struct ParentalControlView: View {
             if let error {
                 Section { Text(error).font(.caption).foregroundStyle(.red) }
             }
+            if let style {
+                Section {
+                    LabeledContent("Stile scelto", value: style.style.title)
+                    Toggle(isOn: Binding(
+                        get: { !style.lexiconOff },
+                        set: { on in Task { await setLexicon(on: on) } }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Impara le sue parole")
+                            if !style.learnLexicon {
+                                Text("Spento da \(child.label) nelle sue impostazioni.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    let words = style.words.filter(\.active)
+                    if words.isEmpty {
+                        Text("Nessuna parola imparata finora.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    ForEach(words) { w in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(w.term).font(.body.weight(.medium))
+                            if !w.meaning.isEmpty {
+                                Text(w.meaning).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Come parla Ernie a \(child.label)")
+                } footer: {
+                    Text("Lo stile lo sceglie \(child.label). Ernie riusa le espressioni che usa spesso, mai parolacce; spegnendo l'apprendimento smette di impararle e di usarle.")
+                }
+            }
             Section {
                 NavigationLink {
                     ChildSessionsView(child: child)
@@ -97,6 +133,7 @@ struct ParentalControlView: View {
         .navigationTitle(child.label)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await reload() }
+        .task { await loadStyle() }
         .confirmationDialog("\(releaseTitle)?", isPresented: $confirmRelease, titleVisibility: .visible) {
             Button(isChild ? "Togli il controllo" : "Smetti di seguir\(FamilyRelation.objectPronoun(for: child.relation))", role: .destructive) { Task { await release() } }
             Button("Annulla", role: .cancel) {}
@@ -178,8 +215,26 @@ struct ParentalControlView: View {
             if let fresh = try await api.supervisedChildren().first(where: { $0.childId == child.childId }) {
                 skills = fresh.skills
             }
+            await loadStyle()
             error = nil
         } catch {
+            self.error = AppModel.describe(error)
+        }
+    }
+
+    private func loadStyle() async {
+        guard let api = model.api else { return }
+        style = try? await api.childStyle(childId: child.childId)
+    }
+
+    private func setLexicon(on: Bool) async {
+        guard let api = model.api else { return }
+        style?.lexiconOff = !on
+        do {
+            style = try await api.setChildLexicon(childId: child.childId, off: !on)
+            error = nil
+        } catch {
+            style?.lexiconOff = on
             self.error = AppModel.describe(error)
         }
     }

@@ -220,6 +220,41 @@ enum FamilyRelation: String, CaseIterable, Identifiable {
     }
 }
 
+/// Parola imparata da Ernie (lessico, 16 ott 2026): attiva o ancora in osservazione.
+struct LexiconWord: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var term: String
+    var meaning: String
+    var example: String
+    var active: Bool
+    var seenCount: Int
+    var lastSeenAt: String
+}
+
+/// «Come parla Ernie»: stili con l'anteprima, stile scelto, apprendimento delle parole.
+struct StyleSettings: Codable, Sendable, Equatable {
+    struct Option: Codable, Sendable, Equatable, Identifiable {
+        var id: String
+        var title: String
+        var description: String
+        var example: String
+    }
+    var styles: [Option]
+    var current: String
+    var learnLexicon: Bool
+    var lexiconLockedByParent: Bool
+    var words: [LexiconWord]
+}
+
+/// Come Ernie parla a un figlio seguito: lo stile lo sceglie lui, il genitore vede e può spegnere l'apprendimento.
+struct ChildStyle: Codable, Sendable, Equatable {
+    struct Style: Codable, Sendable, Equatable { var id: String; var title: String; var description: String }
+    var style: Style
+    var learnLexicon: Bool
+    var lexiconOff: Bool
+    var words: [LexiconWord]
+}
+
 struct Profile: Codable, Sendable, Equatable {
     var userId: String
     var displayName: String
@@ -455,6 +490,21 @@ struct ApiClient: Sendable {
     }
 
     // MARK: controllo genitori
+
+    func styleSettings() async throws -> StyleSettings { try await request("GET", "/v1/me/style") }
+
+    func deleteLexiconWord(id: String) async throws {
+        try await requestNoContent("DELETE", "/v1/me/lexicon/\(id)")
+    }
+
+    func childStyle(childId: String) async throws -> ChildStyle {
+        try await request("GET", "/v1/family/children/\(childId)/style")
+    }
+
+    func setChildLexicon(childId: String, off: Bool) async throws -> ChildStyle {
+        struct Body: Encodable, Sendable { var off: Bool }
+        return try await request("PUT", "/v1/family/children/\(childId)/lexicon", body: Body(off: off))
+    }
 
     func supervisedChildren() async throws -> [SupervisedChild] {
         struct Out: Decodable { var children: [SupervisedChild] }
