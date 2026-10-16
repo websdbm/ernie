@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildProfiles } from './models.js';
-import { anthropicModelId, createModelGateway } from './provider.js';
+import { anthropicModelId, createModelGateway, reasoningBody } from './provider.js';
 
 const profiles = buildProfiles({
   light: 'anthropic/claude-haiku-5.5',
@@ -59,5 +59,13 @@ describe('punto di cache in fondo alla cronologia', () => {
       other: { x: 2 },
     });
     expect(kept[0]?.providerOptions).toEqual(mark);
+  });
+});
+
+describe('reasoningBody (OpenRouter)', () => {
+  it('«off» diventa lo sforzo minimo: su OpenRouter Sonnet 5.5 rifiuta il ragionamento spento', () => {
+    expect(reasoningBody('off')).toEqual({ reasoning: { effort: 'minimal' } });
+    expect(reasoningBody('none')).toEqual({});
+    expect(reasoningBody('low')).toEqual({ reasoning: { effort: 'low' } });
   });
 });

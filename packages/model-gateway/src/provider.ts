@@ -27,8 +27,11 @@ export interface ResolvedModel {
   readonly provider: GatewayProvider;
 }
 
-function reasoningBody(effort: ReasoningEffort): Record<string, unknown> {
-  if (effort === 'off') return { reasoning: { enabled: false } };
+export function reasoningBody(effort: ReasoningEffort): Record<string, unknown> {
+  // Su OpenRouter Sonnet 5.5 rifiuta il ragionamento spento («Reasoning is mandatory for this endpoint»): il 16 ott
+  // 2026 un turno è fallito nel ripiego dopo un guasto DNS verso Anthropic. Lo sforzo minimo è accettato e su una
+  // domanda semplice non ragiona (0 token, provato sul server).
+  if (effort === 'off') return { reasoning: { effort: 'minimal' } };
   // Sui modelli 5.x il ragionamento è attivo di default: 'none' lo lascia al provider senza
   // aggiungere parametri (aggiungerne uno cambia la chiave di cache, spike M2.1 D1).
   return effort === 'none' ? {} : { reasoning: { effort } };
