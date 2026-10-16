@@ -30,12 +30,17 @@ export interface SessionStore {
     info: ClientInfoInput,
   ): Promise<SessionRecord>;
   touch(userId: string, sessionId: string): Promise<void>;
-  /** Isteresi: la classe può solo salire. Restituisce la classe effettiva. */
+  /** Alza la classe (mai la abbassa: per quello c'è lowerModelClass). Restituisce la classe effettiva. */
   raiseModelClass(
     userId: string,
     sessionId: string,
     modelClass: 'standard' | 'heavy',
   ): Promise<SessionRecord['modelClass']>;
+  /** Discesa da heavy a standard dopo due domande semplici di fila, o con «/classe standard». */
+  lowerModelClass(userId: string, sessionId: string): Promise<SessionRecord['modelClass']>;
+  /** Classe scelta dall'utente con «/classe heavy»: la discesa automatica non la tocca finché non la cambia lui. */
+  pinModelClass(sessionId: string, pinned: boolean): Promise<void>;
+  isModelClassPinned(sessionId: string): Promise<boolean>;
   setContextTags(userId: string, sessionId: string, tags: readonly string[]): Promise<void>;
   /** Contaminazione della sessione: contenuto non fidato in cronologia → i turni successivi partono contaminati. */
   markTainted(sessionId: string, source: string, ttlSeconds: number): Promise<void>;
@@ -57,6 +62,7 @@ const key = {
   seq: (id: string) => `ernie:sess:${id}:seq`,
   log: (id: string) => `ernie:sess:${id}:log`,
   taint: (id: string) => `ernie:sess:${id}:taint`,
+  pinned: (id: string) => `ernie:sess:${id}:class_pinned`,
 };
 
 export function createSessionStore(
@@ -149,6 +155,31 @@ export function createSessionStore(
         );
         return res.rows[0]?.model_class ?? modelClass;
       });
+    },
+
+    async lowerModelClass(userId, sessionId) {
+      return withUser(pool, userId, async (client) => {
+        const res = await client.query<{ model_class: SessionRecord['modelClass'] }>(
+          `UPDATE sessions SET model_class = 'standard' WHERE id = $1 AND model_class = 'heavy'
+            RETURNING model_class`,
+          [sessionId],
+        );
+        if (res.rows[0]) return res.rows[0].model_class;
+        const cur = await client.query<{ model_class: SessionRecord['modelClass'] }>(
+          `SELECT model_class FROM sessions WHERE id = $1`,
+          [sessionId],
+        );
+        return cur.rows[0]?.model_class ?? 'standard';
+      });
+    },
+
+    async pinModelClass(sessionId, pinned) {
+      if (pinned) await redis.set(key.pinned(sessionId), '1', 'EX', 30 * 24 * 3600);
+      else await redis.del(key.pinned(sessionId));
+    },
+
+    async isModelClassPinned(sessionId) {
+      return (await redis.exists(key.pinned(sessionId))) === 1;
     },
 
     async setContextTags(userId, sessionId, tags) {

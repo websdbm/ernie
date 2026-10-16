@@ -143,7 +143,7 @@ interface LlmCall {
 6. **Streaming.** `assistant.text.delta`, `tool.started/completed`, eventuali `avatar.*`, `assistant.completed` con `usage`.
 7. **Post-elaborazione asincrona (worker).** Estrazione fatti/episodi in batch con `light`, deduplica, consolidamento; nessuna chiamata LLM sincrona per la memoria.
 
-**Scala di escalation.** Deterministico → skill → `standard` (default conversazionale) → `heavy`. La classe ha **isteresi di sessione** (M3: `sessions.raiseModelClass`): sale quando Jev sceglie `heavy` o `deep_reasoning` supera la soglia, oppure con `/classe heavy`, e non scende più nella sessione, perché ogni cambio di modello invalida la cache (01 §2.5–2.6); al cambio l'agente di sessione viene ricostruito. `light` è riservato a chiamate ancillari fuori banda. Il benchmark M9 (§17) valida questa scelta sui dati di cache.
+**Scala di escalation.** Deterministico → skill → `standard` (default conversazionale) → `heavy`. La classe ha **isteresi di sessione** (M3: `sessions.raiseModelClass`): sale quando Jev sceglie `heavy` o `deep_reasoning` supera la soglia, oppure con `/classe heavy`. Ridiscende a `standard` alla seconda domanda semplice di fila, cioè quando Jev sceglie `standard` con confidenza ≥ `lowerClassConfidence` (0,8) e senza `deep_reasoning` (richiesta dell'utente, 16 ott 2026). In origine non scendeva mai, per non invalidare la cache a ogni cambio di modello (01 §2.5–2.6), ma così tutta la conversazione restava su Opus con ragionamento: prima parola dopo 3–9 s e costo circa cinque volte maggiore. Non scende se heavy l'ha scelto l'utente con `/classe heavy` (segno in Redis); `/classe standard` lo riporta giù. A ogni cambio l'agente di sessione viene ricostruito. `light` è riservato a chiamate ancillari fuori banda. Il benchmark M9 (§17) valida questa scelta sui dati di cache.
 
 ## 6. JEV Decision Router
 
@@ -160,7 +160,7 @@ interface LlmCall {
 | Domanda | Tipo | Criteri |
 |---|---|---|
 | `route` | choice | `deterministic`, `skill`, `llm` |
-| `model_class` | choice | `standard`, `heavy` (la classe di sessione può solo salire; `light` non è una scelta conversazionale) |
+| `model_class` | choice | `standard`, `heavy` (dentro il turno la classe non scende sotto quella della sessione; la sessione ridiscende dopo due domande semplici di fila; `light` non è una scelta conversazionale) |
 | `deep_reasoning` | noul | pianificazione/analisi multi-passo |
 | `needs_memory` | noul | dipende da fatti personali o storici |
 | `tool_category` | choice | `none` + categorie attive |

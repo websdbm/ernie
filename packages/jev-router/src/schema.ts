@@ -103,6 +103,12 @@ export const RouteDecision = z.object({
   ambiguity: z.number().min(0).max(1).optional(),
   /** P(l'utente sta correggendo un fraintendimento della risposta precedente). */
   correction: z.number().min(0).max(1).optional(),
+  /**
+   * La classe che Jev sceglierebbe senza la classe della sessione: `heavy` se la richiesta è complessa, `standard`
+   * se è semplice con sicurezza (soglia `lowerClassConfidence`), assente se è incerta. Serve a far ridiscendere una
+   * sessione heavy dopo due domande semplici di fila.
+   */
+  requestedModelClass: z.enum(['standard', 'heavy']).optional(),
 });
 export type RouteDecision = z.infer<typeof RouteDecision>;
 
@@ -123,6 +129,8 @@ export const Thresholds = z.object({
   clarifyConfidence: z.number().min(0).max(1).default(0.7),
   /** Comando rapido di una skill: sotto questa probabilità di essere fedele alla frase, decide il modello. */
   skillFaithful: z.number().min(0).max(1).default(0.6),
+  /** Discesa da heavy (16 ott 2026): una domanda conta come semplice se Jev sceglie `standard` almeno così. */
+  lowerClassConfidence: z.number().min(0).max(1).default(0.8),
 });
 export type Thresholds = z.infer<typeof Thresholds>;
 
@@ -138,4 +146,5 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   correction: 0.8,
   clarifyConfidence: 0.7,
   skillFaithful: 0.6,
+  lowerClassConfidence: 0.8,
 };

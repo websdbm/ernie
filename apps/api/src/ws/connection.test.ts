@@ -31,6 +31,7 @@ function fakeStore(owner = auth.userId) {
   const classes = new Map<string, 'standard' | 'heavy'>();
   const tags_ = new Map<string, string[]>();
   const taints = new Map<string, string>();
+  const pins = new Set<string>();
   const store: SessionStore = {
     async ensure(userId, _k, sessionId) {
       const existing = sessions.get(sessionId);
@@ -51,6 +52,17 @@ function fakeStore(owner = auth.userId) {
     async raiseModelClass(_u, id, modelClass) {
       classes.set(id, modelClass);
       return modelClass;
+    },
+    async lowerModelClass(_u, id) {
+      classes.set(id, 'standard');
+      return 'standard';
+    },
+    async pinModelClass(id, pinned) {
+      if (pinned) pins.add(id);
+      else pins.delete(id);
+    },
+    async isModelClassPinned(id) {
+      return pins.has(id);
     },
     async setContextTags(_u, id, tags) {
       tags_.set(id, [...tags]);
@@ -77,7 +89,7 @@ function fakeStore(owner = auth.userId) {
       return (logs.get(id) ?? []).filter((e) => e.seq > after);
     },
   };
-  return { store, logs, sessions, owner, classes, tags: tags_, taints };
+  return { store, logs, sessions, owner, classes, tags: tags_, taints, pins };
 }
 
 function fakeSocket() {
@@ -852,6 +864,85 @@ describe('ClientConnection: routing', () => {
     expect(seen[0]?.decision?.source).toBe('jev');
     expect(seen[0]?.decision?.inputTokens).toBe(900);
     expect(d.decisions.record).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ClientConnection: discesa della classe', () => {
+  const HEAVY: Partial<RouteDecision> = {
+    modelClass: 'heavy',
+    deepReasoning: true,
+    requestedModelClass: 'heavy',
+  };
+  const SIMPLE: Partial<RouteDecision> = { requestedModelClass: 'standard' };
+  const UNSURE: Partial<RouteDecision> = {};
+  // Come il router vero: dentro il turno la classe non scende sotto quella della sessione.
+  const seqRouter = (steps: Partial<RouteDecision>[]) => {
+    const base = fakeRouter();
+    return Object.assign(base, {
+      async decide(input: { sessionModelClass: string }): Promise<RouteDecision> {
+        const step = steps[Math.min(base.calls, steps.length - 1)] ?? {};
+        base.calls++;
+        const heavy = step.modelClass === 'heavy' || input.sessionModelClass === 'heavy';
+        return {
+          ...(await fakeRouter(step).decide()),
+          modelClass: heavy ? 'heavy' : 'standard',
+        };
+      },
+    });
+  };
+  const run = async (steps: Partial<RouteDecision>[], first?: string) => {
+    const st = fakeStore();
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const classesSeen: string[] = [];
+    const d = deps(
+      {
+        // La classe della sessione al momento del turno è quella che sceglie il modello dell'agente.
+        getCompanion: vi.fn(async (_a, session) => {
+          classesSeen.push(session.modelClass);
+          return companion as never;
+        }),
+        runTurn: async (input: TurnInput) => {
+          await input.emit('assistant.completed', {});
+        },
+      },
+      st,
+      seqRouter(steps),
+    );
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    if (first) {
+      await conn.handleRaw(c.message(first));
+      await tick();
+    }
+    for (let i = 0; i < steps.length; i++) {
+      await conn.handleRaw(c.message(`domanda ${i}`));
+      await tick();
+    }
+    return { st, sessionId, classesSeen, d };
+  };
+
+  it('alla seconda domanda semplice di fila la sessione torna standard e quella domanda risponde già standard', async () => {
+    const { st, sessionId, classesSeen, d } = await run([HEAVY, SIMPLE, SIMPLE, SIMPLE]);
+    expect(classesSeen).toEqual(['heavy', 'heavy', 'standard', 'standard']);
+    expect(st.classes.get(sessionId)).toBe('standard');
+    expect(d.invalidateCompanion).toHaveBeenCalledWith(sessionId);
+    const recorded = d.decisions.record.mock.calls.map((c) => (c[3] as RouteDecision).modelClass);
+    expect(recorded).toEqual(['heavy', 'heavy', 'standard', 'standard']);
+  });
+
+  it('una richiesta complessa in mezzo azzera il conto; le decisioni incerte non contano', async () => {
+    const { st, sessionId, classesSeen } = await run([HEAVY, SIMPLE, HEAVY, SIMPLE, UNSURE]);
+    expect(classesSeen).toEqual(['heavy', 'heavy', 'heavy', 'heavy', 'heavy']);
+    expect(st.classes.get(sessionId)).toBe('heavy');
+  });
+
+  it('heavy scelto a mano con /classe heavy non scende; /classe standard lo riporta giù', async () => {
+    const { st, sessionId, classesSeen } = await run([SIMPLE, SIMPLE, SIMPLE], '/classe heavy');
+    expect(classesSeen).toEqual(['heavy', 'heavy', 'heavy']);
+    expect(st.classes.get(sessionId)).toBe('heavy');
+    expect(st.pins.has(sessionId)).toBe(true);
   });
 });
 

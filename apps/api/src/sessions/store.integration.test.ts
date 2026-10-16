@@ -76,6 +76,26 @@ describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_a
     expect(seenByA.rows[0]?.n).toBe(1);
   });
 
+  it('classe della sessione: sale, ridiscende e il segno della scelta manuale', async () => {
+    const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
+    const sessionId = randomUUID();
+    await store.ensure(userA, null as unknown as string, sessionId, { platform: 'test' });
+    expect(await store.raiseModelClass(userA, sessionId, 'standard')).toBe('standard');
+    expect(await store.raiseModelClass(userA, sessionId, 'heavy')).toBe('heavy');
+    expect(await store.raiseModelClass(userA, sessionId, 'standard')).toBe('heavy');
+    expect(await store.lowerModelClass(userA, sessionId)).toBe('standard');
+    expect(await store.lowerModelClass(userA, sessionId)).toBe('standard');
+    // B non può toccare la sessione di A (RLS): resta quella di A.
+    await store.raiseModelClass(userA, sessionId, 'heavy');
+    expect(await store.lowerModelClass(userB, sessionId)).toBe('standard');
+    expect(await store.raiseModelClass(userA, sessionId, 'standard')).toBe('heavy');
+    expect(await store.isModelClassPinned(sessionId)).toBe(false);
+    await store.pinModelClass(sessionId, true);
+    expect(await store.isModelClassPinned(sessionId)).toBe(true);
+    await store.pinModelClass(sessionId, false);
+    expect(await store.isModelClassPinned(sessionId)).toBe(false);
+  });
+
   it('seq, log e replay su Redis', async () => {
     const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
     const sessionId = randomUUID();

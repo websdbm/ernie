@@ -135,6 +135,32 @@ describe('mapAnswers', () => {
     expect(mapAnswers(deep, base, DEFAULT_THRESHOLDS, 1).modelClass).toBe('heavy');
   });
 
+  it('riporta la classe voluta da Jev senza isteresi: standard solo se sicura', () => {
+    // Sessione heavy, domanda semplice: il turno resta heavy ma Jev vorrebbe standard.
+    const inHeavy = mapAnswers(
+      observed,
+      { ...base, sessionModelClass: 'heavy' },
+      DEFAULT_THRESHOLDS,
+      1,
+    );
+    expect(inHeavy.modelClass).toBe('heavy');
+    expect(inHeavy.requestedModelClass).toBe('standard');
+    const withClass = (choice: 'standard' | 'heavy', confidence: number, deep = 0.1) =>
+      JevResponse.parse({
+        ...observed,
+        answers: {
+          ...observed.answers,
+          model_class: { type: 'choice', choice, confidence },
+          deep_reasoning: { type: 'noul', noul: deep },
+        },
+      });
+    const req = (r: ReturnType<typeof withClass>) =>
+      mapAnswers(r, base, DEFAULT_THRESHOLDS, 1).requestedModelClass;
+    expect(req(withClass('standard', 0.65))).toBeUndefined(); // incerta: non conta per la discesa
+    expect(req(withClass('heavy', 0.9))).toBe('heavy');
+    expect(req(withClass('standard', 0.95, 0.8))).toBe('heavy'); // ragionamento esteso
+  });
+
   it('sotto la confidenza di route ricade su llm; skill senza candidato valido → llm', () => {
     const low = JevResponse.parse({
       ...observed,

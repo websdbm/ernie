@@ -18,7 +18,7 @@ export interface RouterInput {
   readonly toolCategories: readonly string[];
   /** Skill candidate dal retrieval deterministico (vuoto in M3). */
   readonly skillCandidates: readonly string[];
-  /** Classe corrente della sessione: la decisione può solo salire. */
+  /** Classe corrente della sessione: dentro il turno la decisione non scende sotto questa. */
   readonly sessionModelClass: 'light' | 'standard' | 'heavy';
   /** Impronta del contesto per la chiave di cache (categorie, skill, classe). */
   readonly contextFingerprint?: string;
@@ -203,7 +203,14 @@ export function mapAnswers(
       ? 'heavy'
       : 'standard';
   if (deepReasoning) modelClass = 'heavy';
-  // Isteresi: la classe della sessione può solo salire.
+  const requestedModelClass: RouteDecision['requestedModelClass'] =
+    modelClass === 'heavy'
+      ? 'heavy'
+      : klass?.choice === 'standard' && klass.confidence >= thresholds.lowerClassConfidence
+        ? 'standard'
+        : undefined;
+  // Isteresi: dentro il turno la classe della sessione non scende; la discesa dopo due domande semplici di fila la
+  // decide la connessione con `requestedModelClass`.
   if (CLASS_RANK[modelClass] < CLASS_RANK[input.sessionModelClass])
     modelClass = input.sessionModelClass;
 
@@ -235,6 +242,7 @@ export function mapAnswers(
     raw: res.answers,
     ...(ambiguity === undefined ? {} : { ambiguity }),
     ...(correction === undefined ? {} : { correction }),
+    ...(requestedModelClass ? { requestedModelClass } : {}),
   };
 }
 

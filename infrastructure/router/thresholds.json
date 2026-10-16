@@ -7,5 +7,6 @@
   "ambiguity": 0.82,
   "correction": 0.8,
   "clarifyConfidence": 0.7,
-  "skillFaithful": 0.6
+  "skillFaithful": 0.6,
+  "lowerClassConfidence": 0.8
 }

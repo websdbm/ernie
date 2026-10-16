@@ -116,7 +116,7 @@ describe('routeCommand', () => {
     expect(routeCommand('/boh', ctx).kind).toBe('reply');
   });
 
-  it('la classe può solo salire; i contesti sono validati', () => {
+  it('la classe si sceglie a mano in tutte e due le direzioni; i contesti sono validati', () => {
     expect(routeCommand('/classe heavy', ctx)).toEqual({
       kind: 'set_class',
       modelClass: 'heavy',
@@ -124,7 +124,13 @@ describe('routeCommand', () => {
     });
     expect(routeCommand('/classe standard', ctx).kind).toBe('reply');
     expect(routeCommand('/classe light', ctx).kind).toBe('reply');
-    expect(routeCommand('/classe heavy', { ...ctx, modelClass: 'heavy' }).kind).toBe('reply');
+    // heavy raggiunto da solo: «/classe heavy» lo rende fisso; «/classe standard» lo riporta giù.
+    expect(routeCommand('/classe heavy', { ...ctx, modelClass: 'heavy' }).kind).toBe('set_class');
+    expect(routeCommand('/classe standard', { ...ctx, modelClass: 'heavy' })).toEqual({
+      kind: 'set_class',
+      modelClass: 'standard',
+      text: expect.any(String),
+    });
     expect(routeCommand('/contesto Cucina spesa', ctx)).toEqual({
       kind: 'set_context',
       tags: ['cucina', 'spesa'],

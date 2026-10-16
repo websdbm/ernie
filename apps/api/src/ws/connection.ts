@@ -198,6 +198,8 @@ export interface ConnectionDeps {
 
 const NULL_UUID = '00000000-0000-4000-8000-000000000000';
 const uuid = z.uuid();
+/** Domande semplici di fila dopo le quali una sessione heavy torna standard (la seconda risponde già standard). */
+const SIMPLE_TURNS_TO_LOWER = 2;
 
 const localDecision = (
   route: 'deterministic' | 'skill',
@@ -237,6 +239,8 @@ export class ClientConnection {
   private interruptedReply: { heard: string; unheard: string } | undefined;
   /** Ultimi scambi (max 6 righe) per lo state del router: non persistiti. */
   private readonly recentTurns: string[] = [];
+  /** Domande di fila che Jev giudica semplici: alla seconda una sessione heavy torna standard. */
+  private simpleStreak = 0;
   private sending: Promise<void> = Promise.resolve();
   private closed = false;
 
@@ -426,6 +430,34 @@ export class ClientConnection {
     for (const e of replay) this.socket.send(JSON.stringify(e)); // già numerati: nessun nuovo seq
   }
 
+  /**
+   * Discesa della classe (richiesta dell'utente, 16 ott 2026). La sessione sale a heavy con la prima richiesta
+   * complessa e prima ci restava fino alla fine: Opus con ragionamento scriveva la prima parola dopo 3–9 s e costava
+   * circa cinque volte tanto anche per «e quanto ci vuole?». Ora alla seconda domanda semplice di fila (Jev vuole
+   * `standard` con sicurezza, senza ragionamento esteso) la sessione torna standard, e quella domanda risponde già
+   * standard. Non scende se heavy l'ha scelto l'utente con «/classe heavy».
+   */
+  private async settleModelClass(
+    decision: RouteDecision,
+    sessionId: string,
+  ): Promise<RouteDecision> {
+    if (!this.session) return decision;
+    if (decision.requestedModelClass === 'heavy') this.simpleStreak = 0;
+    if (decision.requestedModelClass !== 'standard') return decision;
+    this.simpleStreak++;
+    if (this.session.modelClass !== 'heavy' || this.simpleStreak < SIMPLE_TURNS_TO_LOWER)
+      return decision;
+    if (await this.deps.store.isModelClassPinned(sessionId)) return decision;
+    const effective = await this.deps.store.lowerModelClass(this.auth.userId, sessionId);
+    this.session = { ...this.session, modelClass: effective };
+    this.deps.invalidateCompanion(sessionId);
+    this.deps.logger.info(
+      { sessionId, simpleTurns: this.simpleStreak },
+      'sessione riportata a standard',
+    );
+    return { ...decision, modelClass: effective === 'heavy' ? 'heavy' : 'standard' };
+  }
+
   private async onUserMessage(
     event: Extract<ClientEvent, { type: 'user.message' }>,
   ): Promise<void> {
@@ -536,11 +568,12 @@ export class ClientConnection {
     });
     if (command.kind !== 'none' && attachments.length === 0) {
       if (command.kind === 'set_class') {
-        const effective = await this.deps.store.raiseModelClass(
-          this.auth.userId,
-          sessionId,
-          command.modelClass,
-        );
+        const effective =
+          command.modelClass === 'heavy'
+            ? await this.deps.store.raiseModelClass(this.auth.userId, sessionId, 'heavy')
+            : await this.deps.store.lowerModelClass(this.auth.userId, sessionId);
+        await this.deps.store.pinModelClass(sessionId, command.modelClass === 'heavy');
+        this.simpleStreak = 0;
         this.session = { ...this.session, modelClass: effective };
         this.deps.invalidateCompanion(sessionId);
       } else if (command.kind === 'set_context') {
@@ -664,14 +697,17 @@ export class ClientConnection {
       }
       throw err;
     }
-    const decision = await this.deps.router.decide({
-      text: modelText,
-      inputMode: event.payload.inputMode,
-      recentTurns: this.recentTurns,
-      toolCategories: this.deps.tools?.categories ?? [],
-      skillCandidates: skills?.candidates(text) ?? [],
-      sessionModelClass: this.session.modelClass,
-    });
+    const decision = await this.settleModelClass(
+      await this.deps.router.decide({
+        text: modelText,
+        inputMode: event.payload.inputMode,
+        recentTurns: this.recentTurns,
+        toolCategories: this.deps.tools?.categories ?? [],
+        skillCandidates: skills?.candidates(text) ?? [],
+        sessionModelClass: this.session.modelClass,
+      }),
+      sessionId,
+    );
     await this.deps.decisions.record(this.auth.userId, sessionId, correlationId, decision);
     if (decision.modelClass === 'heavy' && this.session.modelClass !== 'heavy') {
       const effective = await this.deps.store.raiseModelClass(this.auth.userId, sessionId, 'heavy');

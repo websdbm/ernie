@@ -23,7 +23,7 @@ const CLASS_RANK = { light: 0, standard: 1, heavy: 2 } as const;
 export const COMMANDS_HELP = [
   '/aiuto — questo elenco',
   '/stato — sessione, classe di modello, contesto e spesa di oggi',
-  '/classe standard|heavy — alza la classe di modello della sessione (non scende)',
+  '/classe standard|heavy — classe di modello della sessione (heavy resta finché non scrivi /classe standard)',
   '/contesto <tag …> | nessuno — contesti attivi della sessione (es. cucina)',
 ].join('\n');
 
@@ -58,15 +58,16 @@ export function routeCommand(text: string, ctx: CommandContext): CommandResult {
         };
       if (target !== 'standard' && target !== 'heavy')
         return { kind: 'reply', text: 'Uso: /classe standard oppure /classe heavy' };
-      if (CLASS_RANK[target] <= CLASS_RANK[ctx.modelClass])
-        return {
-          kind: 'reply',
-          text: `La sessione è già in classe ${ctx.modelClass}: la classe può solo salire.`,
-        };
+      // heavy chiesto a mano resta fisso (anche se la sessione c'era già arrivata da sola); standard lo toglie.
+      if (target === 'standard' && CLASS_RANK[ctx.modelClass] <= CLASS_RANK.standard)
+        return { kind: 'reply', text: 'La sessione è già in classe standard.' };
       return {
         kind: 'set_class',
         modelClass: target,
-        text: `Classe di modello portata a ${target} per questa sessione.`,
+        text:
+          target === 'heavy'
+            ? 'Classe di modello heavy per questa sessione, finché non scrivi /classe standard.'
+            : 'Classe di modello riportata a standard per questa sessione.',
       };
     }
     case 'contesto': {
