@@ -11,8 +11,8 @@ import { z } from 'zod';
 
 export const ExtractedExpression = z.object({
   term: z.string().min(1).max(60),
-  meaning: z.string().max(160).nullable().optional(),
-  example: z.string().max(200).nullable().optional(),
+  meaning: z.string().max(160).optional(),
+  example: z.string().max(200).optional(),
 });
 export type ExtractedExpression = z.infer<typeof ExtractedExpression>;
 
@@ -59,8 +59,8 @@ export function cleanExpressions(items: readonly ExtractedExpression[]): Extract
     seen.add(key);
     out.push({
       term: it.term.trim().slice(0, 60),
-      meaning: it.meaning ?? null,
-      example: it.example ?? null,
+      ...(it.meaning ? { meaning: it.meaning } : {}),
+      ...(it.example ? { example: it.example } : {}),
     });
   }
   return out.slice(0, 6);

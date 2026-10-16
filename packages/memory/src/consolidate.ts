@@ -81,35 +81,35 @@ export const ExtractedProfile = z.object({
   city: z.string().nullable().optional(),
   occupation: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
+  // Liste e campi annidati solo facoltativi, non nullabili: l'output strutturato ammette al massimo 16 parametri
+  // nullabili e oltre rifiuta la richiesta (extraction-schema.test.ts).
   family: z
     .array(
       z.object({
-        name: z.string().nullable().optional(),
-        relation: z.string().nullable().optional(),
-        birthDate: z.string().nullable().optional(),
-        notes: z.string().nullable().optional(),
+        name: z.string().optional(),
+        relation: z.string().optional(),
+        birthDate: z.string().optional(),
+        notes: z.string().optional(),
       }),
     )
-    .nullable()
     .optional(),
   /** Luoghi suoi con indirizzo («casa mia è in via Roma 3»), per i promemoria geolocalizzati. */
   places: z
     .array(
       z.object({
-        label: z.string().nullable().optional(),
-        address: z.string().nullable().optional(),
+        label: z.string().optional(),
+        address: z.string().optional(),
       }),
     )
-    .nullable()
     .optional(),
   /** Le parole della persona da cui vengono i dati (breve citazione). */
-  evidence: z.string().nullable().optional(),
+  evidence: z.string().optional(),
 });
 export const Extraction = z.object({
   facts: z.array(ExtractedFact).max(8),
   profile: ExtractedProfile.nullable().optional(),
   /** Espressioni tipiche della persona (lessico imparato, 16 ott 2026). */
-  expressions: z.array(ExtractedExpression).max(8).nullable().optional(),
+  expressions: z.array(ExtractedExpression).max(8).optional(),
 });
 export type Extraction = z.infer<typeof Extraction>;
 

@@ -20,7 +20,7 @@ describe('lessico: normalizzazione e filtri', () => {
       { term: 'Ci sta!', meaning: 'va bene' },
       { term: 'merda', meaning: 'esclamazione' },
       { term: 'questa è una frase intera troppo lunga', meaning: '' },
-      ...['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((term) => ({ term, meaning: null })),
+      ...['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((term) => ({ term })),
     ]);
     expect(out.map((e) => e.term)).toEqual(['ci sta', 'a1', 'a2', 'a3', 'a4', 'a5']);
   });

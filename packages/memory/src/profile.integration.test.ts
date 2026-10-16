@@ -58,7 +58,6 @@ describe.skipIf(!ready)('scheda anagrafica su Postgres (RLS, consolidamento)', (
         fullName: 'Alessandro',
         preferredName: 'Ale',
         birthDate: '1975-05-03',
-        family: null,
         evidence: 'chiamami Ale',
       },
     });
