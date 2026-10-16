@@ -317,6 +317,12 @@ export interface FamilyMessenger {
     senderId: string,
     input: { toLabel: string; text: string; urgent?: boolean },
   ): Promise<FamilyMessage | null>;
+  /** Stesso testo già mandato alla stessa persona di recente (contro i doppioni del modello). */
+  recentSame(
+    senderId: string,
+    input: { toLabel: string; text: string },
+    withinMs?: number,
+  ): Promise<FamilyMessage | null>;
   /** Conferma di lettura di un urgente: lo dice al genitore (scheda aggiornata e notifica). Nil se non c'era. */
   acknowledge(userId: string, id: string): Promise<FamilyMessage | null>;
   /** Un giro delle ripetizioni: notifiche degli urgenti non confermati e avviso al genitore per i scaduti. */
@@ -348,6 +354,21 @@ export function createFamilyMessenger(deps: FamilyMessengerDeps): FamilyMessenge
   };
   return {
     send,
+    async recentSame(senderId, input, withinMs = 12 * 3_600_000) {
+      const link = await deps.findLink(senderId, input.toLabel);
+      if (!link) return null;
+      const key = sameText(input.text);
+      const recent = await deps.store.list(senderId, {
+        since: new Date(Date.now() - withinMs),
+        limit: 200,
+      });
+      return (
+        recent
+          .filter((m) => m.direction === 'out' && m.otherUserId === link.otherUserId)
+          .reverse()
+          .find((m) => sameText(m.text) === key) ?? null
+      );
+    },
     async sendToLabel(senderId, input) {
       const link = await deps.findLink(senderId, input.toLabel);
       if (!link) return null;
@@ -440,9 +461,32 @@ export function createFamilyMessageTool(messenger: FamilyMessenger) {
         .describe(
           'Urgente («super snooze»): il telefono suona finché non conferma di averlo letto. Solo se l’utente lo chiede esplicitamente («urgente», «deve leggerlo subito») e solo verso un figlio.',
         ),
+      resend: z
+        .boolean()
+        .optional()
+        .describe(
+          'true solo se l’utente, nel messaggio attuale, chiede di rimandare un messaggio già partito',
+        ),
     }),
     outputSchema: z.object({ id: z.string(), to: z.string() }),
     execute: async (input, ctx) => {
+      // Il 16 ott 2026 il modello ha rimandato da solo un urgente partito ore prima (l'aveva mandato la skill e
+      // nella cronologia non c'era traccia dello strumento): lo stesso testo alla stessa persona entro 12 ore
+      // riparte solo se l'utente lo chiede adesso.
+      if (!input.resend) {
+        const dup = await messenger.recentSame(ctx.userId, { toLabel: input.to, text: input.text });
+        if (dup) {
+          const at = new Intl.DateTimeFormat('it-IT', {
+            timeZone: 'Europe/Rome',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(dup.at);
+          throw new ToolError(
+            `Questo messaggio a ${dup.label} è già partito alle ${at}${dup.urgent ? ' come urgente' : ''}${dup.acknowledgedAt ? ' ed è stato confermato' : ''}: non rimandarlo. Dillo all’utente; rimandalo (resend true) solo se è lui a chiederlo esplicitamente nel messaggio attuale.`,
+            'invalid_input',
+          );
+        }
+      }
       let m: FamilyMessage | null;
       try {
         m = await messenger.sendToLabel(ctx.userId, {
@@ -475,3 +519,11 @@ export function createFamilyMessageTool(messenger: FamilyMessenger) {
 }
 
 const lastSent = new Map<string, FamilyMessage>();
+
+/** Testo confrontabile: minuscolo, senza punteggiatura né spazi doppi («Facciamo colazione!» = «facciamo colazione»). */
+export function sameText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}

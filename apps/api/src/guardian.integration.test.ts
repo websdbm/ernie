@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createPool, type Pool, withUser } from '@ernie/db';
+import { LOCAL_ACTION_NOTE } from '@ernie/memory';
 import { disabledToolIds, enabledSkillIds } from '@ernie/skills';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createFamilyRepository, SupervisedUnlinkError } from './family.js';
@@ -10,6 +11,22 @@ const APP_PASSWORD = process.env.APP_DB_PASSWORD;
 const ready = Boolean(OWNER_URL && APP_PASSWORD);
 
 describe('registro per il genitore: messaggi salvati → righe leggibili', () => {
+  it('la nota di sistema accanto alle risposte delle skill non si vede', () => {
+    expect(
+      toTranscriptMessage({
+        role: 'assistant',
+        content: {
+          format: 2,
+          parts: [
+            { type: 'text', text: '⏰ Ti ricordo il treno alle 17' },
+            { type: 'text', text: LOCAL_ACTION_NOTE },
+          ],
+        },
+        createdAt: new Date('2026-10-16T09:00:00Z'),
+      })?.text,
+    ).toBe('⏰ Ti ricordo il treno alle 17');
+  });
+
   it('testo, voce, strumenti usati; il ragionamento resta fuori', () => {
     expect(
       toTranscriptMessage({

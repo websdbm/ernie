@@ -1,4 +1,5 @@
 import { type Pool, withUser } from '@ernie/db';
+import { isSystemNote } from '@ernie/memory';
 import { SKILL_CATALOG } from '@ernie/skills';
 import type { Relation, Supervisable } from './family.js';
 
@@ -298,7 +299,8 @@ export function toTranscriptMessage(m: unknown): TranscriptMessage | null {
     for (const p of parts) {
       if (!p || typeof p !== 'object') continue;
       const part = p as Record<string, unknown>;
-      if (part.type === 'text' && typeof part.text === 'string') texts.push(part.text);
+      if (part.type === 'text' && typeof part.text === 'string' && !isSystemNote(part.text))
+        texts.push(part.text);
       const inv = part.toolInvocation as { toolName?: unknown } | undefined;
       if (part.type === 'tool-invocation' && typeof inv?.toolName === 'string')
         tools.push(inv.toolName);

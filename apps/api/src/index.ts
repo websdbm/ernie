@@ -52,6 +52,7 @@ import {
   enqueueConsolidation,
   enqueueSessionSummary,
   findPlace,
+  LOCAL_ACTION_NOTE,
   MAX_PLACES,
   normalizePlaceLabel,
   PROFILE_FIELDS,
@@ -931,25 +932,35 @@ async function main(): Promise<void> {
         intents,
         profiles,
         healthNotices: (userId) => health.takeNotices(userId),
-        recordLocalTurn: async (userId, sessionId, userText, reply) => {
+        recordLocalTurn: async (userId, sessionId, userText, reply, route) => {
           if (!(await memory.getThreadById({ threadId: sessionId })))
             await memory.createThread({ threadId: sessionId, resourceId: userId });
           const now = Date.now();
-          const message = (role: 'user' | 'assistant', text: string, at: number) => ({
+          const message = (
+            role: 'user' | 'assistant',
+            text: string,
+            at: number,
+            note?: string,
+          ) => ({
             id: randomUUID(),
             role,
             createdAt: new Date(at),
             threadId: sessionId,
             resourceId: userId,
             type: 'text',
-            content: { format: 2, parts: [{ type: 'text', text }] },
+            content: {
+              format: 2,
+              parts: [{ type: 'text', text }, ...(note ? [{ type: 'text', text: note }] : [])],
+            },
           });
           // I messaggi interni (promemoria scattati, «__…») restano fuori: si salva solo la risposta.
           const internal = userText.startsWith('__');
           await memory.saveMessages({
             messages: [
               ...(internal ? [] : [message('user', userText, now - 1)]),
-              message('assistant', reply, now),
+              // Senza questa nota il modello, non vedendo lo strumento, crede di non aver fatto l'azione e la
+              // rifà (16 ott 2026: urgente a Giorgio rimandato ore dopo). Il registro del genitore la toglie.
+              message('assistant', reply, now, route === 'skill' ? LOCAL_ACTION_NOTE : undefined),
             ] as never,
           });
         },

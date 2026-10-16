@@ -154,6 +154,14 @@ example la sua frase (max 120 caratteri). Escludi: parolacce, volgarità, bestem
 discriminatori; parole comuni dell'italiano standard; nomi propri di persone; probabili errori di dettatura o di battitura;
 parole tecniche del tema di cui parla. Al massimo 6; nessuna → lista vuota.`;
 
+/**
+ * Nota salvata nella cronologia accanto alle risposte delle skill (senza modello): il modello sa che l'azione è
+ * stata fatta anche se non vede lo strumento. Fuori dai trascritti per la memoria e per il genitore.
+ */
+export const LOCAL_ACTION_NOTE =
+  '[Nota di sistema, non per l’utente: questa risposta l’ha data una skill di Ernie senza modello e l’azione descritta è già stata eseguita davvero. Non ripeterla e non «correggerla».]';
+export const isSystemNote = (text: string): boolean => text.startsWith('[Nota di sistema');
+
 const isToolPart = (p: unknown): boolean => {
   const t = p && typeof p === 'object' ? (p as { type?: unknown }).type : null;
   return (
@@ -185,7 +193,7 @@ export function messageToLine(m: unknown): TranscriptLine | null {
           ? String((p as { text?: string }).text ?? '')
           : '',
       )
-      .filter(Boolean);
+      .filter((t) => t && !isSystemNote(t));
     if (texts.length) text = texts.join(' ');
   }
   text = text.replace(/\s+/g, ' ').trim();

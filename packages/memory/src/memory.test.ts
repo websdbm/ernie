@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageToLine } from './consolidate.js';
+import { LOCAL_ACTION_NOTE, messageToLine } from './consolidate.js';
 import { createFakeEmbedder, toPgVector } from './embeddings.js';
 import { normalizeContent, reciprocalRankFusion } from './rrf.js';
 import { buildMemorySnapshot, formatRetrievedMemories } from './snapshot.js';
@@ -122,6 +122,19 @@ describe('messageToLine', () => {
         },
       })?.text,
     ).toBe('a b');
+    // La nota per il modello accanto alle risposte delle skill non entra nel trascritto della memoria.
+    expect(
+      messageToLine({
+        role: 'assistant',
+        content: {
+          format: 2,
+          parts: [
+            { type: 'text', text: '🚨 Mandato a Giorgio' },
+            { type: 'text', text: LOCAL_ACTION_NOTE },
+          ],
+        },
+      })?.text,
+    ).toBe('🚨 Mandato a Giorgio');
     expect(messageToLine({ role: 'tool', content: 'x' })).toBeNull();
     expect(messageToLine(null)).toBeNull();
   });

@@ -171,6 +171,7 @@ export interface ConnectionDeps {
     sessionId: string,
     userText: string,
     reply: string,
+    route: 'deterministic' | 'skill',
   ) => Promise<void>;
   /** Tool e skill (M5): categorie per Jev, contesto per turno, skill deterministiche prima di Jev. */
   readonly tools?: {
@@ -1111,7 +1112,7 @@ export class ClientConnection {
     const sid = this.sessionId;
     if (sid && this.deps.recordLocalTurn)
       void this.deps
-        .recordLocalTurn(this.auth.userId, sid, userText, reply)
+        .recordLocalTurn(this.auth.userId, sid, userText, reply, route)
         .catch((err: unknown) =>
           this.deps.logger.warn(
             { err: err instanceof Error ? err.message : String(err) },
