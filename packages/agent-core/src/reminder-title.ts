@@ -9,7 +9,7 @@ import { Agent } from '@mastra/core/agent';
  */
 export type ReminderTitler = (
   text: string,
-  ctx: { userId: string; fromLabel?: string },
+  ctx: { userId: string; fromLabel?: string; style?: string },
 ) => Promise<string>;
 
 const INSTRUCTIONS = `Trasformi una richiesta di promemoria detta a voce in un titolo breve per la notifica sul telefono.
@@ -54,11 +54,15 @@ export function createReminderTitler(
     const who = ctx.fromLabel
       ? `\nIl promemoria è per un'altra persona e l'ha messo «${ctx.fromLabel}»: «mi», «me», «mio» riferiti a chi lo chiede diventano «${ctx.fromLabel}» (es. «chiamarmi» → Chiamare ${ctx.fromLabel}).`
       : '';
+    // Stile scelto dall'utente (16 ott 2026): il titolo resta breve e chiaro, nel suo tono.
+    const style = ctx.style
+      ? `\nStile da usare per il titolo, sempre breve e chiaro: ${ctx.style}`
+      : '';
     const t0 = Date.now();
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      const result = (await agent.generate(`Richiesta: «${text.slice(0, 300)}»${who}`, {
+      const result = (await agent.generate(`Richiesta: «${text.slice(0, 300)}»${who}${style}`, {
         // Il limite comprende il ragionamento del modello: con 60 token la risposta restava vuota.
         modelSettings: { maxOutputTokens: 400 },
         abortSignal: ac.signal,

@@ -42,6 +42,7 @@ import {
 } from '@ernie/jev-router';
 import {
   createFakeEmbedder,
+  createLexiconStore,
   createMemoryQueue,
   createMemoryRepository,
   createOpenAIEmbedder,
@@ -88,7 +89,7 @@ import {
   tidyReminderText,
   UnknownPersonError,
 } from '@ernie/skills';
-import { createSoulRepository } from '@ernie/soul';
+import { createSoulRepository, styleNote } from '@ernie/soul';
 import {
   createBrainTools,
   createDocumentTools,
@@ -139,6 +140,7 @@ import { createRouterDecisionRecorder } from './router/recorder.js';
 import { createSentinelStore } from './sentinels.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
+import { createStyleTool } from './style.js';
 import { ConnectionRegistry } from './ws/plugin.js';
 
 async function main(): Promise<void> {
@@ -191,6 +193,8 @@ async function main(): Promise<void> {
     logger.warn('OPENAI_API_KEY assente: memoria con embedder finto (solo full-text)');
   const memories = createMemoryRepository(postgres.pool, embedder, { logger });
   const profiles = createProfileStore(postgres.pool);
+  // Parole imparate dall'utente (16 ott 2026): le annota il worker, qui si leggono e si cancellano.
+  const lexicon = createLexiconStore(postgres.pool);
   const memoryQueue = createMemoryQueue(redis.client);
 
   // Automation Engine (M6): definizioni e run nel database, coda BullMQ condivisa con il worker, eventi interni.
@@ -360,11 +364,19 @@ async function main(): Promise<void> {
     // Titolo breve dei promemoria con il modello leggero (ripiego deterministico senza provider).
     ...(gateway
       ? {
-          title: createReminderTitler({
-            gateway,
-            recorder: createLlmCallRecorder(postgres.pool, logger),
-            fallback: tidyReminderText,
-          }),
+          title: (() => {
+            const titler = createReminderTitler({
+              gateway,
+              recorder: createLlmCallRecorder(postgres.pool, logger),
+              fallback: tidyReminderText,
+            });
+            // Anche i titoli dei promemoria nello stile scelto (vale ovunque, scelta dell'utente).
+            return async (text: string, ctx: { userId: string; fromLabel?: string }) =>
+              titler(text, {
+                ...ctx,
+                style: styleNote(await loadUserSettings(ctx.userId).catch(() => ({}))),
+              });
+          })(),
         }
       : {}),
     notifyRecipient: (userId, block) =>
@@ -397,7 +409,13 @@ async function main(): Promise<void> {
     .register(getTimeTool)
     .register(presentRecipesTool)
     .register(presentChoicesTool)
-    .register(createMemorySearchSpec(memories));
+    .register(createMemorySearchSpec(memories))
+    .register(
+      createStyleTool({
+        pool: postgres.pool,
+        onChanged: (userId) => companions.invalidateUser(userId),
+      }),
+    );
   for (const t of createShoppingTools(shopping)) registry.register(t);
   for (const t of createRecipeTools(createRecipeRepository(postgres.pool))) registry.register(t);
   // Documenti (M7b): testo estratto sul telefono; riassunto e schemi con il modello (classe standard/light), con registrazione dei costi.
@@ -595,6 +613,7 @@ async function main(): Promise<void> {
     logger,
     memories,
     profiles,
+    lexicon,
     snapshotMaxChars: config.memory.snapshotMaxChars,
     sessionSummary: async (userId, sessionId) => {
       const s = await sessionSummaries.get(userId, sessionId);
@@ -611,7 +630,13 @@ async function main(): Promise<void> {
       registry,
       executor,
       categories: config.tools.categories,
-      core: ['memory_search', 'get_time', 'present_recipes', 'present_choices'],
+      core: [
+        'memory_search',
+        'get_time',
+        'present_recipes',
+        'present_choices',
+        'conversation_style_set',
+      ],
     },
     skills: {
       builtin: [
@@ -785,6 +810,8 @@ async function main(): Promise<void> {
       onEmailChanged: async (userId, email) => {
         await setProfileEmail(userId, email);
       },
+      onStyleChanged: (userId) => companions.invalidateUser(userId),
+      lexicon,
     },
     skills: {
       authenticator,
@@ -828,6 +855,7 @@ async function main(): Promise<void> {
       pool: postgres.pool,
       store: guardian,
       onChanged: (userId) => companions.invalidateUser(userId),
+      lexicon,
     },
     profile: {
       authenticator,

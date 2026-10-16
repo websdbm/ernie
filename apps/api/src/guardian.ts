@@ -129,6 +129,13 @@ export interface GuardianStore {
   recordReview(guardianId: string, childId: string, sessionId: string | null): Promise<void>;
   /** Vista del figlio: chi lo segue (con l'etichetta che il figlio usa) e l'ultima consultazione. */
   supervision(childId: string): Promise<Supervision | null>;
+  /** Stile scelto dal figlio e stato dell'apprendimento delle parole, per la pagina del genitore. */
+  childStyle(
+    guardianId: string,
+    childId: string,
+  ): Promise<{ style: string; learn: boolean; lexiconOff: boolean } | null>;
+  /** Il genitore spegne (o riaccende) l'apprendimento delle parole del figlio. */
+  setLexiconOff(guardianId: string, childId: string, off: boolean): Promise<boolean>;
 }
 
 export function createGuardianStore(pool: Pool): GuardianStore {
@@ -213,6 +220,31 @@ export function createGuardianStore(pool: Pool): GuardianStore {
           [guardianId, childId, sessionId],
         ),
       );
+    },
+    async childStyle(guardianId, childId) {
+      return withUser(pool, guardianId, async (c) => {
+        const r = await c.query<{ o_style: string; o_learn: boolean }>(
+          `SELECT o_style, o_learn FROM guardian_child_style($1)`,
+          [childId],
+        );
+        const g = await c.query<{ lexicon_off: boolean }>(
+          `SELECT lexicon_off FROM guardianships WHERE guardian_id = $1 AND child_id = $2`,
+          [guardianId, childId],
+        );
+        const row = r.rows[0];
+        const link = g.rows[0];
+        if (!row || !link) return null;
+        return { style: row.o_style, learn: row.o_learn, lexiconOff: link.lexicon_off };
+      });
+    },
+    async setLexiconOff(guardianId, childId, off) {
+      return withUser(pool, guardianId, async (c) => {
+        const r = await c.query(
+          `UPDATE guardianships SET lexicon_off = $3 WHERE guardian_id = $1 AND child_id = $2`,
+          [guardianId, childId, off],
+        );
+        return (r.rowCount ?? 0) > 0;
+      });
     },
     async supervision(childId) {
       return withUser(pool, childId, async (c) => {

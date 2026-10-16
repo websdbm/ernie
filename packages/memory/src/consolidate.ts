@@ -10,6 +10,7 @@ import {
   type NewFact,
   normalizeDates,
 } from './judge.js';
+import { ExtractedExpression, type LexiconStore } from './lexicon.js';
 import { mergeProfile, type ProfileStore } from './profile.js';
 import type { MemoryRepository } from './repository.js';
 import type { MemoryCategory } from './types.js';
@@ -41,6 +42,8 @@ export interface ConsolidationDeps {
   readonly judge?: Judge | null;
   /** Scheda anagrafica: i dati anagrafici emersi nel batch la aggiornano (stessa chiamata dell'estrazione). */
   readonly profiles?: ProfileStore;
+  /** Lessico imparato: le espressioni del batch (stessa chiamata dell'estrazione). */
+  readonly lexicon?: Pick<LexiconStore, 'learn'>;
 }
 
 export interface ConsolidationResult {
@@ -51,6 +54,7 @@ export interface ConsolidationResult {
   readonly deduplicated: number;
   readonly superseded: number;
   readonly profileChanges?: number;
+  readonly expressions?: number;
 }
 
 export const ExtractedFact = z.object({
@@ -104,6 +108,8 @@ export const ExtractedProfile = z.object({
 export const Extraction = z.object({
   facts: z.array(ExtractedFact).max(8),
   profile: ExtractedProfile.nullable().optional(),
+  /** Espressioni tipiche della persona (lessico imparato, 16 ott 2026). */
+  expressions: z.array(ExtractedExpression).max(8).nullable().optional(),
 });
 export type Extraction = z.infer<typeof Extraction>;
 
@@ -139,7 +145,14 @@ madre, cane…), birthDate se detta, notes brevissime. places: luoghi suoi di cu
 scuola dei figli…): label breve e minuscola («casa», «lavoro»), address come lo dice (via, numero civico, città); senza
 indirizzo niente luogo. evidence: le sue parole, al massimo 160 caratteri.
 Tutto ciò che non è detto è null; se nel batch non ci sono dati anagrafici, profile è null. I dati che metti in profile
-NON vanno ripetuti in facts.`;
+NON vanno ripetuti in facts.
+
+ESPRESSIONI (campo expressions): modi di dire, slang, intercalari, saluti, soprannomi di cose e parole tipiche che la persona
+usa nelle righe «utente» e che un assistente potrebbe riusare per parlarle nel suo stile: «ci sta» (va bene), «bro» (amico),
+«papo» (papà), «top» (ottimo), «sbatti» (fatica). term come lo scrive (1-4 parole), meaning in italiano corrente (poche parole),
+example la sua frase (max 120 caratteri). Escludi: parolacce, volgarità, bestemmie, insulti e termini offensivi o
+discriminatori; parole comuni dell'italiano standard; nomi propri di persone; probabili errori di dettatura o di battitura;
+parole tecniche del tema di cui parla. Al massimo 6; nessuna → lista vuota.`;
 
 const isToolPart = (p: unknown): boolean => {
   const t = p && typeof p === 'object' ? (p as { type?: unknown }).type : null;
@@ -216,7 +229,7 @@ export function createLlmExtractor(
       structuredOutput: {
         schema: Extraction,
         errorStrategy: 'fallback',
-        fallbackValue: { facts: [], profile: null },
+        fallbackValue: { facts: [], profile: null, expressions: [] },
       },
       modelSettings: { maxOutputTokens: 1_536 },
     } as never);
@@ -327,6 +340,19 @@ export async function consolidateThread(
   const { inserted, deduplicated, superseded } = stats;
 
   // Scheda anagrafica: i dati detti dalla persona aggiornano la scheda (le correzioni fatte nell'app restano).
+  let expressions = 0;
+  if (deps.lexicon && extraction.expressions?.length) {
+    try {
+      const r = await deps.lexicon.learn(userId, job.sessionId, extraction.expressions);
+      expressions = r.recorded;
+    } catch (err) {
+      deps.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'lessico non aggiornato',
+      );
+    }
+  }
+
   let profileChanges = 0;
   if (deps.profiles && extraction.profile) {
     try {
@@ -364,6 +390,7 @@ export async function consolidateThread(
       deduplicated,
       superseded,
       profileChanges,
+      expressions,
     },
     'consolidamento memoria',
   );
@@ -375,5 +402,6 @@ export async function consolidateThread(
     deduplicated,
     superseded,
     profileChanges,
+    expressions,
   };
 }

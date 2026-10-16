@@ -1,4 +1,6 @@
 import type { Pool } from '@ernie/db';
+import type { LexiconItem, LexiconStore } from '@ernie/memory';
+import { styleOf } from '@ernie/soul';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
@@ -18,7 +20,21 @@ export interface GuardianRoutesOptions {
   readonly store: GuardianStore;
   /** Skill del figlio cambiate o controllo tolto: il suo agente va ricostruito. */
   readonly onChanged?: (userId: string) => void;
+  /** Parole imparate dal figlio (lettura del genitore). */
+  readonly lexicon?: Pick<LexiconStore, 'listForGuardian'>;
 }
+
+const LexiconBody = z.object({ off: z.boolean() }).strict();
+
+export const lexiconJson = (w: LexiconItem) => ({
+  id: w.id,
+  term: w.term,
+  meaning: w.meaning,
+  example: w.example,
+  active: w.status === 'active',
+  seenCount: w.seenCount,
+  lastSeenAt: w.lastSeenAt.toISOString(),
+});
 
 function requireAuth(req: FastifyRequest): AuthContext {
   const a = req.auth;
@@ -94,6 +110,44 @@ export async function guardianRoutes(
           .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
       opts.onChanged?.(g.childId);
       return { skills: guardianCatalog(allowed) };
+    });
+
+    // Come parla Ernie al figlio: stile scelto da lui e parole imparate (le vede, può spegnere l'apprendimento).
+    const childStyle = async (g: { guardianId: string; childId: string }) => {
+      const st = await opts.store.childStyle(g.guardianId, g.childId);
+      if (!st) return null;
+      const profile = styleOf({ conversationStyle: st.style });
+      const words = (await opts.lexicon?.listForGuardian(g.guardianId, g.childId)) ?? [];
+      return {
+        style: { id: profile.id, title: profile.title, description: profile.description },
+        learnLexicon: st.learn,
+        lexiconOff: st.lexiconOff,
+        words: words.map(lexiconJson),
+      };
+    };
+
+    api.get('/v1/family/children/:childId/style', async (req, reply) => {
+      const g = await guard(req);
+      const body = g ? await childStyle(g) : null;
+      if (!body)
+        return reply
+          .code(404)
+          .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
+      return body;
+    });
+
+    api.put('/v1/family/children/:childId/lexicon', async (req, reply) => {
+      const g = await guard(req);
+      if (!g)
+        return reply
+          .code(404)
+          .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
+      const b = LexiconBody.safeParse(req.body);
+      if (!b.success)
+        return reply.code(400).send({ error: 'invalid_body', message: 'atteso { off: boolean }' });
+      await opts.store.setLexiconOff(g.guardianId, g.childId, b.data.off);
+      opts.onChanged?.(g.childId);
+      return (await childStyle(g)) ?? reply.code(404).send({ error: 'not_found' });
     });
 
     api.delete('/v1/family/children/:childId', async (req, reply) => {

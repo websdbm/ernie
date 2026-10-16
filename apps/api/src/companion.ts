@@ -6,6 +6,7 @@ import {
 } from '@ernie/agent-core';
 import {
   buildMemorySnapshot,
+  type LexiconStore,
   type MemoryRepository,
   type ProfileStore,
   renderProfile,
@@ -19,7 +20,7 @@ import {
   type Skill,
   SkillRegistry,
 } from '@ernie/skills';
-import { assembleSoul, type SoulRepository } from '@ernie/soul';
+import { assembleSoul, lexiconNote, type SoulRepository, styleNote } from '@ernie/soul';
 import {
   buildSessionTools,
   type ExecutorDeps,
@@ -38,6 +39,8 @@ export interface CompanionFactoryDeps {
   readonly memories?: MemoryRepository;
   /** Scheda anagrafica: in cima al prefisso, prevale sulle memorie (richiesta dell'utente, 13 ott 2026). */
   readonly profiles?: ProfileStore;
+  /** Parole imparate dall'utente, riusate quando calzano (16 ott 2026). */
+  readonly lexicon?: Pick<LexiconStore, 'listActive' | 'learningEnabled'>;
   readonly snapshotMaxChars?: number;
   /** Compattazione dei risultati vecchi dei tool nel prompt (M9 A1); `false` la disattiva. */
   readonly compaction?: { readonly minChars: number; readonly historyBudgetChars: number } | false;
@@ -212,6 +215,24 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       const remindersNote =
         "Promemoria, sveglie e appuntamenti: le frasi standard («ricordami di … alle …», «svegliami domani alle 6») le imposta da sola la skill Ricordami. Se una richiesta del genere arriva a te in forma libera, non spiegare come andrebbe detta e non chiedere di ripeterla: crea tu il promemoria con reminder_create, calcolando data e ora ISO con fuso dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvertimi alle 18», «un'ora prima»): eventAt = ora dell'appuntamento, at = ora dell'avviso. Sveglia: alarm true. «Ricordagli / ricordale / digli di …» si riferisce alla persona nominata poco prima: se è una persona collegata (Famiglia) usa forLabel con la sua etichetta, mai un promemoria per l'utente con «dirgli» nel testo. Legato a un luogo («quando arrivo a casa», «quando esco dal lavoro», «ogni volta che arrivo in palestra»): reminder_create con place {label, on: arrive|leave, repeat}; i luoghi sono nella scheda (Luoghi) con il nome che l'utente sceglie: indirizzo detto («casa mia è in via …», «lo studio di Giulia è in via …») → place_set con address; «salva questo posto come …», «qui è …» → place_set con here true; «rinomina X in Y» → place_rename; per un luogo senza indirizzo crea comunque il promemoria e chiedi l'indirizzo. «Che promemoria ho?» → reminder_list; annullare → reminder_cancel. Se la richiesta è ambigua tra funzioni diverse (promemoria, sentinella, nota nel second brain, lista della spesa…) o manca un dato essenziale con poche alternative, fai UNA domanda chiusa con present_choices e poi ricava tutto il resto dalla frase originale.";
       memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${remindersNote}` : remindersNote;
+
+      // In fondo, così valgono su tutto il resto: le parole dell'utente (lessico imparato, se l'apprendimento è
+      // acceso) e lo stile che ha scelto (richiesta dell'utente, 16 ott 2026).
+      if (deps.lexicon) {
+        try {
+          if (await deps.lexicon.learningEnabled(auth.userId)) {
+            const note = lexiconNote('', await deps.lexicon.listActive(auth.userId, 20));
+            if (note) memorySnapshot = `${memorySnapshot}\n\n${note}`;
+          }
+        } catch (err) {
+          deps.logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'lessico non letto',
+          );
+        }
+      }
+      const style = styleNote(effective);
+      if (style) memorySnapshot = `${memorySnapshot}\n\nCome parli: ${style}`;
 
       // Set di tool stabile per sessione dal registry (categorie abilitate + nucleo), con contesto per turno.
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];

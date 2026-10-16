@@ -4,6 +4,7 @@ import { createPool } from '@ernie/db';
 import {
   consolidateThread,
   createFakeEmbedder,
+  createLexiconStore,
   createLlmSummarizer,
   createMemoryRepository,
   createOpenAIEmbedder,
@@ -100,7 +101,16 @@ async function main(): Promise<void> {
         }
         const data = job.data as { userId: string; threadId: string; sessionId: string };
         return consolidateThread(
-          { pool, repo, threads, gateway, recorder, logger, profiles: createProfileStore(pool) },
+          {
+            pool,
+            repo,
+            threads,
+            gateway,
+            recorder,
+            logger,
+            profiles: createProfileStore(pool),
+            lexicon: createLexiconStore(pool),
+          },
           data,
         );
       }

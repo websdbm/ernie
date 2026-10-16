@@ -20,7 +20,7 @@ import {
 import type { Logger } from '@ernie/observability';
 import type { EventType, PayloadInputOf } from '@ernie/protocol';
 import type { SkillRegistry } from '@ernie/skills';
-import { assembleSoul, type SoulRepository } from '@ernie/soul';
+import { assembleSoul, type SoulRepository, styleNote } from '@ernie/soul';
 import {
   buildSessionTools,
   type DeferredAction,
@@ -602,8 +602,8 @@ async function runGuided(
     userId,
     async (c) =>
       (
-        await c.query<{ companion_name: string }>(
-          `SELECT companion_name FROM users WHERE id = $1`,
+        await c.query<{ companion_name: string; settings: Record<string, unknown> | null }>(
+          `SELECT companion_name, settings FROM users WHERE id = $1`,
           [userId],
         )
       ).rows[0],
@@ -644,6 +644,11 @@ async function runGuided(
   const snapshot = buildMemorySnapshot(await g.memories.listActiveSemantic(userId), {
     maxChars: g.snapshotMaxChars,
   });
+  // Avvisi, sentinelle e messaggi spontanei nello stile scelto dall'utente (vale ovunque, 16 ott 2026).
+  const style = styleNote(user.settings);
+  const snapshotText = style
+    ? `${snapshot.text ? `${snapshot.text}\n\n` : ''}Come parli: ${style}`
+    : snapshot.text;
   const pending: DeferredAction[] = [];
   const ctxRef: ToolContextRef = { current: null };
   const specs = g.registry
@@ -668,7 +673,7 @@ async function runGuided(
     modelClass,
     gateway: g.gateway,
     memory: g.memory,
-    ...(snapshot.text ? { memorySnapshot: snapshot.text } : {}),
+    ...(snapshotText ? { memorySnapshot: snapshotText } : {}),
     ...(tools ? { tools } : {}),
   });
 

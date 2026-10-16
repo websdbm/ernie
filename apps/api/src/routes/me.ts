@@ -1,9 +1,12 @@
 import { createDeviceRepository, DeviceInput } from '@ernie/automations';
 import { type Pool, withUser } from '@ernie/db';
+import type { LexiconStore } from '@ernie/memory';
+import { ConversationStyle, STYLE_PROFILES, styleOf } from '@ernie/soul';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
 import { createAuthHook } from '../ws/plugin.js';
+import { lexiconJson } from './guardian.js';
 
 export interface MeRoutesOptions {
   readonly authenticator: Authenticator;
@@ -12,6 +15,10 @@ export interface MeRoutesOptions {
   readonly version: string;
   /** L'email vive nella scheda anagrafica: cambiata dalle impostazioni, si aggiorna anche lì. */
   readonly onEmailChanged?: (userId: string, email: string) => Promise<void>;
+  /** Stile o apprendimento delle parole cambiati: gli agenti dell'utente vanno ricostruiti. */
+  readonly onStyleChanged?: (userId: string) => void;
+  /** Parole imparate (pagina «Parole che Ernie ha imparato da te»). */
+  readonly lexicon?: Pick<LexiconStore, 'list' | 'remove' | 'learningEnabled'>;
 }
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -34,6 +41,10 @@ const SettingsPatch = z
     proactive: z.boolean().optional(),
     quietHours: z.object({ start: HHMM, end: HHMM }).strict().nullable().optional(),
     proactiveDailyCap: z.number().int().min(0).max(10).optional(),
+    /** Come parla Ernie (16 ott 2026): Neutro, Scherzoso, Essenziale, Antico; vale ovunque. */
+    conversationStyle: ConversationStyle.optional(),
+    /** Apprendimento delle espressioni dell'utente (acceso se assente). */
+    learnLexicon: z.boolean().optional(),
   })
   .strict();
 
@@ -86,7 +97,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
       if (!b.success)
         return badRequest(
           reply,
-          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, extraEmails, emailNotifications, proactive, quietHours, proactiveDailyCap',
+          'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, extraEmails, emailNotifications, proactive, quietHours, proactiveDailyCap, conversationStyle, learnLexicon',
         );
       const row = await withUser(
         opts.pool,
@@ -100,7 +111,53 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
           ).rows[0],
       );
       if (b.data.email !== undefined) await opts.onEmailChanged?.(auth.userId, b.data.email);
+      if (b.data.conversationStyle !== undefined || b.data.learnLexicon !== undefined)
+        opts.onStyleChanged?.(auth.userId);
       return { settings: row?.settings ?? {} };
+    });
+
+    // «Come parla Ernie»: stili disponibili con l'anteprima, stile scelto, apprendimento e parole imparate.
+    api.get('/v1/me/style', async (req) => {
+      const auth = requireAuth(req);
+      const settings = await withUser(
+        opts.pool,
+        auth.userId,
+        async (c) =>
+          (
+            await c.query<{ settings: Record<string, unknown> }>(
+              `SELECT settings FROM users WHERE id = $1`,
+              [auth.userId],
+            )
+          ).rows[0]?.settings ?? {},
+      );
+      const own = settings.learnLexicon !== false;
+      const enabled = opts.lexicon ? await opts.lexicon.learningEnabled(auth.userId) : own;
+      const words = opts.lexicon ? await opts.lexicon.list(auth.userId) : [];
+      return {
+        styles: STYLE_PROFILES.map(({ id, title, description, example }) => ({
+          id,
+          title,
+          description,
+          example,
+        })),
+        current: styleOf(settings).id,
+        learnLexicon: own,
+        // Acceso dall'utente ma spento dal genitore (account seguito).
+        lexiconLockedByParent: own && !enabled,
+        words: words.map(lexiconJson),
+      };
+    });
+
+    api.delete('/v1/me/lexicon/:id', async (req, reply) => {
+      const auth = requireAuth(req);
+      const id = (req.params as { id: string }).id;
+      if (!z.uuid().safeParse(id).success || !opts.lexicon)
+        return reply.code(404).send({ error: 'not_found', message: 'parola inesistente' });
+      const removed = await opts.lexicon.remove(auth.userId, id);
+      if (!removed)
+        return reply.code(404).send({ error: 'not_found', message: 'parola inesistente' });
+      opts.onStyleChanged?.(auth.userId);
+      return reply.code(204).send();
     });
 
     api.post('/v1/devices', async (req, reply) => {
