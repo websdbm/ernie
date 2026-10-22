@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { RunContext } from '@ernie/agent-core';
 import { createPool } from '@ernie/db';
+import { ContentBlock } from '@ernie/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createShoppingListRepository } from './builtins/shopping.js';
+import {
+  createShoppingListRepository,
+  createShoppingTools,
+  resolveShoppingTarget,
+} from './builtins/shopping.js';
 
 const APP_URL = process.env.DATABASE_URL;
 const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL;
@@ -94,5 +100,46 @@ run('liste della spesa (Postgres, RLS)', async () => {
     expect((await repo.lists(userA, { includeArchived: true })).map((l) => l.name)).toEqual([
       'Spesa',
     ]);
+  });
+
+  it('nome generico: scelta chiusa, isolamento, tap e ritentativo mantengono una sola voce nella lista scelta', async () => {
+    const repo = createShoppingListRepository(app);
+    const spesa = await repo.createList(userA, 'Spesa');
+    const segreta = await repo.createList(userB, 'Solo altro account');
+    const first = await resolveShoppingTarget(repo, userA, 'cose da acquistare', {
+      suggestExisting: true,
+    });
+    expect(first).toMatchObject({ kind: 'choose', suggested: true, lists: [{ id: spesa.id }] });
+    expect((await repo.lists(userA)).map((l) => l.id)).toEqual([spesa.id]);
+    const casa = await repo.createList(userA, "Casa & ufficio D'Amico");
+    const old = await repo.createList(userA, 'Archivio scelta');
+    await repo.setListStatus(userA, old.id, 'archived');
+    const add = createShoppingTools(repo).find((t) => t.id === 'shopping_list_add');
+    if (!add) throw new Error('Missing shopping tool');
+    const ctx = () => ({
+      userId: userA,
+      sessionId: null,
+      requestId: randomUUID(),
+      scopes: ['chat'],
+      run: new RunContext(userA, ['chat'], 0),
+    });
+    const input = { list: 'cose da acquistare', items: [{ name: 'miele', quantity: '2 vasetti' }] };
+    const before = await repo.items(userA, spesa.id);
+    const reply = await add.execute(input, ctx());
+    const choice = ContentBlock.parse(add.present?.(input, reply));
+    if (choice.kind !== 'shopping_lists') throw new Error('Missing chooser');
+    expect(new Set(choice.lists.map((l) => l.id))).toEqual(new Set([spesa.id, casa.id]));
+    expect(choice.lists.some((l) => l.id === segreta.id || l.id === old.id)).toBe(false);
+    expect(await repo.items(userA, spesa.id)).toEqual(before);
+    expect(await repo.items(userA, casa.id)).toEqual([]);
+    expect(choice.pendingText).toBe('aggiungi 2 vasetti miele nella lista «{lista}»');
+    await add.execute({ ...input, list: casa.name }, ctx());
+    await add.execute({ ...input, list: casa.name }, ctx());
+    expect(await repo.items(userA, casa.id)).toMatchObject([
+      { name: 'miele', quantity: '2 vasetti', status: 'active' },
+    ]);
+    expect(await repo.items(userA, spesa.id)).toEqual(before);
+    expect(await repo.items(userB, casa.id)).toEqual([]);
+    expect((await repo.lists(userA)).some((l) => l.name === input.list)).toBe(false);
   });
 });

@@ -82,10 +82,16 @@ export function createSessionSummaryStore(pool: Pool): SessionSummaryStore {
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (session_id) DO UPDATE SET summary = EXCLUDED.summary, covered_until = EXCLUDED.covered_until,
              messages = EXCLUDED.messages, fallback = EXCLUDED.fallback, version = session_summaries.version + 1, updated_at = now()
+           WHERE session_summaries.covered_until < EXCLUDED.covered_until
            RETURNING version`,
           [sessionId, userId, JSON.stringify(s.sections), s.coveredUntil, s.messages, s.fallback],
         );
-        return r.rows[0]?.version ?? 1;
+        if (r.rows[0]) return r.rows[0].version;
+        const current = await c.query<{ version: number }>(
+          'SELECT version FROM session_summaries WHERE session_id = $1',
+          [sessionId],
+        );
+        return current.rows[0]?.version ?? 1;
       });
     },
   };
@@ -227,6 +233,7 @@ export interface SessionSummaryDeps {
   readonly logger: Pick<Logger, 'info' | 'warn'>;
   /** Modello leggero; assente → riassunto deterministico. */
   readonly summarizer?: Summarizer;
+  readonly checkBudget?: (userId: string) => Promise<void>;
   readonly high?: number;
   readonly low?: number;
   readonly timezone?: string;
@@ -269,6 +276,7 @@ export async function summarizeSession(
   let fallback = false;
   try {
     if (!deps.summarizer) throw new Error('nessun modello');
+    await deps.checkBudget?.(job.userId);
     sections = await deps.summarizer({ previous: prev?.sections ?? null, fold: textual, today });
   } catch (err) {
     deps.logger.warn(

@@ -11,6 +11,53 @@ struct BrainFact: Codable, Sendable, Equatable, Identifiable {
     var label: String
     var value: String
     var updatedAt: String
+    var status: String?
+    var evidence: BrainFactEvidence?
+    var validFrom: String?
+    var validUntil: String?
+    var history: [BrainFactRevision]?
+    var statusLabel: String { BrainFactPresentation.status(status) }
+    func validityLabel(on date: String) -> String? {
+        BrainFactPresentation.validity(from: validFrom, until: validUntil, on: date)
+    }
+}
+struct BrainFactEvidence: Codable, Sendable, Equatable {
+    var kind: String
+    var ref: String
+    var quote: String
+    var kindLabel: String {
+        switch kind {
+        case "user": "Dichiarazione dell’utente"
+        case "document": "Documento"
+        case "calendar": "Calendario"
+        case "inference": "Ipotesi"
+        default: "Fonte"
+        }
+    }
+}
+struct BrainFactRevision: Codable, Sendable, Equatable {
+    var label: String
+    var value: String
+    var updatedAt: String
+    var status: String?
+    var evidence: BrainFactEvidence?
+    var validFrom: String?
+    var validUntil: String?
+}
+enum BrainFactPresentation {
+    static func status(_ status: String?) -> String {
+        switch status {
+        case "confirmed": "Confermato da fonte"
+        case "uncertain": "Da chiarire"
+        case "superseded": "Superato"
+        default: "Da verificare"
+        }
+    }
+    static func validity(from: String?, until: String?, on date: String) -> String? {
+        if let from, from > date { return "Non ancora valido" }
+        if let until, until < date { return "Validità terminata" }
+        return nil
+    }
 }
 struct BrainRoutine: Codable, Sendable, Equatable, Identifiable {
     var id: String

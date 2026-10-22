@@ -12,9 +12,16 @@ import {
   createSessionSummaryStore,
   ensurePurgeSchedule,
   MEMORY_QUEUE,
+  processTurnMemory,
   summarizeSession,
+  type TurnMemoryJobData,
 } from '@ernie/memory';
-import { buildProfiles, createLlmCallRecorder, createModelGateway } from '@ernie/model-gateway';
+import {
+  buildProfiles,
+  createLlmCallRecorder,
+  createModelGateway,
+  createUserBudgetCheck,
+} from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
@@ -42,10 +49,18 @@ async function main(): Promise<void> {
     { name: 'heartbeat', opts: { removeOnComplete: 10, removeOnFail: 50 } },
   );
 
-  const worker = new Worker(SYSTEM_QUEUE, createSystemProcessor({ store: connection, logger }), {
-    connection,
-    concurrency: 4,
-  });
+  const worker = new Worker(
+    SYSTEM_QUEUE,
+    createSystemProcessor({
+      store: connection,
+      logger,
+      publishHeartbeat: (channel, at) => connection.publish(channel, at),
+    }),
+    {
+      connection,
+      concurrency: 4,
+    },
+  );
 
   // ---- Coda `memory`: consolidamento asincrono (modello light) e purge giornaliero ----
   const pool = createPool({
@@ -80,6 +95,7 @@ async function main(): Promise<void> {
     createMastraStorage({ connectionString: config.db.url, disableInit: true, max: 2 }),
   );
   const recorder = createLlmCallRecorder(pool, logger);
+  const checkBudget = createUserBudgetCheck(pool, config.llm.dailyBudgetUsd);
   const sessionSummaries = createSessionSummaryStore(pool);
   const memoryQueue = new Queue(MEMORY_QUEUE, { connection });
   await ensurePurgeSchedule(memoryQueue, config.memory.retentionDays);
@@ -93,6 +109,15 @@ async function main(): Promise<void> {
         );
         logger.info({ purged: n }, 'purge memorie');
         return { purged: n };
+      }
+      if (job.name === 'turn-memory') {
+        const started = performance.now();
+        await processTurnMemory(repo, memoryQueue, job.data as TurnMemoryJobData);
+        logger.debug(
+          { jobId: job.id, durationMs: Math.round(performance.now() - started) },
+          'memoria post-turno elaborata',
+        );
+        return { recorded: true };
       }
       if (job.name === 'consolidate') {
         if (!gateway) {
@@ -108,6 +133,7 @@ async function main(): Promise<void> {
             gateway,
             recorder,
             logger,
+            checkBudget,
             profiles: createProfileStore(pool),
             lexicon: createLexiconStore(pool),
           },
@@ -121,6 +147,7 @@ async function main(): Promise<void> {
           {
             threads,
             store: sessionSummaries,
+            checkBudget,
             logger,
             high: config.memory.summaryHigh,
             low: config.memory.summaryLow,

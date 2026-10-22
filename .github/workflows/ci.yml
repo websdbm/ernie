@@ -57,6 +57,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Audio processing dependency
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm migrate up

@@ -1,3 +1,4 @@
+import { type BrainKnowledge, renderKnowledgeBody, validateBrainKnowledge } from './knowledge.js';
 /**
  * Note del second brain (docs/research/12-second-brain.md): file markdown con frontmatter YAML compatibile con
  * Obsidian. Il frontmatter è un sottoinsieme semplice (valori, elenchi, coordinate); le chiavi sconosciute e le
@@ -13,6 +14,8 @@ export const NOTE_TYPES = [
   'argomento',
   'chi-sono',
   'salute',
+  'ricetta',
+  'immagine',
 ] as const;
 export type NoteType = (typeof NOTE_TYPES)[number];
 
@@ -25,6 +28,8 @@ export const FOLDERS: Record<NoteType, string> = {
   argomento: 'Argomenti',
   'chi-sono': '',
   salute: 'Salute',
+  ricetta: 'Ricette',
+  immagine: 'Immagini',
 };
 
 /** Da dove viene la nota (B3: «condiviso» da altre app, «email» dall'inoltro, «app» scritta a mano nell'app). */
@@ -57,6 +62,7 @@ export interface BrainNote {
   readonly private: boolean;
   readonly source?: NoteSource;
   readonly body: string;
+  readonly knowledge?: BrainKnowledge;
   /** Righe del frontmatter non gestite (preservate alla riscrittura). */
   readonly extra?: readonly string[];
 }
@@ -72,6 +78,7 @@ const KNOWN = new Set([
   'riservata',
   'fonte',
   'titolo',
+  'knowledge',
 ]);
 
 const unquote = (v: string) => {
@@ -163,7 +170,15 @@ export function parseNote(path: string, text: string, fallbackCreated = new Date
         extra.push(front[++i] ?? '');
       continue;
     }
-    if (value.trim() === '') {
+    if (key === 'knowledge') {
+      if (!value.trim().startsWith('{')) {
+        extra.push(line);
+        while (i + 1 < front.length && /^\s+/.test(front[i + 1] ?? ''))
+          extra.push(front[++i] ?? '');
+        continue;
+      }
+      fields.set(key, value.trim());
+    } else if (value.trim() === '') {
       const items: string[] = [];
       while (i + 1 < front.length && /^\s+-\s/.test(front[i + 1] ?? ''))
         items.push(unquote((front[++i] ?? '').replace(/^\s+-\s/, '')));
@@ -199,6 +214,15 @@ export function parseNote(path: string, text: string, fallbackCreated = new Date
   const riferimento = str('riguarda');
   const fino = str('fino');
   const luogo = str('luogo');
+  let knowledge: BrainKnowledge | undefined;
+  const rawKnowledge = str('knowledge');
+  if (rawKnowledge) {
+    try {
+      knowledge = validateBrainKnowledge(JSON.parse(rawKnowledge));
+    } catch {
+      extra.push(`knowledge: ${rawKnowledge}`);
+    } // Invalid/unknown data stays losslessly in the vault.
+  }
   return {
     path,
     title: str('titolo') ?? titleFromPath(path),
@@ -212,6 +236,7 @@ export function parseNote(path: string, text: string, fallbackCreated = new Date
     private: /^(true|sì|si|yes)$/i.test(str('riservata') ?? ''),
     ...(source ? { source } : {}),
     body: body.replace(/\s+$/, ''),
+    ...(knowledge ? { knowledge } : {}),
     ...(extra.length ? { extra } : {}),
   };
 }
@@ -222,10 +247,11 @@ const q = (v: string) =>
 /** Scrive una nota con frontmatter leggibile da Obsidian. */
 export function serializeNote(n: BrainNote): string {
   const lines = ['---', `tipo: ${n.type}`, `creata: ${n.created}`];
+  if (n.title !== titleFromPath(n.path)) lines.push(`titolo: ${q(n.title)}`);
   if (n.refersFrom) lines.push(`riguarda: ${n.refersFrom}`);
   if (n.refersTo) lines.push(`fino: ${n.refersTo}`);
   if (n.place) lines.push(`luogo: ${q(n.place)}`);
-  if (n.coords) lines.push(`coordinate: [${n.coords[0].toFixed(4)}, ${n.coords[1].toFixed(4)}]`);
+  if (n.coords) lines.push(`coordinate: [${n.coords[0]}, ${n.coords[1]}]`);
   const frontLinks = n.links.filter((l) => !bodyLinks(n.body).includes(l));
   if (frontLinks.length) {
     lines.push('collegamenti:');
@@ -233,9 +259,11 @@ export function serializeNote(n: BrainNote): string {
   }
   if (n.private) lines.push('riservata: true');
   if (n.source) lines.push(`fonte: ${n.source}`);
+  if (n.knowledge) lines.push(`knowledge: ${JSON.stringify(validateBrainKnowledge(n.knowledge))}`);
   for (const e of n.extra ?? []) lines.push(e);
   lines.push('---', '');
-  return `${lines.join('\n')}${n.body.replace(/\s+$/, '')}\n`;
+  const body = n.knowledge ? renderKnowledgeBody(n.body, n.knowledge) : n.body;
+  return `${lines.join('\n')}${body.replace(/\s+$/, '')}\n`;
 }
 
 /** Nome di file sicuro (anche per Obsidian e git) dal titolo. */
@@ -260,4 +288,9 @@ export function isoDay(v: string | null | undefined): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return undefined;
   const d = new Date(`${t}T00:00:00Z`);
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t ? undefined : t;
+}
+
+/** Commenti di sincronizzazione esclusi dalla lettura e dall'indicizzazione, mai dal file originale. */
+export function visibleNoteBody(body: string): string {
+  return body.replace(/<!--\s*\/?ernie:[\s\S]*?(?:-->|$)/gu, '');
 }

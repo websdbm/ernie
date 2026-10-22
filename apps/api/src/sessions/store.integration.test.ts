@@ -5,7 +5,7 @@ import { createLogger } from '@ernie/observability';
 import { createEvent } from '@ernie/protocol';
 import { createSoulRepository } from '@ernie/soul';
 import { Redis } from 'ioredis';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSessionStore, SessionForbiddenError } from './store.js';
 
 const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -76,6 +76,20 @@ describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_a
     expect(seenByA.rows[0]?.n).toBe(1);
   });
 
+  it('prenota atomicamente una richiesta anche fra due connessioni e conserva il vincolo', async () => {
+    const a = createSessionStore(app, redis, { logTtlSeconds: 60 });
+    const b = createSessionStore(app, redis, { logTtlSeconds: 60 });
+    const sessionId = randomUUID();
+    const correlationId = randomUUID();
+    const results = await Promise.all([
+      a.claimRequest(sessionId, correlationId),
+      b.claimRequest(sessionId, correlationId),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await createSessionStore(app, redis).claimRequest(sessionId, correlationId)).toBe(false);
+    expect(await b.claimRequest(sessionId, randomUUID())).toBe(true);
+  });
+
   it('classe della sessione: sale, ridiscende e il segno della scelta manuale', async () => {
     const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
     const sessionId = randomUUID();
@@ -120,6 +134,88 @@ describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_a
     expect(await store.isTainted(sessionId)).toBe(false);
     await store.markTainted(sessionId, 'web_fetch:https://x', 60);
     expect(await store.isTainted(sessionId)).toBe(true);
+  });
+
+  it('appendWithSeq: un round-trip, sequenze concorrenti, JSON intatto e replay limitato', async () => {
+    const store = createSessionStore(app, redis, { logTtlSeconds: 60, logMaxEvents: 20 });
+    const sessionId = randomUUID();
+    const appendWithSeq = store.appendWithSeq;
+    if (!appendWithSeq) throw new Error('atomic append mancante');
+    const evalSpy = vi.spyOn(redis, 'eval');
+    try {
+      const events = await Promise.all(
+        Array.from({ length: 30 }, (_, i) =>
+          appendWithSeq(
+            sessionId,
+            createEvent(
+              'assistant.text.delta',
+              {
+                delta: JSON.stringify({
+                  index: i,
+                  empty: [],
+                  unicode: 'caffè',
+                  nested: { seq: 0 },
+                }),
+              },
+              { sessionId, correlationId: randomUUID(), seq: 0 },
+            ),
+          ),
+        ),
+      );
+      expect(evalSpy).toHaveBeenCalledTimes(30);
+      expect(events.map((e) => e.seq)).toEqual(Array.from({ length: 30 }, (_, i) => i));
+      const replay = await store.replay(sessionId, 24);
+      expect(replay.map((e) => e.seq)).toEqual([25, 26, 27, 28, 29]);
+      expect(replay.at(-1)).toEqual(events.at(-1));
+      expect(await store.replay(sessionId, -1)).toHaveLength(20);
+      expect(await redis.ttl(`ernie:sess:${sessionId}:seq`)).toBeGreaterThan(0);
+      const pong = await appendWithSeq(
+        sessionId,
+        createEvent(
+          'session.pong',
+          { serverTime: new Date().toISOString() },
+          { sessionId, correlationId: randomUUID(), seq: 0 },
+        ),
+      );
+      expect(pong.seq).toBe(30);
+      expect(await store.replay(sessionId, 29)).toEqual([]);
+    } finally {
+      evalSpy.mockRestore();
+      await redis.del(`ernie:sess:${sessionId}:seq`, `ernie:sess:${sessionId}:log`);
+    }
+  });
+
+  it('limite predefinito500, array vuoti intatti e rifiuto senza evento se Redis non può persistere', async () => {
+    const store = createSessionStore(app, redis);
+    const append = store.appendWithSeq;
+    if (!append) throw new Error('atomic append mancante');
+    const id = randomUUID();
+    const seqKey = `ernie:sess:${id}:seq`;
+    const logKey = `ernie:sess:${id}:log`;
+    try {
+      const event = createEvent(
+        'assistant.block',
+        {
+          blockId: 'b',
+          block: {
+            kind: 'recipes',
+            recipes: [{ title: 'Caffè', ingredients: ['acqua'], steps: [], tags: [] }],
+          },
+        },
+        { sessionId: id, correlationId: randomUUID(), seq: 0 },
+      );
+      await Promise.all(Array.from({ length: 501 }, () => append(id, event)));
+      const replay = await store.replay(id, -1);
+      expect(replay).toHaveLength(500);
+      expect(replay[0]?.seq).toBe(1);
+      expect(replay.at(-1)?.payload).toEqual(event.payload);
+      expect(await redis.ttl(logKey)).toBeGreaterThan(86300);
+      await redis.set(logKey, 'wrong-type');
+      await expect(append(id, event)).rejects.toThrow('WRONGTYPE');
+      expect(await redis.get(logKey)).toBe('wrong-type');
+    } finally {
+      await redis.del(seqKey, logKey);
+    }
   });
 
   it('llm_calls per utente e budget giornaliero', async () => {

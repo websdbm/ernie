@@ -1,3 +1,5 @@
+import { createHash, randomInt } from 'node:crypto';
+
 /**
  * Inoltro email al second brain (fase B3). Brevo riceve la posta del sottodominio dedicato (record MX) e chiama
  * il nostro webhook con il messaggio già estratto in markdown. L'indirizzo è personale: `<token>@<dominio>`; il
@@ -72,10 +74,10 @@ export function parseInboundPayload(body: unknown, domain: string): InboundEmail
     ]
       .map((r) => (typeof r === 'string' ? r : str((r as { Address?: unknown })?.Address)))
       .filter(Boolean);
-    const token = addresses
-      .map((a) => inboundToken(a, domain))
-      .find((t): t is string => t !== null);
-    if (!token) continue;
+    const tokens = new Set(
+      addresses.map((a) => inboundToken(a, domain)).filter((t): t is string => t !== null),
+    );
+    if (!tokens.size) continue;
     const from = it.From as { Address?: unknown; Name?: unknown } | undefined;
     const text =
       str(it.ExtractedMarkdownMessage).trim() ||
@@ -86,16 +88,30 @@ export function parseInboundPayload(body: unknown, domain: string): InboundEmail
     const attachments = (Array.isArray(it.Attachments) ? it.Attachments : [])
       .map((a) => str((a as { Name?: unknown })?.Name))
       .filter(Boolean);
-    out.push({
-      messageId: str(it.MessageId) || `${token}:${sentRaw}:${str(it.Subject)}`,
-      token,
-      from: str(from?.Address).trim().toLowerCase(),
-      fromName: str(from?.Name).trim(),
-      subject: str(it.Subject),
-      text: text.slice(0, 60_000),
-      sentOn: sent && !Number.isNaN(sent.getTime()) ? romeDate(sent) : null,
-      attachments,
-    });
+    const messageId =
+      str(it.MessageId) ||
+      createHash('sha256')
+        .update(
+          JSON.stringify([
+            str(from?.Address).trim().toLowerCase(),
+            sentRaw,
+            str(it.Subject),
+            text,
+            attachments,
+          ]),
+        )
+        .digest('hex');
+    for (const token of tokens)
+      out.push({
+        messageId,
+        token,
+        from: str(from?.Address).trim().toLowerCase(),
+        fromName: str(from?.Name).trim(),
+        subject: str(it.Subject),
+        text: text.slice(0, 60_000),
+        sentOn: sent && !Number.isNaN(sent.getTime()) ? romeDate(sent) : null,
+        attachments,
+      });
   }
   return out;
 }
@@ -112,10 +128,11 @@ export function emailToNote(m: InboundEmail, now = new Date()): { title: string;
 }
 
 /** Token dell'indirizzo personale: 12 caratteri senza ambiguità (si detta e si copia). */
-export function newInboxToken(random: () => number = Math.random): string {
+export function newInboxToken(random?: () => number): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
   let s = '';
-  for (let i = 0; i < 12; i++) s += alphabet[Math.floor(random() * alphabet.length)];
+  for (let i = 0; i < 12; i++)
+    s += alphabet[random ? Math.floor(random() * alphabet.length) : randomInt(alphabet.length)];
   return s;
 }
 

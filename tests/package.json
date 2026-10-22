@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Spike riproducibili, smoke test e (M9) benchmark. Non \u00e8 codice di produzione.",
+  "description": "Spike riproducibili, smoke test e (M9) benchmark. Non è codice di produzione.",
   "scripts": {
     "spike:openrouter": "node --env-file-if-exists=../.env --import tsx --conditions=development spikes/openrouter-passthrough.ts",
     "demo:chat": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-chat.ts",
     "calibrate:jev": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/jev-calibrate.ts",
     "eval:memory": "node --env-file-if-exists=../.env --import tsx --conditions=development eval/memory-recall.ts",
     "demo:listen": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-listen.ts",
-    "demo:document": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-document.ts"
+    "demo:document": "node --env-file-if-exists=../.env --import tsx --conditions=development demo/ws-document.ts",
+    "eval:quality": "node --import tsx --conditions=development eval/quality.ts",
+    "test:quality": "vitest run eval/quality-runner.test.ts eval/quality-ws.test.ts"
   },
   "dependencies": {
     "@ernie/config": "workspace:*",

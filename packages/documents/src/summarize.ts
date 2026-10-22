@@ -22,6 +22,8 @@ export interface SummarizerDeps {
   readonly gateway: ModelGateway;
   readonly recorder: LlmCallRecorder;
   readonly logger: Pick<Logger, 'info' | 'warn' | 'error'>;
+  /** Riletto per ogni chiamata, inclusi pezzi, fusione e tentativi aggiuntivi. */
+  readonly checkBudget?: (userId: string) => Promise<void>;
   readonly maxChars?: number;
   readonly singleCallChars?: number;
   readonly chunkChars?: number;
@@ -348,6 +350,9 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
     schema: T,
     maxOutputTokens: number,
   ): Promise<z.infer<T>> {
+    scope.signal?.throwIfAborted();
+    await deps.checkBudget?.(scope.userId);
+    scope.signal?.throwIfAborted();
     const resolved = deps.gateway.resolve(
       modelClass,
       scope.sessionId ?? `document-${scope.userId}`,

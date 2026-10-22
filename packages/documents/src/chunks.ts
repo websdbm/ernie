@@ -45,7 +45,7 @@ export function chunkDocument(pageTexts: readonly string[]): DocumentChunk[] {
     let lastWasHeading = false;
     const flush = () => {
       const content = buf.join(' ').replace(/\s+/g, ' ').trim();
-      if (content.length >= 20) out.push({ page, ordinal: ordinal++, heading, content });
+      if (content.length > 0) out.push({ page, ordinal: ordinal++, heading, content });
       buf = [];
       words = 0;
     };
@@ -60,10 +60,15 @@ export function chunkDocument(pageTexts: readonly string[]): DocumentChunk[] {
         continue;
       }
       lastWasHeading = false;
-      const w = line.split(/\s+/).length;
-      if (words + w > MAX_WORDS && words > 0) flush();
-      buf.push(line);
-      words += w;
+      // OCR/PDF possono restituire un'intera pagina senza a capo: il limite vale anche lì.
+      const tokens = line.split(/\s+/);
+      for (let start = 0; start < tokens.length; ) {
+        const take = Math.min(MAX_WORDS - words, tokens.length - start);
+        buf.push(tokens.slice(start, start + take).join(' '));
+        words += take;
+        start += take;
+        if (words === MAX_WORDS) flush();
+      }
     }
     flush();
   });

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CheckSourceError,
   evaluateCheck,
@@ -6,6 +8,9 @@ import {
   isPrivateAddress,
   pageText,
 } from './checks.js';
+
+const nativeGet = vi.hoisted(() => vi.fn());
+vi.mock('node:https', () => ({ get: nativeGet }));
 
 const page = (body: string) =>
   `<html><head><script>var x=1</script><style>p{}</style></head><body><nav>menu</nav><h1>Versioni</h1>${body}<footer>© 2026</footer></body></html>`;
@@ -43,6 +48,46 @@ describe('controlli economici', () => {
         resolve: async () => ['10.0.0.5'],
       }),
     ).rejects.toThrow('indirizzo interno');
+  });
+
+  it('blocca IPv6 mapped/espanso/link-local e non carica fonti oltre il limite', async () => {
+    for (const ip of ['::ffff:7f00:1', '::ffff:a00:1', '0:0:0:0:0:0:0:1', 'fe90::1', 'ff02::1'])
+      expect(isPrivateAddress(ip)).toBe(true);
+    const fetch = vi.fn(fakeFetch(['<p>ok</p>']));
+    await expect(
+      evaluateCheck({ type: 'page_changed', url: 'http://[::ffff:127.0.0.1]/' }, null, { fetch }),
+    ).rejects.toThrow('indirizzo interno');
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(
+      evaluateCheck({ type: 'page_changed', url: 'https://example.com/' }, null, {
+        fetch: fakeFetch(['x'.repeat(2_000_001)]),
+        resolve: publicDns,
+      }),
+    ).rejects.toThrow('troppo grande');
+  });
+
+  it('fissa il socket agli indirizzi DNS verificati e mantiene il nome HTTPS', async () => {
+    nativeGet.mockImplementationOnce((url, options, onResponse) => {
+      expect(url.hostname).toBe('example.com');
+      const callback = vi.fn();
+      options.lookup('example.com', { all: true }, callback);
+      expect(callback).toHaveBeenCalledWith(null, [{ address: '93.184.216.34', family: 4 }]);
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() });
+      const response = Object.assign(new PassThrough(), { statusCode: 200, headers: {} });
+      queueMicrotask(() => {
+        onResponse(response);
+        response.end('<p>Pagina pubblica</p>');
+      });
+      return request;
+    });
+    const resolve = vi.fn(publicDns);
+    const result = await evaluateCheck(
+      { type: 'page_changed', url: 'https://example.com/' },
+      null,
+      { resolve },
+    );
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(result.diff).toContain('Pagina pubblica');
   });
 
   it('pagina: primo giro memorizza e fa valutare il contenuto attuale; uguale → niente; cambiata → diff delle righe nuove', async () => {

@@ -119,7 +119,10 @@ export async function resolveDeferredApproval(
     outcome,
     allDecided ? 'succeeded' : undefined,
   );
-  if (deps.redis && allDecided) {
+  const finalActions = updated?.outcome?.pendingActions ?? pendingActions;
+  const finallyDecided =
+    finalActions.length > 0 && finalActions.every((p) => p.decision !== undefined);
+  if (deps.redis && finallyDecided) {
     await publishUserEvent(deps.redis, {
       userId,
       type: 'automation.run.updated',
@@ -127,7 +130,7 @@ export async function resolveDeferredApproval(
         automationId: run.automationId,
         runId: run.id,
         status: 'succeeded',
-        summary: `Azioni decise: ${pendingActions.filter((p) => p.executed).length} eseguite su ${pendingActions.length}`,
+        summary: `Azioni decise: ${finalActions.filter((p) => p.executed).length} eseguite su ${finalActions.length}`,
       },
     }).catch((err: unknown) => deps.logger.warn({ err }, 'pubblicazione evento fallita'));
   }

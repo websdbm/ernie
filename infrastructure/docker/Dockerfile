@@ -95,7 +95,7 @@ COPY infrastructure/migrations ./infrastructure/migrations
 COPY infrastructure/router ./infrastructure/router
 # Second brain: git e ssh per i vault (repository locale per utente, remoto facoltativo); il volume /data/brain
 # eredita il proprietario dalla cartella dell'immagine al primo montaggio.
-RUN apk add --no-cache git openssh-client && mkdir -p /data/brain && chown node:node /data/brain
+RUN apk add --no-cache git openssh-client ffmpeg && mkdir -p /data/brain && chown node:node /data/brain
 USER node
 EXPOSE 3000
 CMD ["node", "apps/api/dist/index.js"]

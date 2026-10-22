@@ -13,12 +13,15 @@ export interface MeRoutesOptions {
   readonly allowedOrigins: readonly string[];
   readonly pool: Pool;
   readonly version: string;
+  readonly onSettingsChanged?: (userId: string) => Promise<void>;
   /** L'email vive nella scheda anagrafica: cambiata dalle impostazioni, si aggiorna anche lì. */
   readonly onEmailChanged?: (userId: string, email: string) => Promise<void>;
   /** Stile o apprendimento delle parole cambiati: gli agenti dell'utente vanno ricostruiti. */
   readonly onStyleChanged?: (userId: string) => void;
   /** Parole imparate (pagina «Parole che Ernie ha imparato da te»). */
   readonly lexicon?: Pick<LexiconStore, 'list' | 'remove' | 'learningEnabled'>;
+  /** Permesso amministrativo separato dal ruolo owner e dalle settings modificabili. */
+  readonly canViewAllUsage?: (userId: string) => Promise<boolean>;
 }
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -98,6 +101,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
         role: auth.role,
         scopes: auth.scopes,
         settings: row?.settings ?? {},
+        capabilities: { usageAdmin: (await opts.canViewAllUsage?.(auth.userId)) ?? false },
         server: { version: opts.version, protocol: { version: 1, minor: 1 } },
       };
     });
@@ -121,6 +125,7 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
             )
           ).rows[0],
       );
+      if (b.data.killSwitch !== undefined) await opts.onSettingsChanged?.(auth.userId);
       if (b.data.email !== undefined) await opts.onEmailChanged?.(auth.userId, b.data.email);
       if (b.data.conversationStyle !== undefined || b.data.learnLexicon !== undefined)
         opts.onStyleChanged?.(auth.userId);

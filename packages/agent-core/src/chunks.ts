@@ -58,7 +58,13 @@ export function interpretChunk(
       const toolCallId = str(p.toolCallId) ?? 'unknown';
       const started = toolStartedAt.get(toolCallId) ?? now;
       toolStartedAt.delete(toolCallId);
-      const isError = chunk.type === 'tool-error' || p.isError === true;
+      const result = rec(p.result);
+      // L'executor restituisce error/reason/retryable come risultato normale per il modello.
+      const toolFailure =
+        typeof result.error === 'string' &&
+        typeof result.reason === 'string' &&
+        typeof result.retryable === 'boolean';
+      const isError = chunk.type === 'tool-error' || p.isError === true || toolFailure;
       const payload: PayloadInputOf<'tool.completed'> = {
         toolCallId,
         toolId: str(p.toolName) ?? 'unknown',
@@ -66,7 +72,9 @@ export function interpretChunk(
         durationMs: Math.max(0, now - started),
       };
       const resultPreview = isError ? undefined : preview(p.result);
-      const error = isError ? preview(p.error ?? p.result) : undefined;
+      const error = isError
+        ? preview(toolFailure ? result.reason : (p.error ?? p.result))
+        : undefined;
       return {
         kind: 'tool.completed',
         payload: {

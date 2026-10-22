@@ -511,7 +511,23 @@ struct ApiClient: Sendable {
         return out.invite
     }
 
-    // MARK: controllo genitori
+    // MARK: Preferenze operative
+
+    func operatingPreferences() async throws -> [OperatingPreference] {
+        struct Response: Decodable { let preferences: [OperatingPreference] }
+        let response: Response = try await request("GET", "/v1/operating-preferences")
+        return response.preferences
+    }
+
+    func saveOperatingPreference(id: String?, text: String, active: Bool) async throws {
+        struct Body: Encodable { let text: String; let active: Bool }
+        struct Response: Decodable { let preference: OperatingPreference }
+        let _: Response = try await request(id == nil ? "POST" : "PATCH", "/v1/operating-preferences" + (id.map { "/\($0)" } ?? ""), body: Body(text: text, active: active))
+    }
+
+    func deleteOperatingPreference(id: String) async throws {
+        try await requestNoContent("DELETE", "/v1/operating-preferences/\(id)")
+    }
 
     func styleSettings() async throws -> StyleSettings { try await request("GET", "/v1/me/style") }
 

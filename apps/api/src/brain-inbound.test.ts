@@ -13,6 +13,24 @@ import { shareTitle } from './routes/brain.js';
 const DOMAIN = 'brain.ernie.staging3.eklettica.it';
 
 describe('inoltro email al second brain (B3)', () => {
+  it('consegna a ogni destinatario distinto e distingue corpi diversi senza MessageId', () => {
+    const item = {
+      From: { Address: 'mittente@example.org' },
+      To: [`abcdefgh2345@${DOMAIN}`, `zzzzzzzzzzzz@${DOMAIN}`],
+      Recipients: [`abcdefgh2345@${DOMAIN}`],
+      Subject: 'Appunto',
+      RawTextBody: 'Primo contenuto',
+    };
+    const first = parseInboundPayload({ items: [item] }, DOMAIN);
+    expect(first.map((m) => m.token)).toEqual(['abcdefgh2345', 'zzzzzzzzzzzz']);
+    expect(new Set(first.map((m) => m.messageId)).size).toBe(1);
+    expect(parseInboundPayload({ items: [item] }, DOMAIN)).toEqual(first);
+    const second = parseInboundPayload(
+      { items: [{ ...item, RawTextBody: 'Altro contenuto' }] },
+      DOMAIN,
+    );
+    expect(second[0]?.messageId).not.toBe(first[0]?.messageId);
+  });
   it('token dall’indirizzo: solo il nostro dominio, forma attesa, senza il suffisso +tag', () => {
     expect(inboundToken('abcdefgh2345@brain.ernie.staging3.eklettica.it', DOMAIN)).toBe(
       'abcdefgh2345',

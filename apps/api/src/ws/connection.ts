@@ -39,11 +39,13 @@ import {
   PROTOCOL_MINOR,
   PROTOCOL_VERSION,
   parseClientEvent,
+  toolDisplayName,
 } from '@ernie/protocol';
 import {
   type DeterministicSkill,
   formatFiredIntents,
   type IntentStore,
+  requiresSshModel,
   type SkillRegistry,
 } from '@ernie/skills';
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
@@ -51,9 +53,17 @@ import { z } from 'zod';
 import type { AuthContext } from '../auth.js';
 import { type ClarificationRecord, interpretationBlock, isCorrection } from '../clarify.js';
 import { formatDeviceContext } from '../device-context.js';
-import { type DocumentsFlow, parseDocumentRequest, parseSchemaCommand } from '../documents-flow.js';
+import {
+  attachmentInstructions,
+  type DocumentsFlow,
+  parseDocumentRequest,
+  parseSchemaCommand,
+} from '../documents-flow.js';
+import { type PerformanceObservation, ServerTurnTrace } from '../performance.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
+import { videoContentInstructions } from '../video-flow.js';
+import { youtubeLinksIn } from '../youtube-metadata.js';
 
 /** Ora e posizione del telefono per i tool (es. note del second brain annotate «qui»). */
 function toolDevice(d: NonNullable<ClientEventOf<'user.message'>['payload']['device']>) {
@@ -69,6 +79,12 @@ function toolDevice(d: NonNullable<ClientEventOf<'user.message'>['payload']['dev
         }
       : {}),
   };
+}
+
+/** I fallimenti delle letture facoltative sono gestiti nel loro punto originale, senza rejection pendenti. */
+function readResult<T>(result: PromiseSettledResult<T>): T {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
 }
 
 type ClientEventOf<T extends ClientEvent['type']> = Extract<ClientEvent, { type: T }>;
@@ -95,10 +111,12 @@ export interface TurnOutcomeInfo {
 
 export interface ConnectionDeps {
   readonly logger: Logger;
+  readonly recordPerformance?: (userId: string, observation: PerformanceObservation) => void;
   readonly store: SessionStore;
   readonly recorder: LlmCallRecorder;
   readonly budget: BudgetGuard;
   readonly dailyBudgetUsd: number;
+  readonly refreshAuth?: (auth: AuthContext) => Promise<AuthContext | null>;
   /** Costruisce (o recupera dalla cache) l'agente della sessione. Null se nessun provider è configurato. */
   readonly getCompanion: (
     auth: AuthContext,
@@ -152,6 +170,13 @@ export interface ConnectionDeps {
   };
   /** Scheda anagrafica: i cambiamenti emersi in chat si comunicano una volta, al turno dopo. */
   readonly profiles?: ProfileStore;
+  /** Fresh, bounded canonical work + explicit preferences, shared across conversations. No LLM call. */
+  readonly continuity?: (
+    userId: string,
+    sessionId: string,
+    text: string,
+    timezone?: string,
+  ) => Promise<{ text: string; untrusted: boolean }>;
   /** Second brain (B2): nota pertinente da accennare in una riga, senza modello; null se non c'è. */
   readonly brainSuggest?: (
     userId: string,
@@ -228,6 +253,7 @@ export class ClientConnection {
   private session: SessionRecord | undefined;
   private readonly dedupe = new EventDeduper(2048);
   private readonly activeTurns = new Map<string, AbortController>();
+  private readonly preparingTurns = new Map<string, AbortController>();
   /** Note del second brain già accennate in questa conversazione (una volta per nota). */
   private readonly brainSuggested = new Set<string>();
   /** La proposta di travaso si valuta una volta per conversazione. */
@@ -244,12 +270,33 @@ export class ClientConnection {
   private simpleStreak = 0;
   private sending: Promise<void> = Promise.resolve();
   private closed = false;
+  private requestInFlight: string | undefined;
+  private performanceTrace: ServerTurnTrace | undefined;
+  private replaying = false;
 
   constructor(
-    private readonly socket: SocketLike,
-    private readonly auth: AuthContext,
+    private socket: SocketLike,
+    private auth: AuthContext,
     private readonly deps: ConnectionDeps,
   ) {}
+
+  /** La connessione può cadere mentre il lavoro continua: si cambia solo il trasporto. */
+  attach(socket: SocketLike, auth: AuthContext = this.auth): void {
+    if (auth.userId !== this.auth.userId || auth.apiKeyId !== this.auth.apiKeyId)
+      throw new Error('identità della connessione diversa');
+    this.auth = auth;
+    if (this.closed) this.performanceTrace?.reconnect();
+    if (this.socket !== socket) this.socket.close(1000, 'session resumed');
+    this.socket = socket;
+    this.closed = false;
+    this.replaying = Boolean(this.sessionId);
+  }
+
+  detach(socket: SocketLike): boolean {
+    if (socket !== this.socket) return false;
+    this.closed = true;
+    return true;
+  }
 
   /** Punto d'ingresso per ogni frame ricevuto. Non lancia mai: gli errori tornano al client come eventi `error`. */
   async handleRaw(data: string | Buffer): Promise<void> {
@@ -271,6 +318,7 @@ export class ClientConnection {
     try {
       await this.dispatch(event);
     } catch (err) {
+      if (event.type === 'session.start') this.replaying = false;
       this.deps.logger.error({ err, type: event.type }, "errore nella gestione dell'evento");
       await this.sendError('internal_error', 'Errore interno', true, event.correlationId);
     }
@@ -279,6 +327,7 @@ export class ClientConnection {
   async close(): Promise<void> {
     this.closed = true;
     for (const ac of this.activeTurns.values()) ac.abort();
+    for (const ac of this.preparingTurns.values()) ac.abort();
     this.activeTurns.clear();
   }
 
@@ -302,7 +351,9 @@ export class ClientConnection {
       case 'user.message':
         return this.onUserMessage(event);
       case 'user.cancel': {
-        const ac = this.activeTurns.get(event.payload.targetCorrelationId);
+        const ac =
+          this.activeTurns.get(event.payload.targetCorrelationId) ??
+          this.preparingTurns.get(event.payload.targetCorrelationId);
         if (ac) {
           if (event.payload.spokenThroughIndex !== undefined)
             this.spokenThrough.set(
@@ -414,21 +465,32 @@ export class ClientConnection {
     this.session = session;
 
     const resumeFrom = event.payload.resumeFromSeq;
-    const replay =
-      resumeFrom === undefined ? [] : await this.deps.store.replay(session.id, resumeFrom);
+    let replay: AgentEvent[] = [];
+    const replayTask = this.sending.then(async () => {
+      replay =
+        resumeFrom === undefined
+          ? []
+          : (await this.deps.store.replay(session.id, resumeFrom)).filter(
+              (e) => e.type !== 'session.started',
+            );
+      for (const e of replay) if (!this.closed) this.socket.send(JSON.stringify(e));
+      this.replaying = false;
+    });
+    this.sending = replayTask.catch(() => {});
+    await replayTask;
     await this.send(
       'session.started',
       {
         serverTime: new Date().toISOString(),
         protocolVersion: PROTOCOL_VERSION,
         protocolMinor: PROTOCOL_MINOR,
+        safeRequestReplay: true,
         ...(resumeFrom === undefined
           ? {}
           : { resumedFromSeq: resumeFrom, replayed: replay.length }),
       },
       event.correlationId,
     );
-    for (const e of replay) this.socket.send(JSON.stringify(e)); // già numerati: nessun nuovo seq
   }
 
   /**
@@ -462,6 +524,7 @@ export class ClientConnection {
   private async onUserMessage(
     event: Extract<ClientEvent, { type: 'user.message' }>,
   ): Promise<void> {
+    const receivedAt = performance.now();
     if (!this.sessionId || !this.session) {
       await this.sendError('no_session', 'Invia prima session.start', false, event.correlationId);
       return;
@@ -475,7 +538,16 @@ export class ClientConnection {
       );
       return;
     }
-    if (this.activeTurns.size > 0) {
+    if (this.requestInFlight === event.correlationId) {
+      await this.send(
+        'session.pong',
+        { serverTime: new Date().toISOString() },
+        event.correlationId,
+        false,
+      );
+      return;
+    }
+    if (this.requestInFlight || this.activeTurns.size > 0) {
       await this.sendError(
         'busy',
         'Ernie sta ancora rispondendo: il messaggio partirà subito dopo.',
@@ -484,15 +556,90 @@ export class ClientConnection {
       );
       return;
     }
+    // Prenotazione sincrona prima di qualunque await: anche il routing è parte del turno.
+    this.requestInFlight = event.correlationId;
+    const ac = new AbortController();
+    this.preparingTurns.set(event.correlationId, ac);
+    try {
+      if (this.deps.refreshAuth) {
+        const fresh = await this.deps.refreshAuth(this.auth);
+        if (!fresh || fresh.userId !== this.auth.userId || fresh.apiKeyId !== this.auth.apiKeyId) {
+          await this.sendError(
+            'unauthorized',
+            'La chiave di accesso non è più valida.',
+            false,
+            event.correlationId,
+          );
+          this.socket.close(1008, 'unauthorized');
+          return;
+        }
+        this.auth = fresh;
+      }
+      if (this.auth.settings.killSwitch === true) {
+        await this.sendError(
+          'disabled',
+          'Interruttore di emergenza attivo.',
+          false,
+          event.correlationId,
+        );
+        return;
+      }
+      if (!(await this.deps.store.claimRequest(this.sessionId, event.correlationId))) {
+        const prior = (await this.deps.store.replay(this.sessionId, -1)).filter(
+          (e) => e.correlationId === event.correlationId,
+        );
+        for (const e of prior) if (!this.closed) this.socket.send(JSON.stringify(e));
+        if (
+          !prior.some((e) =>
+            ['assistant.completed', 'assistant.cancelled', 'error'].includes(e.type),
+          )
+        )
+          await this.sendError(
+            'request_interrupted',
+            'La richiesta è stata interrotta sul server. Le azioni già eseguite sono conservate; controlla il risultato prima di ripeterla.',
+            false,
+            event.correlationId,
+          );
+        return;
+      }
+      ac.signal.throwIfAborted();
+      this.performanceTrace = new ServerTurnTrace(
+        this.sessionId,
+        event.correlationId,
+        event.payload.inputMode,
+        receivedAt,
+      );
+      await this.executeUserMessage(event, ac);
+    } catch (err) {
+      if (!ac.signal.aborted) throw err;
+      await this.send(
+        'assistant.cancelled',
+        { reason: this.closed ? 'server' : 'user' },
+        event.correlationId,
+      );
+    } finally {
+      this.preparingTurns.delete(event.correlationId);
+      if (!this.activeTurns.has(event.correlationId)) this.requestInFlight = undefined;
+    }
+  }
+
+  private async executeUserMessage(
+    event: Extract<ClientEvent, { type: 'user.message' }>,
+    ac: AbortController,
+  ): Promise<void> {
+    if (!this.sessionId || !this.session) return;
     const t0 = Date.now();
     const correlationId = event.correlationId;
     const sessionId = this.sessionId;
     const text = event.payload.text;
-    // Allegati (v1.3): il modello riceve il testo annotato con titolo e id dei documenti; la skill «Documenti» guida il turno.
+    const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
+    ac.signal.throwIfAborted();
+    // Gli allegati correnti sono indicati a Jev e nel contesto del modello, separati dalla cronologia.
     const attachments = event.payload.attachments ?? [];
     const attachmentNotes: string[] = [];
     for (const a of attachments) {
       const d = await this.deps.documents?.describe(this.auth.userId, a.id);
+      ac.signal.throwIfAborted();
       if (!d) {
         await this.sendError(
           'document_not_found',
@@ -506,23 +653,23 @@ export class ClientConnection {
         `[Allegato a questo messaggio: documento «${d.title}», id=${d.id}, ${d.pages} ${d.pages === 1 ? 'pagina' : 'pagine'}, fonte ${d.source}. Lavora SOLO su questo documento (questo id), non su documenti precedenti.]`,
       );
     }
-    // Allegato senza una domanda: riassunto e schema vengono prodotti qui, senza passare dal modello
-    // (che in passato ha riusato un documento precedente). Con una domanda il modello entra, annotato.
-    const flow = this.deps.documents?.flow;
+    // Solo studio esplicito: riassunto e schema. Ogni altro allegato viene letto e riconosciuto dal modello.
+    const flow = skills?.guided('documenti') ? this.deps.documents?.flow : undefined;
     const attachedId = attachments[0]?.id;
-    if (flow && attachedId) {
+    if (flow && attachedId && attachments.length === 1) {
       const req = parseDocumentRequest(text);
-      if (!req.question) {
+      if (req.study && !req.question) {
         const reply = await this.runDocumentsFlow(
           () =>
             flow.attached(
-              { userId: this.auth.userId, sessionId, requestId: correlationId },
+              { userId: this.auth.userId, sessionId, requestId: correlationId, signal: ac.signal },
               attachedId,
               req,
             ),
           correlationId,
           t0,
           text,
+          ac.signal,
         );
         if (reply) return;
       }
@@ -532,13 +679,14 @@ export class ClientConnection {
         const reply = await this.runDocumentsFlow(
           () =>
             flow.schemaByTitle(
-              { userId: this.auth.userId, sessionId, requestId: correlationId },
+              { userId: this.auth.userId, sessionId, requestId: correlationId, signal: ac.signal },
               cmd.title,
               cmd.type,
             ),
           correlationId,
           t0,
           text,
+          ac.signal,
         );
         if (reply) return;
       }
@@ -555,7 +703,7 @@ export class ClientConnection {
           ? own
           : this.deps.dailyBudgetUsd
         : typeof own === 'number' && own > 0
-          ? Math.min(own, this.deps.dailyBudgetUsd)
+          ? Math.min(own, this.deps.dailyBudgetUsd || own)
           : this.deps.dailyBudgetUsd;
 
     // 1) Router deterministico: comandi riconosciuti → nessuna chiamata a Jev né a un modello.
@@ -568,6 +716,7 @@ export class ClientConnection {
       role: this.auth.role,
     });
     if (command.kind !== 'none' && attachments.length === 0) {
+      ac.signal.throwIfAborted();
       if (command.kind === 'set_class') {
         const effective =
           command.modelClass === 'heavy'
@@ -593,7 +742,6 @@ export class ClientConnection {
     }
 
     // 2) Skill deterministiche (procedure note): riconosciute con regole, eseguite senza modelli.
-    const skills = this.deps.skills ? await this.deps.skills.registryFor(this.auth) : null;
     // Risposta a una domanda della skill nel turno prima («alle 9» dopo «a che ora?»): vale una volta sola.
     const pending = this.pendingFollowUp;
     this.pendingFollowUp = null;
@@ -621,12 +769,14 @@ export class ClientConnection {
       if (skillNote) match = null;
     }
     // Promemoria a evento: confronto full-text del messaggio, mai sulla frase che ne crea uno.
+    ac.signal.throwIfAborted();
     const fired =
       this.deps.intents && attachments.length === 0 && match?.skill.id !== 'promemoria_evento'
         ? await this.deps.intents.fire(this.auth.userId, text).catch(() => [])
         : [];
     const firedNote = formatFiredIntents(fired);
     if (match) {
+      ac.signal.throwIfAborted();
       const loc = event.payload.device?.location;
       const raw = await match.skill.run(match.plan, {
         userId: this.auth.userId,
@@ -698,17 +848,23 @@ export class ClientConnection {
       }
       throw err;
     }
+    ac.signal.throwIfAborted();
+    const routed = await this.deps.router.decide({
+      text: modelText,
+      inputMode: event.payload.inputMode,
+      recentTurns: this.recentTurns,
+      toolCategories: this.deps.tools?.categories ?? [],
+      skillCandidates: skills?.candidates(text) ?? [],
+      sessionModelClass: this.session.modelClass,
+    });
+    this.performanceTrace?.phase('routerMs', routed.latencyMs);
+    const sshTurn =
+      Boolean(skills?.get('ssh')) && requiresSshModel(modelText, routed.skillId, this.recentTurns);
     const decision = await this.settleModelClass(
-      await this.deps.router.decide({
-        text: modelText,
-        inputMode: event.payload.inputMode,
-        recentTurns: this.recentTurns,
-        toolCategories: this.deps.tools?.categories ?? [],
-        skillCandidates: skills?.candidates(text) ?? [],
-        sessionModelClass: this.session.modelClass,
-      }),
+      sshTurn ? { ...routed, modelClass: 'heavy', requestedModelClass: 'heavy' } : routed,
       sessionId,
     );
+    ac.signal.throwIfAborted();
     await this.deps.decisions.record(this.auth.userId, sessionId, correlationId, decision);
     if (decision.modelClass === 'heavy' && this.session.modelClass !== 'heavy') {
       const effective = await this.deps.store.raiseModelClass(this.auth.userId, sessionId, 'heavy');
@@ -716,15 +872,25 @@ export class ClientConnection {
       this.deps.invalidateCompanion(sessionId);
     }
 
-    const clarifyNote = await this.clarifyTurn(
-      modelText,
-      event.payload.inputMode,
-      decision,
-      sessionId,
-      correlationId,
-    );
+    // Jev vede i metadati, non il testo OCR: per gli allegati il dubbio si risolve dopo la lettura.
+    const clarifyNote = attachments.length
+      ? undefined
+      : await this.clarifyTurn(
+          modelText,
+          event.payload.inputMode,
+          decision,
+          sessionId,
+          correlationId,
+        );
 
+    const companionStartedAt = performance.now();
     const companion = await this.deps.getCompanion(this.auth, this.session);
+    this.performanceTrace?.phase('companionMs', performance.now() - companionStartedAt);
+    this.deps.logger.debug(
+      { sessionId, correlationId, companionMs: Math.round(performance.now() - companionStartedAt) },
+      'preparazione agente turno',
+    );
+    ac.signal.throwIfAborted();
     if (!companion) {
       await this.sendError(
         'llm_unavailable',
@@ -736,7 +902,73 @@ export class ClientConnection {
     }
 
     // Contesto del turno (fuori dal prefisso): memorie pertinenti e, se Jev indica una skill guidata, la sua procedura.
+    const contextStartedAt = performance.now();
+    const contextTimings: Record<string, number> = {};
+    const timedRead = async <T>(phase: string, read: () => Promise<T>): Promise<T> => {
+      const start = performance.now();
+      try {
+        return await read();
+      } finally {
+        contextTimings[phase] = Math.round(performance.now() - start);
+      }
+    };
+    const canSuggest = Boolean(
+      this.deps.brainSuggest &&
+        attachments.length === 0 &&
+        decision.skillId !== 'second_brain' &&
+        text.trim().split(/\s+/).length >= 4,
+    );
+    // Solo letture indipendenti: gli avvisi consumati e le prenotazioni restano applicati in ordine.
+    const [suggestionRead, retrievalRead, memoryNoticesRead, profileNoticesRead, continuityRead] =
+      await Promise.allSettled([
+        timedRead('brainSuggestMs', () =>
+          canSuggest
+            ? (this.deps.brainSuggest?.(this.auth.userId, text, [...this.brainSuggested]) ??
+              Promise.resolve(null))
+            : Promise.resolve(null),
+        ),
+        timedRead('retrievalMs', () =>
+          decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0
+            ? this.deps.memories.repo.search({
+                userId: this.auth.userId,
+                query: text,
+                limit: this.deps.memories.retrievalLimit,
+              })
+            : Promise.resolve([]),
+        ),
+        timedRead(
+          'memoryNoticesMs',
+          () => this.deps.memories?.repo.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
+        ),
+        timedRead(
+          'profileNoticesMs',
+          () => this.deps.profiles?.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
+        ),
+        timedRead(
+          'continuityMs',
+          () =>
+            this.deps.continuity?.(
+              this.auth.userId,
+              sessionId,
+              text,
+              event.payload.device?.timezone,
+            ) ?? Promise.resolve({ text: '', untrusted: false }),
+        ),
+      ]);
+    ac.signal.throwIfAborted();
     const contextBlocks: string[] = [];
+    const untrustedContext = new Set<string>();
+    const privateContext = new Set<string>();
+    try {
+      const continuity = readResult(continuityRead);
+      if (continuity.text) {
+        contextBlocks.push(continuity.text);
+        privateContext.add('continuity');
+        if (continuity.untrusted) untrustedContext.add('continuity');
+      }
+    } catch {
+      // Optional context failure must not abort the user's turn.
+    }
     // v1.10: ora locale e posizione del telefono (solo se l'utente ha dato il permesso per la posizione).
     const deviceBlock = formatDeviceContext(event.payload.device);
     if (deviceBlock) contextBlocks.push(deviceBlock);
@@ -748,8 +980,10 @@ export class ClientConnection {
       text.trim().split(/\s+/).length >= 4
     ) {
       try {
-        const hit = await this.deps.brainSuggest(this.auth.userId, text, [...this.brainSuggested]);
+        const hit = readResult(suggestionRead);
         if (hit) {
+          untrustedContext.add('brain:suggestion');
+          privateContext.add('brain:suggestion');
           this.brainSuggested.add(hit.path);
           contextBlocks.push(
             `Nel second brain dell'utente c'è una nota forse pertinente: «${hit.title}» (${hit.when}): ${hit.passage}\nSe aiuta davvero, accennala in una riga (es. «ho una nota su questo, vuoi che la riprenda?») o usala citandola «(nota: ${hit.title})»; se non c'entra, ignorala senza parlarne.`,
@@ -768,20 +1002,24 @@ export class ClientConnection {
       this.brainTransferChecked = true;
       try {
         const block = await this.deps.brainTransfer(this.auth.userId);
-        if (block) contextBlocks.push(block);
+        if (block) {
+          contextBlocks.push(block);
+          untrustedContext.add('brain:transfer');
+          privateContext.add('brain:transfer');
+        }
       } catch {
         /* proposta facoltativa */
       }
     }
     if (decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0) {
       try {
-        const hits = await this.deps.memories.repo.search({
-          userId: this.auth.userId,
-          query: text,
-          limit: this.deps.memories.retrievalLimit,
-        });
+        const hits = readResult(retrievalRead);
         const block = formatRetrievedMemories(hits);
-        if (block) contextBlocks.push(block);
+        if (block) {
+          contextBlocks.push(block);
+          privateContext.add('memory:retrieval');
+          if (hits.some((h) => h.provenance.trust < 0.5)) untrustedContext.add('memory:retrieval');
+        }
       } catch (err) {
         this.deps.logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
@@ -792,7 +1030,7 @@ export class ClientConnection {
     // Ricerca 11, M1: cambiamenti della memoria (sostituzioni, dubbi) comunicati una volta al turno dopo.
     if (this.deps.memories) {
       try {
-        const notices = await this.deps.memories.repo.pendingNotices(this.auth.userId, 5);
+        const notices = readResult(memoryNoticesRead);
         const block = formatMemoryNotices(notices);
         if (block) {
           contextBlocks.push(block);
@@ -810,7 +1048,7 @@ export class ClientConnection {
     }
     if (this.deps.profiles) {
       try {
-        const notices = await this.deps.profiles.pendingNotices(this.auth.userId, 5);
+        const notices = readResult(profileNoticesRead);
         const block = formatProfileNotices(notices);
         if (block) {
           contextBlocks.push(block);
@@ -854,13 +1092,30 @@ export class ClientConnection {
         /* contesto facoltativo */
       }
     }
+    // Per gli allegati la lettura del contenuto precede la scelta della skill. Jev vede solo i metadati.
+    if (attachments.length)
+      contextBlocks.push(
+        attachmentNotes.join('\n'),
+        attachmentInstructions(Boolean(skills?.guided('ricette'))),
+      );
+    // Read first: a previous cooking conversation must not force every new video into Ricette.
+    const hasYouTube = youtubeLinksIn(text).length > 0;
     const guided =
-      (attachments.length ? skills?.guided('documenti') : undefined) ??
-      (decision.skillId ? skills?.guided(decision.skillId) : undefined);
+      !attachments.length && !hasYouTube && decision.skillId
+        ? skills?.guided(decision.skillId)
+        : undefined;
     if (guided)
       contextBlocks.push(
         `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,
       );
+    if (hasYouTube) {
+      contextBlocks.push(
+        videoContentInstructions('YouTube', 'youtube_read', {
+          recipes: Boolean(skills?.guided('ricette')),
+          brain: Boolean(skills?.guided('second_brain')),
+        }),
+      );
+    }
     const interruptedNote = this.takeInterruptedNote();
     if (interruptedNote) contextBlocks.push(interruptedNote);
     if (clarifyNote) contextBlocks.push(clarifyNote);
@@ -874,10 +1129,18 @@ export class ClientConnection {
       contextBlocks.push(
         `La richiesta sembra per la funzione «${missed.id}» (${missed.description.slice(0, 160)}) anche se non è detta nella forma solita: eseguila con i suoi strumenti, interpretando con buon senso parole storpiate, incomplete o in ordine diverso.`,
       );
+    this.deps.logger.debug(
+      {
+        sessionId,
+        correlationId,
+        ...contextTimings,
+        contextMs: Math.round(performance.now() - contextStartedAt),
+      },
+      'preparazione contesto turno',
+    );
     const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
+    this.performanceTrace?.phase('contextMs', performance.now() - contextStartedAt);
 
-    const ac = new AbortController();
-    this.activeTurns.set(correlationId, ac);
     const run = this.deps.runTurn ?? defaultRunTurn;
     this.remember('utente', text);
     const turnStartedAt = Date.now();
@@ -885,10 +1148,19 @@ export class ClientConnection {
     const run_ = new RunContext(this.auth.userId, this.auth.scopes, decision.riskSignal);
     if (sessionTainted) run_.markUntrusted('session:history');
     const taintTtl = this.deps.tools?.taintTtlSeconds ?? 1800;
+    for (const source of privateContext) run_.markPrivateRead(source);
+    for (const source of untrustedContext) {
+      run_.markUntrusted(source);
+      await this.deps.store.markTainted(sessionId, source, taintTtl);
+    }
+    ac.signal.throwIfAborted();
+    this.activeTurns.set(correlationId, ac);
     this.deps.tools?.setToolContext(sessionId, {
+      userMessage: text,
       userId: this.auth.userId,
       sessionId,
       requestId: correlationId,
+      modelClass: companion.profile.modelClass,
       scopes: this.auth.scopes,
       run: run_,
       emit: (type, payload) => this.send(type, payload, correlationId),
@@ -980,6 +1252,7 @@ export class ClientConnection {
       })
       .finally(() => {
         this.activeTurns.delete(correlationId);
+        if (this.requestInFlight === correlationId) this.requestInFlight = undefined;
         void this.deps.store.touch(this.auth.userId, sessionId).catch(() => {});
       })
       .catch((err: unknown) =>
@@ -994,6 +1267,7 @@ export class ClientConnection {
     correlationId: string,
     t0: number,
     userText: string,
+    signal: AbortSignal,
   ): Promise<boolean> {
     const sessionId = this.sessionId;
     if (!sessionId) return false;
@@ -1004,6 +1278,7 @@ export class ClientConnection {
     );
     try {
       const reply = await run();
+      signal.throwIfAborted();
       if (!reply) return false;
       await this.deps.decisions.record(
         this.auth.userId,
@@ -1058,6 +1333,7 @@ export class ClientConnection {
       });
       return true;
     } catch (err) {
+      signal.throwIfAborted();
       this.deps.logger.warn({ err }, 'percorso documenti fallito');
       await this.sendError(
         'document_failed',
@@ -1230,7 +1506,8 @@ export class ClientConnection {
 
   /**
    * Controllo di Jev su un comando rapido: restituisce la nota per il modello se il comando non è fedele alla
-   * frase (e allora non va eseguito), altrimenti undefined. Senza Jev, in ritardo o con errori: si esegue.
+   * frase (e allora non va eseguito), altrimenti undefined. Un controllo fallito non autorizza l'azione:
+   * timeout, errore o risposta mancante affidano la richiesta al modello.
    */
   private async checkSkillPlan(
     match: { skill: DeterministicSkill; plan: unknown },
@@ -1243,6 +1520,7 @@ export class ClientConnection {
     const check = this.deps.skillCheck;
     const planned = check && match.skill.describe ? match.skill.describe(match.plan) : null;
     if (!check || !planned) return undefined;
+    const unchecked = `Il comando rapido della funzione «${match.skill.id}» non è stato eseguito: il controllo della sua interpretazione non è disponibile. Analizza tu la richiesta originale e usa gli strumenti rispettando tutti gli impegni, gli orari, i preavvisi e le persone. Non considerare eseguita nessuna azione e non parlare del controllo interno.`;
     const base = {
       userId: this.auth.userId,
       sessionId,
@@ -1271,7 +1549,8 @@ export class ClientConnection {
           ...(r ? { costUsd: r.costUsd } : {}),
         })
         .catch(() => {});
-      if (!r || r.faithful >= check.threshold) return undefined;
+      if (!r || !Number.isFinite(r.faithful)) return unchecked;
+      if (r.faithful >= check.threshold) return undefined;
       return `Il comando rapido della funzione «${match.skill.id}» aveva capito: ${planned}. Un controllo ha visto che non corrisponde del tutto alla richiesta dell’utente, quindi non è stato eseguito: eseguila tu con gli strumenti, rispettando ogni dettaglio (orari, preavvisi, persone, condizioni, più compiti nella stessa frase). Non parlare di questo controllo.`;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1287,7 +1566,7 @@ export class ClientConnection {
           error: message,
         })
         .catch(() => {});
-      return undefined;
+      return unchecked;
     }
   }
 
@@ -1317,19 +1596,39 @@ export class ClientConnection {
   ): Promise<void> {
     // Serializza gli invii: seq monotono e ordine di emissione garantito anche con emit concorrenti.
     const next = this.sending.then(async () => {
-      if (this.closed) return;
       const sessionId = this.sessionId ?? NULL_UUID;
-      const seq = this.sessionId ? await this.deps.store.nextSeq(this.sessionId) : 0;
-      const event: AgentEvent = createEvent(type, payload, {
+      const atomicAppend = this.sessionId && this.deps.store.appendWithSeq;
+      const seq =
+        this.sessionId && !atomicAppend ? await this.deps.store.nextSeq(this.sessionId) : 0;
+      let event: AgentEvent = createEvent(type, payload, {
         sessionId,
         correlationId,
         seq,
         ...(persist === undefined ? {} : { persist }),
       });
-      this.socket.send(JSON.stringify(event));
+      if (event.type === 'tool.started' || event.type === 'tool.confirmation.requested')
+        event.payload.displayName = toolDisplayName(event.payload.toolId);
       // Le espressioni dell'avatar sono effimere: non si rinviano alla ripresa (sostituirebbero quella del momento).
-      if (this.sessionId && !type.startsWith('avatar.'))
+      if (this.sessionId && atomicAppend) event = await atomicAppend(this.sessionId, event);
+      else if (this.sessionId && !type.startsWith('avatar.'))
         await this.deps.store.append(this.sessionId, event);
+      // Persistenza prima del trasporto: perdere il socket non deve annullare né perdere il lavoro.
+      if (!this.closed && !this.replaying) {
+        try {
+          this.socket.send(JSON.stringify(event));
+        } catch (err) {
+          this.deps.logger.warn({ err }, 'trasporto interrotto: evento conservato');
+        }
+      }
+      const observation = this.performanceTrace?.observe(event);
+      if (observation) {
+        this.performanceTrace = undefined;
+        try {
+          this.deps.recordPerformance?.(this.auth.userId, observation);
+        } catch {
+          this.deps.logger.warn('campione performance non accodato');
+        }
+      }
     });
     this.sending = next.catch((err) => this.deps.logger.warn({ err }, 'invio evento fallito'));
     return next;
@@ -1350,7 +1649,7 @@ export class ClientConnection {
       'error',
       { code, message, retryable },
       correlationId ?? NULL_UUID,
-      false,
+      Boolean(correlationId),
     ).catch((err: unknown) => this.deps.logger.warn({ err, code }, 'errore non inviato al client'));
   }
 }

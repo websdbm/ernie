@@ -1,4 +1,9 @@
-import { callCostUsd, type LlmCallRecorder, normalizeUsage } from '@ernie/model-gateway';
+import {
+  callCostUsd,
+  type LlmCallRecorder,
+  modelFailure,
+  normalizeUsage,
+} from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import type { EventType, PayloadInputOf, RouteKind } from '@ernie/protocol';
 import type { z } from 'zod';
@@ -88,6 +93,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
   const internal = new AbortController();
   const onExternalAbort = () => internal.abort();
   input.abortSignal.addEventListener('abort', onExternalAbort, { once: true });
+  if (input.abortSignal.aborted) internal.abort();
 
   const result = (cancelled: boolean): TurnResult => ({
     text,
@@ -108,17 +114,26 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
     return result(false);
   };
 
-  await emit('assistant.started', {
-    route: input.decision?.route ?? ('llm' as Route),
-    modelClass: companion.profile.modelClass,
-  });
-
   try {
+    if (internal.signal.aborted) {
+      await emit('assistant.cancelled', { reason: 'user' });
+      return result(true);
+    }
+    await emit('assistant.started', {
+      route: input.decision?.route ?? ('llm' as Route),
+      modelClass: companion.profile.modelClass,
+    });
+    internal.signal.throwIfAborted();
     const stream = await companion.agent.stream(formatUserTurn(input.text, input.inputMode), {
       context: turnContext(input.memoryContext) ?? [],
       memory: { thread: input.sessionId, resource: input.userId },
       maxSteps: companion.profile.maxSteps,
-      modelSettings: { maxOutputTokens: companion.profile.maxOutputTokens },
+      modelSettings: {
+        maxOutputTokens: companion.profile.maxOutputTokens,
+        maxRetries: 0,
+        // Include due Retry-After fino a 120 s, senza rilanciare il turno o i tool già eseguiti.
+        timeout: { totalMs: 480_000, stepMs: 360_000 },
+      },
       abortSignal: internal.signal,
     });
 
@@ -191,11 +206,14 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
     }
     if (loopDetected) return finishWithLoop();
     logger.error({ err, correlationId: input.correlationId }, 'turno fallito');
-    await emit('error', {
-      code: 'turn_failed',
-      message: 'Il turno non è stato completato',
-      retryable: true,
-    });
+    await emit(
+      'error',
+      modelFailure(err) ?? {
+        code: 'turn_failed',
+        message: 'Il turno non è stato completato',
+        retryable: true,
+      },
+    );
     await emit('assistant.completed', { finishReason: 'error' });
     return result(false);
   } finally {

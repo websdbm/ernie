@@ -78,6 +78,163 @@ const echoSpec: ToolSpec = defineTool({
 });
 
 describe('createGuardedTool', () => {
+  it('una scrittura identica nello stesso turno condivide conferma ed esito; altri argomenti e turni chiedono un nuovo consenso', async () => {
+    const events: Array<{ approvalId: string }> = [];
+    const approvals = {
+      store: memoryApprovalStore(),
+      pending: new PendingApprovals(),
+      ttlMs: 2_000,
+    };
+    const emit: ToolContext['emit'] = (type, payload) => {
+      if (type === 'tool.confirmation.requested') events.push(payload as { approvalId: string });
+    };
+    const context = (userId: string) => {
+      const run = new RunContext(userId, ['chat'], 0);
+      run.markUntrusted('youtube');
+      return ctx(run, emit);
+    };
+    const ref: ToolContextRef = { current: context('u') };
+    const execute = vi.fn(async (input: unknown) => echoSpec.inputSchema.parse(input));
+    const tool = createGuardedTool(
+      { ...echoSpec, oncePerTurn: true, risk: { ...echoSpec.risk, write: true }, execute },
+      { policyRules: {}, audit: memoryToolCallRecorder(), logger, approvals },
+      ref,
+    );
+    const approve = async (count: number, userId = 'u') => {
+      await vi.waitFor(() => expect(approvals.pending.size).toBe(1));
+      expect(events).toHaveLength(count);
+      const id = events[count - 1]?.approvalId as string;
+      await approvals.store.resolve(userId, id, 'approved');
+      approvals.pending.settle(id, 'approved');
+    };
+    const first = tool.execute?.({ text: 'ricetta' }, {} as never);
+    const duplicate = tool.execute?.({ text: 'ricetta' }, {} as never);
+    await approve(1);
+    expect(await first).toEqual({ text: 'ricetta' });
+    expect(await duplicate).toEqual({ text: 'ricetta' });
+    expect(await tool.execute?.({ text: 'ricetta' }, {} as never)).toEqual({ text: 'ricetta' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    const changed = tool.execute?.({ text: 'ingredienti diversi' }, {} as never);
+    await approve(2);
+    await changed;
+    ref.current = context('u');
+    const nextTurn = tool.execute?.({ text: 'ricetta' }, {} as never);
+    await approve(3);
+    await nextTurn;
+    ref.current = context('other');
+    const otherUser = tool.execute?.({ text: 'ricetta' }, {} as never);
+    await approve(4, 'other');
+    await otherUser;
+    expect(execute).toHaveBeenCalledTimes(4);
+  });
+
+  it('dopo un timeout di scrittura non ripete la conferma né avvia un secondo salvataggio', async () => {
+    const approvals = {
+      store: memoryApprovalStore(),
+      pending: new PendingApprovals(),
+      ttlMs: 2_000,
+    };
+    const events: Array<{ approvalId: string }> = [];
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('youtube');
+    const release = Promise.withResolvers<{ text: string }>();
+    const execute = vi.fn(() => release.promise);
+    const tool = createGuardedTool(
+      {
+        ...echoSpec,
+        oncePerTurn: true,
+        timeoutMs: 30,
+        retry: { attempts: 3, backoffMs: 1 },
+        risk: { ...echoSpec.risk, write: true },
+        execute,
+      },
+      { policyRules: {}, audit: memoryToolCallRecorder(), logger, approvals },
+      {
+        current: ctx(run, (type, payload) => {
+          if (type === 'tool.confirmation.requested')
+            events.push(payload as { approvalId: string });
+        }),
+      },
+    );
+    try {
+      const first = tool.execute?.({ text: 'ricetta' }, {} as never);
+      await vi.waitFor(() => expect(approvals.pending.size).toBe(1));
+      const id = events[0]?.approvalId as string;
+      await approvals.store.resolve('u', id, 'approved');
+      approvals.pending.settle(id, 'approved');
+      const result = await first;
+      expect(result).toMatchObject({ error: 'timeout', retryable: false });
+      expect(await tool.execute?.({ text: 'ricetta' }, {} as never)).toEqual(result);
+      expect(events).toHaveLength(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      release.resolve({ text: 'salvata' });
+    }
+  });
+
+  it('una conferma rifiutata non viene riproposta per gli stessi argomenti nel turno', async () => {
+    const approvals = {
+      store: memoryApprovalStore(),
+      pending: new PendingApprovals(),
+      ttlMs: 2_000,
+    };
+    const events: Array<{ approvalId: string }> = [];
+    const execute = vi.fn(async () => ({ text: 'mai' }));
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('youtube');
+    const tool = createGuardedTool(
+      { ...echoSpec, oncePerTurn: true, risk: { ...echoSpec.risk, write: true }, execute },
+      { policyRules: {}, audit: memoryToolCallRecorder(), logger, approvals },
+      {
+        current: ctx(run, (type, payload) => {
+          if (type === 'tool.confirmation.requested')
+            events.push(payload as { approvalId: string });
+        }),
+      },
+    );
+    const first = tool.execute?.({ text: 'ricetta' }, {} as never);
+    await vi.waitFor(() => expect(approvals.pending.size).toBe(1));
+    const id = events[0]?.approvalId as string;
+    await approvals.store.resolve('u', id, 'denied');
+    approvals.pending.settle(id, 'denied');
+    expect(await first).toMatchObject({ error: 'denied_by_user' });
+    expect(await tool.execute?.({ text: 'ricetta' }, {} as never)).toMatchObject({
+      error: 'denied_by_user',
+    });
+    expect(events).toHaveLength(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('preserves structured ingredients with an explicitly larger result budget', async () => {
+    const output = {
+      description: 'd'.repeat(14_000),
+      ingredients: Array.from({ length: 30 }, (_, i) => `Ingrediente ${i}: ${'x'.repeat(90)}`),
+    };
+    const spec = defineTool({
+      ...echoSpec,
+      maxResultChars: 20_000,
+      outputSchema: z.object({ description: z.string(), ingredients: z.array(z.string()) }),
+      execute: async () => output,
+    });
+    const tool = createGuardedTool(
+      spec,
+      { policyRules: {}, audit: memoryToolCallRecorder(), logger },
+      { current: ctx(new RunContext('u', ['chat'], 0)) },
+    );
+    expect(await tool.execute?.({ text: 'read' }, {} as never)).toEqual(output);
+  });
+  it('SSH commands are omitted from generic audit previews', async () => {
+    const audit = memoryToolCallRecorder();
+    const ref: ToolContextRef = { current: ctx(new RunContext('u', ['chat'], 0)) };
+    const tool = createGuardedTool(
+      { ...echoSpec, category: 'ssh' },
+      { policyRules: {}, audit, logger },
+      ref,
+    );
+    await tool.execute?.({ text: 'synthetic sensitive command' }, {} as never);
+    expect(audit.entries[0]?.argsPreview).toBeNull();
+  });
+
   it("allow: esegue, valida l'output e registra l'audit", async () => {
     const audit = memoryToolCallRecorder();
     const ref: ToolContextRef = { current: ctx(new RunContext('u', ['chat'], 0)) };
@@ -211,6 +368,16 @@ describe('createGuardedTool', () => {
     )) as { error: string };
     expect(denied.error).toBe('approval_expired');
     expect(events.some((e) => e.type === 'tool.confirmation.requested')).toBe(true);
+    expect(events.find((e) => e.type === 'tool.confirmation.requested')?.payload).toMatchObject({
+      displayName: 'Aggiunta alla lista della spesa',
+      argsPreview: 'Aggiungi i prodotti elencati alla lista della spesa.',
+      reason: 'Prima di procedere, controlla i dati ricavati dai contenuti che ho letto.',
+      presentation: {
+        title: 'Aggiungere alla lista?',
+        confirmLabel: 'Aggiungi',
+        details: [{ label: 'Prodotti', value: '• zucchero · 10 kg' }],
+      },
+    });
     expect(repo.add).not.toHaveBeenCalled();
     expect(audit.entries.at(-1)).toMatchObject({
       toolId: 'shopping_list_add',

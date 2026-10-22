@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { type ConnectionOptions, type JobsOptions, Queue } from 'bullmq';
 import { dedupeKeys } from './schedule.js';
 import { AUTOMATION_QUEUE, type Automation, type RunJobData, type TickJobData } from './schema.js';
@@ -26,7 +27,8 @@ export async function enqueueRun(
   delayMs = 0,
 ): Promise<{ enqueued: boolean; jobId: string }> {
   // BullMQ 6 vieta i due punti negli id personalizzati: la chiave resta leggibile nel database, qui viene normalizzata.
-  const jobId = `run_${data.automationId}_${data.dedupeKey}`.replace(/[^\w.-]/g, '_');
+  const digest = createHash('sha256').update(data.dedupeKey).digest('hex');
+  const jobId = `run_${data.automationId}_${digest}`;
   // Controllo informativo (la deduplica vera è nel database): BullMQ ignora un add con jobId già presente.
   if (await queue.getJob(jobId)) return { enqueued: false, jobId };
   await queue.add('run', data, runOpts(delayMs, jobId));

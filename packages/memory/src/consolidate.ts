@@ -36,6 +36,8 @@ export interface ConsolidationDeps {
   readonly gateway: ModelGateway;
   readonly recorder: LlmCallRecorder;
   readonly logger: Logger;
+  /** Budget e kill switch aggiornati prima di ogni chiamata pagata. */
+  readonly checkBudget?: (userId: string) => Promise<void>;
   /** Per i test: estrattore sostitutivo senza LLM. */
   readonly extractor?: Extractor;
   /** Per i test: giudice sostitutivo; null = nessun giudice (inserimento senza confronto). */
@@ -176,7 +178,13 @@ export function messageToLine(m: unknown): TranscriptLine | null {
   const r = m as Record<string, unknown>;
   const role = typeof r.role === 'string' ? r.role : 'unknown';
   const createdAt =
-    r.createdAt instanceof Date ? r.createdAt : new Date(String(r.createdAt ?? Date.now()));
+    r.createdAt instanceof Date
+      ? r.createdAt
+      : typeof r.createdAt === 'number'
+        ? new Date(r.createdAt)
+        : r.createdAt == null
+          ? new Date()
+          : new Date(String(r.createdAt));
   const c = r.content;
   let text = '';
   if (typeof c === 'string') text = c;
@@ -196,6 +204,7 @@ export function messageToLine(m: unknown): TranscriptLine | null {
       .filter((t) => t && !isSystemNote(t));
     if (texts.length) text = texts.join(' ');
   }
+  if (!Number.isFinite(createdAt.getTime())) return null;
   text = text.replace(/\s+/g, ' ').trim();
   if (!text || (role !== 'user' && role !== 'assistant')) return null;
   return { role, text, createdAt };
@@ -294,18 +303,75 @@ export async function consolidateThread(
   const lines = messages
     .map(messageToLine)
     .filter((l): l is TranscriptLine => l !== null)
-    .filter((l) => !cursor || l.createdAt > cursor);
-  const batch = lines.slice(-24);
+    .filter((l) => !cursor || l.createdAt > cursor)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const totals = {
+    skipped: true,
+    read: lines.length,
+    extracted: 0,
+    inserted: 0,
+    deduplicated: 0,
+    superseded: 0,
+    profileChanges: 0,
+    expressions: 0,
+  };
+  // Processa in ordine tutto il backlog: prendere solo la coda avanzava il cursore oltre dati mai letti.
+  for (let offset = 0; offset < lines.length; ) {
+    let end = Math.min(offset + 24, lines.length);
+    // Il cursore è temporale: non dividere messaggi con la stessa data tra due batch.
+    while (
+      end < lines.length &&
+      lines[end]?.createdAt.getTime() === lines[end - 1]?.createdAt.getTime()
+    )
+      end++;
+    const result = await consolidateBatch(deps, job, lines.slice(offset, end));
+    totals.skipped &&= result.skipped;
+    totals.extracted += result.extracted;
+    totals.inserted += result.inserted;
+    totals.deduplicated += result.deduplicated;
+    totals.superseded += result.superseded;
+    totals.profileChanges += result.profileChanges ?? 0;
+    totals.expressions += result.expressions ?? 0;
+    offset = end;
+  }
+  return totals;
+}
+
+async function advanceCursor(
+  deps: ConsolidationDeps,
+  userId: string,
+  threadId: string,
+  batch: readonly TranscriptLine[],
+) {
+  const last = batch.at(-1)?.createdAt;
+  if (!last) return;
+  await withUser(deps.pool, userId, (c) =>
+    c.query(
+      `INSERT INTO memory_cursors (thread_id, user_id, last_message_at, processed) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (thread_id) DO UPDATE SET last_message_at = GREATEST(memory_cursors.last_message_at, EXCLUDED.last_message_at), processed = memory_cursors.processed + EXCLUDED.processed, updated_at = now()`,
+      [threadId, userId, last, batch.length],
+    ),
+  );
+}
+
+async function consolidateBatch(
+  deps: ConsolidationDeps,
+  job: { userId: string; threadId: string; sessionId: string | null },
+  batch: readonly TranscriptLine[],
+): Promise<ConsolidationResult> {
+  const { userId, threadId } = job;
   const userLines = batch.filter((l) => l.role === 'user');
-  if (userLines.length === 0)
+  if (userLines.length === 0) {
+    await advanceCursor(deps, userId, threadId, batch);
     return {
       skipped: true,
-      read: lines.length,
+      read: batch.length,
       extracted: 0,
       inserted: 0,
       deduplicated: 0,
       superseded: 0,
     };
+  }
 
   const candidates = await deps.repo.search({
     userId,
@@ -317,6 +383,7 @@ export async function consolidateThread(
     limit: 8,
   });
   const extractor = deps.extractor ?? createLlmExtractor(deps, userId, job.sessionId);
+  await deps.checkBudget?.(userId);
   const extraction = await extractor(
     batch,
     candidates.map((c) => ({ id: c.id, content: c.content })),
@@ -334,7 +401,7 @@ export async function consolidateThread(
   }));
   const judge = deps.judge === undefined ? createLlmJudge(deps, userId, job.sessionId) : deps.judge;
   const stats = await applyWithJudge(
-    { repo: deps.repo, judge },
+    { repo: deps.repo, judge, ...(deps.checkBudget ? { checkBudget: deps.checkBudget } : {}) },
     userId,
     facts,
     {
@@ -381,18 +448,11 @@ export async function consolidateThread(
     }
   }
 
-  const last = batch.at(-1)?.createdAt ?? new Date();
-  await withUser(deps.pool, userId, (c) =>
-    c.query(
-      `INSERT INTO memory_cursors (thread_id, user_id, last_message_at, processed) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (thread_id) DO UPDATE SET last_message_at = EXCLUDED.last_message_at, processed = memory_cursors.processed + EXCLUDED.processed, updated_at = now()`,
-      [threadId, userId, last, batch.length],
-    ),
-  );
+  await advanceCursor(deps, userId, threadId, batch);
   deps.logger.info(
     {
       threadId,
-      read: lines.length,
+      read: batch.length,
       extracted: extraction.facts.length,
       inserted,
       deduplicated,
@@ -404,7 +464,7 @@ export async function consolidateThread(
   );
   return {
     skipped: false,
-    read: lines.length,
+    read: batch.length,
     extracted: extraction.facts.length,
     inserted,
     deduplicated,

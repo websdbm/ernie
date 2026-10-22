@@ -33,7 +33,7 @@ export interface ShoppingItem {
 
 export type ListResolution =
   | { readonly kind: 'list'; readonly list: ShoppingList }
-  | { readonly kind: 'choose'; readonly lists: ShoppingList[] }
+  | { readonly kind: 'choose'; readonly lists: ShoppingList[]; readonly suggested?: true }
   | { readonly kind: 'none' };
 
 export function normalizeItemName(name: string): string {
@@ -101,6 +101,31 @@ export interface ShoppingListRepository {
   markAllBought(userId: string, listId: string): Promise<number>;
   /** Toglie tutte le voci («svuota la lista»). */
   empty(userId: string, listId: string): Promise<number>;
+}
+
+/** Un nome non trovato non implica una nuova lista: propone le attive senza sceglierle al posto dell'utente. */
+export async function resolveShoppingTarget(
+  repo: ShoppingListRepository,
+  userId: string,
+  hint: string | undefined,
+  opts: { createDefault?: boolean; suggestExisting?: boolean } = {},
+): Promise<ListResolution> {
+  const result = await repo.resolve(userId, hint, { createDefault: opts.createDefault ?? false });
+  if (result.kind !== 'none' || !hint || !opts.suggestExisting) return result;
+  const active = (await repo.lists(userId)).filter((list) => list.status === 'active');
+  return active.length ? { kind: 'choose', lists: active, suggested: true } : result;
+}
+
+export function shoppingChoiceQuestion(lists: readonly ShoppingList[]): string {
+  return lists.length === 1 && lists[0]
+    ? `Vuoi usare la lista «${lists[0].name}»?`
+    : 'Quale lista vuoi usare?';
+}
+
+export function shoppingAddRequest(
+  items: ReadonlyArray<{ name: string; quantity?: string | undefined }>,
+): string {
+  return `aggiungi ${items.map((item) => (item.quantity ? `${item.quantity} ${item.name}` : item.name)).join(', ')} nella lista «{lista}»`;
 }
 
 interface ListRow {
@@ -181,7 +206,15 @@ export function toChooserBlock(
       bought: l.bought,
       archived: l.status === 'archived',
     })),
-    ...(pendingText ? { pendingText: pendingText.slice(0, 500) } : {}),
+    // Mai troncare a metà una richiesta: il tap deve conservare anche elenchi lunghi e quantità.
+    ...(pendingText
+      ? {
+          pendingText:
+            pendingText.length <= 31_900
+              ? pendingText
+              : 'Usa la lista «{lista}» per completare la mia richiesta precedente.',
+        }
+      : {}),
   };
 }
 
@@ -502,6 +535,8 @@ const ListResult = z.object({
   list: ListOut.optional(),
   items: z.array(ItemOut).optional(),
   choose: z.array(ListOut).optional(),
+  question: z.string().max(100).optional(),
+  pendingText: z.string().max(32_000).optional(),
   message: z.string(),
 });
 type ListResult = z.infer<typeof ListResult>;
@@ -530,6 +565,8 @@ function presentResult(out: ListResult): ContentBlock | null {
         updatedAt: new Date(0),
         lastUsedAt: new Date(0),
       })),
+      out.question,
+      out.pendingText,
     );
   if (out.list && out.items)
     return {
@@ -551,21 +588,28 @@ function presentResult(out: ListResult): ContentBlock | null {
 export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
   const write = { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: true };
   const read = { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false };
+  // Dopo aver chiesto una lista il modello deve attendere un nuovo turno, non rispondere da sé.
+  const addTurns = new WeakMap<object, Promise<ListResult>>();
+  const afterListChoice = (run: object, action: () => Promise<ListResult>): Promise<ListResult> => {
+    const previous = addTurns.get(run)?.catch(() => undefined) ?? Promise.resolve(undefined);
+    const result = previous.then((pending) => (pending?.choose?.length ? pending : action()));
+    addTurns.set(run, result);
+    return result;
+  };
 
   const pick = async (
     userId: string,
     hint: string | undefined,
-    opts?: { createDefault?: boolean },
+    opts?: { createDefault?: boolean; suggestExisting?: boolean },
   ): Promise<{ list: ShoppingList } | { result: ListResult }> => {
-    const r = await repo.resolve(userId, hint, opts);
+    const r = await resolveShoppingTarget(repo, userId, hint, opts);
     if (r.kind === 'list') return { list: r.list };
     if (r.kind === 'choose')
       return {
         result: {
           choose: r.lists.map(outList),
-          message: hint
-            ? `Più liste corrispondono a «${hint}»: chiedi all'utente quale.`
-            : "Ci sono più liste: chiedi all'utente quale (l'app mostra la scelta).",
+          question: shoppingChoiceQuestion(r.lists),
+          message: `${shoppingChoiceQuestion(r.lists)} La scheda contiene le liste disponibili. Nessuna modifica eseguita: attendi che l'utente scelga, senza creare liste o scegliere tu.`,
         },
       };
     return {
@@ -596,7 +640,7 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
     inputSchema: z.object({ list: ListRef }),
     outputSchema: ListResult,
     execute: async ({ list }, ctx) => {
-      const p = await pick(ctx.userId, list, { createDefault: true });
+      const p = await pick(ctx.userId, list, { createDefault: true, suggestExisting: true });
       if ('result' in p) return p.result;
       await repo.touch(ctx.userId, p.list.id);
       return snapshot(ctx.userId, p.list, `Lista «${p.list.name}».`);
@@ -609,7 +653,7 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
     version: '2',
     category: 'shopping_list',
     description:
-      'Aggiunge voci (con quantità facoltativa) a una lista della spesa, solo su richiesta esplicita. `list`: nome della lista, se detto.',
+      'Aggiunge voci (con quantità facoltativa) a una lista della spesa, solo su richiesta esplicita. `list`: nome o riferimento detto dall’utente. Se restituisce choose, la scheda permette di scegliere: attendi il tap senza creare liste o ripetere l’aggiunta su una lista scelta da te.',
     risk: write,
     timeoutMs: 5_000,
     inputSchema: z.object({ items: z.array(Item).min(1).max(30), list: ListRef }),
@@ -617,21 +661,25 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
       added: z.array(z.string()).optional(),
       alreadyPresent: z.array(z.string()).optional(),
     }),
-    execute: async ({ items, list }, ctx) => {
-      const p = await pick(ctx.userId, list, { createDefault: true });
-      if ('result' in p) return p.result;
-      const r = await repo.add(ctx.userId, p.list.id, items, 'tool');
-      const added = r.added.map((i) => i.name);
-      return {
-        ...(await snapshot(
-          ctx.userId,
-          p.list,
-          `Aggiunte ${added.length} voci a «${p.list.name}»${r.alreadyPresent.length ? `; già presenti: ${r.alreadyPresent.join(', ')}` : ''}.`,
-        )),
-        added,
-        alreadyPresent: r.alreadyPresent,
-      };
-    },
+    execute: async ({ items, list }, ctx) =>
+      afterListChoice(ctx.run, async () => {
+        const p = await pick(ctx.userId, list, { createDefault: true, suggestExisting: true });
+        if ('result' in p) {
+          if (!p.result.choose?.length) return p.result;
+          return { ...p.result, pendingText: shoppingAddRequest(items) };
+        }
+        const r = await repo.add(ctx.userId, p.list.id, items, 'tool');
+        const added = r.added.map((i) => i.name);
+        return {
+          ...(await snapshot(
+            ctx.userId,
+            p.list,
+            `Aggiunte ${added.length} voci a «${p.list.name}»${r.alreadyPresent.length ? `; già presenti: ${r.alreadyPresent.join(', ')}` : ''}.`,
+          )),
+          added,
+          alreadyPresent: r.alreadyPresent,
+        };
+      }),
     present: (_i, out) => presentResult(out),
   });
 
@@ -772,10 +820,11 @@ export function createShoppingTools(repo: ShoppingListRepository): ToolSpec[] {
     timeoutMs: 5_000,
     inputSchema: z.object({ name: z.string().min(1).max(60) }),
     outputSchema: ListResult,
-    execute: async ({ name }, ctx) => {
-      const l = await repo.createList(ctx.userId, name);
-      return snapshot(ctx.userId, l, `Lista «${l.name}» pronta.`);
-    },
+    execute: async ({ name }, ctx) =>
+      afterListChoice(ctx.run, async () => {
+        const l = await repo.createList(ctx.userId, name);
+        return snapshot(ctx.userId, l, `Lista «${l.name}» pronta.`);
+      }),
     present: (_i, out) => presentResult(out),
   });
 

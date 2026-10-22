@@ -5,8 +5,10 @@ packages:
 
 # Dipendenze autorizzate a eseguire script di build (binari nativi/opzionali).
 allowBuilds:
+  cpu-features: false
   esbuild: true
   msgpackr-extract: true
+  ssh2: false
 
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@4.0.79'

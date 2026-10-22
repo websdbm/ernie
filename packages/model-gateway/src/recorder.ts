@@ -23,6 +23,8 @@ export interface LlmCallRecord {
   readonly modelClass: string | null;
   readonly generationId: string | null;
   readonly usage: NormalizedUsage;
+  /** Tariffa non a token (es. byte TTS); resta una stima, non un costo del provider. */
+  readonly estimatedCostUsd?: number;
   readonly ttftMs: number | null;
   readonly latencyMs: number;
   readonly finishReason: string | null;
@@ -36,7 +38,7 @@ export interface LlmCallRecorder {
 export function createLlmCallRecorder(pool: Pool, logger: Logger): LlmCallRecorder {
   return {
     async record(c) {
-      const estimated = estimateCostForModel(c.usage, c.model);
+      const estimated = c.estimatedCostUsd ?? estimateCostForModel(c.usage, c.model);
       const reported = c.usage.costReportedUsd;
       try {
         await withUser(pool, c.userId, (client) =>
@@ -52,7 +54,9 @@ export function createLlmCallRecorder(pool: Pool, logger: Logger): LlmCallRecord
               c.requestId,
               c.stepIndex,
               c.purpose,
-              c.provider,
+              // Anthropic diretto non comunica un costo USD. Se è presente, la
+              // chiamata del gateway è passata alla riserva OpenRouter.
+              c.provider === 'anthropic' && reported !== undefined ? 'openrouter' : c.provider,
               c.model,
               c.modelClass,
               c.generationId,

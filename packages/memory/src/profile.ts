@@ -728,7 +728,69 @@ export interface ProfileNotice {
   readonly at: Date;
 }
 
+/** Unione già autorizzata nel Brain: identità esatte, mai somiglianze fra nomi. */
+export function consolidateFamily(
+  current: UserProfile,
+  into: string,
+  aliases: readonly string[],
+): { profile: UserProfile; changes: ProfileChange[]; question: string | null } {
+  const key = (s: string) => s.trim().toLocaleLowerCase('it');
+  const names = new Set([into, ...aliases].map(key));
+  const members = current.family.filter((m) => m.name && names.has(key(m.name)));
+  const unchanged = (question: string | null = null) => ({
+    profile: current,
+    changes: [],
+    question,
+  });
+  if (!members.length || (members.length === 1 && members[0]?.name === into)) return unchanged();
+  const unique = (values: (string | undefined)[]) => [...new Set(values.filter(Boolean))];
+  // Due persone con lo stesso nome nella scheda non sono automaticamente la stessa persona.
+  if (
+    new Set(members.map((m) => key(m.name ?? ''))).size !== members.length ||
+    unique(members.map((m) => key(m.relation))).length > 1 ||
+    unique(members.map((m) => m.birthDate)).length > 1
+  )
+    return unchanged(
+      `Le schede unite in «${into}» hanno dati anagrafici discordanti: quali sono corretti?`,
+    );
+  const target = members.find((m) => key(m.name ?? '') === key(into)) ?? members[0];
+  if (!target) return unchanged();
+  const notes = unique(members.map((m) => m.notes)).join('; ');
+  if (into.length > 60 || notes.length > 120)
+    return unchanged(
+      `Come vuoi sintetizzare i dati della scheda anagrafica di «${into}»? Le note complete restano nel Second Brain.`,
+    );
+  const merged: FamilyMember = {
+    ...target,
+    name: into,
+    ...(members.find((m) => m.birthDate)?.birthDate
+      ? { birthDate: members.find((m) => m.birthDate)?.birthDate }
+      : {}),
+    ...(notes ? { notes } : {}),
+  };
+  const ids = new Set(members.map((m) => m.id));
+  return {
+    profile: {
+      ...current,
+      family: current.family.flatMap((m) =>
+        m.id === target.id ? [merged] : ids.has(m.id) ? [] : [m],
+      ),
+    },
+    changes: [
+      { field: 'family', before: JSON.stringify(members), after: JSON.stringify([merged]) },
+    ],
+    question: null,
+  };
+}
+
 export interface ProfileStore {
+  /** Operazione mirata sotto lock SQL: conserva campi concorrenti e cronologia. */
+  consolidateFamily(
+    userId: string,
+    into: string,
+    aliases: readonly string[],
+  ): Promise<{ changed: boolean; question: string | null }>;
+
   get(userId: string): Promise<UserProfile>;
   /** Salva scheda e revisione nella stessa transazione; nessun cambiamento = nessuna scrittura. */
   save(
@@ -746,6 +808,27 @@ export interface ProfileStore {
 
 export function createProfileStore(pool: Pool): ProfileStore {
   return {
+    async consolidateFamily(userId, into, aliases) {
+      return withUser(pool, userId, async (c) => {
+        const row = await c.query<{ data: unknown }>(
+          'SELECT data FROM user_profiles WHERE user_id = $1 FOR UPDATE',
+          [userId],
+        );
+        if (!row.rows[0]) return { changed: false, question: null };
+        const result = consolidateFamily(UserProfile.parse(row.rows[0].data), into, aliases);
+        if (result.changes.length) {
+          await c.query(
+            'UPDATE user_profiles SET data = $2, version = version + 1, updated_at = now() WHERE user_id = $1',
+            [userId, JSON.stringify(result.profile)],
+          );
+          await c.query(
+            "INSERT INTO user_profile_revisions (user_id, changes, source, notified_at) VALUES ($1, $2, 'user', now())",
+            [userId, JSON.stringify(result.changes)],
+          );
+        }
+        return { changed: result.changes.length > 0, question: result.question };
+      });
+    },
     async get(userId) {
       return withUser(pool, userId, async (c) => {
         const r = await c.query<{ data: unknown }>(
@@ -829,6 +912,20 @@ export function memoryProfileStore(): ProfileStore & {
   }> = [];
   return {
     revisions,
+    async consolidateFamily(userId, into, aliases) {
+      const result = consolidateFamily(data.get(userId) ?? emptyProfile(), into, aliases);
+      if (result.changes.length) {
+        data.set(userId, UserProfile.parse(structuredClone(result.profile)));
+        revisions.push({
+          userId,
+          changes: result.changes,
+          source: 'user',
+          notified: true,
+          id: String(revisions.length + 1),
+        });
+      }
+      return { changed: result.changes.length > 0, question: result.question };
+    },
     async get(userId) {
       return structuredClone(data.get(userId) ?? emptyProfile());
     },

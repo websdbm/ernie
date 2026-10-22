@@ -186,7 +186,7 @@ const PLACE_RE = new RegExp(
   'iu',
 );
 
-/** Testo che sembra un indirizzo (via, piazza… o un numero civico): evita di salvare «lavoro in banca». */
+/** Indirizzi espliciti (via, piazza…): un numero da solo può essere una data o un orario. */
 export function addressLike(raw: string): string | undefined {
   const t = raw
     .replace(/[‘’´`]/gu, "'")
@@ -197,8 +197,7 @@ export function addressLike(raw: string): string | undefined {
     .trim();
   if (t.length < 5 || t.length > 160) return undefined;
   if (
-    /\d/u.test(t) ||
-    /^(?:via|viale|v\.le|piazza|p\.za|piazzale|corso|c\.so|strada|vicolo|largo|località|loc\.|contrada|frazione|borgo|lungomare|lungotevere)\b/iu.test(
+    /^(?:via|viale|v\.le|piazza|p\.za|piazzale|corso|c\.so|strada|vicolo|largo|località|loc\.|contrada|frazione|borgo|lungomare|lungotevere)\s+\S/iu.test(
       t,
     )
   )
@@ -844,6 +843,37 @@ export function parseReminderCommand(
   now = new Date(),
   tz = 'Europe/Rome',
 ): ReminderPlan | null {
+  const plan = parseSingleReminderCommand(input, now, tz);
+  if (!plan || (plan.op !== 'create' && plan.op !== 'create_place' && plan.op !== 'ask_time'))
+    return plan;
+  // Le routine fattuali possono contenere giorni e ore senza chiedere alcun avviso.
+  // Queste formulazioni richiedono il contesto del modello e della memoria, non il percorso rapido.
+  if (
+    /(?:^|\s)ricorda(?:ti)?\s+che\s/iu.test(input) ||
+    /\b(?:senza|niente)\s+(?:(?:alcun[oa]?|nessun[oa]?|le|i|gli)\s+)?(?:notifiche?|promemoria|avvisi)|\bnon\s+(?:notificarmi|avvisarmi)|\bnon\s+(?:voglio|creare|crearmi|inviare|inviarmi)\s+(?:(?:alcun[oa]?|nessun[oa]?|le|i|gli|dei|delle)\s+)?(?:notifiche?|promemoria|avvisi)/iu.test(
+      input,
+    ) ||
+    /\b(?:salva|memorizza|registra|aggiorna)\b[^.!?]*\bsecond\s+brain\b/iu.test(input)
+  )
+    return null;
+  const body = plan.text;
+  // Il parser rapido può rappresentare un solo impegno. Una seconda richiesta o un vincolo
+  // ancora nel titolo deve arrivare al modello, anche se Jev non è disponibile.
+  if (
+    /(?:^|\s)(?:ricordami|ricordati|ricordamelo|avvisami|avvertimi|promemoria)(?=[\s,.;:!?]|$)/iu.test(
+      body,
+    ) ||
+    /(?:^|\s)(?:entro|prima\s+delle|non\s+oltre)\s+(?:le\s+|ore\s+)?\d/iu.test(
+      normalizeHourWords(input),
+    )
+  )
+    return null;
+  const remainder = parseWhen(body, now, tz);
+  if (remainder && !('needTime' in remainder)) return null;
+  return plan;
+}
+
+function parseSingleReminderCommand(input: string, now: Date, tz: string): ReminderPlan | null {
   const text = input
     .replace(/[‘’´`]/gu, "'")
     .trim()
@@ -918,7 +948,12 @@ export function parseReminderCommand(
   // finire lì: «ricorda» dentro «ricordagli» non vale.
   const anchor =
     toOther ??
-    /(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?|promemoria)(?=[\s,.;:!?]|$)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
+    /(?:^|\s)(?:ricordami|ricordati|ricorda(?:mi)?)(?=[\s,.;:!?]|$)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
+      text,
+    ) ??
+    // Il sostantivo da solo non è un comando: «lista senza orari né promemoria»
+    // deve arrivare alla skill Todo, non generare un nuovo promemoria.
+    /^(?:ernie[,\s]+)?(?:(?:crea(?:mi)?|imposta(?:mi)?|fammi|mettimi|aggiungi(?:mi)?)\s+(?:un\s+)?)?promemoria(?=[\s,.;:!?]|$)\s*(?::|di\s|che\s|,)?\s*/iu.exec(
       text,
     );
   if (!anchor) return null;

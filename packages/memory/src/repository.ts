@@ -147,11 +147,46 @@ export function createMemoryRepository(
     async remember(input) {
       const content = input.content.replace(/\s+/g, ' ').trim();
       if (!content) throw new Error('contenuto vuoto');
-      const hash = contentHash(content);
+      const episodeRequest =
+        input.kind === 'episodic' && input.provenance.source === 'system'
+          ? input.provenance.requestId
+          : undefined;
+      const hash = episodeRequest
+        ? createHash('sha256')
+            .update(
+              `episode:${input.provenance.sessionId ?? ''}:${episodeRequest}:${contentHash(content)}`,
+            )
+            .digest('hex')
+        : contentHash(content);
       const confidence = input.confidence ?? 0.7;
+      const existingEpisode = async (client: PoolClient) => {
+        if (!episodeRequest) return null;
+        const result = await client.query<Row>(
+          `SELECT ${COLS} FROM memories
+          WHERE user_id = $1 AND kind = 'episodic' AND provenance->>'requestId' = $2 AND COALESCE(provenance->>'sessionId', '') = $3 LIMIT 1`,
+          [input.userId, episodeRequest, input.provenance.sessionId ?? ''],
+        );
+        return result.rows[0] ?? null;
+      };
+      const replay = episodeRequest ? await withUser(pool, input.userId, existingEpisode) : null;
+      if (replay)
+        return { record: toRecord(replay), deduplicated: true, superseded: false, embedded: false };
       const vector = input.embedding ? [...input.embedding] : (await tryEmbed([content]))?.[0];
 
       return withUser(pool, input.userId, async (client) => {
+        // La verifica e l'inserimento devono essere seriali per utente, inclusi i quasi-duplicati.
+        // Gli embedding sono già calcolati: nessun lock viene tenuto durante una chiamata esterna.
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+          `memory:${input.userId}`,
+        ]);
+        const completedEpisode = await existingEpisode(client);
+        if (completedEpisode)
+          return {
+            record: toRecord(completedEpisode),
+            deduplicated: true,
+            superseded: false,
+            embedded: Boolean(vector),
+          };
         // 1) duplicato esatto (normalizzato)
         const exact = await client.query<Row>(
           `SELECT ${COLS} FROM memories WHERE user_id = $1 AND content_hash = $2 AND status IN ('active','disputed')`,

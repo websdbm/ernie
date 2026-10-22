@@ -30,6 +30,10 @@ export const envSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   REDIS_URL: redisUrl,
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  TTS_ENABLED: z.enum(['true', 'false']).default('true'),
+  TTS_VOICE_ID: z.string().min(1).optional(),
+  TTS_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
+  TTS_USD_PER_M_BYTES: z.coerce.number().positive().default(10),
   OPENAI_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   /** Stessa chiave con il nome usato dall'utente nel .env. */
@@ -43,6 +47,10 @@ export const envSchema = z.object({
   WS_ALLOWED_ORIGINS: z.string().default(''),
   /** Tetto di spesa LLM giornaliero per utente, in USD, se non impostato in users.settings. */
   LLM_DAILY_BUDGET_USD: z.coerce.number().min(0).default(2),
+  SSH_MASTER_KEY_B64: z
+    .string()
+    .regex(/^[A-Za-z0-9+/]{43}=$/)
+    .optional(),
   MODEL_LIGHT: z.string().min(1).default('anthropic/claude-haiku-5.5'),
   MODEL_STANDARD: z.string().min(1).default('anthropic/claude-sonnet-5.5'),
   MODEL_HEAVY: z.string().min(1).default('anthropic/claude-opus-5.5'),
@@ -80,6 +88,8 @@ export const envSchema = z.object({
   BRAIN_REMOTES: z.string().default(''),
   BRAIN_DEPLOY_KEY_B64: z.string().optional(),
   BRAIN_SYNC_INTERVAL_S: z.coerce.number().int().min(0).max(86_400).default(300),
+  /** Riordino automatico: minimo effettivo 24 ore, anche dopo errori; 0 lo disabilita. */
+  BRAIN_REVIEW_INTERVAL_S: z.coerce.number().int().min(0).max(604_800).default(86_400),
   BRAIN_GIT_NAME: z.string().default('Ernie'),
   BRAIN_GIT_EMAIL: z.string().default('ernie@eklettica.it'),
   /** Inoltro email al second brain (B3): segreto del webhook di Brevo e dominio di ricezione (record MX). */
@@ -124,6 +134,12 @@ export interface AppConfig {
     readonly appPassword: string | undefined;
     readonly poolMax: number;
   };
+  readonly speech: {
+    readonly enabled: boolean;
+    readonly voiceId: string | undefined;
+    readonly timeoutMs: number;
+    readonly usdPerMillionBytes: number;
+  };
   readonly redis: { readonly url: string };
   readonly ws: { readonly allowedOrigins: readonly string[] };
   readonly llm: {
@@ -158,9 +174,11 @@ export interface AppConfig {
     readonly remotes: ReadonlyArray<readonly [string, string]>;
     readonly deployKeyB64?: string;
     readonly syncIntervalSeconds: number;
+    readonly reviewIntervalSeconds: number;
     readonly author: { readonly name: string; readonly email: string };
     readonly inbound?: { readonly secret: string; readonly domain: string };
   };
+  readonly ssh: { readonly masterKey?: string };
   readonly tools: {
     readonly categories: readonly string[];
     readonly approvalTtlSeconds: number;
@@ -254,6 +272,12 @@ export function toAppConfig(env: Env): AppConfig {
       appPassword: env.APP_DB_PASSWORD,
       poolMax: env.DATABASE_POOL_MAX,
     },
+    speech: {
+      enabled: env.TTS_ENABLED === 'true',
+      voiceId: env.TTS_VOICE_ID,
+      timeoutMs: env.TTS_TIMEOUT_MS,
+      usdPerMillionBytes: env.TTS_USD_PER_M_BYTES,
+    },
     ws: {
       allowedOrigins: env.WS_ALLOWED_ORIGINS.split(',')
         .map((o) => o.trim())
@@ -294,6 +318,7 @@ export function toAppConfig(env: Env): AppConfig {
         ),
       ...(env.BRAIN_DEPLOY_KEY_B64 ? { deployKeyB64: env.BRAIN_DEPLOY_KEY_B64 } : {}),
       syncIntervalSeconds: env.BRAIN_SYNC_INTERVAL_S,
+      reviewIntervalSeconds: env.BRAIN_REVIEW_INTERVAL_S,
       ...(env.BRAIN_INBOUND_SECRET && env.BRAIN_INBOUND_DOMAIN
         ? {
             inbound: {
@@ -304,6 +329,7 @@ export function toAppConfig(env: Env): AppConfig {
         : {}),
       author: { name: env.BRAIN_GIT_NAME, email: env.BRAIN_GIT_EMAIL },
     },
+    ssh: { ...(env.SSH_MASTER_KEY_B64 ? { masterKey: env.SSH_MASTER_KEY_B64 } : {}) },
     tools: {
       categories: csv(env.TOOL_CATEGORIES),
       approvalTtlSeconds: env.TOOL_APPROVAL_TTL_S,
@@ -392,11 +418,13 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
     router: config.router,
     memory: config.memory,
     tools: config.tools,
+    ssh: { configured: Boolean(config.ssh.masterKey) },
     brain: {
       dir: config.brain.dir,
       remotes: config.brain.remotes.map(([u, url]) => [u, url]),
       deployKey: present(config.brain.deployKeyB64),
       syncIntervalSeconds: config.brain.syncIntervalSeconds,
+      reviewIntervalSeconds: config.brain.reviewIntervalSeconds,
     },
     automations: config.automations,
     push: {

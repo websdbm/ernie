@@ -1,5 +1,27 @@
 [
   {
+    "build": 96,
+    "date": "2026-10-22",
+    "title": "Una memoria più chiara e continua",
+    "items": [
+      {
+        "icon": "checkmark.seal",
+        "title": "Fatti con fonte e validità",
+        "detail": "Le schede distinguono informazioni confermate, da verificare o superate. Puoi consultare la fonte, le date di validità e le versioni precedenti."
+      },
+      {
+        "icon": "slider.horizontal.3",
+        "title": "Come lavora Ernie",
+        "detail": "Nelle impostazioni puoi aggiungere, modificare, disattivare ed eliminare le tue preferenze su risposte e organizzazione. Le ipotesi restano inattive finché non le confermi."
+      },
+      {
+        "icon": "arrow.triangle.branch",
+        "title": "Continuità tra conversazioni",
+        "detail": "Ernie consulta liste e attività aggiornate anche nelle nuove chat, senza duplicarle. La revisione generale evita nuove chiamate al modello sui contenuti già esaminati e invariati, senza aggiungere notifiche."
+      }
+    ]
+  },
+  {
     "build": 95,
     "date": "2026-10-22",
     "title": "Tre nuovi aspetti per Ernie",

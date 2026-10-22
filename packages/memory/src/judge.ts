@@ -111,6 +111,7 @@ export interface ApplyDeps {
     | 'recordEvent'
   >;
   readonly judge: Judge | null;
+  readonly checkBudget?: (userId: string) => Promise<void>;
 }
 
 const ymd = (d: Date) => romeDate(d);
@@ -147,6 +148,8 @@ export async function applyWithJudge(
   const judged = facts.map((_, i) => i).filter((i) => !dup[i] && (near[i]?.length ?? 0) > 0);
   let decisions: JudgeDecision[] = [];
   if (judged.length && deps.judge) {
+    // Il blocco budget non è un guasto del giudice: va propagato senza salvare né avanzare cursori.
+    await deps.checkBudget?.(userId);
     try {
       const out = await deps.judge({
         today,

@@ -71,14 +71,9 @@ struct BrainKnowledgeContent: View {
         VStack(alignment: .leading, spacing: 20) {
             if !knowledge.facts.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Fatti attuali").font(.headline).accessibilityAddTraits(.isHeader)
+                    Text("Informazioni raccolte").font(.headline).accessibilityAddTraits(.isHeader)
                     ForEach(knowledge.facts) { fact in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(fact.label).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
-                            Text(Markdown.render(BrainFormat.linkify(fact.value))).font(.body).foregroundStyle(Theme.ink)
-                            Text("Aggiornato \(BrainFormat.when(created: fact.updatedAt, from: nil, to: nil))")
-                                .font(.caption).foregroundStyle(Theme.inkSecondary)
-                        }.fixedSize(horizontal: false, vertical: true)
+                        BrainFactCard(fact: fact)
                     }
                 }
             }
@@ -100,6 +95,71 @@ struct BrainKnowledgeContent: View {
             Text("Per aggiornare fatti e orari, chiedilo a Ernie in chat.")
                 .font(.footnote).foregroundStyle(Theme.inkSecondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct BrainFactCard: View {
+    let fact: BrainFact
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(fact.label).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
+            Text(Markdown.render(BrainFormat.linkify(fact.value))).font(.body).foregroundStyle(Theme.ink)
+            Label(fact.statusLabel, systemImage: fact.status == "confirmed" ? "checkmark.seal" : "questionmark.circle")
+                .font(.caption.weight(.medium)).foregroundStyle(Theme.inkSecondary)
+            if let validity = fact.validityLabel(on: BrainAgendaQuery.day(Date(), timeZone: TimeZone.current.identifier)) {
+                Label(validity, systemImage: "calendar.badge.exclamationmark").font(.caption.weight(.semibold))
+            }
+            BrainFactValidity(from: fact.validFrom, until: fact.validUntil)
+            if let evidence = fact.evidence { BrainFactSource(evidence: evidence) }
+            else { Text("Fonte non registrata").font(.caption).foregroundStyle(Theme.inkSecondary) }
+            Text("Aggiornato \(BrainFormat.when(created: fact.updatedAt, from: nil, to: nil))")
+                .font(.caption).foregroundStyle(Theme.inkSecondary)
+            if let history = fact.history, !history.isEmpty {
+                DisclosureGroup("Versioni precedenti (\(history.count))") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(history.enumerated().reversed()), id: \.offset) { _, revision in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(revision.label): \(revision.value)").font(.subheadline)
+                                Text("Versione precedente · \(BrainFactPresentation.status(revision.status))")
+                                    .font(.caption).foregroundStyle(Theme.inkSecondary)
+                                BrainFactValidity(from: revision.validFrom, until: revision.validUntil)
+                                if let evidence = revision.evidence { BrainFactSource(evidence: evidence) }
+                                Text(BrainFormat.when(created: revision.updatedAt, from: nil, to: nil)).font(.caption)
+                            }
+                        }
+                    }.padding(.top, 6)
+                }.font(.caption)
+            }
+        }.fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct BrainFactValidity: View {
+    let from: String?
+    let until: String?
+    var body: some View {
+        if from != nil || until != nil {
+            Text("Validità: \(from.map { BrainFormat.when(created: $0, from: nil, to: nil) } ?? "inizio non indicato") → \(until.map { BrainFormat.when(created: $0, from: nil, to: nil) } ?? "fine non indicata")")
+                .font(.caption).foregroundStyle(Theme.inkSecondary)
+        }
+    }
+}
+private struct BrainFactSource: View {
+    let evidence: BrainFactEvidence
+    var body: some View {
+        DisclosureGroup(evidence.kindLabel) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(evidence.quote).font(.subheadline).textSelection(.enabled)
+                if let url = URL(string: evidence.ref), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
+                    Link("Apri fonte", destination: url)
+                } else if evidence.ref.hasSuffix(".md") && !evidence.ref.contains(":") && !evidence.ref.contains("..") {
+                    NavigationLink(value: BrainDestination.path(evidence.ref)) { Text("Apri scheda fonte") }
+                } else {
+                    Text(evidence.ref.hasPrefix("chat:") ? "Conversazione con Ernie" : evidence.ref)
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
+        }.font(.caption)
     }
 }
 

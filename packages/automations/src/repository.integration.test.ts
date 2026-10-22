@@ -203,6 +203,49 @@ describe.skipIf(!ready)('repository delle automazioni (Postgres, ruolo applicati
     expect(await repo.getRun(userB, run.id)).toBeNull();
   });
 
+  it('decisioni concorrenti su due approvazioni non si sovrascrivono', async () => {
+    const repo = createAutomationRepository(app);
+    const a = await repo.create(userA, {
+      key: 'parallel_approvals',
+      title: 'Parallele',
+      trigger: { type: 'webhook' },
+      action: { type: 'guided', instructions: 'Aggiungi quanto indicato.' },
+    });
+    const run = await repo.claimRun({
+      userId: userA,
+      automationId: a.id,
+      scheduledAt: new Date(),
+      dedupeKey: 'approval-test',
+      triggerType: 'webhook',
+      attempt: 1,
+    });
+    if (!run) throw new Error('run non creata');
+    const pendingActions = [1, 2].map(() => ({
+      approvalId: randomUUID(),
+      toolId: 'shopping_list_add',
+      args: {},
+      reason: 'test',
+      expiresAt: new Date().toISOString(),
+    }));
+    await repo.finishRun(userA, run.id, {
+      status: 'awaiting_approval',
+      outcome: { summary: 'Azioni', pendingActions },
+    });
+    await Promise.all(
+      pendingActions.map((_, i) =>
+        repo.updateRunOutcome(userA, run.id, {
+          summary: 'Azioni',
+          pendingActions: pendingActions.map((p, n) =>
+            n === i ? { ...p, decision: 'approved' as const, executed: true } : p,
+          ),
+        }),
+      ),
+    );
+    const final = await repo.getRun(userA, run.id);
+    expect(final?.outcome?.pendingActions?.every((p) => p.decision === 'approved')).toBe(true);
+    expect(final?.status).toBe('succeeded');
+  });
+
   it('azioni sospese: la run si ritrova dall’id di approvazione; notifiche lette e non lette', async () => {
     const repo = createAutomationRepository(app);
     const a = await repo.create(userA, {

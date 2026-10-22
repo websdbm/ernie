@@ -1,0 +1,13 @@
+# Staging3 soltanto: installare come docker-compose.override.yml accanto al Compose del progetto.
+# I DNS del server (resolvectl dns, verificati 17/10/2026) sono raggiunti direttamente:
+# il resolver loopback systemd 127.0.0.53 usato da Docker rootless dava EAI_AGAIN intermittenti.
+# Il DNS interno Docker continua a risolvere postgres e redis. Nessuna modifica al DNS dell'host.
+services:
+  api:
+    dns:
+      - 195.179.224.53
+      - 209.126.15.53
+  worker:
+    dns:
+      - 195.179.224.53
+      - 209.126.15.53

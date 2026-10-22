@@ -1,4 +1,4 @@
-import type { EventType, PayloadInputOf } from '@ernie/protocol';
+import { type EventType, type PayloadInputOf, parseClientEvent } from '@ernie/protocol';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type AuthContext, type Authenticator, extractBearer } from '../auth.js';
@@ -78,6 +78,15 @@ export function createAuthHook(authenticator: Authenticator, allowedOrigins: rea
 export async function registerWs(app: FastifyInstance, opts: WsPluginOptions): Promise<void> {
   if (!app.hasRequestDecorator('auth')) app.decorateRequest('auth', null);
   await app.register(websocket, { options: { maxPayload: 256 * 1024 } });
+  // Mantiene turno, conferme e routing durante brevi perdite di rete del telefono.
+  const sessions = new Map<string, { connection: ClientConnection; expiry?: NodeJS.Timeout }>();
+  app.addHook('onClose', async () => {
+    for (const entry of sessions.values()) {
+      clearTimeout(entry.expiry);
+      await entry.connection.close();
+    }
+    sessions.clear();
+  });
 
   app.get(
     opts.path ?? '/v1/ws',
@@ -88,16 +97,42 @@ export async function registerWs(app: FastifyInstance, opts: WsPluginOptions): P
         socket.close(1008, 'unauthorized');
         return;
       }
-      const conn = new ClientConnection(socket, auth, opts.connection);
-      opts.connections?.add(conn);
+      let conn: ClientConnection | undefined;
+      let key: string | undefined;
       socket.on('message', (data: Buffer | string) => {
+        if (!conn) {
+          try {
+            const event = parseClientEvent(JSON.parse(data.toString()));
+            if (event.type === 'session.start')
+              key = `${auth.userId}:${auth.apiKeyId}:${event.sessionId}`;
+          } catch {
+            /* handleRaw restituisce l'errore del protocollo */
+          }
+          const entry = key ? sessions.get(key) : undefined;
+          clearTimeout(entry?.expiry);
+          conn = entry?.connection ?? new ClientConnection(socket, auth, opts.connection);
+          conn.attach(socket, auth);
+          if (key) sessions.set(key, { connection: conn });
+          opts.connections?.add(conn);
+        }
         conn
           .handleRaw(data)
           .catch((err: unknown) => req.log.error({ err }, 'messaggio WebSocket non gestito'));
       });
       socket.on('close', () => {
+        if (!conn?.detach(socket)) return;
         opts.connections?.remove(conn);
-        void conn.close();
+        if (key) {
+          const entry = sessions.get(key);
+          const oldKey = key;
+          if (entry) {
+            entry.expiry = setTimeout(() => {
+              sessions.delete(oldKey);
+              void entry.connection.close();
+            }, 10 * 60_000);
+            entry.expiry.unref();
+          }
+        } else void conn.close();
       });
       socket.on('error', (err: Error) => {
         opts.connection.logger.warn({ err: err.message }, 'errore socket');

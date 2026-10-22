@@ -42,6 +42,18 @@ describe('API server', () => {
     expect(typeof body.uptimeSeconds).toBe('number');
   });
 
+  it('le risposte a richieste autenticate, inclusi errori, non sono memorizzabili in cache', async () => {
+    const app = await make({});
+    for (const url of ['/health', '/non-esiste']) {
+      const res = await app.inject({
+        method: 'GET',
+        url,
+        headers: { authorization: 'Bearer prova' },
+      });
+      expect(res.headers['cache-control']).toBe('no-store');
+    }
+  });
+
   it('il log della richiesta in arrivo non contiene la chiave passata in query string', async () => {
     const lines: string[] = [];
     const captured = createLogger({

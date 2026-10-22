@@ -1,3 +1,9 @@
+import {
+  enqueueConsolidation,
+  enqueueSessionSummary,
+  type MemoryQueue,
+  type TurnMemoryJobData,
+} from './queue.js';
 import type { MemoryRepository } from './repository.js';
 
 export interface TurnEpisodeInput {
@@ -36,4 +42,26 @@ export async function recordTurnEpisode(
     provenance: { source: 'system', trust: 1, sessionId: e.sessionId, requestId: e.requestId },
     confidence: 1,
   });
+}
+
+/** Ripetibile dopo un crash: episodio identificato dal requestId, code figlie deduplicate. */
+export async function processTurnMemory(
+  repo: MemoryRepository,
+  queue: MemoryQueue,
+  data: TurnMemoryJobData,
+): Promise<void> {
+  const info = data.episode;
+  await recordTurnEpisode(repo, info);
+  if (info.outcome === 'completed' && info.llmCalls > 0) {
+    await enqueueConsolidation(
+      queue,
+      {
+        userId: info.userId,
+        threadId: info.sessionId,
+        sessionId: info.sessionId,
+      },
+      data.consolidationDelayMs,
+    );
+    await enqueueSessionSummary(queue, { userId: info.userId, sessionId: info.sessionId });
+  }
 }

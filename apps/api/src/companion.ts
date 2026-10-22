@@ -157,7 +157,32 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       if (!deps.gateway) return null;
       const cached = cache.get(session.id);
       if (cached) return cached;
-      const souls = await deps.souls.loadForUser(auth.userId);
+      const coldStartedAt = performance.now();
+      const [souls, profile, semantic, links, effective, vocabulary] = await Promise.all([
+        deps.souls.loadForUser(auth.userId),
+        deps.profiles?.get(auth.userId).catch((err: unknown) => {
+          deps.logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'scheda anagrafica non letta',
+          );
+          return null;
+        }) ?? Promise.resolve(null),
+        deps.memories?.listActiveSemantic(auth.userId) ?? Promise.resolve([]),
+        deps.family?.list(auth.userId) ?? Promise.resolve([]),
+        currentSettings(auth),
+        (async () => {
+          try {
+            if (deps.lexicon && (await deps.lexicon.learningEnabled(auth.userId)))
+              return lexiconNote('', await deps.lexicon.listActive(auth.userId, 20));
+          } catch (err) {
+            deps.logger.warn(
+              { err: err instanceof Error ? err.message : String(err) },
+              'lessico non letto',
+            );
+          }
+          return '';
+        })(),
+      ]);
       const soul = assembleSoul({
         souls,
         contextTags: session.contextTags,
@@ -166,25 +191,14 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
 
       let memorySnapshot: string | undefined;
       // Scheda anagrafica prima di tutto il resto: nome, come chiamarlo, età, famiglia.
-      let profileText = '';
-      if (deps.profiles) {
-        try {
-          profileText = renderProfile(await deps.profiles.get(auth.userId));
-        } catch (err) {
-          deps.logger.warn(
-            { err: err instanceof Error ? err.message : String(err) },
-            'scheda anagrafica non letta',
-          );
-        }
-      }
+      const profileText = profile ? renderProfile(profile) : '';
       if (deps.memories) {
-        const snap = buildMemorySnapshot(await deps.memories.listActiveSemantic(auth.userId), {
+        const snap = buildMemorySnapshot(semantic, {
           maxChars: deps.snapshotMaxChars ?? 2000,
         });
         memorySnapshot = snap.text || undefined;
       }
       if (deps.family) {
-        const links = await deps.family.list(auth.userId);
         if (links.length) {
           const line = `Persone collegate (Famiglia): ${links.map((l) => `${l.label} (${l.relation})`).join(', ')}. Per un promemoria a una di loro l'utente dice «ricorda a <nome> di …» (skill Ricordami, senza modello). Puoi anche mandare loro messaggi: «scrivi a <nome> che …» lo fa la skill Messaggi; in forma libera («di' a Giorgio di venire a cena») usa family_message_send con il testo rivolto alla persona. Non dire che non puoi mandare messaggi ai familiari collegati.`;
           memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${line}` : line;
@@ -200,7 +214,6 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       }
       // Account seguito: un figlio (controllo genitori) o un nonno; le impostazioni effettive portano le skill
       // concesse e la parentela.
-      const effective = await currentSettings(auth);
       if (Array.isArray(effective.guardianAllowed)) {
         const allowed = new Set(effective.guardianAllowed as string[]);
         const off = [
@@ -215,24 +228,22 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       const remindersNote =
         "Promemoria, sveglie e appuntamenti: le frasi standard («ricordami di … alle …», «svegliami domani alle 6») le imposta da sola la skill Ricordami. Se una richiesta del genere arriva a te in forma libera, non spiegare come andrebbe detta e non chiedere di ripeterla: crea tu il promemoria con reminder_create, calcolando data e ora ISO con fuso dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvertimi alle 18», «un'ora prima»): eventAt = ora dell'appuntamento, at = ora dell'avviso. Sveglia: alarm true. «Ricordagli / ricordale / digli di …» si riferisce alla persona nominata poco prima: se è una persona collegata (Famiglia) usa forLabel con la sua etichetta, mai un promemoria per l'utente con «dirgli» nel testo. Legato a un luogo («quando arrivo a casa», «quando esco dal lavoro», «ogni volta che arrivo in palestra»): reminder_create con place {label, on: arrive|leave, repeat}; i luoghi sono nella scheda (Luoghi) con il nome che l'utente sceglie: indirizzo detto («casa mia è in via …», «lo studio di Giulia è in via …») → place_set con address; «salva questo posto come …», «qui è …» → place_set con here true; «rinomina X in Y» → place_rename; per un luogo senza indirizzo crea comunque il promemoria e chiedi l'indirizzo. «Che promemoria ho?» → reminder_list; annullare → reminder_cancel. Se la richiesta è ambigua tra funzioni diverse (promemoria, sentinella, nota nel second brain, lista della spesa…) o manca un dato essenziale con poche alternative, fai UNA domanda chiusa con present_choices e poi ricava tutto il resto dalla frase originale.";
       memorySnapshot = memorySnapshot ? `${memorySnapshot}\n\n${remindersNote}` : remindersNote;
+      memorySnapshot +=
+        '\n\nPiù promemoria nello stesso messaggio: separa gli impegni con orari o condizioni differenti e crea una chiamata reminder_create per ciascuno. Se l’utente raggruppa esplicitamente più commissioni alla stessa ora («comprare mocho e secchio e ritirare pacchi, tutto alle 18:30»), mantieni un solo avviso per quel gruppo. Una successiva richiesta («ricordami inoltre…») è un altro impegno: non copiarla nel titolo del primo. «Entro le 19» è una scadenza, non un orario di appuntamento o di avviso già concordato: chiedi quando avvisare, eventualmente proponendo un anticipo, senza inventare durate o spostare gli orari già espliciti. Puoi salvare gli impegni completi mentre chiedi il dato mancante per gli altri; dopo la risposta usa reminder_list per riconoscere quelli già salvati e non duplicarli.';
       // 16 ott 2026: il modello ha rimandato da solo un messaggio urgente partito ore prima, credendo di non averlo
       // mandato (l'aveva fatto la skill, senza strumenti visibili nella cronologia).
       memorySnapshot += `\n\nAzioni già fatte: nella cronologia alcune risposte le ha date una skill senza strumenti (promemoria, messaggi, liste); ciò che dicono di aver fatto è stato fatto davvero. Non ripetere e non «correggere» di tua iniziativa azioni passate (messaggi, promemoria, liste, impostazioni): rifalle solo se l'utente lo chiede nel messaggio attuale.`;
 
       // In fondo, così valgono su tutto il resto: le parole dell'utente (lessico imparato, se l'apprendimento è
       // acceso) e lo stile che ha scelto (richiesta dell'utente, 16 ott 2026).
-      if (deps.lexicon) {
-        try {
-          if (await deps.lexicon.learningEnabled(auth.userId)) {
-            const note = lexiconNote('', await deps.lexicon.listActive(auth.userId, 20));
-            if (note) memorySnapshot = `${memorySnapshot}\n\n${note}`;
-          }
-        } catch (err) {
-          deps.logger.warn(
-            { err: err instanceof Error ? err.message : String(err) },
-            'lessico non letto',
-          );
-        }
+      if (vocabulary) memorySnapshot = `${memorySnapshot}\n\n${vocabulary}`;
+      if (enabledSkillIds(effective).has('ssh')) {
+        memorySnapshot +=
+          '\n\nServer e siti: usa solo gli strumenti ssh_ del tuo account. Per qualsiasi modifica prepara ssh_plan con verifica, backup e recupero: la persona approva nel pannello Server e siti. Non affermare che un piano sia stato eseguito. Non chiedere chiavi o token in chat. Gli strumenti rifiutano un modello diverso da heavy.';
+      }
+      if (enabledSkillIds(effective).has('second_brain')) {
+        memorySnapshot +=
+          '\n\nSecond Brain: i fatti attuali e gli orari abituali si salvano nelle schede con brain_knowledge_update, dopo ricerca e lettura della persona/argomento. Le domande su sport, scuola, accompagnamento, ritiro o rientro in una data si verificano con brain_agenda (today/tomorrow sono calcolati nel fuso del telefono). Orari abituali e ricordi non implicano richieste di avviso: non creare reminder o Todo senza richiesta esplicita. Attività terminata non prova rientro a casa; assenza di attività non prova disponibilità. Se mancano orari strutturati consulta le note e segnala i dati sconosciuti.';
       }
       const style = styleNote(effective);
       if (style) memorySnapshot = `${memorySnapshot}\n\nCome parli: ${style}`;
@@ -241,7 +252,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       let tools: Parameters<typeof createCompanionAgent>[0]['tools'];
       if (deps.tools) {
         const ctxRef: ToolContextRef = { current: null };
-        const off = disabledToolIds(await currentSettings(auth));
+        const off = disabledToolIds(effective);
         const specs = deps.tools.registry
           .select({
             categories: deps.tools.categories,
@@ -285,6 +296,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           soulTokens: soul.tokenEstimate,
           model: companion.profile.modelId,
           snapshotChars: memorySnapshot?.length ?? 0,
+          coldStartMs: Math.round(performance.now() - coldStartedAt),
           tools: Object.keys(tools ?? {}),
         },
         'agente di sessione creato',

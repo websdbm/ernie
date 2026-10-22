@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   type ApplyDeps,
   applyWithJudge,
@@ -136,6 +136,26 @@ describe('applyWithJudge', () => {
     validFrom: new Date('2026-09-01T10:00:00Z'),
     sim: 0.71,
   };
+
+  it('propaga il blocco budget senza fallback che inserisca fatti non giudicati', async () => {
+    const f = fakeRepo([old]);
+    const judge = vi.fn(decide('contradicts'));
+    const checkBudget = vi.fn(async () => {
+      throw new Error('Ernie è in pausa');
+    });
+    await expect(
+      applyWithJudge(
+        { repo: f.repo, judge, checkBudget },
+        'u',
+        [fact()],
+        { source: 'assistant', trust: 0.8 },
+        '2026-10-13',
+      ),
+    ).rejects.toThrow('Ernie è in pausa');
+    expect(checkBudget).toHaveBeenCalledWith('u');
+    expect(judge).not.toHaveBeenCalled();
+    expect(f.calls).toEqual([]);
+  });
 
   it('smentita con evidenza: il vecchio si chiude e c’è l’evento; l’indice fuori intervallo è scartato', async () => {
     const f = fakeRepo([old]);

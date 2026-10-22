@@ -1,6 +1,9 @@
 import {
+  resolveShoppingTarget,
   type ShoppingList,
   type ShoppingListRepository,
+  shoppingAddRequest,
+  shoppingChoiceQuestion,
   toChooserBlock,
   toShoppingBlock,
 } from '@ernie/tools';
@@ -31,7 +34,7 @@ const QUANTITY =
   /^(?<q>(?:\d+(?:[.,]\d+)?|un|uno|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|mezzo|mezza)\s*(?:kg|g|l|litri?|litro|etti?|grammi?|chili?|chilo|pacchi?|pacco|confezioni?|confezione|bottiglie?|bottiglia|vasetti?|vasetto|scatole?|scatola|pezzi?)?)\s+(?:di\s+)?(?<n>.+)$/i;
 /** Nome della lista in coda alla frase: «… nella lista Esselunga», «… alla lista di Natale», «… lista «Casa»». */
 const LIST_HINT =
-  /\s+(?:nella|alla|dalla|sulla|in|nel|per la|della|la)\s+lista\s+(?:della\s+spesa\s+)?(?:chiamata\s+|di\s+nome\s+|di\s+|per\s+)?[«"']?(?<list>(?!della\s+spesa\b)[\p{L}\p{N}][\p{L}\p{N}' -]{0,39}?)[»"']?\s*$/iu;
+  /\s+(?:nella|alla|dalla|sulla|in|nel|per la|della|la)\s+lista\s+(?:della\s+spesa\s+)?(?:chiamata\s+|di\s+nome\s+|di\s+|per\s+)?(?<list>«[^»\r\n]{1,60}»|"[^"\r\n]{1,60}"|'[^'\r\n]{1,60}'|(?!della\s+spesa\b)[\p{L}\p{N}][\p{L}\p{N}' -]{0,59}?)\s*$/iu;
 
 export function splitItems(text: string): string[] {
   return text
@@ -57,7 +60,7 @@ export function parseItem(raw: string): { name: string; quantity?: string } {
 
 const cleanName = (s: string) =>
   s
-    .replace(/[«»"']/g, '')
+    .replace(/^[«"']|[»"']$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 const withList = <T extends object>(plan: T, list: string | undefined): T & { list?: string } =>
@@ -85,7 +88,18 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
     /^(?:crea(?:mi)?|fai|apri|nuova)\s+(?:una\s+)?(?:nuova\s+)?lista(?:\s+della\s+spesa)?(?:\s+(?:chiamata|di nome|per|di))?\s+(?<name>.+)$/iu.exec(
       original,
     );
-  if (m?.groups?.name) return { op: 'create', name: cleanName(m.groups.name) };
+  if (m?.groups?.name) {
+    const name = m.groups.name.trim();
+    const quotedName = /^(?:«[^»]+»|"[^"]+"|'[^']+')$/u.test(name);
+    // Una ricetta richiede lettura e aggiunta degli ingredienti: non trasformare tutta la richiesta
+    // nel nome di una lista vuota. Le istruzioni composte passano al modello senza scritture parziali.
+    if (
+      !quotedName &&
+      (/\b(?:ingredient[ei]|ricett[ae])\b|[«»".!?;\n]/iu.test(name) || cleanName(name).length > 60)
+    )
+      return null;
+    return { op: 'create', name: cleanName(name) };
+  }
   m = /^(?:rinomina|chiama)\s+(?:la\s+)?lista\s+(?<from>.+?)\s+(?:in|come)\s+(?<to>.+)$/iu.exec(
     original,
   );
@@ -235,14 +249,27 @@ export function createShoppingListSkill(repo: ShoppingListRepository): Determini
     original: string,
     createDefault: boolean,
   ): Promise<{ list: ShoppingList } | { reply: SkillReply }> => {
-    const r = await repo.resolve(userId, hint, { createDefault });
+    const r = await resolveShoppingTarget(repo, userId, hint, {
+      createDefault,
+      suggestExisting: createDefault,
+    });
     if (r.kind === 'list') return { list: r.list };
     if (r.kind === 'choose')
       return {
         reply: {
-          text: hint ? `Più liste somigliano a «${hint}»: quale?` : 'Quale lista? Tocca una lista.',
+          text: r.suggested
+            ? shoppingChoiceQuestion(r.lists)
+            : hint
+              ? `Più liste somigliano a «${hint}»: quale?`
+              : 'Quale lista? Tocca una lista.',
           actions: ['choose'],
-          blocks: [toChooserBlock(r.lists, 'Quale lista?', original)],
+          blocks: [
+            toChooserBlock(
+              r.lists,
+              r.suggested ? shoppingChoiceQuestion(r.lists) : 'Quale lista?',
+              original,
+            ),
+          ],
         },
       };
     return {
@@ -467,7 +494,7 @@ export function describe(p: ShoppingPlan): string {
   const items = (xs: readonly string[]) => joinIt(xs);
   switch (p.op) {
     case 'add':
-      return `aggiungi ${items(p.items.map((i) => (i.quantity ? `${i.quantity} ${i.name}` : i.name)))} nella lista {lista}`;
+      return shoppingAddRequest(p.items);
     case 'remove':
       return `togli ${items(p.names)} dalla lista {lista}`;
     case 'check':

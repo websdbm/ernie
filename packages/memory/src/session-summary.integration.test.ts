@@ -61,6 +61,15 @@ describe.skipIf(!ready)('riassunti di sessione (Postgres, RLS)', () => {
         fallback: true,
       }),
     ).toBe(2);
+    // Una run lenta/ritentata non deve sostituire il riassunto più recente né incrementarne la versione.
+    expect(
+      await store.save(userA, sessionId, {
+        sections: { ...sections, state: 'vecchio' },
+        coveredUntil: t,
+        messages: 14,
+        fallback: false,
+      }),
+    ).toBe(2);
     const got = await store.get(userA, sessionId);
     expect(got).toMatchObject({ messages: 28, version: 2, fallback: true });
     expect(got?.sections.state).toBe('dopo');

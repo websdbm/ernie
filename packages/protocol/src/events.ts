@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { ConfirmationPresentation } from './confirmation.js';
+import { TodoListBlock } from './todo.js';
 
 /**
  * Protocollo Ernie v1 — comunicazione bidirezionale client ⇄ backend (WebSocket o SSE).
@@ -134,6 +136,8 @@ export const SessionStarted = event(
     resumedFromSeq: z.number().int().nonnegative().optional(),
     /** Numero di eventi rinviati in replay dopo resumedFromSeq. */
     replayed: z.number().int().nonnegative().optional(),
+    /** Il client può rinviare lo stesso correlationId senza rieseguire azioni. */
+    safeRequestReplay: z.boolean().optional(),
   }),
 );
 
@@ -195,6 +199,8 @@ export const ToolConfirmationRequested = event(
     displayName: z.string().max(120).optional(),
     argsPreview: z.string().max(500).optional(),
     reason: z.string().max(300).optional(),
+    /** Riepilogo leggibile, aggiuntivo per i client precedenti. Nessun testo del modello. */
+    presentation: ConfirmationPresentation.optional(),
     expiresAt: z.iso.datetime(),
     /** v1.9: il tool ammette «Consenti sempre» (nessun effetto esterno). */
     allowAlways: z.boolean().optional(),
@@ -316,6 +322,9 @@ export const ListBlock = z.object({
     .max(100),
 });
 export const RecipeItem = z.object({
+  recipeId: z.uuid().optional(),
+  category: z.string().max(60).optional(),
+  tags: z.array(z.string().min(1).max(30)).max(10).optional(),
   title: z.string().min(1).max(120),
   time: z.string().max(40).optional(),
   servings: z.string().max(40).optional(),
@@ -439,7 +448,7 @@ export const ShoppingListsBlock = z.object({
       }),
     )
     .max(50),
-  pendingText: z.string().max(500).optional(),
+  pendingText: z.string().max(32_000).optional(),
 });
 /** Documenti letti (v1.5): scelta toccabile; l'app rimanda `pendingText` con il titolo al posto di `{documento}`. */
 export const DocumentsBlock = z.object({
@@ -637,6 +646,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   DocumentBlock,
   SchemaBlock,
   ShoppingListBlock,
+  TodoListBlock,
   ShoppingListsBlock,
   DocumentsBlock,
   RemindersBlock,

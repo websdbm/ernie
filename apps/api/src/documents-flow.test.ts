@@ -7,24 +7,27 @@ import {
 
 describe('richieste sui documenti', () => {
   it('riconosce il tipo di schema chiesto e il testo di default', () => {
-    expect(parseDocumentRequest(DEFAULT_DOCUMENT_PROMPT)).toEqual({ question: false });
+    expect(parseDocumentRequest(DEFAULT_DOCUMENT_PROMPT)).toEqual({ question: false, study: true });
     expect(parseDocumentRequest('fammi una linea del tempo')).toEqual({
       question: false,
+      study: true,
       schemaType: 'timeline',
     });
     expect(parseDocumentRequest('Riassumi e fai la mappa mentale')).toEqual({
       question: false,
+      study: true,
       schemaType: 'mindmap',
     });
     expect(parseDocumentRequest('schema a flusso')).toEqual({
       question: false,
+      study: true,
       schemaType: 'flow',
     });
     expect(
       parseDocumentRequest(
         'Riassumi questo documento per studiarlo e fammi lo schema a schema a frecce.',
       ),
-    ).toEqual({ question: false, schemaType: 'outline' });
+    ).toEqual({ question: false, study: true, schemaType: 'outline' });
   });
 
   it('distingue una domanda (modello) da un taglio particolare (focus)', () => {
@@ -35,9 +38,23 @@ describe('richieste sui documenti', () => {
     );
     expect(f).toEqual({
       question: false,
+      study: false,
       focus: 'Concentrati sulle date degli eventi e sui protagonisti principali',
       schemaType: 'timeline',
     });
+  });
+
+  it.each([
+    '',
+    'Leggi questo allegato.',
+    'Acquisisci questa ricetta',
+    'Non farmi uno schema, acquisisci la ricetta',
+    'Leggi la ricetta senza riassunto',
+    'Salva la ricetta',
+    'Ecco una foto',
+    'Ricetta con passaggi e tempi',
+  ])('non trasforma %j in studio', (text) => {
+    expect(parseDocumentRequest(text).study).toBe(false);
   });
 
   it('comando «schema «Titolo» come tipo»', () => {

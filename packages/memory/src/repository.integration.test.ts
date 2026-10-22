@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createPool, type Pool } from '@ernie/db';
 import { createLogger } from '@ernie/observability';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { consolidateThread, type Extractor } from './consolidate.js';
 import { createFakeEmbedder } from './embeddings.js';
 import { recordTurnEpisode } from './episodes.js';
@@ -103,6 +103,25 @@ describe.skipIf(!ready)('Memory Engine su Postgres (ruolo ernie_app, embedder fi
     expect(active.map((m) => m.content)).not.toContain('Vive a Padova');
   });
 
+  it('ricordi identici concorrenti sono una sola riga senza violazioni unique', async () => {
+    const r = repo();
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        r.remember({
+          userId: userB,
+          kind: 'semantic',
+          category: 'habit',
+          content: 'Pratica tiro con arco ogni domenica',
+          provenance: { source: 'user', trust: 1 },
+          skipNearDuplicate: true,
+        }),
+      ),
+    );
+    expect(new Set(results.map((x) => x.record.id)).size).toBe(1);
+    expect(results.filter((x) => !x.deduplicated)).toHaveLength(1);
+    expect((await r.getById(userB, results[0]?.record.id ?? ''))?.seenCount).toBe(8);
+  });
+
   it("ricerca ibrida: full-text e vettori fusi con RRF, solo ricordi attivi dell'utente", async () => {
     const r = repo();
     await r.remember({
@@ -177,6 +196,115 @@ describe.skipIf(!ready)('Memory Engine su Postgres (ruolo ernie_app, embedder fi
     ).toBe(false);
     expect(await r.purge(owner, 0)).toBeGreaterThanOrEqual(0);
     expect(await r.forgetAll(userB)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('episodi idempotenti per richiesta: retry non reinserisce né ricalcola embedding; richieste distinte restano distinte', async () => {
+    const embedder = createFakeEmbedder(1536);
+    const embed = vi.spyOn(embedder, 'embed');
+    const r = createMemoryRepository(app, embedder, { logger });
+    const requestId = randomUUID();
+    const episode = {
+      userId: userA,
+      sessionId: randomUUID(),
+      requestId,
+      userText: `Episodio ${randomUUID()}`,
+      route: 'llm',
+      modelClass: 'standard',
+      outcome: 'completed' as const,
+      costUsd: 0,
+      llmCalls: 1,
+      toolCalls: 0,
+      latencyMs: 100,
+    };
+    await recordTurnEpisode(r, episode);
+    await recordTurnEpisode(r, { ...episode, latencyMs: 900 });
+    expect(embed).toHaveBeenCalledTimes(1);
+    let rows = await owner.query(
+      "SELECT id, seen_count, content FROM memories WHERE user_id=$1 AND provenance->>'requestId'=$2",
+      [userA, requestId],
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0]?.seen_count).toBe(1);
+    await Promise.all(Array.from({ length: 4 }, () => recordTurnEpisode(r, episode)));
+    expect(embed).toHaveBeenCalledTimes(1);
+    const second = randomUUID();
+    await recordTurnEpisode(r, { ...episode, requestId: second });
+    rows = await owner.query(
+      "SELECT id FROM memories WHERE user_id=$1 AND provenance->>'requestId'=ANY($2::text[])",
+      [userA, [requestId, second]],
+    );
+    expect(rows.rows).toHaveLength(2);
+    // Il protocollo deduplica per sessione: lo stesso correlationId in un'altra sessione è un altro turno.
+    await recordTurnEpisode(r, { ...episode, sessionId: randomUUID() });
+    rows = await owner.query(
+      "SELECT id FROM memories WHERE user_id=$1 AND provenance->>'requestId'=$2",
+      [userA, requestId],
+    );
+    expect(rows.rows).toHaveLength(2);
+  });
+
+  it('consolidamento non perde i primi messaggi quando il backlog supera 24 righe', async () => {
+    const messages = Array.from({ length: 50 }, (_, i) => ({
+      role: i % 2 ? 'assistant' : 'user',
+      content: `Messaggio ${i}`,
+      createdAt: new Date(1_800_000_000_000 + i * 1000),
+    }));
+    const seen: string[] = [];
+    const deps = {
+      pool: app,
+      repo: repo(),
+      threads: { recall: async () => ({ messages }) },
+      gateway: null as never,
+      recorder: { record: async () => {} },
+      logger,
+      extractor: async (lines: readonly { text: string }[]) => {
+        seen.push(...lines.map((l) => l.text));
+        return { facts: [] };
+      },
+      judge: null,
+    };
+    const data = { userId: userA, threadId: `t-${randomUUID()}`, sessionId: null };
+    await consolidateThread(deps, data);
+    expect(seen).toEqual(messages.map((m) => m.content));
+    await consolidateThread(deps, data);
+    expect(seen).toHaveLength(50);
+  });
+
+  it('budget esaurito dopo un batch: non chiama altri estrattori e riprende dal cursore completato', async () => {
+    const messages = Array.from({ length: 50 }, (_, i) => ({
+      role: 'user',
+      content: `Budget messaggio ${i}`,
+      createdAt: new Date(1_800_000_000_000 + i * 1000),
+    }));
+    let checks = 0;
+    const seen: string[] = [];
+    const deps = {
+      pool: app,
+      repo: repo(),
+      threads: { recall: async () => ({ messages }) },
+      gateway: null as never,
+      recorder: { record: async () => {} },
+      logger,
+      checkBudget: async () => {
+        if (++checks > 1) throw new Error('budget esaurito');
+      },
+      extractor: async (lines: readonly { text: string }[]) => {
+        seen.push(...lines.map((l) => l.text));
+        return { facts: [] };
+      },
+      judge: null,
+    };
+    const data = { userId: userA, threadId: `budget-${randomUUID()}`, sessionId: null };
+    await expect(consolidateThread(deps, data)).rejects.toThrow('budget esaurito');
+    expect(seen).toEqual(messages.slice(0, 24).map((m) => m.content));
+    const cursor = await owner.query(
+      'SELECT last_message_at, processed FROM memory_cursors WHERE thread_id=$1',
+      [data.threadId],
+    );
+    expect(cursor.rows[0]?.last_message_at).toEqual(messages[23]?.createdAt);
+    expect(cursor.rows[0]?.processed).toBe(24);
+    await consolidateThread({ ...deps, checkBudget: async () => {} }, data);
+    expect(seen).toEqual(messages.map((m) => m.content));
   });
 
   it('consolidamento con estrattore sostitutivo: cursore, inserimento e supersessione', async () => {

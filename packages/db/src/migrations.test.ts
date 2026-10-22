@@ -93,6 +93,25 @@ describe.skipIf(!DATABASE_URL)(
       expect(info.serverVersion).toMatch(/PostgreSQL/);
     });
 
+    it('non richiede una seconda connessione mentre tiene il lock delle migrazioni', async () => {
+      const single = createPool({
+        connectionString: DATABASE_URL as string,
+        max: 1,
+        connectionTimeoutMillis: 500,
+      });
+      const isolated = await tempDir({ '0001_noop.sql': 'SELECT 1;' });
+      const singleTable = `${table}_single`;
+      try {
+        expect(
+          (await runMigrations(single, { dir: isolated, table: singleTable })).applied,
+        ).toHaveLength(1);
+      } finally {
+        await single.end();
+        await pool.query(`DROP TABLE IF EXISTS "${singleTable}"`);
+        await rm(isolated, { recursive: true, force: true });
+      }
+    });
+
     it('applica le migrazioni una sola volta ed è idempotente', async () => {
       const first = await runMigrations(pool, { dir, table });
       expect(first.applied.map((m) => m.file)).toEqual([

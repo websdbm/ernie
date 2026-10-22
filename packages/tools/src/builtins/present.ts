@@ -14,7 +14,12 @@ export const presentRecipesTool = defineTool({
     "Mostra all'utente da una a sei ricette come schede (titolo, tempo, porzioni, ingredienti, passaggi, fonte). Usalo ogni volta che proponi ricette, poi aggiungi nel testo solo un commento breve.",
   risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: false },
   timeoutMs: 2_000,
-  inputSchema: z.object({ recipes: z.array(RecipeItem).min(1).max(6) }),
+  inputSchema: z.object({
+    recipes: z
+      .array(RecipeItem.omit({ recipeId: true }))
+      .min(1)
+      .max(6),
+  }),
   outputSchema: z.object({ shown: z.number().int() }),
   execute: async ({ recipes }) => ({ shown: recipes.length }),
   present: ({ recipes }) => ({ kind: 'recipes', recipes }),

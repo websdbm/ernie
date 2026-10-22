@@ -17,7 +17,7 @@ export const GUARDIAN_EXTRAS = [
     id: 'web',
     title: 'Ricerca sul web',
     summary: 'Cerca su internet e legge le pagine.',
-    tools: ['web_search', 'web_fetch'],
+    tools: ['web_search', 'web_fetch', 'youtube_read'],
   },
 ] as const;
 

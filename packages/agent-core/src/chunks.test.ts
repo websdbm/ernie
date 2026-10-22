@@ -101,3 +101,26 @@ describe('mapFinishReason', () => {
     expect(mapFinishReason(undefined)).toBe('stop');
   });
 });
+
+it('un errore strutturato del tool non viene presentato come una lettura riuscita', () => {
+  const signal = interpretChunk(
+    {
+      type: 'tool-result',
+      payload: {
+        toolCallId: 'video',
+        toolName: 'youtube_read',
+        result: {
+          error: 'video_busy',
+          reason: 'Il servizio video è temporaneamente occupato.',
+          retryable: true,
+        },
+      },
+    },
+    new Map(),
+  );
+  expect(signal).toMatchObject({
+    kind: 'tool.completed',
+    payload: { ok: false, error: 'Il servizio video è temporaneamente occupato.' },
+  });
+  if (signal.kind === 'tool.completed') expect(signal.payload).not.toHaveProperty('resultPreview');
+});

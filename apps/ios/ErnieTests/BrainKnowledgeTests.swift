@@ -198,3 +198,53 @@ struct BrainKnowledgeTests {
         }
     }
 }
+
+struct BrainFactReliabilityTests {
+    @Test func vecchiFattiNonSonoConfermati() throws {
+        let json = #"{"id":"f","label":"Sport","value":"Nuoto","updatedAt":"2026-10-22T10:00:00Z"}"#
+        let fact = try JSONDecoder().decode(BrainFact.self, from: Data(json.utf8))
+        #expect(fact.statusLabel == "Da verificare")
+        #expect(fact.evidence == nil)
+        #expect(fact.history == nil)
+    }
+    @Test func validitaSeparataDallaConfermaEFontePreservata() throws {
+        let json = #"{"id":"f","label":"Sport","value":"Nuoto","updatedAt":"2026-10-22T10:00:00Z","status":"confirmed","validFrom":"2026-10-01","validUntil":"2026-10-22","evidence":{"kind":"user","ref":"chat:s:r","quote":"Ada fa nuoto"},"history":[{"label":"Sport","value":"Tennis","updatedAt":"2026-09-01T10:00:00Z","status":"uncertain"}]}"#
+        let fact = try JSONDecoder().decode(BrainFact.self, from: Data(json.utf8))
+        #expect(fact.statusLabel == "Confermato da fonte")
+        #expect(fact.validityLabel(on: "2026-10-22") == nil)
+        #expect(fact.validityLabel(on: "2026-10-23") == "Validità terminata")
+        #expect(fact.validityLabel(on: "2026-09-30") == "Non ancora valido")
+        #expect(fact.history?.first?.value == "Tennis")
+        #expect(fact.evidence?.quote == "Ada fa nuoto")
+        #expect(try JSONDecoder().decode(BrainFact.self, from: JSONEncoder().encode(fact)) == fact)
+        #expect(BrainFactPresentation.status("future-status") == "Da verificare")
+        #expect(BrainFactPresentation.status("superseded") == "Superato")
+    }
+}
+
+@MainActor struct BrainReliabilityRenderTests {
+    @Test func renderStatiEFontiInChiaroScuro() throws {
+        let directory = URL(fileURLWithPath: "/tmp/ernie-brain-reliability-20261022/renders")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (name, scheme, width, size) in [("light", ColorScheme.light, CGFloat(390), DynamicTypeSize.large),
+                                           ("dark", ColorScheme.dark, CGFloat(390), DynamicTypeSize.large),
+                                           ("accessible", ColorScheme.dark, CGFloat(320), DynamicTypeSize.xxxLarge)] {
+            let evidence = BrainFactEvidence(kind: "user", ref: "chat:fixture:turn", quote: "I genitori di Ada vivono a Roma.")
+            let facts: [BrainFact] = [
+                .init(id: "family", label: "Casa dei genitori", value: "Roma", updatedAt: "2026-10-22T10:00:00Z", status: "confirmed", evidence: evidence),
+                .init(id: "home", label: "Domicilio di Ada", value: "Da chiarire; la casa dei genitori non indica il suo domicilio", updatedAt: "2026-10-22T10:00:00Z", status: "uncertain"),
+                .init(id: "sport", label: "Sport", value: "Tennis", updatedAt: "2026-09-01T10:00:00Z", status: "superseded", validUntil: "2026-09-30"),
+            ]
+            let content = BrainKnowledgeContent(knowledge: .init(version: 1, facts: facts, routines: []))
+                .padding(20).frame(width: width).background(Theme.surface)
+                .environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
+                .environment(\.locale, Locale(identifier: "it_IT"))
+            let renderer = ImageRenderer(content: content)
+            renderer.scale = 2
+            let image = try #require(renderer.uiImage)
+            #expect(image.size.width == width)
+            try #require(image.pngData()).write(to: directory.appendingPathComponent("facts-\(name).png"))
+        }
+        print("FACT_RELIABILITY_PREVIEWS=\(directory.path)")
+    }
+}

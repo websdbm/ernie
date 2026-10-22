@@ -1,5 +1,6 @@
 export * from './agent.js';
 export * from './approvals.js';
+export * from './brain-review.js';
 export * from './chunks.js';
 export * from './clarify.js';
 export * from './commands.js';

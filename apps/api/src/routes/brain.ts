@@ -1,6 +1,7 @@
-import { type BrainService, NOTE_TYPES, type ReadResult } from '@ernie/brain';
+import { type BrainService, NOTE_TYPES, type ReadResult, resourceFromPath } from '@ernie/brain';
 import { type Pool, withUser } from '@ernie/db';
 import type { Logger } from '@ernie/observability';
+import { BrainAgendaQuerySchema, BrainKnowledgeUpdateSchema } from '@ernie/protocol';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
@@ -11,9 +12,11 @@ import {
   normalizeEmails,
   parseInboundPayload,
 } from '../brain-inbound.js';
+import type { BrainResourceSync } from '../brain-resources.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface BrainRoutesOptions {
+  readonly resources?: BrainResourceSync;
   readonly authenticator: Authenticator;
   readonly allowedOrigins: readonly string[];
   readonly brain: BrainService;
@@ -82,13 +85,14 @@ const ShareBody = z
   .refine((b) => Boolean(b.url) || Boolean(b.text?.trim()), { message: 'serve url o text' });
 
 /** Pagine generate da Ernie: dall'app non si modificano né si cancellano. */
-const GENERATED = new Set(['chi-sono', 'salute']);
+const GENERATED = new Set(['chi-sono', 'salute', 'ricetta', 'immagine']);
 
 const noteJson = (r: ReadResult) => {
   const n = r.note;
   return {
     note: {
       path: n.path,
+      resource: resourceFromPath(n.path),
       title: n.title,
       type: n.type,
       created: n.created,
@@ -100,8 +104,11 @@ const noteJson = (r: ReadResult) => {
       private: n.private,
       source: n.source ?? null,
       body: n.body,
+      overview: r.overview ?? null,
+      knowledge: n.knowledge ?? null,
     },
     backlinks: r.backlinks,
+    related: r.related ?? [],
   };
 };
 
@@ -167,7 +174,7 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
         opts.logger?.warn({ userId, from: m.from }, 'inoltro email: mittente non riconosciuto');
         continue;
       }
-      const seenKey = `brain:inbound:${m.messageId}`;
+      const seenKey = `brain:inbound:${userId}:${m.messageId}`;
       if (opts.firstSeen && !(await opts.firstSeen(seenKey, 7 * 86_400))) continue;
       const { title, body } = emailToNote(m);
       try {
@@ -189,9 +196,17 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
 
   await app.register(async (api) => {
     api.addHook('preValidation', createAuthHook(opts.authenticator, opts.allowedOrigins));
+    api.addHook('preHandler', async (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      if (!req.auth?.scopes.includes('chat'))
+        return reply
+          .code(403)
+          .send({ error: 'forbidden', message: 'Accesso al Second Brain non consentito.' });
+    });
 
     api.get('/v1/brain/notes', async (req, reply) => {
       const { userId } = requireAuth(req);
+      await opts.resources?.afterChange(userId);
       const q = ListQuery.safeParse(req.query);
       if (!q.success)
         return reply.code(400).send({ error: 'invalid_query', message: 'parametri non validi' });
@@ -206,8 +221,36 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
       return { notes };
     });
 
+    api.get('/v1/brain/directory', async (req) => {
+      const { userId } = requireAuth(req);
+      await opts.resources?.afterChange(userId);
+      return opts.brain.directory(userId, { includePrivate: true });
+    });
+
+    api.get('/v1/brain/agenda', async (req, reply) => {
+      const { userId } = requireAuth(req);
+      const input = BrainAgendaQuerySchema.safeParse(req.query);
+      if (!input.success)
+        return reply
+          .code(400)
+          .send({ error: 'invalid_query', message: 'Indica una data e un fuso orario validi.' });
+      return opts.brain.agenda(userId, { ...input.data, includePrivate: true });
+    });
+
+    api.patch('/v1/brain/knowledge', { bodyLimit: 120_000 }, async (req, reply) => {
+      const { userId } = requireAuth(req);
+      const input = BrainKnowledgeUpdateSchema.safeParse(req.body);
+      if (!input.success)
+        return reply.code(400).send({
+          error: 'invalid_knowledge',
+          message: 'Le informazioni o gli orari indicati non sono validi.',
+        });
+      return noteJson(await opts.brain.updateKnowledge(userId, input.data));
+    });
+
     api.get('/v1/brain/note', async (req, reply) => {
       const { userId } = requireAuth(req);
+      await opts.resources?.afterChange(userId);
       const q = NoteQuery.safeParse(req.query);
       const ref = q.success ? (q.data.path ?? q.data.title) : undefined;
       if (!ref)
@@ -241,7 +284,34 @@ export async function brainRoutes(app: FastifyInstance, opts: BrainRoutesOptions
           backlinks: citing.map((n) => n.title),
         };
       }
-      return noteJson(r);
+      const json = noteJson(r);
+      const resource = resourceFromPath(r.note.path);
+      return {
+        ...json,
+        note: {
+          ...json.note,
+          ...(resource && opts.resources
+            ? { resourceLinks: await opts.resources.links(userId, resource) }
+            : {}),
+        },
+      };
+    });
+
+    api.patch('/v1/brain/resources/:kind/:id/links', async (req, reply) => {
+      const { userId } = requireAuth(req);
+      const params = z
+        .object({ kind: z.enum(['recipe', 'media']), id: z.uuid() })
+        .safeParse(req.params);
+      const body = z
+        .object({ paths: z.array(z.string().min(1).max(300)).max(20) })
+        .strict()
+        .safeParse(req.body);
+      if (!params.success || !body.success)
+        return reply.code(400).send({ error: 'invalid_body', message: 'Collegamenti non validi.' });
+      const paths = await opts.resources?.setLinks(userId, params.data, body.data.paths);
+      if (!paths)
+        return reply.code(404).send({ error: 'not_found', message: 'Elemento non trovato.' });
+      return { paths };
     });
 
     // B3: nuova nota scritta a mano nell'app.

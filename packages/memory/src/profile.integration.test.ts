@@ -91,3 +91,65 @@ describe.skipIf(!ready)('scheda anagrafica su Postgres (RLS, consolidamento)', (
     expect((await profiles.get(other)).preferredName).toBeUndefined();
   });
 });
+
+// La serializzazione SQL impedisce che due heartbeat creino due revisioni della stessa unione.
+describe.skipIf(!ready)('identità familiari atomiche', () => {
+  it('due consolidamenti concorrenti producono una sola revisione e non toccano altri utenti', async () => {
+    const owner = createPool({ connectionString: OWNER_URL as string, max: 2 });
+    const u = new URL(OWNER_URL as string);
+    u.username = 'ernie_app';
+    u.password = APP_PASSWORD as string;
+    const app = createPool({ connectionString: u.toString(), max: 3 });
+    const user = randomUUID();
+    const other = randomUUID();
+    try {
+      await owner.query(
+        "INSERT INTO users (id, display_name) VALUES ($1, 'Merge test'), ($2, 'Other')",
+        [user, other],
+      );
+      const profiles = createProfileStore(app);
+      await profiles.save(
+        user,
+        {
+          family: [
+            {
+              id: 'a',
+              name: 'Anna Rossi',
+              relation: 'compagna',
+              birthDate: '1980-01-01',
+              meta: { source: 'user', at: '2026-01-01' },
+            },
+            {
+              id: 'b',
+              name: 'Anna',
+              relation: 'compagna',
+              notes: 'Scarpe 41',
+              meta: { source: 'user', at: '2026-01-01' },
+            },
+          ],
+          places: [],
+          meta: {},
+        },
+        [{ field: 'family', before: null, after: 'fixture' }],
+        'user',
+      );
+      const results = await Promise.all([
+        profiles.consolidateFamily(user, 'Anna Rossi', ['Anna']),
+        profiles.consolidateFamily(user, 'Anna Rossi', ['Anna']),
+      ]);
+      expect(results.filter((r) => r.changed)).toHaveLength(1);
+      expect((await profiles.get(user)).family).toHaveLength(1);
+      expect((await profiles.get(user)).family[0]?.notes).toBe('Scarpe 41');
+      expect((await profiles.get(other)).family).toEqual([]);
+      const rows = await owner.query(
+        'SELECT count(*)::int AS n FROM user_profile_revisions WHERE user_id = $1',
+        [user],
+      );
+      expect(rows.rows[0].n).toBe(2);
+    } finally {
+      await owner.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[user, other]]);
+      await app.end();
+      await owner.end();
+    }
+  });
+});

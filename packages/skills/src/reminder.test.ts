@@ -26,6 +26,67 @@ const local = (d: Date) => {
 };
 
 describe('parseReminderCommand', () => {
+  it('lascia al modello gli orari da memorizzare senza generare notifiche', () => {
+    for (const text of [
+      'Ricordati che Anna ha nuoto ogni mercoledì alle 18, senza notifiche',
+      'Ricorda che il mercoledì Anna ha sport alle 18',
+      'Ricordati che Anna ha nuoto domani alle 18',
+      'Ricordami di portare Anna ogni mercoledì alle 18, ma non voglio promemoria',
+      'Salva nel Second Brain: ricordami che Anna ha sport ogni mercoledì alle 18',
+      'Ho il dentista alle 19, senza avvisi',
+    ])
+      expect(parseReminderCommand(text, NOW, TZ), text).toBeNull();
+    expect(
+      parseReminderCommand('Ricordami di portare Anna ogni mercoledì alle 18', NOW, TZ),
+    ).toMatchObject({ op: 'create', repeat: { kind: 'weekly' } });
+    expect(parseReminderCommand('Annulla tutti i promemoria', NOW, TZ)).toMatchObject({
+      op: 'cancel',
+    });
+  });
+
+  it('affida al modello richieste multiple e vincoli rimasti nel testo, senza unirli in un promemoria', () => {
+    for (const text of [
+      'Stasera ricordami di andare a comprare mocho e secchio e ritirare pacchi tutto alle 18:30 \nRicordami inoltre entro le 19 di passare in casa nuova per verificare stato lavori',
+      'ricordami alle 18 di chiamare Luca e alle 19 di uscire',
+      'ricordami di chiamare Luca tra 20 minuti e di uscire tra un’ora',
+      'ricordami di comprare il pane quando arrivo a casa e ricordami di telefonare alle 19',
+      'ricordami entro le 19 di passare in casa nuova',
+    ])
+      expect(parseReminderCommand(text, NOW, TZ), text).toBeNull();
+  });
+
+  it('mantiene il comando rapido per attività raggruppate alla stessa ora e appuntamenti con preavviso', () => {
+    expect(
+      parseReminderCommand(
+        'ricordami di comprare mocho e secchio e ritirare pacchi tutto alle 18:30',
+        NOW,
+        TZ,
+      ),
+    ).toMatchObject({ op: 'create', text: 'comprare mocho e secchio e ritirare pacchi tutto' });
+    const p = parseReminderCommand('ho il dentista alle 19, avvisami alle 18', NOW, TZ);
+    expect(p?.op).toBe('create');
+    if (p?.op === 'create' && p.eventAt) {
+      expect(local(p.at)).toBe('2026-10-11 18:00');
+      expect(local(p.eventAt)).toBe('2026-10-11 19:00');
+    } else throw new Error('atteso appuntamento con preavviso');
+  });
+
+  it('non scambia riferimenti ai promemoria nelle liste Todo per un comando di creazione', () => {
+    for (const text of [
+      'Per ora lascia fuori il meccanico. Converti questa lista Todo in una semplice lista senza orari né promemoria, conservando tutte le attività, i gruppi, le dipendenze e lo stato. Applica subito.',
+      'Trasforma questa lista in una lista senza promemoria',
+      'La lista deve avere gli orari ma non i promemoria',
+    ])
+      expect(parseReminderCommand(text, NOW, TZ)).toBeNull();
+    expect(parseReminderCommand('Promemoria: chiamare Marco alle 17', NOW, TZ)).toMatchObject({
+      op: 'create',
+      text: 'chiamare Marco',
+    });
+    expect(
+      parseReminderCommand('Creami un promemoria: chiamare Marco alle 17', NOW, TZ),
+    ).toMatchObject({ op: 'create', text: 'chiamare Marco' });
+  });
+
   it('oggi alle 17 (giorno omesso = oggi)', () => {
     const p = parseReminderCommand('Ricordami di uscire dal lavoro alle 17', NOW, TZ);
     expect(p?.op).toBe('create');
@@ -670,6 +731,20 @@ describe('promemoria legati a un luogo', () => {
     );
   });
 
+  it('non scambia date, orari o numeri di una routine per indirizzi da salvare', () => {
+    for (const text of [
+      'Il nuoto di Anna Verifica è annullato soltanto il 19 novembre 2031. Registra questa eccezione nella sua scheda del Second Brain; gli altri mercoledì rimangono uguali. Nessun promemoria.',
+      'Il nuoto di Anna è annullato il 19 novembre',
+      'Il mio allenamento è spostato alle 18:30',
+      'La scuola è chiusa il 25 dicembre',
+    ])
+      expect(parseReminderCommand(text, NOW, TZ), text).toBeNull();
+    for (const text of ['annullato il 19 novembre', 'spostato alle 18:30', 'chiusa per 3 giorni'])
+      expect(addressLike(text), text).toBeUndefined();
+    expect(addressLike('via 20 Settembre 3, Treviso')).toBe('via 20 Settembre 3, Treviso');
+    expect(addressLike('piazza Duomo, Milano')).toBe('piazza Duomo, Milano');
+  });
+
   it('luogo sconosciuto: crea il promemoria e chiede l’indirizzo; la risposta lo salva', async () => {
     const created: Array<Parameters<ReminderStore['create']>[1]> = [];
     let place: { label: string; address: string } | null = null;
@@ -1027,7 +1102,7 @@ describe('frasi ambigue fra skill (revisione del 16 ott 2026)', () => {
       NOW,
       TZ,
     );
-    expect(p).not.toHaveProperty('eventAt');
+    expect(p).toBeNull();
     expect(
       parseReminderCommand('ricorda alla mamma di chiamarmi domani alle 17', NOW, TZ),
     ).toMatchObject({

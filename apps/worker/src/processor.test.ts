@@ -13,6 +13,13 @@ describe('system processor', () => {
     expect(store.set).toHaveBeenCalledWith(HEARTBEAT_KEY, fixed.toISOString(), 'EX', 180);
   });
 
+  it('pubblica il battito per attivare la manutenzione del Brain', async () => {
+    const publishHeartbeat = vi.fn().mockResolvedValue(1);
+    const process = createSystemProcessor({ store: { set: vi.fn() }, logger, publishHeartbeat });
+    await process({ name: 'heartbeat', data: {} });
+    expect(publishHeartbeat).toHaveBeenCalledWith('ernie:system:heartbeat', expect.any(String));
+  });
+
   it('ping restituisce il payload', async () => {
     const store = { set: vi.fn() };
     const process = createSystemProcessor({ store, logger });

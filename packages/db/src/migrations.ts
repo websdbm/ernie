@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Pool } from './pool.js';
+import type { Pool, PoolClient } from './pool.js';
 
 /**
  * Runner minimale e deterministico di migrazioni SQL.
@@ -102,7 +102,7 @@ function quoteIdent(table: string): string {
   return `"${table}"`;
 }
 
-async function ensureTable(pool: Pool, table: string): Promise<void> {
+async function ensureTable(pool: Pool | PoolClient, table: string): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${quoteIdent(table)} (
       version     integer PRIMARY KEY,
@@ -113,7 +113,7 @@ async function ensureTable(pool: Pool, table: string): Promise<void> {
   `);
 }
 
-async function readApplied(pool: Pool, table: string): Promise<AppliedMigration[]> {
+async function readApplied(pool: Pool | PoolClient, table: string): Promise<AppliedMigration[]> {
   const res = await pool.query<{
     version: number;
     name: string;
@@ -166,9 +166,9 @@ export async function runMigrations(pool: Pool, opts: MigrateOptions = {}): Prom
 
   try {
     await client.query('SELECT pg_advisory_lock($1)', [LOCK_KEY]);
-    await ensureTable(pool, table);
+    await ensureTable(client, table);
     const files = await discoverMigrations(opts.dir);
-    const applied = await readApplied(pool, table);
+    const applied = await readApplied(client, table);
     verifyChecksums(files, applied);
     const appliedVersions = new Set(applied.map((a) => a.version));
     const pending = files.filter((f) => !appliedVersions.has(f.version));

@@ -49,8 +49,12 @@ export interface SessionStore {
   nextSeq(sessionId: string): Promise<number>;
   currentSeq(sessionId: string): Promise<number>;
   append(sessionId: string, event: AgentEvent): Promise<void>;
+  /** Numera e conserva l'evento in un solo round-trip Redis, prima del trasporto. */
+  appendWithSeq?(sessionId: string, event: AgentEvent): Promise<AgentEvent>;
   /** Eventi con seq > afterSeq, nell'ordine di emissione. */
   replay(sessionId: string, afterSeq: number): Promise<AgentEvent[]>;
+  /** Una richiesta logica si esegue una volta sola, anche dopo una riconnessione/riavvio. */
+  claimRequest(sessionId: string, correlationId: string): Promise<boolean>;
 }
 
 export interface SessionStoreOptions {
@@ -65,6 +69,19 @@ const key = {
   pinned: (id: string) => `ernie:sess:${id}:class_pinned`,
 };
 
+// Non decodificare/ricodificare con cjson: gli array vuoti diventerebbero oggetti.
+const APPEND_WITH_SEQ = `
+local n = redis.call('INCR', KEYS[1]) - 1
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+local event = '{"seq":' .. tostring(n) .. ',' .. ARGV[1]
+if ARGV[4] == '1' then
+  redis.call('RPUSH', KEYS[2], event)
+  redis.call('LTRIM', KEYS[2], -tonumber(ARGV[3]), -1)
+  redis.call('EXPIRE', KEYS[2], ARGV[2])
+end
+return event
+`;
+
 export function createSessionStore(
   pool: Pool,
   redis: Redis,
@@ -74,6 +91,17 @@ export function createSessionStore(
   const maxEvents = opts.logMaxEvents ?? 500;
 
   return {
+    async claimRequest(sessionId, correlationId) {
+      return (
+        (await redis.set(
+          `ernie:sess:${sessionId}:request:${correlationId}`,
+          '1',
+          'EX',
+          ttl,
+          'NX',
+        )) === 'OK'
+      );
+    },
     async ensure(userId, apiKeyId, sessionId, info) {
       return withUser(pool, userId, async (client) => {
         const existing = await client.query<{
@@ -197,9 +225,29 @@ export function createSessionStore(
     },
 
     async nextSeq(sessionId) {
-      const n = await redis.incr(key.seq(sessionId));
-      await redis.expire(key.seq(sessionId), ttl);
-      return n - 1; // la sequenza parte da 0
+      const results = await redis
+        .multi()
+        .incr(key.seq(sessionId))
+        .expire(key.seq(sessionId), ttl)
+        .exec();
+      if (!results) throw new Error('numerazione Redis interrotta');
+      for (const [error] of results) if (error) throw error;
+      return Number(results[0]?.[1]) - 1; // la sequenza parte da 0
+    },
+
+    async appendWithSeq(sessionId, event) {
+      const { seq: _seq, ...rest } = event;
+      const raw = await redis.eval(
+        APPEND_WITH_SEQ,
+        2,
+        key.seq(sessionId),
+        key.log(sessionId),
+        JSON.stringify(rest).slice(1),
+        ttl,
+        maxEvents,
+        !event.type.startsWith('avatar.') && shouldPersist(event) ? '1' : '0',
+      );
+      return JSON.parse(String(raw)) as AgentEvent;
     },
 
     async currentSeq(sessionId) {
@@ -209,12 +257,14 @@ export function createSessionStore(
 
     async append(sessionId, event) {
       if (!shouldPersist(event)) return;
-      await redis
+      const results = await redis
         .multi()
         .rpush(key.log(sessionId), JSON.stringify(event))
         .ltrim(key.log(sessionId), -maxEvents, -1)
         .expire(key.log(sessionId), ttl)
         .exec();
+      if (!results) throw new Error('persistenza Redis interrotta');
+      for (const [error] of results) if (error) throw error;
     },
 
     async replay(sessionId, afterSeq) {

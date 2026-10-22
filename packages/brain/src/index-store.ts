@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type Pool, withUser } from '@ernie/db';
-import type { BrainNote, NoteType } from './note.js';
+import { type BrainNote, type NoteType, visibleNoteBody } from './note.js';
+import { type BrainResource, resourceFromPath } from './resources.js';
 
 /** Embedder (stessa interfaccia dei documenti): null = solo full-text. */
 export interface BrainEmbedder {
@@ -9,6 +10,7 @@ export interface BrainEmbedder {
 }
 
 export interface NoteSummary {
+  readonly resource?: BrainResource | null;
   readonly path: string;
   readonly title: string;
   readonly type: NoteType;
@@ -31,6 +33,7 @@ export interface BrainHit extends NoteSummary {
 }
 
 export interface BrainQuery {
+  readonly excludeTypes?: readonly NoteType[];
   readonly query?: string | undefined;
   readonly type?: NoteType | undefined;
   /** Note che si riferiscono a date in questo intervallo (o create in esso, se senza data). */
@@ -91,7 +94,7 @@ export function chunkNote(
     if (t) out.push({ heading, content: t });
     buf = '';
   };
-  for (const para of note.body.split(/\n\s*\n/)) {
+  for (const para of visibleNoteBody(note.body).split(/\n\s*\n/)) {
     const p = para.trim();
     if (!p) continue;
     const h = /^#{1,6}\s+(.+)$/.exec(p.split('\n')[0] ?? '');
@@ -118,6 +121,8 @@ const vec = (v: readonly number[]) => `[${v.map((x) => (Number.isFinite(x) ? x :
 
 export const noteHash = (n: BrainNote) =>
   createHash('sha256')
+    // Aggiorna una volta anche gli indici esistenti che contenevano marcatori tecnici.
+    .update('visible-body-v1\0')
     .update(JSON.stringify({ ...n, path: undefined }))
     .digest('hex');
 
@@ -142,6 +147,7 @@ const COLS = `n.path, n.title, n.note_type, n.created, to_char(n.refers_from,'YY
 
 const summary = (r: Row): NoteSummary => ({
   path: r.path,
+  resource: resourceFromPath(r.path),
   title: r.title,
   type: r.note_type,
   created: r.created.toISOString(),
@@ -163,6 +169,7 @@ function filters(q: BrainQuery, start: number): { sql: string; params: unknown[]
     params.push(v);
     return `$${start + params.length - 1}`;
   };
+  if (q.excludeTypes?.length) parts.push(`NOT (n.note_type = ANY(${p(q.excludeTypes)}::text[]))`);
   if (!q.includePrivate) parts.push('n.private = false');
   if (q.type) parts.push(`n.note_type = ${p(q.type)}`);
   if (q.from)
@@ -216,7 +223,7 @@ export function createBrainIndex(pool: Pool, embedder: BrainEmbedder | null): Br
       );
       const vectors = await embed(texts);
       // Anteprima senza i titoletti markdown (le pagine iniziano con «# Titolo», già mostrato a parte).
-      const excerpt = note.body
+      const excerpt = visibleNoteBody(note.body)
         .split('\n')
         .filter((l) => !/^#{1,6}\s/.test(l.trim()))
         .join(' ')

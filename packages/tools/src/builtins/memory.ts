@@ -7,16 +7,18 @@ const romeDate = (d: Date): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
 
 /** Provenienza di un ricordo in parole, per il modello. */
-export function sourceLabel(source: string, confidence: number, seenCount: number): string {
+export function sourceLabel(source: string, _confidence: number, seenCount: number): string {
   const base =
-    source === 'assistant' || source === 'user'
-      ? confidence >= 0.85
-        ? "detto dall'utente in una conversazione"
-        : "dedotto da una conversazione con l'utente"
-      : source === 'system'
-        ? "registro delle attività svolte con l'utente"
-        : `fonte esterna (${source}): da verificare`;
-  return seenCount > 1 ? `${base}; confermato ${seenCount} volte` : base;
+    source === 'user'
+      ? "registrato da una conversazione con l'utente; verificare la fonte prima di citarlo come dichiarazione testuale"
+      : source === 'assistant'
+        ? "derivato dalla conversazione, non una dichiarazione testuale dell'utente"
+        : source === 'system'
+          ? "registro delle attività svolte con l'utente"
+          : `fonte esterna (${source}): da verificare`;
+  return seenCount > 1
+    ? `${base}; registrato ${seenCount} volte (ripetizione, non conferma indipendente)`
+    : base;
 }
 
 /** `memory_search` come ToolSpec del registry (legge dati privati, nessun effetto esterno). */
@@ -44,6 +46,9 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
           trusted: z.boolean(),
           /** Provenienza in parole (M9 A4): per rispondere a «perché lo sai?». */
           source: z.string(),
+          status: z.string(),
+          validFrom: z.string(),
+          validTo: z.string().nullable(),
         }),
       ),
     }),
@@ -54,6 +59,9 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
         ...(kinds ? { kinds } : {}),
         limit: limit ?? 5,
       });
+      if (hits.some((hit) => hit.provenance.trust < 0.5)) {
+        ctx.run.markUntrusted('memory_search:external-provenance');
+      }
       return {
         results: hits.map((h) => ({
           content: h.content,
@@ -62,6 +70,9 @@ export function createMemorySearchSpec(repo: MemoryRepository): ToolSpec {
           date: romeDate(h.createdAt),
           trusted: h.provenance.trust >= 0.5,
           source: sourceLabel(h.provenance.source, h.confidence, h.seenCount),
+          status: h.status,
+          validFrom: h.validFrom.toISOString(),
+          validTo: h.validTo?.toISOString() ?? null,
         })),
       };
     },

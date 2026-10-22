@@ -15,15 +15,27 @@ import {
 import { type GuardianRoutesOptions, guardianRoutes } from './routes/guardian.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
+import { type MediaRoutesOptions, mediaRoutes } from './routes/media.js';
+import {
+  type OperatingPreferenceRoutesOptions,
+  operatingPreferenceRoutes,
+} from './routes/operating-preferences.js';
+import { type PerformanceRoutesOptions, performanceRoutes } from './routes/performance.js';
 import { type ProfileRoutesOptions, profileRoutes } from './routes/profile.js';
+import { type RecipeRoutesOptions, recipeRoutes } from './routes/recipes.js';
 import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders.js';
 import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
+import { type SpeechRoutesOptions, speechRoutes } from './routes/speech.js';
+import { type TodoRoutesOptions, todoRoutes } from './routes/todo.js';
 import { type ToolRulesRoutesOptions, toolRulesRoutes } from './routes/tool-rules.js';
+import { type UsageRoutesOptions, usageRoutes } from './routes/usage.js';
 import { type WidgetRoutesOptions, widgetRoutes } from './routes/widget.js';
+import { type SshRoutesOptions, sshRoutes } from './ssh/routes.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
+  readonly operatingPreferences?: OperatingPreferenceRoutesOptions;
   readonly config: AppConfig;
   readonly logger: Logger;
   /** Controlli di readiness per nome (es. postgres, redis). */
@@ -34,10 +46,17 @@ export interface BuildServerOptions {
   readonly automations?: AutomationRoutesOptions;
   /** Profilo, impostazioni e dispositivi push (M7). */
   readonly me?: MeRoutesOptions;
+  readonly usage?: UsageRoutesOptions;
+  readonly performance?: PerformanceRoutesOptions;
   /** Catalogo delle skill con interruttori per utente. */
   readonly skills?: SkillsRoutesOptions;
+  readonly speech?: SpeechRoutesOptions;
   readonly documents?: DocumentsRoutesOptions;
   readonly shopping?: ShoppingRoutesOptions;
+  readonly todo?: TodoRoutesOptions;
+  readonly ssh?: SshRoutesOptions;
+  readonly recipes?: RecipeRoutesOptions;
+  readonly media?: MediaRoutesOptions;
   readonly reminders?: RemindersRoutesOptions;
   /** Scheda anagrafica dell'utente (13 ott 2026). */
   readonly profile?: ProfileRoutesOptions;
@@ -88,6 +107,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
+    if (req.auth || req.headers.authorization) reply.header('cache-control', 'no-store');
   });
 
   app.setErrorHandler((err: unknown, req, reply) => {
@@ -124,8 +144,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.ws) await registerWs(app, opts.ws);
   if (opts.automations) await app.register(automationRoutes, opts.automations);
   if (opts.me) await app.register(meRoutes, opts.me);
+  if (opts.operatingPreferences)
+    await app.register(operatingPreferenceRoutes, opts.operatingPreferences);
+  if (opts.usage) await app.register(usageRoutes, opts.usage);
+  if (opts.performance) await app.register(performanceRoutes, opts.performance);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
+  if (opts.speech) await app.register(speechRoutes, opts.speech);
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
+  if (opts.todo) await app.register(todoRoutes, opts.todo);
+  if (opts.ssh) await app.register(sshRoutes, opts.ssh);
   if (opts.shopping) await app.register(shoppingRoutes, opts.shopping);
   if (opts.reminders) await app.register(remindersRoutes, opts.reminders);
   if (opts.widget) await app.register(widgetRoutes, opts.widget);
@@ -135,6 +162,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.toolRules) await app.register(toolRulesRoutes, opts.toolRules);
   if (opts.profile) await app.register(profileRoutes, opts.profile);
   if (opts.brain) await app.register(brainRoutes, opts.brain);
+  if (opts.recipes) await app.register(recipeRoutes, opts.recipes);
+  if (opts.media) await app.register(mediaRoutes, opts.media);
 
   return app;
 }

@@ -2,6 +2,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { wrapLanguageModel } from 'ai';
 import type { ClassProfile, ModelClass, ReasoningEffort } from './models.js';
+import { createProviderCircuit } from './provider-circuit.js';
+import { retryModelCall } from './retry.js';
 
 export interface GatewayOptions {
   /** OpenRouter: via storica e riserva automatica quando Anthropic non risponde. */
@@ -100,6 +102,8 @@ export function createModelGateway(opts: GatewayOptions) {
     : null;
   const anthropic = opts.anthropicApiKey ? createAnthropic({ apiKey: opts.anthropicApiKey }) : null;
 
+  const circuits = new Map<string, ReturnType<typeof createProviderCircuit>>();
+
   const viaOpenRouter = (profile: ClassProfile, sessionId: string) =>
     openrouter?.chat(profile.modelId, {
       usage: { include: true },
@@ -113,6 +117,10 @@ export function createModelGateway(opts: GatewayOptions) {
   const viaAnthropic = (profile: ClassProfile, fallback: ReturnType<typeof viaOpenRouter>) => {
     if (!anthropic) return null;
     const base = anthropic(anthropicModelId(profile.modelId));
+    const circuit = circuits.get(profile.modelId) ?? createProviderCircuit();
+    circuits.set(profile.modelId, circuit);
+    const onFailure = (err: unknown) =>
+      opts.onFallback?.({ modelId: profile.modelId, error: errorText(err) });
     return wrapLanguageModel({
       model: base,
       middleware: {
@@ -136,22 +144,20 @@ export function createModelGateway(opts: GatewayOptions) {
         }),
         ...(fallback
           ? {
-              wrapStream: async ({ doStream, params }) => {
-                try {
-                  return await doStream();
-                } catch (err) {
-                  opts.onFallback?.({ modelId: profile.modelId, error: errorText(err) });
-                  return fallback.doStream(params);
-                }
-              },
-              wrapGenerate: async ({ doGenerate, params }) => {
-                try {
-                  return await doGenerate();
-                } catch (err) {
-                  opts.onFallback?.({ modelId: profile.modelId, error: errorText(err) });
-                  return fallback.doGenerate(params);
-                }
-              },
+              wrapStream: ({ doStream, params }) =>
+                circuit.run(
+                  doStream,
+                  () => fallback.doStream(params),
+                  onFailure,
+                  params.abortSignal,
+                ),
+              wrapGenerate: ({ doGenerate, params }) =>
+                circuit.run(
+                  doGenerate,
+                  () => fallback.doGenerate(params),
+                  onFailure,
+                  params.abortSignal,
+                ),
             }
           : {}),
       },
@@ -166,9 +172,17 @@ export function createModelGateway(opts: GatewayOptions) {
       const profile = opts.profiles[modelClass];
       const fallback = viaOpenRouter(profile, sessionId);
       const direct = viaAnthropic(profile, fallback);
-      if (direct) return { profile, model: direct, provider: 'anthropic' };
-      if (!fallback) throw new Error('Model Gateway: nessun provider disponibile');
-      return { profile, model: fallback, provider: 'openrouter' };
+      const selected = direct ?? fallback;
+      if (!selected) throw new Error('Model Gateway: nessun provider disponibile');
+      const model = wrapLanguageModel({
+        model: selected,
+        middleware: {
+          specificationVersion: 'v4',
+          wrapStream: ({ doStream, params }) => retryModelCall(doStream, params.abortSignal),
+          wrapGenerate: ({ doGenerate, params }) => retryModelCall(doGenerate, params.abortSignal),
+        },
+      });
+      return { profile, model, provider: direct ? 'anthropic' : 'openrouter' };
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { ShoppingListRepository } from '@ernie/tools';
+import type { ShoppingList, ShoppingListRepository } from '@ernie/tools';
 import { describe, expect, it, vi } from 'vitest';
 import { SkillRegistry } from './registry.js';
 import {
@@ -111,6 +111,34 @@ describe('parseShoppingCommand', () => {
     expect(splitItems('latte, pane e uova')).toEqual(['latte', 'pane', 'uova']);
     expect(parseItem('una bottiglia di olio')).toEqual({ name: 'olio', quantity: 'una bottiglia' });
   });
+
+  it('lascia al modello la creazione da una ricetta o con altre istruzioni', () => {
+    for (const text of [
+      'Crea una nuova lista della spesa chiamata «Cena di prova» con tutti gli ingredienti dell’ultima ricetta salvata.',
+      'crea una lista con gli ingredienti della ricetta',
+      'fai una lista per l’ultima ricetta',
+      'crea una lista Cena. Aggiungi latte e pane',
+    ])
+      expect(parseShoppingCommand(text)).toBeNull();
+    expect(parseShoppingCommand('crea una lista chiamata «Cena con amici»')).toEqual({
+      op: 'create',
+      name: 'Cena con amici',
+    });
+    expect(parseShoppingCommand('crea una lista chiamata «Ricette preferite»')).toEqual({
+      op: 'create',
+      name: 'Ricette preferite',
+    });
+  });
+
+  it('i nomi proposti dal widget conservano apostrofi, punteggiatura e fino a 60 caratteri', () => {
+    for (const name of ["Spesa D'Amico", 'Casa & ufficio (ottobre)', 'A'.repeat(60)]) {
+      expect(parseShoppingCommand(`aggiungi miele nella lista «${name}»`)).toEqual({
+        op: 'add',
+        items: [{ name: 'miele' }],
+        list: name,
+      });
+    }
+  });
 });
 
 describe('shopping skill + registry', () => {
@@ -126,7 +154,7 @@ describe('shopping skill + registry', () => {
     bought: 0,
   };
   const natale = { ...spesa, id: 'l2', name: 'Natale', open: 0 };
-  let lists = [spesa];
+  let lists: ShoppingList[] = [spesa];
   const item = (
     name: string,
     quantity: string | null = null,
@@ -213,7 +241,7 @@ describe('shopping skill + registry', () => {
     expect(reply?.text).toBe('Quale lista? Tocca una lista.');
     expect(reply?.blocks?.[0]).toMatchObject({
       kind: 'shopping_lists',
-      pendingText: 'aggiungi candele nella lista {lista}',
+      pendingText: 'aggiungi candele nella lista «{lista}»',
     });
     const n = registry.match('aggiungi le candele nella lista Natale');
     expect(n?.plan).toEqual({ op: 'add', items: [{ name: 'candele' }], list: 'Natale' });
@@ -228,6 +256,65 @@ describe('shopping skill + registry', () => {
   it('candidate per Jev per sovrapposizione lessicale', () => {
     expect(registry.candidates('mi servono le cose per la spesa')).toEqual(['shopping_list']);
     expect(registry.candidates('che tempo fa domani')).toEqual([]);
+  });
+
+  it('propone la lista esistente quando il riferimento è generico, senza creare o aggiungere prima del tap', async () => {
+    lists = [spesa];
+    vi.mocked(repo.add).mockClear();
+    vi.mocked(repo.createList).mockClear();
+    const m = registry.match('Aggiungi il miele nella lista di cose da acquistare.');
+    expect(m?.plan).toEqual({ op: 'add', items: [{ name: 'miele' }], list: 'cose da acquistare' });
+    const reply = await m?.skill.run(m.plan, ctx);
+    expect(reply?.text).toBe('Vuoi usare la lista «Spesa»?');
+    const block = reply?.blocks?.[0];
+    expect(block).toMatchObject({
+      kind: 'shopping_lists',
+      lists: [{ id: spesa.id, name: 'Spesa' }],
+    });
+    expect(repo.add).not.toHaveBeenCalled();
+    expect(repo.createList).not.toHaveBeenCalled();
+    if (block?.kind !== 'shopping_lists' || !block.pendingText)
+      throw new Error('Scelta senza richiesta');
+    const tapped = registry.match(block.pendingText.replace('{lista}', spesa.name));
+    expect(tapped?.plan).toEqual({ op: 'add', items: [{ name: 'miele' }], list: 'Spesa' });
+    await tapped?.skill.run(tapped.plan, ctx);
+    expect(repo.add).toHaveBeenCalledExactlyOnceWith('u', spesa.id, [{ name: 'miele' }], 'skill');
+  });
+
+  it('propone solo liste attive e il tap conserva quantità e tutte le voci', async () => {
+    lists = [spesa, natale, { ...spesa, id: 'archived', name: 'Vacanze', status: 'archived' }];
+    vi.mocked(repo.add).mockClear();
+    const m = registry.match('Aggiungi 2 kg di farina e il miele nella lista degli acquisti');
+    const reply = await m?.skill.run(m.plan, ctx);
+    const block = reply?.blocks?.[0];
+    expect(reply?.text).toBe('Quale lista vuoi usare?');
+    if (block?.kind !== 'shopping_lists' || !block.pendingText)
+      throw new Error('Scelta senza richiesta');
+    expect(block.lists.map((l) => l.id)).toEqual([spesa.id, natale.id]);
+    expect(repo.add).not.toHaveBeenCalled();
+    const tapped = registry.match(block.pendingText.replace('{lista}', natale.name));
+    await tapped?.skill.run(tapped.plan, ctx);
+    expect(repo.add).toHaveBeenCalledExactlyOnceWith(
+      'u',
+      natale.id,
+      [{ name: 'farina', quantity: '2 kg' }, { name: 'miele' }],
+      'skill',
+    );
+  });
+
+  it('un nome esplicito assente senza alternative non crea liste e non sposta azioni distruttive', async () => {
+    lists = [];
+    vi.mocked(repo.createList).mockClear();
+    const m = registry.match('aggiungi miele nella lista Natale');
+    const reply = await m?.skill.run(m.plan, ctx);
+    expect(reply?.blocks).toBeUndefined();
+    expect(repo.createList).not.toHaveBeenCalled();
+    lists = [spesa];
+    vi.mocked(repo.deleteList).mockClear();
+    const remove = registry.match('elimina la lista inesistente');
+    const result = await remove?.skill.run(remove.plan, ctx);
+    expect(result?.blocks).toBeUndefined();
+    expect(repo.deleteList).not.toHaveBeenCalled();
   });
 });
 

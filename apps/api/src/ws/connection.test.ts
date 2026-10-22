@@ -9,6 +9,12 @@ import {
   SequenceSource,
   shouldPersist,
 } from '@ernie/protocol';
+import {
+  createRecipesSkill,
+  createSecondBrainSkill,
+  createSshSkill,
+  SkillRegistry,
+} from '@ernie/skills';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../auth.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
@@ -32,7 +38,14 @@ function fakeStore(owner = auth.userId) {
   const tags_ = new Map<string, string[]>();
   const taints = new Map<string, string>();
   const pins = new Set<string>();
+  const requests = new Set<string>();
   const store: SessionStore = {
+    async claimRequest(id, correlationId) {
+      const key = `${id}:${correlationId}`;
+      if (requests.has(key)) return false;
+      requests.add(key);
+      return true;
+    },
     async ensure(userId, _k, sessionId) {
       const existing = sessions.get(sessionId);
       if (existing && existing !== userId) throw new SessionForbiddenError('x');
@@ -214,6 +227,91 @@ const field = <T>(e: AgentEvent | undefined, key: string): T | undefined =>
   (e?.payload as Record<string, T> | undefined)?.[key];
 
 describe('ClientConnection', () => {
+  it('registra un campione numerico per richiesta, senza duplicarlo al replay', async () => {
+    const recordPerformance = vi.fn();
+    const socket = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const conn = new ClientConnection(socket.socket, auth, deps({ recordPerformance }));
+    await conn.handleRaw(c.start());
+    const requestId = randomUUID();
+    await conn.handleRaw(c.message('Questo testo non deve entrare nelle metriche', requestId));
+    await vi.waitFor(() => expect(recordPerformance).toHaveBeenCalledTimes(1));
+    await conn.handleRaw(c.message('Questo testo non deve entrare nelle metriche', requestId));
+    expect(recordPerformance).toHaveBeenCalledTimes(1);
+    expect(recordPerformance.mock.calls[0]?.[1]).toMatchObject({
+      sessionId,
+      requestId,
+      source: 'server',
+      outcome: 'completed',
+      inputMode: 'text',
+    });
+    expect(recordPerformance.mock.calls[0]?.[1].metrics.completedMs).toBeGreaterThanOrEqual(
+      recordPerformance.mock.calls[0]?.[1].metrics.firstContentMs,
+    );
+    expect(JSON.stringify(recordPerformance.mock.calls)).not.toContain('Questo testo');
+  });
+
+  it('un guasto della telemetria non altera la risposta', async () => {
+    const socket = fakeSocket();
+    const c = client(randomUUID());
+    const conn = new ClientConnection(
+      socket.socket,
+      auth,
+      deps({
+        recordPerformance: () => {
+          throw new Error('storage non disponibile');
+        },
+      }),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Ciao'));
+    await vi.waitFor(() =>
+      expect(socket.sent.some((e) => e.type === 'assistant.completed')).toBe(true),
+    );
+    expect(socket.sent.some((e) => e.type === 'assistant.completed')).toBe(true);
+    expect(socket.sent.some((e) => e.type === 'error')).toBe(false);
+  });
+
+  it('reads a new video before selecting recipes, even when the router picked the cooking flow', async () => {
+    const registry = new SkillRegistry()
+      .register(createRecipesSkill())
+      .register(createSecondBrainSkill());
+    const router = fakeRouter({
+      route: 'llm',
+      modelClass: 'standard',
+      skillId: 'ricette',
+      riskSignal: 0,
+    } as RouteDecision);
+    const contexts: string[] = [];
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const conn = new ClientConnection(
+      s.socket,
+      auth,
+      deps(
+        {
+          skills: { registryFor: async () => registry },
+          runTurn: async (input: TurnInput) => {
+            contexts.push(input.memoryContext ?? '');
+            await input.emit('assistant.completed', { finishReason: 'stop' });
+          },
+        },
+        fakeStore(),
+        router,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('https://youtu.be/jNQXAC9IVRw'));
+    await tick();
+    expect(contexts[0]).toContain('youtube_read');
+    expect(contexts[0]).toContain('Second Brain attivo');
+    expect(contexts[0]).toContain('non culinario va riassunto');
+    expect(contexts[0]).not.toContain('Procedura «Riconosce ricette');
+    expect(contexts[0]).not.toContain('Procedura «Ricette»');
+    await conn.close();
+  });
+
   it('rifiuta messaggi prima di session.start e JSON non valido', async () => {
     const s = fakeSocket();
     const conn = new ClientConnection(s.socket, auth, deps());
@@ -261,10 +359,15 @@ describe('ClientConnection', () => {
     const second = fakeSocket();
     const conn2 = new ClientConnection(second.socket, auth, deps({}, st));
     await conn2.handleRaw(c.start(1)); // il client ha visto fino a seq 1
-    expect(second.sent[0]?.type).toBe('session.started');
-    expect(field<number>(second.sent[0], 'replayed')).toBe(3);
-    expect(second.sent.slice(1).map((e) => e.seq)).toEqual([2, 3, 4]);
-    expect(second.sent[0]?.seq).toBe(5);
+    expect(second.sent.at(-1)?.type).toBe('session.started');
+    expect(field<number>(second.sent.at(-1), 'replayed')).toBe(3);
+    expect(second.sent.slice(0, -1).map((e) => e.seq)).toEqual([2, 3, 4]);
+    expect(second.sent.at(-1)?.seq).toBe(5);
+    // I vecchi handshake non devono riavviare il recupero iOS durante il replay.
+    const before = second.sent.length;
+    await conn2.handleRaw(c.start(0));
+    expect(second.sent.slice(before).filter((e) => e.type === 'session.started')).toHaveLength(1);
+    expect(second.sent.at(-1)?.type).toBe('session.started');
   });
 
   it('nega una sessione di un altro utente', async () => {
@@ -329,6 +432,40 @@ describe('ClientConnection', () => {
     await conn2.handleRaw(c.message('tre'));
     await tick();
     expect((s.last().payload as { code: string }).code).toBe('budget_exceeded');
+  });
+
+  it('user.cancel durante il routing impedisce di avviare il modello', async () => {
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    const router = fakeRouter();
+    let release!: () => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>((r) => {
+      entered = r;
+    });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const decide = router.decide.bind(router);
+    router.decide = async () => {
+      entered();
+      await gate;
+      return decide();
+    };
+    const runTurn = vi.fn(async () => {});
+    const conn = new ClientConnection(s.socket, auth, deps({ runTurn }, fakeStore(), router));
+    await conn.handleRaw(c.start());
+    const id = randomUUID();
+    const handling = conn.handleRaw(c.message('parliamo di questa idea', id));
+    await waiting;
+    await conn.handleRaw(c.cancel(id));
+    release();
+    await handling;
+    expect(runTurn).not.toHaveBeenCalled();
+    expect(s.types()).toContain('assistant.cancelled');
+    await conn.handleRaw(c.message('un’altra idea'));
+    expect(runTurn).toHaveBeenCalledOnce();
   });
 
   it('user.cancel abortisce il turno in corso', async () => {
@@ -560,6 +697,120 @@ describe('ClientConnection: contesto del telefono (v1.10)', () => {
   });
 });
 
+describe('ClientConnection: preparazione parallela e persistenza', () => {
+  it('avvia le quattro letture indipendenti insieme e assembla in ordine con taint prima del modello', async () => {
+    const started: string[] = [];
+    const release = new Map<string, () => void>();
+    const read = async <T>(name: string, value: T) => {
+      started.push(name);
+      await new Promise<void>((resolve) => release.set(name, resolve));
+      return value;
+    };
+    const st = fakeStore();
+    const socket = fakeSocket();
+    const c = client(randomUUID());
+    let context = '';
+    let tainted = false;
+    const marks: string[] = [];
+    const conn = new ClientConnection(
+      socket.socket,
+      auth,
+      deps(
+        {
+          brainSuggest: () =>
+            read('brain', { path: 'test.md', title: 'BRAIN', passage: 'note', when: 'oggi' }),
+          memories: {
+            retrievalLimit: 3,
+            afterTurn: async () => {},
+            repo: {
+              search: () =>
+                read('retrieval', [
+                  {
+                    content: 'RETRIEVAL',
+                    provenance: { trust: 0.1 },
+                    createdAt: new Date(),
+                    category: 'fact',
+                  },
+                ]),
+              pendingNotices: () =>
+                read('memoryNotices', [{ id: 'n', event: 'closed', oldText: 'MEMORY_NOTICE' }]),
+              markNotified: async () => {
+                marks.push('memory');
+              },
+            } as never,
+          },
+          profiles: {
+            pendingNotices: () =>
+              read('profileNotices', [
+                { id: 'p', changes: [{ field: 'city', before: null, after: 'PROFILE_NOTICE' }] },
+              ]),
+            markNotified: async () => {
+              marks.push('profile');
+            },
+          } as never,
+          tools: {
+            categories: [],
+            setToolContext: (_s, ctx) => {
+              if (ctx) tainted = ctx.run.tainted;
+            },
+          },
+          runTurn: async (input) => {
+            context = input.memoryContext ?? '';
+            expect(tainted).toBe(true);
+          },
+        },
+        st,
+      ),
+    );
+    await conn.handleRaw(c.start());
+    const pending = conn.handleRaw(c.message('parliamo di questa cosa insieme'));
+    try {
+      await vi.waitFor(() => expect(started).toHaveLength(4));
+      expect(context).toBe('');
+      // Completamento inverso all'ordine di presentazione.
+      for (const name of ['profileNotices', 'memoryNotices', 'retrieval', 'brain'])
+        release.get(name)?.();
+      await pending;
+      await vi.waitFor(() => expect(context).toContain('PROFILE_NOTICE'));
+      const positions = ['BRAIN', 'RETRIEVAL', 'MEMORY_NOTICE', 'PROFILE_NOTICE'].map((x) =>
+        context.indexOf(x),
+      );
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
+      expect(marks).toEqual(['memory', 'profile']);
+    } finally {
+      for (const done of release.values()) done();
+      await conn.close();
+    }
+  });
+
+  it('non trasmette un evento prima che appendWithSeq abbia completato', async () => {
+    const st = fakeStore();
+    const socket = fakeSocket();
+    const c = client(randomUUID());
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const persisted: string[] = [];
+    st.store.appendWithSeq = async (id, event) => {
+      await gate;
+      const stored = { ...event, seq: await st.store.nextSeq(id) };
+      await st.store.append(id, stored);
+      persisted.push(stored.id);
+      return stored;
+    };
+    const conn = new ClientConnection(socket.socket, auth, deps({}, st));
+    const pending = conn.handleRaw(c.start());
+    await Promise.resolve();
+    expect(socket.sent).toHaveLength(0);
+    release();
+    await pending;
+    expect(socket.sent.length).toBeGreaterThan(0);
+    expect(socket.sent.every((e) => persisted.includes(e.id))).toBe(true);
+    await conn.close();
+  });
+});
+
 describe('ClientConnection: suggerimenti del second brain (B2)', () => {
   it('una nota pertinente arriva nel contesto una volta sola per conversazione', async () => {
     const st = fakeStore();
@@ -737,6 +988,78 @@ describe('ClientConnection: domanda in sospeso di una skill', () => {
 });
 
 describe('ClientConnection: controllo dei comandi rapidi (Jev)', () => {
+  it.each(['timeout', 'no_result'] as const)(
+    'un controllo %s non autorizza una scrittura rapida: la richiesta passa al modello',
+    async (failure) => {
+      const { createReminderSkill } = await import('@ernie/skills');
+      const create = vi.fn(async () => ({ id: 'r1', text: 'chiamare Luca', status: 'scheduled' }));
+      const registry = new SkillRegistry().register(
+        createReminderSkill({
+          create,
+          list: async () => [],
+          remove: async () => false,
+          update: async () => null,
+        } as never),
+      );
+      const runTurn = vi.fn(async (input: TurnInput) => {
+        expect(input.memoryContext).toContain('non è stato eseguito');
+        await input.emit('assistant.started', { route: 'llm' });
+        await input.emit('assistant.completed', { finishReason: 'stop' });
+      });
+      const s = fakeSocket();
+      const c = client(randomUUID());
+      const d = deps({
+        skills: { registryFor: async () => registry },
+        skillCheck: {
+          threshold: 0.5,
+          run: async () => {
+            if (failure === 'timeout') throw new Error('This operation was aborted');
+            return null;
+          },
+        },
+        runTurn,
+      });
+      const conn = new ClientConnection(s.socket, auth, d);
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('ricordami alle 18 di chiamare Luca'));
+      await tick();
+      expect(create).not.toHaveBeenCalled();
+      expect(runTurn).toHaveBeenCalledOnce();
+      expect(d.router.calls).toBe(1);
+    },
+  );
+
+  it('due richieste nello stesso messaggio arrivano al modello anche senza Jev', async () => {
+    const { createReminderSkill } = await import('@ernie/skills');
+    const create = vi.fn();
+    const registry = new SkillRegistry().register(
+      createReminderSkill({
+        create,
+        list: async () => [],
+        remove: async () => false,
+        update: async () => null,
+      }),
+    );
+    const runTurn = vi.fn(async (input: TurnInput) => {
+      await input.emit('assistant.started', { route: 'llm' });
+      await input.emit('assistant.completed', { finishReason: 'stop' });
+    });
+    const s = fakeSocket();
+    const c = client(randomUUID());
+    const d = deps({ skills: { registryFor: async () => registry }, runTurn });
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(
+      c.message(
+        'Stasera ricordami di andare a comprare mocho e secchio e ritirare pacchi tutto alle 18:30\nRicordami inoltre entro le 19 di passare in casa nuova per verificare stato lavori',
+      ),
+    );
+    await tick();
+    expect(create).not.toHaveBeenCalled();
+    expect(runTurn).toHaveBeenCalledOnce();
+    expect(d.router.calls).toBe(1);
+  });
+
   it('comando non fedele alla frase → niente comando rapido, decide il modello con la nota; fedele → si esegue', async () => {
     const { SkillRegistry, createReminderSkill } = await import('@ernie/skills');
     const created: Array<{ text: string }> = [];
@@ -778,9 +1101,7 @@ describe('ClientConnection: controllo dei comandi rapidi (Jev)', () => {
       }),
     );
     await conn.handleRaw(c.start());
-    await conn.handleRaw(
-      c.message('ricordami alle 18 di chiamare Luca e anche di comprare il pane alle 19'),
-    );
+    await conn.handleRaw(c.message('ricordami alle 18 di chiamare Luca, è importante'));
     await tick();
     expect(checks[0]?.planned).toMatch(/^promemoria «.+» per l’utente /);
     expect(created).toHaveLength(0);
@@ -837,6 +1158,38 @@ describe('ClientConnection: routing', () => {
     await conn.handleRaw(c.message('/contesto cucina'));
     await tick();
     expect(st.tags.get(sessionId)).toEqual(['cucina']);
+  });
+
+  it('SSH attiva forza heavy anche se il router propone standard', async () => {
+    const st = fakeStore(),
+      socket = fakeSocket(),
+      sessionId = randomUUID(),
+      c = client(sessionId);
+    const registry = new SkillRegistry().register(createSshSkill());
+    const seen: TurnInput[] = [];
+    const d = deps(
+      {
+        getCompanion: async (_auth, session) =>
+          ({
+            ...companion,
+            profile: { ...companion.profile, modelClass: session.modelClass },
+          }) as never,
+        skills: { registryFor: async () => registry },
+        runTurn: async (input) => {
+          seen.push(input);
+          await input.emit('assistant.completed', {});
+        },
+      },
+      st,
+      fakeRouter({ modelClass: 'standard', requestedModelClass: 'standard' }),
+    );
+    const conn = new ClientConnection(socket.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Controlla il mio server SSH'));
+    await tick();
+    expect(st.classes.get(sessionId)).toBe('heavy');
+    expect(seen[0]?.decision?.modelClass).toBe('heavy');
+    expect(d.invalidateCompanion).toHaveBeenCalledWith(sessionId);
   });
 
   it('una decisione Jev heavy alza la classe prima del turno e passa la decisione a runTurn', async () => {
@@ -947,6 +1300,48 @@ describe('ClientConnection: discesa della classe', () => {
 });
 
 describe('ClientConnection: contesto dei tool e contaminazione di sessione', () => {
+  it.each(['suggestion', 'transfer'] as const)(
+    'il contesto Brain %s conserva la provenienza non fidata',
+    async (kind) => {
+      const st = fakeStore();
+      const s = fakeSocket();
+      const sessionId = randomUUID();
+      const c = client(sessionId);
+      const contexts: Array<{ tainted: boolean; privateRead: boolean }> = [];
+      const conn = new ClientConnection(
+        s.socket,
+        auth,
+        deps(
+          {
+            ...(kind === 'suggestion'
+              ? {
+                  brainSuggest: async () => ({
+                    path: 'note/test.md',
+                    title: 'Importato',
+                    when: '2026-10-17',
+                    passage: 'Testo esterno',
+                  }),
+                }
+              : { brainTransfer: async () => 'Testo di un documento importato' }),
+            tools: {
+              categories: [],
+              setToolContext: (_id, ctx) => {
+                if (ctx)
+                  contexts.push({ tainted: ctx.run.tainted, privateRead: ctx.run.privateRead });
+              },
+            },
+          },
+          st,
+        ),
+      );
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('vorrei parlare di una ricetta'));
+      await tick();
+      expect(contexts[0]).toEqual({ tainted: true, privateRead: true });
+      expect(st.taints.get(sessionId)).toBe(`brain:${kind}`);
+    },
+  );
+
   it('imposta il contesto per il turno e, dopo contenuto non fidato, il turno successivo parte contaminato', async () => {
     const st = fakeStore();
     const s = fakeSocket();
@@ -982,4 +1377,343 @@ describe('ClientConnection: contesto dei tool e contaminazione di sessione', () 
     expect(second?.tainted).toBe(true);
     expect(contexts.filter((x) => x === null).length).toBeGreaterThanOrEqual(2);
   });
+});
+
+describe('ClientConnection: riconoscimento degli allegati', () => {
+  async function setup(enabled = ['documenti', 'ricette']) {
+    const { SkillRegistry, createDocumentsSkill, createRecipesSkill } = await import(
+      '@ernie/skills'
+    );
+    const registry = new SkillRegistry();
+    for (const skill of [createDocumentsSkill(), createRecipesSkill()])
+      if (enabled.includes(skill.id)) registry.register(skill);
+    const attached = vi.fn(async () => ({ text: 'Schema richiesto', blocks: [] }));
+    const schemaByTitle = vi.fn(async () => ({ text: 'Schema richiesto', blocks: [] }));
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const clarify = vi.fn(async () => null);
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        clarify: {
+          run: clarify,
+          known: async () => ({ people: [], places: [] }),
+          thresholds: { ambiguity: 0.5, correction: 0.5 },
+        },
+        documents: {
+          describe: async (_u, id) => ({ id, title: 'Foto', source: 'photo', pages: 1 }),
+          flow: { attached, schemaByTitle },
+        },
+        runTurn,
+      },
+      undefined,
+      fakeRouter({ skillId: 'documenti', ambiguity: 0.9 }),
+    );
+    const socket = fakeSocket();
+    const conn = new ClientConnection(socket.socket, auth, d);
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    const id = randomUUID();
+    const message = async (text: string, docId = id) => {
+      await conn.handleRaw(
+        c.message(text, randomUUID(), { attachments: [{ kind: 'document', id: docId }] }),
+      );
+      await tick();
+    };
+    return { attached, schemaByTitle, runTurn, message, id, socket, clarify };
+  }
+
+  it.each(['Leggi questo allegato.', 'Acquisisci questa ricetta', 'Salva questa ricetta'])(
+    'legge %j con l’id attuale, senza imporre Documenti anche se Jev lo propone',
+    async (text) => {
+      const t = await setup();
+      await t.message(text);
+      expect(t.attached).not.toHaveBeenCalled();
+      expect(t.clarify).not.toHaveBeenCalled();
+      expect(t.runTurn).toHaveBeenCalledOnce();
+      const input = t.runTurn.mock.calls[0]?.[0];
+      expect(input?.text).toBe(text); // La cronologia conserva il messaggio originale.
+      expect(input?.memoryContext).toContain(`id=${t.id}`);
+      expect(input?.memoryContext).toContain('document_get');
+      expect(input?.memoryContext).toContain('present_recipes');
+      expect(input?.memoryContext).toContain('non autorizza recipe_save');
+      expect(input?.memoryContext).not.toContain('Procedura «');
+      const nextId = randomUUID();
+      await t.message('Leggi questo allegato.', nextId);
+      const next = t.runTurn.mock.calls[1]?.[0];
+      expect(next?.memoryContext).toContain(`id=${nextId}`);
+      expect(next?.memoryContext).not.toContain(t.id);
+    },
+  );
+
+  it('mantiene il percorso di studio per la richiesta esplicita dei vecchi client', async () => {
+    const t = await setup();
+    await t.message('Riassumi questo documento per studiarlo e fammi lo schema.');
+    expect(t.attached).toHaveBeenCalledWith(expect.anything(), t.id, {
+      question: false,
+      study: true,
+    });
+    expect(t.runTurn).not.toHaveBeenCalled();
+  });
+
+  it('Documenti spento non avvia lo schema mentre Ricette può leggere l’allegato', async () => {
+    const t = await setup(['ricette']);
+    await t.message('Fammi lo schema');
+    expect(t.attached).not.toHaveBeenCalled();
+    expect(t.runTurn).toHaveBeenCalledOnce();
+    expect(t.runTurn.mock.calls[0]?.[0].memoryContext).toContain('present_recipes');
+  });
+
+  it('Ricette spento non introduce istruzioni per generare o salvare ricette', async () => {
+    const t = await setup(['documenti']);
+    await t.message('Acquisisci questa ricetta');
+    expect(t.attached).not.toHaveBeenCalled();
+    const context = t.runTurn.mock.calls[0]?.[0].memoryContext;
+    expect(context).toContain('skill Ricette è disattivata');
+    expect(context).not.toContain('present_recipes');
+  });
+});
+
+describe('recupero delle richieste senza duplicare le azioni', () => {
+  it('continua dopo il distacco, recupera il risultato e non ripete un invio con lo stesso id', async () => {
+    const st = fakeStore();
+    const first = fakeSocket();
+    const second = fakeSocket();
+    const c = client(randomUUID());
+    const correlationId = randomUUID();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const run = vi.fn(async (input: TurnInput) => {
+      await input.emit('assistant.started', {});
+      await input.emit('tool.started', { toolId: 'place_set', toolCallId: 'save' });
+      await gate;
+      expect(input.abortSignal.aborted).toBe(false);
+      await input.emit('tool.completed', {
+        toolId: 'place_set',
+        toolCallId: 'save',
+        ok: true,
+        durationMs: 10,
+      });
+      await input.emit('assistant.text.completed', { text: 'Luogo salvato.' });
+      await input.emit('assistant.completed', {});
+    });
+    const d = deps({ runTurn: run }, st);
+    const conn = new ClientConnection(first.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Salva questa posizione', correlationId));
+    await tick();
+    const lastSeen = first.last().seq;
+    expect(first.last().payload).toMatchObject({ displayName: 'Salvataggio del luogo' });
+    conn.detach(first.socket);
+    release();
+    await tick();
+    expect(first.last().seq).toBe(lastSeen);
+    conn.attach(second.socket);
+    expect(conn.detach(first.socket)).toBe(false); // close tardivo del vecchio socket
+    await conn.handleRaw(c.start(lastSeen));
+    expect(second.types()).toContain('assistant.completed');
+    expect(second.last().type).toBe('session.started');
+    await conn.handleRaw(c.message('Salva questa posizione', correlationId));
+    expect(run).toHaveBeenCalledTimes(1);
+    // Anche dopo un riavvio del processo, la prenotazione Redis impedisce una seconda esecuzione.
+    const fresh = new ClientConnection(second.socket, auth, d);
+    await fresh.handleRaw(c.start());
+    await fresh.handleRaw(c.message('Salva questa posizione', correlationId));
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('riprende un turno ancora attivo e Stop sulla nuova connessione lo annulla', async () => {
+    const first = fakeSocket();
+    const next = fakeSocket();
+    const c = client(randomUUID());
+    let input: TurnInput | undefined;
+    const run = vi.fn(async (i: TurnInput) => {
+      input = i;
+      await i.emit('assistant.started', {});
+      await new Promise<void>((resolve) =>
+        i.abortSignal.addEventListener('abort', () => resolve(), { once: true }),
+      );
+      await i.emit('assistant.cancelled', { reason: 'user' });
+    });
+    const conn = new ClientConnection(first.socket, auth, deps({ runTurn: run }));
+    const corr = randomUUID();
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Richiesta', corr));
+    await tick();
+    conn.detach(first.socket);
+    conn.attach(next.socket);
+    await conn.handleRaw(c.start(first.last().seq));
+    await conn.handleRaw(c.message('Richiesta', corr));
+    expect(next.last().type).toBe('session.pong');
+    expect(run).toHaveBeenCalledTimes(1);
+    await conn.handleRaw(c.cancel(corr));
+    await tick();
+    expect(input?.abortSignal.aborted).toBe(true);
+    expect(next.types()).toContain('assistant.cancelled');
+  });
+
+  it('non riesegue una richiesta con esito sconosciuto dopo un arresto del server', async () => {
+    const st = fakeStore();
+    const sessionId = randomUUID();
+    const corr = randomUUID();
+    await st.store.claimRequest(sessionId, corr);
+    const run = vi.fn();
+    const socket = fakeSocket();
+    const c = client(sessionId);
+    const conn = new ClientConnection(socket.socket, auth, deps({ runTurn: run }, st));
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Invia', corr));
+    expect(run).not.toHaveBeenCalled();
+    expect(socket.last().payload).toMatchObject({ code: 'request_interrupted', retryable: false });
+  });
+});
+
+it('WebSocket reale: riconnessione durante un salvataggio senza duplicarlo', async () => {
+  const { default: Fastify } = await import('fastify');
+  const { registerWs } = await import('./plugin.js');
+  const app = Fastify();
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const run = vi.fn(async (input: TurnInput) => {
+    await input.emit('assistant.started', {});
+    await gate;
+    expect(input.abortSignal.aborted).toBe(false);
+    await input.emit('assistant.text.completed', { text: 'Salvato una volta' });
+    await input.emit('assistant.completed', {});
+  });
+  await registerWs(app, {
+    authenticator: { authenticate: async () => auth },
+    allowedOrigins: [],
+    connection: deps({ runTurn: run }),
+  });
+  await app.ready();
+  const c = client(randomUUID());
+  const corr = randomUUID();
+  const first = await app.injectWS('/v1/ws');
+  const events: AgentEvent[] = [];
+  first.on('message', (data: Buffer) => events.push(decodeEvent(data.toString())));
+  try {
+    first.send(c.start());
+    await vi.waitFor(() => expect(events.at(-1)?.type).toBe('session.started'));
+    first.send(c.message('Salva questa posizione', corr));
+    await vi.waitFor(() => expect(events.at(-1)?.type).toBe('assistant.started'));
+    const lastSeq = events.at(-1)?.seq ?? -1;
+    await new Promise<void>((resolve) => {
+      first.once('close', () => resolve());
+      first.terminate();
+    });
+    const second = await app.injectWS('/v1/ws');
+    const resumed: AgentEvent[] = [];
+    second.on('message', (data: Buffer) => resumed.push(decodeEvent(data.toString())));
+    second.send(c.start(lastSeq));
+    await vi.waitFor(() => expect(resumed.at(-1)?.type).toBe('session.started'));
+    second.send(c.message('Salva questa posizione', corr));
+    await vi.waitFor(() => expect(resumed.at(-1)?.type).toBe('session.pong'));
+    release();
+    await vi.waitFor(() =>
+      expect(resumed.some((e) => e.type === 'assistant.completed')).toBe(true),
+    );
+    expect(run).toHaveBeenCalledTimes(1);
+    second.terminate();
+  } finally {
+    release();
+    first.terminate();
+    await app.close();
+  }
+});
+
+describe('live authorization during an existing session', () => {
+  it('blocks new messages when the kill switch changes without reconnecting', async () => {
+    const d = deps({ refreshAuth: async () => ({ ...auth, settings: { killSwitch: true } }) });
+    const s = fakeSocket(),
+      c = client(randomUUID());
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('aggiungi latte alla lista'));
+    expect(s.last()).toMatchObject({ type: 'error', payload: { code: 'disabled' } });
+    expect(d.router.calls).toBe(0);
+    expect(d.getCompanion).not.toHaveBeenCalled();
+  });
+  it('rejects a revoked key and reads the updated budget instead of the handshake snapshot', async () => {
+    const revoked = deps({ refreshAuth: async () => null });
+    const s = fakeSocket(),
+      c = client(randomUUID());
+    const conn = new ClientConnection(s.socket, auth, revoked);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('ciao'));
+    expect(s.last()).toMatchObject({ type: 'error', payload: { code: 'unauthorized' } });
+    expect(s.socket.close).toHaveBeenCalledWith(1008, 'unauthorized');
+    expect(revoked.router.calls).toBe(0);
+
+    const fresh = deps({
+      dailyBudgetUsd: 0,
+      refreshAuth: async () => ({ ...auth, role: 'member', settings: { dailyBudgetUsd: 0.1 } }),
+    });
+    const s2 = fakeSocket(),
+      c2 = client(randomUUID());
+    const conn2 = new ClientConnection(s2.socket, auth, fresh);
+    await conn2.handleRaw(c2.start());
+    await conn2.handleRaw(c2.message('ciao'));
+    expect(fresh.budget.assertWithinBudget).toHaveBeenCalledWith(auth.userId, 0.1);
+  });
+});
+
+describe('continuity and grounded tool user input', () => {
+  it.each([false, true])(
+    'fresh context is private, derived hints tainted=%s; original input reaches tools',
+    async (untrusted) => {
+      const st = fakeStore(),
+        socket = fakeSocket(),
+        sessionId = randomUUID(),
+        c = client(sessionId);
+      const contexts: Array<{
+        userMessage: string | undefined;
+        privateRead: boolean;
+        tainted: boolean;
+      }> = [];
+      const seen: Array<string | undefined> = [];
+      const conn = new ClientConnection(
+        socket.socket,
+        auth,
+        deps(
+          {
+            continuity: async (userId, actualSession, text) => {
+              expect(userId).toBe(auth.userId);
+              expect(actualSession).toBe(sessionId);
+              expect(text).toBe('Preferisco risposte brevi');
+              return { text: 'Preferenza esplicita aggiornata', untrusted };
+            },
+            tools: {
+              categories: [],
+              setToolContext: (_, ctx) => {
+                if (ctx)
+                  contexts.push({
+                    userMessage: ctx.userMessage,
+                    privateRead: ctx.run.privateRead,
+                    tainted: ctx.run.tainted,
+                  });
+              },
+            },
+            runTurn: async (input) => {
+              seen.push(input.memoryContext);
+              await input.emit('assistant.completed', {});
+            },
+          },
+          st,
+        ),
+      );
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('Preferisco risposte brevi'));
+      await tick();
+      expect(seen[0]).toContain('Preferenza esplicita aggiornata');
+      expect(contexts[0]).toEqual({
+        userMessage: 'Preferisco risposte brevi',
+        privateRead: true,
+        tainted: untrusted,
+      });
+    },
+  );
 });

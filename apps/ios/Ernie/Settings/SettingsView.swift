@@ -274,6 +274,9 @@ struct SettingsView: View {
                 Section("Skill") {
                     NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
                 }
+                Section("Preferenze operative") {
+                    NavigationLink("Come lavora Ernie") { OperatingPreferencesView() }
+                }
                 Section {
                     NavigationLink("Azioni consentite sempre") { SecurityView() }
                 } header: {

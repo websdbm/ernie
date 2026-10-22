@@ -10,5 +10,6 @@ export * from './registry.js';
 export * from './reminder.js';
 export * from './reminder-repeat.js';
 export * from './shopping.js';
+export * from './ssh.js';
 export * from './types.js';
 export * from './zoned.js';

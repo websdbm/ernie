@@ -8,9 +8,11 @@ import {
   type ToolPolicyDescriptor,
 } from '@ernie/agent-core';
 import type { Logger } from '@ernie/observability';
+import { toolDisplayName } from '@ernie/protocol';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { ToolCallRecorder } from './audit.js';
+import { confirmationPresentation, confirmationReason } from './confirmation.js';
 import type { ToolRuleStore } from './rules.js';
 import { type ToolContext, ToolError, type ToolSpec } from './types.js';
 
@@ -98,6 +100,30 @@ async function withTimeout<T>(p: Promise<T>, ms: number, signal?: AbortSignal): 
   }
 }
 
+/** Cache effimera per contesto autenticato del turno e hash esatto: non concede nuovi permessi. */
+function oncePerTurn(
+  enabled: boolean,
+  ref: ToolContextRef,
+  execute: (input: unknown, execCtx?: { abortSignal?: AbortSignal }) => Promise<unknown>,
+) {
+  const turns = new WeakMap<ToolContext, Map<string, Promise<unknown>>>();
+  return (input: unknown, execCtx?: { abortSignal?: AbortSignal }): Promise<unknown> => {
+    const ctx = ref.current;
+    if (!enabled || !ctx) return execute(input, execCtx);
+    let results = turns.get(ctx);
+    if (!results) {
+      results = new Map();
+      turns.set(ctx, results);
+    }
+    const hash = argsHash(input);
+    const previous = results.get(hash);
+    if (previous) return previous;
+    const result = execute(input, execCtx);
+    results.set(hash, result);
+    return result;
+  };
+}
+
 /**
  * Avvolge un ToolSpec in un tool Mastra con: policy deny → ask → allow, approvazione monouso,
  * timeout e retry sugli errori transitori, taint dopo contenuti non fidati, audit per chiamata,
@@ -109,14 +135,14 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
     risk: spec.risk,
     ...(spec.requiredScopes ? { requiredScopes: spec.requiredScopes } : {}),
   };
-  const maxChars = deps.maxResultChars ?? 8_000;
+  const maxChars = Math.min(deps.maxResultChars ?? spec.maxResultChars ?? 8_000, 64_000);
 
   return createTool({
     id: spec.id,
     description: spec.description,
     inputSchema: spec.inputSchema,
     outputSchema: z.union([spec.outputSchema, ToolErrorResult]),
-    execute: async (input: unknown, execCtx?: { abortSignal?: AbortSignal }) => {
+    execute: oncePerTurn(spec.oncePerTurn === true, ctxRef, async (input, execCtx) => {
       const ctx = ctxRef.current;
       if (!ctx)
         return { error: 'no_context', reason: 'nessun turno attivo' } satisfies ToolErrorResult;
@@ -133,7 +159,8 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
         toolVersion: spec.version,
         category: spec.category,
         argsHash: hash,
-        argsPreview: preview(input),
+        // Infrastructure commands are visible in their protected plan, never duplicated in generic logs.
+        argsPreview: spec.category === 'ssh' ? null : preview(input),
         taintedBefore,
       };
 
@@ -191,13 +218,15 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           ttlMs: deps.approvals.ttlMs,
         });
         approvalId = created.id;
+        const presentation = confirmationPresentation(spec.id, input, ctx.device?.timezone);
         await ctx.emit?.('tool.confirmation.requested', {
           approvalId: created.id,
           toolCallId,
           toolId: spec.id,
-          displayName: spec.description.slice(0, 120),
-          ...(preview(input) ? { argsPreview: preview(input) as string } : {}),
-          reason: verdict.reason.slice(0, 300),
+          displayName: toolDisplayName(spec.id),
+          argsPreview: presentation.summary.slice(0, 500),
+          reason: confirmationReason(verdict),
+          presentation,
           expiresAt: created.expiresAt.toISOString(),
           ...(deps.rules && sticky ? { allowAlways: true } : {}),
         });
@@ -298,6 +327,8 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           return truncateResult(parsed.data, maxChars);
         } catch (err) {
           lastErr = err;
+          // Il timeout non annulla necessariamente la scrittura: non avviarne un'altra in parallelo.
+          if (spec.oncePerTurn && err instanceof ToolError && err.code === 'timeout') break;
           const retryable = err instanceof ToolError ? err.retryable : false;
           if (!retryable || attempt === attempts) break;
           await new Promise((r) => setTimeout(r, (spec.retry?.backoffMs ?? 500) * attempt));
@@ -317,10 +348,13 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
       });
       return {
         error: lastErr instanceof ToolError ? lastErr.code : 'tool_failed',
-        reason: message.slice(0, 300),
-        retryable: lastErr instanceof ToolError ? lastErr.retryable : false,
+        reason:
+          spec.oncePerTurn && lastErr instanceof ToolError && lastErr.code === 'timeout'
+            ? 'Esito non ancora verificato: la scrittura potrebbe essere riuscita. Non ripeterla; controlla prima i dati salvati con gli strumenti di lettura.'
+            : message.slice(0, 300),
+        retryable: !spec.oncePerTurn && lastErr instanceof ToolError ? lastErr.retryable : false,
       } satisfies ToolErrorResult;
-    },
+    }),
   });
 }
 

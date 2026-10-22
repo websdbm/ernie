@@ -8,6 +8,27 @@ import {
 } from './catalog.js';
 
 describe('catalogo delle skill', () => {
+  it('Ricette include la lettura YouTube, che rispetta comunque il blocco web del tutore', () => {
+    expect(createRecipesSkill().allowedTools).toContain('youtube_read');
+    expect(disabledToolIds({ skills: { ricette: false } }).has('youtube_read')).toBe(false);
+    expect(disabledToolIds({ guardianBlockedTools: ['youtube_read'] }).has('youtube_read')).toBe(
+      true,
+    );
+  });
+  it('Ricette legge le foto anche con Documenti e Second Brain spenti, senza riattivare lo studio', () => {
+    const settings = { skills: { documenti: false, second_brain: false, ricette: true } };
+    const off = disabledToolIds(settings);
+    expect(off.has('document_get')).toBe(false);
+    expect(off.has('document_summarize')).toBe(true);
+    expect(off.has('document_schema')).toBe(true);
+    expect(
+      disabledToolIds({ skills: { ...settings.skills, ricette: false } }).has('document_get'),
+    ).toBe(true);
+    expect(
+      disabledToolIds({ ...settings, guardianBlockedTools: ['document_get'] }).has('document_get'),
+    ).toBe(true);
+  });
+
   it('senza impostazioni valgono i predefiniti; gli interruttori per utente li sovrascrivono', () => {
     expect([...enabledSkillIds(undefined)].sort()).toEqual([
       'diario',
@@ -19,6 +40,7 @@ describe('catalogo delle skill', () => {
       'second_brain',
       'sentinelle',
       'shopping_list',
+      'todo',
     ]);
     expect([
       ...enabledSkillIds({
@@ -32,6 +54,7 @@ describe('catalogo delle skill', () => {
           salute: false,
           messaggi: false,
           portami: false,
+          todo: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -48,6 +71,7 @@ describe('catalogo delle skill', () => {
           salute: false,
           messaggi: false,
           portami: false,
+          todo: false,
         },
       }),
     ]).toEqual([]);
@@ -65,6 +89,8 @@ describe('catalogo delle skill', () => {
       'second_brain',
       'sentinelle',
       'shopping_list',
+      'ssh',
+      'todo',
     ]);
     expect([
       ...availableSkillIds({
@@ -78,6 +104,8 @@ describe('catalogo delle skill', () => {
           salute: false,
           messaggi: false,
           portami: false,
+          todo: false,
+          ssh: false,
         },
       }),
     ]).toEqual(['shopping_list']);
@@ -93,6 +121,8 @@ describe('catalogo delle skill', () => {
           salute: false,
           messaggi: false,
           portami: false,
+          todo: false,
+          ssh: false,
         },
         skills: { ricette: true },
       }),
@@ -111,6 +141,7 @@ describe('catalogo delle skill', () => {
             salute: false,
             messaggi: false,
             portami: false,
+            todo: false,
           },
           skills: { ricette: true },
         }),
@@ -129,14 +160,18 @@ describe('catalogo delle skill', () => {
     expect(disabledToolIds({ skills: { shopping_list: false } }).has('shopping_list_add')).toBe(
       true,
     );
-    // Di partenza è spenta solo «Salute» (dati sanitari): i suoi tool non arrivano al modello.
+    // Salute e SSH richiedono attivazione esplicita.
     expect([...disabledToolIds(undefined)].sort()).toEqual([
       'health_import',
       'health_overview',
       'health_parameter',
       'health_report',
+      'ssh_diagnose',
+      'ssh_inventory',
+      'ssh_operation',
+      'ssh_plan',
     ]);
-    expect(disabledToolIds({ skills: { salute: true } }).size).toBe(0);
+    expect(disabledToolIds({ skills: { salute: true, ssh: true } }).size).toBe(0);
   });
 
   it('la skill guidata «Ricette» porta istruzioni e tool coerenti con il catalogo', () => {

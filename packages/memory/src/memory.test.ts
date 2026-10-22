@@ -63,6 +63,27 @@ describe('fake embedder', () => {
 });
 
 describe('buildMemorySnapshot', () => {
+  it('non presenta stati futuri come attuali e non lascia che un fatto lungo nasconda quelli successivi', () => {
+    const snap = buildMemorySnapshot(
+      [
+        rec({
+          content: 'Vive a Milano dal prossimo anno',
+          validFrom: new Date('2027-01-01'),
+          confidence: 1,
+        }),
+        rec({ content: 'x'.repeat(300), confidence: 0.99 }),
+        rec({ content: 'Preferisce risposte brevi', confidence: 0.9 }),
+      ],
+      { now: new Date('2026-10-22'), maxChars: 100 },
+    );
+    expect(snap.text).toContain('Preferisce risposte brevi');
+    expect(snap.text).not.toContain('Milano');
+    const uncertain = formatRetrievedMemories([
+      rec({ content: 'Possibile nuovo indirizzo', status: 'disputed' }),
+    ]);
+    expect(uncertain).toContain('informazione in dubbio');
+    expect(uncertain).toContain('validità:');
+  });
   it('ordina per confidenza, esclude non semantici/scaduti e rispetta il limite di caratteri', () => {
     const records = [
       rec({ content: 'È allergico alle noci', category: 'fact', confidence: 0.95 }),
@@ -137,6 +158,10 @@ describe('messageToLine', () => {
     ).toBe('🚨 Mandato a Giorgio');
     expect(messageToLine({ role: 'tool', content: 'x' })).toBeNull();
     expect(messageToLine(null)).toBeNull();
+    expect(messageToLine({ role: 'user', content: 'ciao', createdAt: 'non-data' })).toBeNull();
+    expect(
+      Number.isFinite(messageToLine({ role: 'user', content: 'ciao' })?.createdAt.getTime()),
+    ).toBe(true);
   });
 
   it("scarta il testo dell'assistente scritto dopo chiamate a tool: i contenuti esterni non diventano fatti", () => {

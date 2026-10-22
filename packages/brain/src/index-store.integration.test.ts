@@ -30,6 +30,23 @@ describe.skipIf(!ready)('indice del second brain (Postgres, RLS, filtri)', () =>
     await app.end();
   });
 
+  it('anteprime e risultati non contengono commenti tecnici, anche dopo reindicizzazione', async () => {
+    const index = createBrainIndex(app, null);
+    const note = parseNote(
+      'Persone/Anna.md',
+      '# Anna\n\n<!-- ernie:family-profile abc123 -->\nCompagna: ama la montagna.\n<!-- /ernie:family-profile -->',
+    );
+    await index.upsert(user, note);
+    const read = await index.get(user, note.path);
+    expect(read?.excerpt).toBe('Compagna: ama la montagna.');
+    const hits = await index.search(user, { query: 'montagna' });
+    expect(hits[0]?.passage).toContain('ama la montagna');
+    expect(hits[0]?.passage).not.toContain('ernie:');
+    expect(hits[0]?.passage).not.toContain('abc123');
+    expect(await index.upsert(user, note)).toBe(false);
+    await index.remove(user, note.path);
+  });
+
   it('cerca per parole, filtra per tempo, luogo, vicinanza e collegamenti; le riservate solo se chieste', async () => {
     const index = createBrainIndex(app, null);
     const note = (path: string, front: string, body: string) =>

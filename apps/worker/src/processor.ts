@@ -1,4 +1,5 @@
 import type { Logger } from '@ernie/observability';
+import { SYSTEM_HEARTBEAT_CHANNEL } from '@ernie/protocol';
 
 export const SYSTEM_QUEUE = 'system';
 export const HEARTBEAT_KEY = 'ernie:worker:heartbeat';
@@ -20,6 +21,7 @@ export interface ProcessorDeps {
   readonly store: HeartbeatStore;
   readonly logger: Pick<Logger, 'info' | 'warn' | 'debug'>;
   readonly now?: () => Date;
+  readonly publishHeartbeat?: (channel: string, at: string) => Promise<unknown>;
 }
 
 export class UnknownJobError extends Error {
@@ -38,6 +40,7 @@ export function createSystemProcessor(deps: ProcessorDeps) {
       case 'heartbeat': {
         const at = now().toISOString();
         await deps.store.set(HEARTBEAT_KEY, at, 'EX', Math.ceil((HEARTBEAT_EVERY_MS * 3) / 1000));
+        await deps.publishHeartbeat?.(SYSTEM_HEARTBEAT_CHANNEL, at);
         deps.logger.debug({ at }, 'heartbeat');
         return { at };
       }

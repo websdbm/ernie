@@ -112,6 +112,7 @@
 		9B9DF1D50EA65E3D8CEFE2F7 /* ShoppingCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191C6CE16907D39919854571 /* ShoppingCardTests.swift */; };
 		9BA3A63DC00A00CF94B383CC /* BrainKnowledge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7C91876D2292383C015461 /* BrainKnowledge.swift */; };
 		9F5A44B1A297A3FC335DAEBA /* ernie-bear-v3-halloween.png in Resources */ = {isa = PBXBuildFile; fileRef = 7A5DD5E654850582A7832ED1 /* ernie-bear-v3-halloween.png */; };
+		A02A1568DB1590CF531ACD2D /* OperatingPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */; };
 		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
 		A1D5A7D57C02A966E3ECD80B /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB0BD9AF11E92414B24BA85 /* DiagnosticsView.swift */; };
 		A368351CF3066F653D67118C /* ernie-bear-v3-chef.png in Resources */ = {isa = PBXBuildFile; fileRef = CC9C561A88249297708E9B99 /* ernie-bear-v3-chef.png */; };
@@ -132,6 +133,7 @@
 		BD3195B52FBDD98D652B7956 /* BearPawTapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA8E07EDF3310160FC266EF /* BearPawTapTests.swift */; };
 		BF64100397A47A685BDF8482 /* BearAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C04E03146CD97D1D3B63A22 /* BearAtlas.swift */; };
 		BFA5F40D64C007CA647CE8EC /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
+		C0D01254C35E462FD19A38AD /* OperatingPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036F0DF7FEA403A5EBFFC870 /* OperatingPreferencesView.swift */; };
 		C325109281E152FF2237FE4E /* DocumentComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372714292F29616AAC713015 /* DocumentComposer.swift */; };
 		C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4361E7F7124014F0D94B4EA2 /* ChatView.swift */; };
 		C4666B871148CB2179C835C5 /* SpeechVolumeControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B409D5EDF0AF1E1FEEC6A98 /* SpeechVolumeControl.swift */; };
@@ -231,6 +233,7 @@
 
 /* Begin PBXFileReference section */
 		0318A65C146A510647B4A7A4 /* TtsMarkerProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TtsMarkerProbe.swift; sourceTree = "<group>"; };
+		036F0DF7FEA403A5EBFFC870 /* OperatingPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatingPreferencesView.swift; sourceTree = "<group>"; };
 		038F7702EBDFA36D6DB805FB /* ernie-bear-v3-atlases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ernie-bear-v3-atlases.json"; sourceTree = "<group>"; };
 		06D05B4674194F94566A5561 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
@@ -289,6 +292,7 @@
 		4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStore.swift; sourceTree = "<group>"; };
 		46F7BFE68638A12185371716 /* ErnieNotifications.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieNotifications.entitlements; sourceTree = "<group>"; };
 		482E5F1386683C4811B2C6EE /* CardExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardExport.swift; sourceTree = "<group>"; };
+		4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperatingPreferencesTests.swift; sourceTree = "<group>"; };
 		4ACB8BB3C74086AE6C9519EC /* ernie-bear-v3-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-night.png"; sourceTree = "<group>"; };
 		4C582BDD29CFEE84A945F289 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeServerView.swift; sourceTree = "<group>"; };
@@ -435,6 +439,7 @@
 				5C4FDC5D430FCAC2E1E3AB13 /* LifecycleTests.swift */,
 				088F8B730F08811F3C0B89B6 /* MediaTests.swift */,
 				1BD09F97518CE26791D89C46 /* MediaUploadQueueTests.swift */,
+				4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */,
 				9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */,
 				FFADBB8C959380C87F836E68 /* PerformanceObservationTests.swift */,
 				74EAED8097FB2EF14E6B4514 /* ReadabilityTests.swift */,
@@ -542,6 +547,7 @@
 				5625CB5A1D7224D40E394A01 /* FamilyView.swift */,
 				A873D448B86F04E46852AD68 /* IconGalleryView.swift */,
 				BB6A663AAF174530467149DD /* OnboardingView.swift */,
+				036F0DF7FEA403A5EBFFC870 /* OperatingPreferencesView.swift */,
 				226A064044FE204795B8F540 /* PlaceEditor.swift */,
 				18135035CD14820BAC03C2C7 /* ProfileView.swift */,
 				CCA2BB9EC2D73383C332B042 /* SecurityView.swift */,
@@ -984,6 +990,7 @@
 				B7606F408A80151242918AF5 /* LifecycleTests.swift in Sources */,
 				EC0D6880111D9F41D4807840 /* MediaTests.swift in Sources */,
 				B28E1A3D2D62EFFA16DB6953 /* MediaUploadQueueTests.swift in Sources */,
+				A02A1568DB1590CF531ACD2D /* OperatingPreferencesTests.swift in Sources */,
 				E5EE6BC917331155085BF71E /* OrderingTests.swift in Sources */,
 				7D6D8FDD304DEF73652A903F /* PerformanceObservationTests.swift in Sources */,
 				DF38A2E1B2EBBCE2DBA783E7 /* ReadabilityTests.swift in Sources */,
@@ -1099,6 +1106,7 @@
 				C85FB888B2C73FE885282816 /* MediaModels.swift in Sources */,
 				5F98B5EFDEB882087C1B1AE6 /* MediaUploadQueue.swift in Sources */,
 				8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */,
+				C0D01254C35E462FD19A38AD /* OperatingPreferencesView.swift in Sources */,
 				0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */,
 				0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */,
 				EB5E395A3DDD3D2D37145F98 /* ParentalControlView.swift in Sources */,
@@ -1179,7 +1187,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1234,7 +1242,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1325,7 +1333,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1346,7 +1354,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1370,7 +1378,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1453,7 +1461,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1474,7 +1482,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1498,7 +1506,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 96;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

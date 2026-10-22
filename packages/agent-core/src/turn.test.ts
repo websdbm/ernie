@@ -221,3 +221,60 @@ describe('runTurn: loop e decisione', () => {
     expect(completed.usage.costUsdActual).toBeCloseTo(0.00204, 6);
   });
 });
+
+describe('cancellation before provider start', () => {
+  it('never contacts the model for an already cancelled turn', async () => {
+    const companion = fakeCompanion([]),
+      { events, emit } = collector();
+    const result = await runTurn({
+      userId: 'u',
+      sessionId: 's',
+      correlationId: 'c',
+      text: 'ciao',
+      inputMode: 'text',
+      companion,
+      abortSignal: AbortSignal.abort(),
+      recorder: { record: vi.fn() },
+      logger,
+      emit,
+    });
+    expect(companion.agent.stream).not.toHaveBeenCalled();
+    expect(result.cancelled).toBe(true);
+    expect(events.map((e) => e.type)).toEqual(['assistant.cancelled']);
+  });
+});
+
+it('spiega il limite temporaneo del provider e non mostra soltanto turno incompleto', async () => {
+  const companion = fakeCompanion([
+    {
+      type: 'error',
+      payload: {
+        error: Object.assign(new Error('request denied'), {
+          statusCode: 402,
+          responseBody: JSON.stringify({
+            error: { metadata: { reason: 'in_flight_budget_exhausted' } },
+          }),
+        }),
+      },
+    },
+  ]);
+  const { events, emit } = collector();
+  await runTurn({
+    userId: 'u1',
+    sessionId: 's1',
+    correlationId: 'c-limit',
+    text: 'Riassumi il video',
+    inputMode: 'text',
+    companion,
+    abortSignal: new AbortController().signal,
+    recorder: { record: vi.fn(async () => {}) },
+    logger,
+    emit,
+  });
+  expect(events.find((e) => e.type === 'error')?.payload).toMatchObject({
+    code: 'provider_busy',
+    message: expect.stringMatching(/temporaneamente/),
+    retryable: true,
+  });
+  expect(companion.agent.stream).toHaveBeenCalledTimes(1);
+});

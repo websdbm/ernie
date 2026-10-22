@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { bodyLinks, isoDay, parseNote, pathFor, safeFileName, serializeNote } from './note.js';
+import {
+  bodyLinks,
+  isoDay,
+  parseNote,
+  pathFor,
+  safeFileName,
+  serializeNote,
+  visibleNoteBody,
+} from './note.js';
 
 describe('note del second brain', () => {
   it('legge frontmatter in stile Obsidian, collegamenti nel testo e chiavi sconosciute', () => {
@@ -56,5 +64,22 @@ describe('note del second brain', () => {
     expect(isoDay('2026-02-30')).toBeUndefined();
     expect(isoDay('2026-10-14')).toBe('2026-10-14');
     expect(bodyLinks('[[A]] [[A]] [[B|b]]')).toEqual(['A', 'B']);
+  });
+});
+
+describe('testo leggibile delle note', () => {
+  it('nasconde commenti tecnici interi o troncati, conserva testo e wikilink', () => {
+    const body =
+      '# Anna\n\n<!-- ernie:family-profile abc123 -->\nCompagna [[Chi sono]].\n<!-- /ernie:family-profile -->\n\nNota personale.';
+    const visible = visibleNoteBody(body);
+    expect(visible).not.toContain('ernie:');
+    expect(visible).not.toContain('abc123');
+    expect(visible).toContain('Compagna [[Chi sono]].');
+    expect(visible).toContain('Nota personale.');
+    expect(visibleNoteBody('Testo. <!-- ernie:consolidated abc')).toBe('Testo. ');
+    expect(body).toContain('<!-- ernie:family-profile');
+    expect(visibleNoteBody('ernie: un nome, non un commento')).toBe(
+      'ernie: un nome, non un commento',
+    );
   });
 });

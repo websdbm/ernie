@@ -514,10 +514,32 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
 
     async updateRunOutcome(userId, runId, outcome, status) {
       return withUser(pool, userId, async (client) => {
+        const found = await client.query<RRow>(
+          `SELECT ${R_COLS} FROM automation_runs WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+          [runId, userId],
+        );
+        const prev = found.rows[0];
+        if (!prev) return null;
+        // Due schede possono essere decise insieme: una fotografia vecchia non azzera decisioni già salvate.
+        const saved = new Map((prev.outcome?.pendingActions ?? []).map((p) => [p.approvalId, p]));
+        for (const p of outcome.pendingActions ?? []) {
+          const current = saved.get(p.approvalId);
+          if (!current?.decision) saved.set(p.approvalId, p);
+        }
+        const pendingActions = [...saved.values()];
+        const merged = {
+          ...(prev.outcome ?? {}),
+          ...outcome,
+          ...(pendingActions.length ? { pendingActions } : {}),
+        };
+        const allDecided =
+          pendingActions.length > 0 && pendingActions.every((p) => p.decision !== undefined);
+        const nextStatus =
+          allDecided && prev.status === 'awaiting_approval' ? 'succeeded' : (status ?? prev.status);
         const res = await client.query<RRow>(
-          `UPDATE automation_runs SET outcome = $3, status = COALESCE($4, status), finished_at = now()
+          `UPDATE automation_runs SET outcome = $3, status = $4, finished_at = now()
             WHERE id = $1 AND user_id = $2 RETURNING ${R_COLS}`,
-          [runId, userId, JSON.stringify(outcome), status ?? null],
+          [runId, userId, JSON.stringify(merged), nextStatus],
         );
         const row = res.rows[0];
         return row ? toRun(row) : null;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   chooseFold,
   ensureExactData,
@@ -153,6 +153,23 @@ describe('summarizeSession', () => {
     expect(g.saved[0]?.coveredUntil).toEqual(new Date(base + 19 * 60_000));
     expect(g.saved[0]?.messages).toBe(20);
     expect(g.saved[0]?.sections.facts.at(-1)).toBe('Citati anche: 18:45');
+  });
+
+  it('budget bloccato: nessuna chiamata LLM e riassunto deterministico preservato', async () => {
+    const f = fakes(30);
+    const summarizer = vi.fn(async () => empty);
+    const checkBudget = vi.fn(async () => {
+      throw new Error('budget esaurito');
+    });
+    const result = await summarizeSession(
+      { threads: f.threads, store: f.store, logger, summarizer, checkBudget },
+      { userId: 'u', sessionId: 's' },
+    );
+    expect(checkBudget).toHaveBeenCalledWith('u');
+    expect(summarizer).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ compacted: true, fallback: true });
+    expect(f.saved).toHaveLength(1);
+    expect(f.saved[0]?.fallback).toBe(true);
   });
 
   it('riprende dal riassunto precedente e ripiega se il modello fallisce', async () => {

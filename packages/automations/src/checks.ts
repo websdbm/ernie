@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { get as httpGet } from 'node:http';
+import { get as httpsGet } from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import type { Check } from './schema.js';
 
 /**
@@ -30,30 +33,106 @@ export class CheckSourceError extends Error {
   }
 }
 
-/** Indirizzi che il worker non deve mai raggiungere (SSRF). */
+const blocked = new BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['127.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+  ['224.0.0.0', 3],
+] as const)
+  blocked.addSubnet(address, prefix, 'ipv4');
+for (const [address, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['ff00::', 8],
+] as const)
+  blocked.addSubnet(address, prefix, 'ipv6');
+
+/** BlockList normalizza anche gli IPv4 mapped, senza dipendere dalla scrittura dell'indirizzo. */
 export function isPrivateAddress(ip: string): boolean {
-  if (isIP(ip) === 4) {
-    const [a = 0, b = 0] = ip.split('.').map(Number);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) || // CGNAT, anche Tailscale
-      (a === 169 && b === 254) || // link-local, metadati cloud
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
+  const family = isIP(ip);
+  return !family || blocked.check(ip, family === 4 ? 'ipv4' : 'ipv6');
+}
+
+const MAX_SOURCE_BYTES = 2_000_000;
+const headers = {
+  'user-agent': 'Ernie-sentinella/1.0',
+  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5',
+};
+
+function checkStatus(status: number): void {
+  if (status >= 300 && status < 400) throw new CheckSourceError(`redirect non seguito (${status})`);
+  if (status < 200 || status >= 300) throw new CheckSourceError(`la fonte ha risposto ${status}`);
+}
+
+async function boundedText(chunks: AsyncIterable<Uint8Array>): Promise<string> {
+  const buffers: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of chunks) {
+    size += chunk.byteLength;
+    if (size > MAX_SOURCE_BYTES) throw new CheckSourceError('fonte troppo grande');
+    buffers.push(Buffer.from(chunk));
   }
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith('::ffff:')) return isPrivateAddress(v6.slice(7));
-  return (
-    v6 === '::' ||
-    v6 === '::1' ||
-    v6.startsWith('fc') ||
-    v6.startsWith('fd') ||
-    v6.startsWith('fe80')
-  );
+  return Buffer.concat(buffers).toString('utf8');
+}
+
+/** Il socket usa esclusivamente gli indirizzi verificati, senza una seconda risoluzione DNS. */
+function pinnedGet(url: URL, addresses: string[], signal: AbortSignal): Promise<string> {
+  const pinnedLookup: LookupFunction = (_host, options, callback) => {
+    const entries = addresses.map((address) => ({ address, family: isIP(address) }));
+    if (options.all) callback(null, entries);
+    else {
+      const first = entries[0];
+      if (!first) callback(new Error('nome non risolto'), '', 0);
+      else callback(null, first.address, first.family);
+    }
+  };
+  return new Promise((resolve, reject) => {
+    const request = (url.protocol === 'https:' ? httpsGet : httpGet)(
+      url,
+      {
+        signal,
+        lookup: pinnedLookup,
+        headers,
+      },
+      (response) => {
+        void (async () => {
+          try {
+            checkStatus(response.statusCode ?? 0);
+            const encoding = response.headers['content-encoding']?.toLowerCase();
+            const decoder =
+              encoding === 'gzip'
+                ? createGunzip()
+                : encoding === 'deflate'
+                  ? createInflate()
+                  : encoding === 'br'
+                    ? createBrotliDecompress()
+                    : null;
+            if (encoding && encoding !== 'identity' && !decoder)
+              throw new CheckSourceError('codifica della fonte non supportata');
+            if (decoder) response.on('error', (error) => decoder.destroy(error));
+            try {
+              resolve(await boundedText(decoder ? response.pipe(decoder) : response));
+            } finally {
+              decoder?.destroy();
+            }
+          } catch (error) {
+            reject(error);
+          } finally {
+            response.destroy();
+            request.destroy();
+          }
+        })();
+      },
+    );
+    request.on('error', reject);
+  });
 }
 
 const defaultResolve = async (host: string) =>
@@ -77,19 +156,15 @@ async function safeGet(url: string, deps: CheckDeps): Promise<string> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), deps.timeoutMs ?? 10_000);
   try {
-    const res = await (deps.fetch ?? fetch)(u, {
-      signal: ac.signal,
-      redirect: 'manual', // un redirect verso la rete interna non deve passare
-      headers: {
-        'user-agent': 'Ernie-sentinella/1.0',
-        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5',
-      },
-    });
-    if (res.status >= 300 && res.status < 400)
-      throw new CheckSourceError(`redirect non seguito (${res.status})`);
-    if (!res.ok) throw new CheckSourceError(`la fonte ha risposto ${res.status}`);
-    const text = await res.text();
-    return text.slice(0, 2_000_000);
+    if (!deps.fetch) return await pinnedGet(u, addrs, ac.signal);
+    const res = await deps.fetch(u, { signal: ac.signal, redirect: 'manual', headers });
+    try {
+      checkStatus(res.status);
+      if (!res.body) return '';
+      return await boundedText(res.body);
+    } finally {
+      if (res.body && !res.body.locked) await res.body.cancel().catch(() => {});
+    }
   } catch (err) {
     if (err instanceof CheckSourceError) throw err;
     throw new CheckSourceError(err instanceof Error ? err.message : String(err));

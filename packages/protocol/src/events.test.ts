@@ -244,3 +244,40 @@ describe('documenti (v1.3)', () => {
     ).toBe(false);
   });
 });
+
+describe('ricette salvate e raccolta', () => {
+  it('mantiene id persistente categoria e tag, continuando a leggere le proposte precedenti', () => {
+    const recipeId = randomUUID();
+    const saved = createEvent(
+      'assistant.block',
+      {
+        blockId: randomUUID(),
+        block: {
+          kind: 'recipes',
+          recipes: [
+            {
+              recipeId,
+              title: 'Pasta al limone',
+              ingredients: ['200 g pasta'],
+              category: 'Primi',
+              tags: ['veloce'],
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+    const decoded = decodeEvent(encodeEvent(saved));
+    expect(decoded.payload).toEqual(saved.payload);
+    expect(() =>
+      createEvent(
+        'assistant.block',
+        {
+          blockId: randomUUID(),
+          block: { kind: 'recipes', recipes: [{ title: 'Proposta', ingredients: ['1 uovo'] }] },
+        },
+        ctx,
+      ),
+    ).not.toThrow();
+  });
+});

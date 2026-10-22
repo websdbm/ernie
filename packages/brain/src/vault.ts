@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -30,6 +31,7 @@ export interface SyncResult {
 }
 
 export class VaultPathError extends Error {}
+export class VaultChangedError extends Error {}
 
 export class GitVault {
   private queue: Promise<unknown> = Promise.resolve();
@@ -124,14 +126,30 @@ export class GitVault {
     if (!rel.toLowerCase().endsWith('.md')) throw new VaultPathError('solo file .md');
     const abs = join(this.opts.dir, rel);
     const back = relative(this.opts.dir, abs);
-    if (back.startsWith('..') || back.split(sep).includes('.git'))
+    if (back.startsWith('..') || back.split(sep).some((part) => part.toLowerCase() === '.git'))
       throw new VaultPathError('percorso fuori dal vault');
+    return abs;
+  }
+
+  /** Un remoto Git può contenere symlink: il controllo lessicale da solo non confina I/O nel vault. */
+  private async safePath(path: string): Promise<string> {
+    const abs = this.resolve(path);
+    let current = this.opts.dir;
+    for (const part of relative(this.opts.dir, abs).split(sep)) {
+      current = join(current, part);
+      const info = await lstat(current).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') return null;
+        throw err;
+      });
+      if (info?.isSymbolicLink())
+        throw new VaultPathError('link simbolico non consentito nel vault');
+    }
     return abs;
   }
 
   async read(path: string): Promise<string | null> {
     await this.ensure();
-    return readFile(this.resolve(path), 'utf8').catch(() => null);
+    return readFile(await this.safePath(path), 'utf8').catch(() => null);
   }
 
   async exists(path: string): Promise<boolean> {
@@ -144,7 +162,7 @@ export class GitVault {
     const out: string[] = [];
     const walk = async (d: string) => {
       for (const e of await readdir(d, { withFileTypes: true })) {
-        if (e.name.startsWith('.')) continue;
+        if (e.name.startsWith('.') || e.isSymbolicLink()) continue;
         const abs = join(d, e.name);
         if (e.isDirectory()) await walk(abs);
         else if (e.name.toLowerCase().endsWith('.md'))
@@ -159,25 +177,65 @@ export class GitVault {
   async commit(
     files: ReadonlyArray<{ path: string; content: string | null }>,
     message: string,
+    expected?: ReadonlyMap<string, string | null>,
   ): Promise<string | null> {
     await this.ensure();
     return this.exclusive(async () => {
-      for (const f of files) {
-        const abs = this.resolve(f.path);
-        if (f.content === null) await rm(abs, { force: true });
-        else {
-          await mkdir(dirname(abs), { recursive: true });
-          await writeFile(abs, f.content);
+      return this.commitUnlocked(files, message, expected);
+    });
+  }
+
+  /** Read-modify-write under the same queue as commit/sync; callback must not call commit itself. */
+  async mutate<T>(
+    change: () => Promise<{
+      files: ReadonlyArray<{ path: string; content: string | null }>;
+      message: string;
+      result: T;
+    }>,
+  ): Promise<T> {
+    await this.ensure();
+    return this.exclusive(async () => {
+      const update = await change();
+      if (update.files.length) await this.commitUnlocked(update.files, update.message);
+      return update.result;
+    });
+  }
+
+  private async commitUnlocked(
+    files: ReadonlyArray<{ path: string; content: string | null }>,
+    message: string,
+    expected?: ReadonlyMap<string, string | null>,
+  ): Promise<string | null> {
+    // Valida tutti i percorsi prima di modificare il primo file.
+    const targets = await Promise.all(files.map((f) => this.safePath(f.path)));
+    // La revisione può impiegare un modello: nessuna scrittura se nel frattempo cambia una fonte.
+    for (const [path, before] of expected ?? []) {
+      const current = await readFile(await this.safePath(path), 'utf8').catch(() => null);
+      if (current !== before) throw new VaultChangedError('fonti cambiate durante la revisione');
+    }
+    for (const [index, f] of files.entries()) {
+      const abs = targets[index];
+      if (!abs) throw new VaultPathError('percorso mancante');
+      if (f.content === null) await rm(abs, { force: true });
+      else {
+        await mkdir(dirname(abs), { recursive: true });
+        // I lettori non devono vedere un file troncato durante la scrittura.
+        const temp = join(dirname(abs), `.ernie-${randomUUID()}.tmp`);
+        try {
+          await writeFile(temp, f.content, { flag: 'wx' });
+          await rename(temp, abs);
+        } finally {
+          await rm(temp, { force: true });
         }
       }
-      const paths = files.map((f) => f.path);
-      await this.git(['add', '-A', '--', ...paths]);
-      const status = await this.git(['status', '--porcelain', '--', ...paths]);
-      if (!status.stdout.trim()) return this.headUnlocked(); // niente di nuovo da salvare
-      await this.git(['commit', '-m', message.slice(0, 200), '--', ...paths]);
-      if (this.opts.remote) await this.pushUnlocked();
-      return this.headUnlocked();
-    });
+    }
+    const paths = files.map((f) => f.path);
+    await this.git(['add', '-A', '--', ...paths]);
+    const status = await this.git(['status', '--porcelain', '--', ...paths]);
+    if (!status.stdout.trim()) return this.headUnlocked(); // niente di nuovo da salvare
+    await this.git(['commit', '-m', message.slice(0, 200), '--', ...paths]);
+    if (this.opts.remote) await this.pushUnlocked();
+    return this.headUnlocked();
   }
 
   private async headUnlocked(): Promise<string | null> {

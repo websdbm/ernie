@@ -6,6 +6,10 @@ export type { ToolRisk };
 
 /** Contesto di esecuzione per turno: aggiornato dalla connessione prima di ogni turno. */
 export interface ToolContext {
+  /** Original authenticated user message, never supplied by the model or a tool result. */
+  readonly userMessage?: string;
+  /** Actual model executing this turn; sensitive infrastructure tools require heavy. */
+  readonly modelClass?: 'light' | 'standard' | 'heavy';
   readonly userId: string;
   readonly sessionId: string | null;
   readonly requestId: string;
@@ -49,7 +53,11 @@ export interface ToolSpec<
   readonly requiredScopes?: readonly string[];
   readonly timeoutMs?: number;
   readonly retry?: RetryPolicy;
+  /** Identici argomenti nello stesso turno riusano l'esito, anche in attesa/scadenza: una sola approvazione ed esecuzione. */
+  readonly oncePerTurn?: boolean;
   readonly costEstimateUsd?: number;
+  /** Tetto del risultato per contratti ampi, comunque limitato dall'executor a 64k caratteri. */
+  readonly maxResultChars?: number;
   readonly inputSchema: I;
   readonly outputSchema: O;
   readonly execute: (input: z.infer<I>, ctx: ToolContext) => Promise<z.infer<O>>;

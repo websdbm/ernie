@@ -1,6 +1,22 @@
 import { join } from 'node:path';
 import type { Logger } from '@ernie/observability';
+import {
+  identityExtra,
+  mergedIdentities,
+  normalizeProfileBlocks,
+  withoutGeneratedQuotes,
+} from './identities.js';
 import type { BrainHit, BrainIndex, BrainQuery, NoteSummary } from './index-store.js';
+import {
+  applyKnowledgeUpdate,
+  type BrainAgenda,
+  BrainKnowledgeError,
+  calculateBrainAgenda,
+  type KnowledgeUpdate,
+  knowledgeKey,
+  renderKnowledgeBody,
+  stripKnowledgeBody,
+} from './knowledge.js';
 import {
   type BrainNote,
   bodyLinks,
@@ -10,10 +26,29 @@ import {
   parseNote,
   pathFor,
   serializeNote,
+  visibleNoteBody,
 } from './note.js';
-import { GitVault, type VaultOptions } from './vault.js';
+import { type BrainOverview, buildBrainOverview } from './overview.js';
+import {
+  type BrainReviewPlan,
+  contentHash,
+  normalized,
+  reconcileNotes,
+  reviewable,
+  reviewFingerprint,
+  reviewNotes,
+} from './reconcile.js';
+import {
+  type BrainResource,
+  isResourceType,
+  managedResourceError,
+  resourceFromPath,
+  resourcePath,
+} from './resources.js';
+import { GitVault, type VaultOptions, VaultPathError } from './vault.js';
 
 export interface BrainServiceOptions {
+  readonly canUseResource?: (userId: string, kind: BrainResource['kind']) => Promise<boolean>;
   /** Cartella che contiene un vault per utente (`<baseDir>/<userId>`). */
   readonly baseDir: string;
   /** Remoti git per utente (es. il repository privato aperto con Obsidian). */
@@ -22,6 +57,8 @@ export interface BrainServiceOptions {
   readonly author?: { readonly name: string; readonly email: string };
   readonly index: BrainIndex;
   readonly logger?: Pick<Logger, 'info' | 'warn'>;
+  /** Dopo un salvataggio riuscito, consolida solo i percorsi interessati. */
+  readonly onNotesWritten?: (userId: string, paths: readonly string[]) => Promise<void>;
   /** «Chi sono» modificata fuori da Ernie (Obsidian): i campi tornano nella scheda anagrafica. */
   readonly onChiSonoEdited?: (userId: string, fields: ChiSonoFields) => Promise<void>;
 }
@@ -52,9 +89,23 @@ export interface WriteResult {
   readonly newPages: readonly string[];
 }
 
+export interface BrainDirectory {
+  total: number;
+  groups: Array<{ type: string; count: number; notes: NoteSummary[] }>;
+  truncated: boolean;
+}
+
 export interface ReadResult {
   readonly note: BrainNote;
   readonly backlinks: readonly string[];
+  readonly overview?: BrainOverview | null;
+  readonly related?: ReadonlyArray<{
+    path: string;
+    title: string;
+    type: NoteType;
+    resource: BrainResource | null;
+    coords: readonly [number, number] | null;
+  }>;
 }
 
 /** Campi della scheda anagrafica che passano per la pagina «Chi sono». */
@@ -216,7 +267,11 @@ export function createBrainService(opts: BrainServiceOptions) {
     indexed.add(userId);
   };
 
-  const readNote = async (userId: string, ref: string): Promise<BrainNote | null> => {
+  const readNote = async (
+    userId: string,
+    ref: string,
+    snapshots?: Map<string, string | null>,
+  ): Promise<BrainNote | null> => {
     await ready(userId);
     const v = vault(userId);
     const byIndex = ref.toLowerCase().endsWith('.md')
@@ -224,8 +279,99 @@ export function createBrainService(opts: BrainServiceOptions) {
       : await opts.index.findByTitle(userId, ref);
     const path = byIndex?.path ?? (ref.toLowerCase().endsWith('.md') ? ref : null);
     if (!path) return null;
+    const resource = resourceFromPath(path);
+    if (resource && opts.canUseResource && !(await opts.canUseResource(userId, resource.kind)))
+      return null;
     const text = await v.read(path);
+    snapshots?.set(path, text);
     return text === null ? null : parseNote(path, text);
+  };
+
+  const notifyWritten = async (userId: string, paths: readonly string[]) => {
+    if (!paths.length || !opts.onNotesWritten) return;
+    try {
+      await opts.onNotesWritten(userId, paths);
+    } catch (err) {
+      // Il contenuto è già salvato: non indurre il client a reinviarlo creando duplicati.
+      opts.logger?.warn(
+        { userId, err: err instanceof Error ? err.message : String(err) },
+        'consolidamento locale rinviato alla revisione giornaliera',
+      );
+    }
+  };
+
+  const allowedQuery = async (userId: string, q: BrainQuery): Promise<BrainQuery> => ({
+    ...q,
+    ...(opts.canUseResource && !(await opts.canUseResource(userId, 'recipe'))
+      ? { excludeTypes: [...(q.excludeTypes ?? []), 'ricetta'] }
+      : {}),
+  });
+
+  // These read paths use canonical files, without indexing/embeddings or a hidden result limit.
+  const allNotes = async (userId: string): Promise<BrainNote[]> => {
+    const v = vault(userId);
+    await v.ensure();
+    const notes: BrainNote[] = [];
+    for (const path of await v.list()) {
+      const raw = await v.read(path);
+      if (raw !== null) notes.push(parseNote(path, raw));
+    }
+    return notes;
+  };
+  const visibleNotes = async (userId: string, includePrivate = false): Promise<BrainNote[]> => {
+    const allowed = new Map<string, boolean>();
+    const notes: BrainNote[] = [];
+    for (const note of await allNotes(userId)) {
+      if (!includePrivate && note.private) continue;
+      const kind =
+        resourceFromPath(note.path)?.kind ??
+        (note.type === 'ricetta' ? 'recipe' : note.type === 'immagine' ? 'media' : null);
+      if (kind && opts.canUseResource) {
+        if (!allowed.has(kind)) allowed.set(kind, await opts.canUseResource(userId, kind));
+        if (!allowed.get(kind)) continue;
+      }
+      notes.push(note);
+    }
+    return notes;
+  };
+  const uniqueNote = (notes: readonly BrainNote[], ref: string): BrainNote => {
+    if (typeof ref !== 'string' || !ref.trim() || ref.length > 300)
+      throw new BrainKnowledgeError('Riferimento non valido');
+    const key = knowledgeKey(ref);
+    // A path is an explicit identity; a title must be unique, never first-match.
+    const matches = notes.filter((note) =>
+      ref.toLowerCase().endsWith('.md')
+        ? knowledgeKey(note.path) === key
+        : knowledgeKey(note.title) === key,
+    );
+    if (!matches.length) throw new BrainKnowledgeError('Scheda non trovata', 'note_not_found', 404);
+    if (matches.length !== 1)
+      throw new BrainKnowledgeError(
+        'Riferimento ambiguo: specificare il percorso della scheda',
+        'ambiguous_reference',
+        409,
+      );
+    const note = matches[0];
+    if (!note) throw new BrainKnowledgeError('Scheda non trovata', 'note_not_found', 404);
+    return note;
+  };
+  const assertKnowledgePage = (note: BrainNote) => {
+    if (
+      isResourceType(note.type) ||
+      resourceFromPath(note.path) ||
+      ['chi-sono', 'salute'].includes(note.type) ||
+      /^(?:Salute|Ricette|Immagini)\//iu.test(note.path) ||
+      note.path.toLowerCase() === 'chi sono.md'
+    )
+      throw new BrainKnowledgeError(
+        'La pagina è generata: usare la funzione dedicata',
+        'managed_note',
+        409,
+      );
+    if (note.extra?.some((line) => /^knowledge\s*:/iu.test(line)))
+      throw new BrainKnowledgeError(
+        'Dati knowledge nel file non validi: correggerli prima di aggiornare',
+      );
   };
 
   const service = {
@@ -233,23 +379,243 @@ export function createBrainService(opts: BrainServiceOptions) {
     ready,
     reindex,
 
-    async write(userId: string, input: WriteInput): Promise<WriteResult> {
+    async directory(
+      userId: string,
+      input: { includePrivate?: boolean | undefined } = {},
+    ): Promise<BrainDirectory> {
+      const notes = await visibleNotes(userId, input.includePrivate);
+      const groups = new Map<NoteType, BrainNote[]>();
+      for (const note of notes) groups.set(note.type, [...(groups.get(note.type) ?? []), note]);
+      return {
+        total: notes.length,
+        truncated: [...groups.values()].some((items) => items.length > 100),
+        groups: [...groups]
+          .sort(([a], [b]) => a.localeCompare(b, 'it'))
+          .map(([type, items]) => ({
+            type,
+            count: items.length,
+            notes: items
+              .sort((a, b) => a.title.localeCompare(b.title, 'it') || a.path.localeCompare(b.path))
+              .slice(0, 100)
+              .map(
+                (note): NoteSummary => ({
+                  path: note.path,
+                  title: note.title,
+                  type: note.type,
+                  created: note.created,
+                  refersFrom: note.refersFrom ?? null,
+                  refersTo: note.refersTo ?? null,
+                  place: note.place ?? null,
+                  coords: note.coords ?? null,
+                  links: note.links,
+                  private: note.private,
+                  source: note.source ?? null,
+                  resource: resourceFromPath(note.path),
+                  excerpt: visibleNoteBody(note.body).slice(0, 240),
+                }),
+              ),
+          })),
+      };
+    },
+
+    async agenda(
+      userId: string,
+      input: {
+        date: string;
+        timeZone: string;
+        ref?: string | undefined;
+        includePrivate?: boolean | undefined;
+      },
+    ): Promise<BrainAgenda> {
+      const notes = await visibleNotes(userId, input.includePrivate);
+      const selected = input.ref ? [uniqueNote(notes, input.ref)] : notes;
+      return calculateBrainAgenda(selected, input);
+    },
+
+    async updateKnowledge(userId: string, input: KnowledgeUpdate): Promise<ReadResult> {
+      const v = vault(userId);
+      const saved = await v.mutate(async () => {
+        const existing = uniqueNote(await allNotes(userId), input.ref);
+        assertKnowledgePage(existing);
+        const knowledge = applyKnowledgeUpdate(existing.knowledge, input);
+        if (JSON.stringify(knowledge) === JSON.stringify(existing.knowledge))
+          return { files: [], message: '', result: { path: existing.path, changed: false } };
+        const note: BrainNote = {
+          ...existing,
+          knowledge,
+          body: renderKnowledgeBody(existing.body, knowledge),
+        };
+        return {
+          files: [{ path: note.path, content: serializeNote(note) }],
+          message: `Ernie: aggiornate informazioni e routine di «${note.title}»`,
+          result: { path: note.path, changed: true },
+        };
+      });
+      if (saved.changed) {
+        await reindex(userId, { changed: [saved.path], removed: [] });
+        await notifyWritten(userId, [saved.path]);
+      }
+      const result = await service.read(userId, saved.path);
+      if (!result)
+        throw new BrainKnowledgeError(
+          'Scheda non trovata dopo aggiornamento',
+          'note_not_found',
+          404,
+        );
+      return result;
+    },
+
+    /** Identità confermate, senza includere pagine riservate o sanitarie. */
+    async identities(userId: string) {
+      await ready(userId);
+      const out: Array<{
+        title: string;
+        path: string;
+        type: NoteType;
+        aliases: ReturnType<typeof mergedIdentities>;
+      }> = [];
+      for (const path of await vault(userId).list()) {
+        const raw = await vault(userId).read(path);
+        if (!raw) continue;
+        const n = parseNote(path, raw);
+        if (n.private || n.type === 'salute' || n.type === 'chi-sono') continue;
+        const aliases = mergedIdentities(n);
+        if (aliases.length) out.push({ title: n.title, path, type: n.type, aliases });
+      }
+      return out;
+    },
+
+    /** Solo copie esatte dello stesso concetto: omonimi con contenuti diversi restano separati. */
+    async consolidateDuplicates(userId: string) {
+      await ready(userId);
+      const groups = new Map<string, BrainNote[]>();
+      for (const path of await vault(userId).list()) {
+        const raw = await vault(userId).read(path);
+        if (!raw) continue;
+        const n = parseNote(path, raw);
+        if (!reviewable(n) || !['persona', 'luogo', 'progetto', 'argomento'].includes(n.type))
+          continue;
+        const body = withoutGeneratedQuotes(n.body)
+          .replace(/<!--[\s\S]*?-->/gu, '')
+          .trim();
+        if (body.length < 40 || body.includes('Pagina creata da Ernie:')) continue;
+        const metadata = {
+          knowledge: n.knowledge,
+          place: n.place,
+          coords: n.coords,
+          refersFrom: n.refersFrom,
+          refersTo: n.refersTo,
+          extra: n.extra?.filter((l) => !l.startsWith('ernie_unioni:')),
+        };
+        const key = `${n.type}:${normalized(n.title)}:${contentHash(body + JSON.stringify(metadata))}`;
+        groups.set(key, [...(groups.get(key) ?? []), n]);
+      }
+      let merged = 0;
+      for (const group of groups.values()) {
+        if (group.length < 2 || merged >= 10) continue;
+        const [target, ...sources] = group.sort(
+          (a, b) =>
+            Number(b.path === pathFor(b.type, b.title)) -
+              Number(a.path === pathFor(a.type, a.title)) ||
+            a.created.localeCompare(b.created) ||
+            a.path.localeCompare(b.path),
+        );
+        if (!target) continue;
+        await service.merge(userId, { into: target.path, notes: sources.map((n) => n.path) });
+        merged += sources.length;
+      }
+      return merged;
+    },
+
+    /** Snapshot delle sole note non riservate per il revisore senza strumenti. */
+    async reviewSnapshot(userId: string) {
+      await ready(userId);
+      const notes: BrainNote[] = [];
+      for (const path of await vault(userId).list()) {
+        const raw = await vault(userId).read(path);
+        if (raw !== null) notes.push(parseNote(path, raw));
+      }
+      return { fingerprint: reviewFingerprint(notes), notes: reviewNotes(notes) };
+    },
+
+    /** Riordino non distruttivo, con confronto delle fonti sotto lo stesso lock delle scritture git. */
+    async reconcile(
+      userId: string,
+      plan?: BrainReviewPlan,
+      expectedFingerprint?: string,
+      focusPaths?: readonly string[],
+    ) {
       await ready(userId);
       const v = vault(userId);
+      const before = new Map<string, string | null>();
+      const notes: BrainNote[] = [];
+      for (const path of await v.list()) {
+        const raw = await v.read(path);
+        before.set(path, raw);
+        if (raw !== null) notes.push(parseNote(path, raw));
+      }
+      if (expectedFingerprint && reviewFingerprint(notes) !== expectedFingerprint)
+        return { changed: 0, questions: [] as readonly string[], stale: true };
+      const changes = reconcileNotes(notes, plan, focusPaths ? new Set(focusPaths) : undefined);
+      if (changes.files.length) {
+        await v.commit(
+          changes.files,
+          'Ernie: consolidate le informazioni con le loro fonti',
+          before,
+        );
+        // Il push può integrare modifiche di Obsidian: l'indice deve leggere i file finali, non il piano.
+        await reindex(userId);
+      }
+      return { changed: changes.files.length, questions: changes.questions, stale: false };
+    },
+
+    async write(userId: string, input: WriteInput): Promise<WriteResult> {
+      if (input.type && isResourceType(input.type)) throw managedResourceError();
+      await ready(userId);
+      const v = vault(userId);
+      const snapshots = new Map<string, string | null>();
       const title = input.title.replace(/\s+/g, ' ').trim().slice(0, 120) || 'Senza titolo';
-      let existing = await readNote(userId, title);
+      const knownIdentities = await service.identities(userId);
+      const canonicalRef = (ref: string): string => {
+        const matches = knownIdentities.filter((n) =>
+          n.aliases.some((a) =>
+            [a.title, a.path, a.path.replace(/\.md$/iu, '')].some(
+              (r) => r.toLowerCase() === ref.toLowerCase(),
+            ),
+          ),
+        );
+        return matches.length === 1 && matches[0] ? matches[0].path : ref;
+      };
+      let existing = await readNote(userId, title, snapshots);
+      if (!existing) {
+        const candidates = knownIdentities.filter((n) =>
+          n.aliases.some((a) => a.title.toLowerCase() === title.toLowerCase()),
+        );
+        if (candidates.length === 1 && candidates[0])
+          existing = await readNote(userId, candidates[0].path, snapshots);
+      }
       // Titolo con caratteri tolti dal nome del file («Codice: caldaia» → «Codice caldaia.md»): l'indice non lo
       // ritrova per titolo, ma il file c'è. Si aggiunge in fondo invece di sovrascriverlo (revisione del 16 ott).
       if (!existing) {
         const path = pathFor(input.type ?? 'nota', title);
         const raw = await v.read(path);
+        snapshots.set(path, raw);
         if (raw !== null) existing = parseNote(path, raw);
       }
+      if (existing && (isResourceType(existing.type) || resourceFromPath(existing.path)))
+        throw managedResourceError();
       const mode = input.mode ?? 'create';
       const links = new Set([
-        ...(input.links ?? []).map((l) => l.replace(/^\[\[|\]\]$/g, '').trim()).filter(Boolean),
+        ...(input.links ?? [])
+          .map((l) => canonicalRef(l.replace(/^\[\[|\]\]$/g, '').trim()))
+          .filter(Boolean),
       ]);
-      const body = input.body.trim();
+      const body = input.body
+        .trim()
+        .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gu, (all, ref: string, alias?: string) => {
+          const canonical = canonicalRef(ref);
+          return canonical === ref ? all : `[[${canonical}|${alias ?? ref}]]`;
+        });
       let note: BrainNote;
       let created = false;
       if (!existing) {
@@ -302,9 +668,20 @@ export function createBrainService(opts: BrainServiceOptions) {
       for (const link of all.slice(0, 12)) {
         if (link.toLowerCase() === title.toLowerCase()) continue;
         if (await opts.index.findByTitle(userId, link)) continue;
+        if (
+          knownIdentities.some((n) =>
+            n.aliases.some((a) =>
+              [a.title, a.path, a.path.replace(/\.md$/iu, '')].some(
+                (r) => r.toLowerCase() === link.toLowerCase(),
+              ),
+            ),
+          )
+        )
+          continue;
         const type = kinds.get(link.toLowerCase()) ?? 'argomento';
         const path = pathFor(type, link);
         if (await v.exists(path)) continue;
+        snapshots.set(path, null);
         stubs.push({
           path,
           title: link,
@@ -316,13 +693,19 @@ export function createBrainService(opts: BrainServiceOptions) {
           body: `# ${link}\n\nPagina creata da Ernie: compare in [[${title}]].`,
         });
       }
+      if (note.knowledge) note = { ...note, body: renderKnowledgeBody(note.body, note.knowledge) };
       const verb = created ? 'nuova nota' : mode === 'replace' ? 'riscritta' : 'aggiunto a';
       const extra = stubs.length ? ` (+ ${stubs.map((p) => `«${p.title}»`).join(', ')})` : '';
       await v.commit(
         [note, ...stubs].map((n) => ({ path: n.path, content: serializeNote(n) })),
         `Ernie: ${verb} «${title}»${extra}`,
+        snapshots,
       );
       for (const n of [note, ...stubs]) await opts.index.upsert(userId, n);
+      await notifyWritten(
+        userId,
+        [note, ...stubs].map((n) => n.path),
+      );
       return {
         path: note.path,
         title: note.title,
@@ -335,34 +718,78 @@ export function createBrainService(opts: BrainServiceOptions) {
     async read(userId: string, ref: string): Promise<ReadResult | null> {
       const note = await readNote(userId, ref);
       if (!note) return null;
-      const back = await opts.index.list(userId, {
-        linkedTo: note.title,
-        includePrivate: true,
-        limit: 50,
-      });
-      return { note, backlinks: back.filter((b) => b.path !== note.path).map((b) => b.title) };
+      const back = (
+        await Promise.all(
+          [note.title, note.path, note.path.replace(/\.md$/iu, '')].map(async (linkedTo) =>
+            opts.index.list(
+              userId,
+              await allowedQuery(userId, { linkedTo, includePrivate: true, limit: 50 }),
+            ),
+          ),
+        )
+      ).flat();
+      const linked = (
+        await Promise.all(
+          note.links.map(async (ref) => {
+            try {
+              return await readNote(userId, ref);
+            } catch (err) {
+              // Un rimando non valido non deve impedire di leggere la scheda principale.
+              if (err instanceof VaultPathError) return null;
+              throw err;
+            }
+          }),
+        )
+      ).filter((n): n is BrainNote => n !== null);
+      return {
+        note,
+        overview: buildBrainOverview(note, linked),
+        related: [
+          ...new Map(
+            [...linked, ...back]
+              .filter((n) => n.path !== note.path && !n.private)
+              .map((n) => [
+                n.path,
+                {
+                  path: n.path,
+                  title: n.title,
+                  type: n.type,
+                  resource: resourceFromPath(n.path),
+                  coords: n.coords ?? null,
+                },
+              ]),
+          ).values(),
+        ],
+        backlinks: [...new Set(back.filter((b) => b.path !== note.path).map((b) => b.title))],
+      };
     },
 
     async search(userId: string, q: BrainQuery): Promise<BrainHit[]> {
       await ready(userId);
-      return opts.index.search(userId, q);
+      return opts.index.search(userId, await allowedQuery(userId, q));
     },
 
     /** Nota da accennare in conversazione (B2), oppure null. */
     async suggest(userId: string, text: string, exclude: readonly string[] = []) {
       await ready(userId);
-      return opts.index.suggest(userId, text, exclude);
+      const suggestion = await opts.index.suggest(userId, text, exclude);
+      const resource = suggestion && resourceFromPath(suggestion.path);
+      if (resource && opts.canUseResource && !(await opts.canUseResource(userId, resource.kind)))
+        return null;
+      return suggestion;
     },
 
     async list(userId: string, q: BrainQuery = {}): Promise<NoteSummary[]> {
       await ready(userId);
-      return opts.index.list(userId, q);
+      return opts.index.list(userId, await allowedQuery(userId, q));
     },
 
-    /** Pagina «Chi sono» dalla scheda anagrafica, con le pagine-persona dei familiari (create se mancano). */
+    /** Pagina «Chi sono» e dati della scheda nelle pagine-persona, preservando le aggiunte manuali. */
     async writeChiSono(userId: string, p: ChiSonoInput): Promise<void> {
       await ready(userId);
       const v = vault(userId);
+      const expected = new Map<string, string | null>();
+      for (const path of await v.list()) expected.set(path, await v.read(path));
       const files: Array<{ path: string; content: string | null }> = [];
       const family = p.family.map((m) => {
         const name = m.name?.trim();
@@ -424,19 +851,55 @@ export function createBrainService(opts: BrainServiceOptions) {
         const name = m.name?.trim();
         if (!name) continue;
         const path = pathFor('persona', name);
-        if (await v.exists(path)) continue;
+        const existingRaw = await v.read(path);
+        const existing = existingRaw ? parseNote(path, existingRaw) : null;
+        // Le pagine riservate restano fuori dalla sincronizzazione automatica della famiglia.
+        if (existing?.private) continue;
+        const profileText = `${m.relation[0]?.toUpperCase() ?? ''}${m.relation.slice(1)} (vedi [[Chi sono]]).${m.birthDate ? `\n\nNascita: ${m.birthDate}.` : ''}${m.notes ? `\n\n${m.notes}` : ''}`;
+        // Le nuove informazioni della scheda sono visibili anche se la pagina esiste già.
+        // Un blocco marcato permette di conservare intatto il testo aggiunto a mano.
+        const start = `<!-- ernie:family-profile ${contentHash(profileText)} -->`;
+        const end = '<!-- /ernie:family-profile -->';
+        const block = `${start}\n${profileText}\n${end}`;
+        const oldBlock =
+          /<!-- ernie:family-profile ([a-f0-9]{64}) -->\n([\s\S]*?)\n<!-- \/ernie:family-profile -->/u;
+        let oldBody = existing?.body ?? `# ${name}`;
+        const oldMatch = oldBlock.exec(oldBody);
+        if (oldMatch && contentHash(oldMatch[2] ?? '') !== oldMatch[1]) continue;
+        // Migrazione delle pagine create dalla scheda prima dei blocchi gestiti: togli solo il
+        // prefisso generato identico ai dati già nel blocco. Testo personale e varianti restano intatti.
+        const previousProfile = oldMatch?.[2] ?? profileText;
+        const legacyFields = previousProfile.match(
+          /^([^\n]+ \(vedi \[\[Chi sono\]\]\)\.)(?:\n\nNascita: \d{4}-\d{2}-\d{2}\.)?/u,
+        )?.[0];
+        if (existing?.source === 'scheda' && legacyFields) {
+          const prefix = `# ${name}\n\n${legacyFields}`;
+          const tail = oldBody.slice(prefix.length);
+          if (oldBody.startsWith(prefix) && (!tail || tail.startsWith('\n\n'))) {
+            oldBody = `# ${name}${tail}`;
+          }
+        }
+        const body = oldBlock.test(oldBody)
+          ? oldBody.replace(oldBlock, () => block)
+          : `${oldBody}\n\n${block}`;
+        const content = serializeNote(
+          existing
+            ? { ...existing, body }
+            : {
+                path,
+                title: name,
+                type: 'persona',
+                created: nowIso(),
+                links: ['Chi sono'],
+                private: false,
+                source: 'scheda',
+                body,
+              },
+        );
+        if (existingRaw === content) continue;
         files.push({
           path,
-          content: serializeNote({
-            path,
-            title: name,
-            type: 'persona',
-            created: nowIso(),
-            links: ['Chi sono'],
-            private: false,
-            source: 'scheda',
-            body: `# ${name}\n\n${m.relation[0]?.toUpperCase() ?? ''}${m.relation.slice(1)} (vedi [[Chi sono]]).${m.birthDate ? `\n\nNascita: ${m.birthDate}.` : ''}`,
-          }),
+          content,
         });
       }
       // Una nota per luogo in Luoghi: indirizzo e coordinate dalla scheda (che per questi luoghi è la fonte), il
@@ -494,11 +957,46 @@ export function createBrainService(opts: BrainServiceOptions) {
         if (!before || serializeNote(before) !== content) files.push({ path, content });
       }
       if (old === files[0]?.content && files.length === 1) return;
-      await v.commit(files, 'Ernie: aggiornata «Chi sono» dalla scheda');
+      for (const f of files) if (!expected.has(f.path)) expected.set(f.path, null);
+      await v.commit(files, 'Ernie: aggiornata «Chi sono» dalla scheda', expected);
       for (const f of files) {
         if (f.content === null) await opts.index.remove(userId, f.path);
         else await opts.index.upsert(userId, parseNote(f.path, f.content));
       }
+      await notifyWritten(
+        userId,
+        files.filter((f) => f.path !== 'Chi sono.md').map((f) => f.path),
+      );
+    },
+
+    /** Proiezione di una risorsa SQL: il chiamante serializza e rilegge sempre la fonte canonica. */
+    async projectResource(
+      userId: string,
+      resource: BrainResource,
+      input: Omit<BrainNote, 'path' | 'type'> | null,
+    ) {
+      await ready(userId);
+      const path = resourcePath(resource);
+      const v = vault(userId);
+      const old = await v.read(path);
+      if (!input) {
+        if (old !== null)
+          await v.commit([{ path, content: null }], 'Ernie: rimossa risorsa dalla raccolta');
+        await opts.index.remove(userId, path);
+        return;
+      }
+      const note: BrainNote = {
+        ...input,
+        path,
+        type: resource.kind === 'recipe' ? 'ricetta' : 'immagine',
+      };
+      const content = serializeNote(note);
+      if (old !== content)
+        await v.commit([{ path, content }], `Ernie: aggiornata risorsa «${note.title}»`);
+      // Ripara anche un precedente commit Git riuscito seguito da un errore dell'indice.
+      await opts.index.upsert(userId, note);
+      // I collegamenti locali della risorsa sono gia determinati dal sincronizzatore;
+      // non ripetere una scansione del vault per ciascuna foto del lotto.
     },
 
     /**
@@ -552,9 +1050,13 @@ export function createBrainService(opts: BrainServiceOptions) {
       ref: string,
       patch: { body?: string; private?: boolean; source?: NoteSource },
     ): Promise<ReadResult | null> {
-      const existing = await readNote(userId, ref);
+      const snapshots = new Map<string, string | null>();
+      const existing = await readNote(userId, ref, snapshots);
       if (!existing) return null;
-      const body = (patch.body ?? existing.body).trim();
+      if (isResourceType(existing.type) || resourceFromPath(existing.path))
+        throw managedResourceError();
+      const rawBody = (patch.body ?? existing.body).trim();
+      const body = existing.knowledge ? renderKnowledgeBody(rawBody, existing.knowledge) : rawBody;
       const note: BrainNote = {
         ...existing,
         links: [...new Set([...existing.links, ...bodyLinks(body)])],
@@ -565,8 +1067,10 @@ export function createBrainService(opts: BrainServiceOptions) {
       await vault(userId).commit(
         [{ path: note.path, content: serializeNote(note) }],
         `Ernie: modificata «${note.title}» dall'app`,
+        snapshots,
       );
       await opts.index.upsert(userId, note);
+      await notifyWritten(userId, [note.path]);
       return service.read(userId, note.path);
     },
 
@@ -574,6 +1078,8 @@ export function createBrainService(opts: BrainServiceOptions) {
     async remove(userId: string, ref: string): Promise<boolean> {
       const existing = await readNote(userId, ref);
       if (!existing) return false;
+      if (isResourceType(existing.type) || resourceFromPath(existing.path))
+        throw managedResourceError();
       await vault(userId).commit(
         [{ path: existing.path, content: null }],
         `Ernie: eliminata «${existing.title}»`,
@@ -593,14 +1099,21 @@ export function createBrainService(opts: BrainServiceOptions) {
     ): Promise<{ path: string; title: string; merged: string[]; skipped: string[] }> {
       await ready(userId);
       const v = vault(userId);
-      const targetTitle = input.into.replace(/\s+/g, ' ').trim().slice(0, 120);
-      const target = await readNote(userId, targetTitle);
+      const ref = input.into.replace(/\s+/g, ' ').trim().slice(0, 240);
+      const target = await readNote(userId, ref);
+      if (target && (isResourceType(target.type) || resourceFromPath(target.path)))
+        throw managedResourceError();
+      const targetTitle = target?.title ?? ref.slice(0, 120);
+      const originals = new Map<string, string | null>();
+      if (target) originals.set(target.path, await v.read(target.path));
       const sources: BrainNote[] = [];
       const skipped: string[] = [];
       for (const t of input.notes) {
         const n = await readNote(userId, t);
         if (
           !n ||
+          isResourceType(n.type) ||
+          resourceFromPath(n.path) ||
           n.type === 'chi-sono' ||
           n.type === 'salute' ||
           n.path === target?.path ||
@@ -609,24 +1122,46 @@ export function createBrainService(opts: BrainServiceOptions) {
           skipped.push(t);
           continue;
         }
+        originals.set(n.path, await v.read(n.path));
         sources.push(n);
       }
       if (!sources.length) throw new Error('nessuna nota da unire');
-      const stub = /^Pagina creata da Ernie: compare in \[\[[^\]]*\]\]\.?\s*$/m;
-      const base = (target ? target.body.replace(stub, '') : `# ${targetTitle}`).replace(
-        /\s+$/,
-        '',
+      const structured = [target, ...sources].filter((note): note is BrainNote =>
+        Boolean(note?.knowledge),
       );
+      const knowledge = structured[0]?.knowledge;
+      if (structured.some((note) => JSON.stringify(note.knowledge) !== JSON.stringify(knowledge)))
+        throw new BrainKnowledgeError(
+          'Le schede hanno dati strutturati diversi: risolvere esplicitamente prima di unirle',
+          'knowledge_merge_conflict',
+          409,
+        );
+
+      const stub = /^Pagina creata da Ernie: compare in \[\[[^\]]*\]\]\.?\s*$/m;
+      const base = (
+        target
+          ? normalizeProfileBlocks(withoutGeneratedQuotes(stripKnowledgeBody(target.body))).replace(
+              stub,
+              '',
+            )
+          : `# ${targetTitle}`
+      ).replace(/\s+$/, '');
       // Dentro la pagina il rimando a se stessa non serve: «[[Caldaia]]» diventa «Caldaia».
       const selfLink = new RegExp(
         `\\[\\[${targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\|([^\\]]*))?\\]\\]`,
         'gi',
       );
-      const sections = sources.map((n) => {
-        const text = n.body
+      const comparableBase = base.replace(/<!--[\s\S]*?-->/gu, '');
+      const sections = sources.flatMap((n) => {
+        const text = normalizeProfileBlocks(
+          withoutGeneratedQuotes(stripKnowledgeBody(n.body)),
+          false,
+        )
           .replace(/^#\s+[^\n]*\n?/, '')
           .replace(selfLink, (_m, alias?: string) => alias || targetTitle)
           .trim();
+        if (!text || text.split(/\n\s*\n/u).every((p) => comparableBase.includes(p.trim())))
+          return [];
         const when = n.refersFrom ?? n.created.slice(0, 10);
         return `## ${n.title} (${italianDate(when)})\n\n${text}`;
       });
@@ -635,7 +1170,7 @@ export function createBrainService(opts: BrainServiceOptions) {
         ...new Set([...(target?.links ?? []), ...sources.flatMap((n) => n.links)]),
       ].filter((l) => l.toLowerCase() !== targetTitle.toLowerCase() && !gone.has(l.toLowerCase()));
       const type = target?.type ?? input.type ?? 'argomento';
-      const note: BrainNote = target
+      let note: BrainNote = target
         ? {
             ...target,
             links,
@@ -652,37 +1187,72 @@ export function createBrainService(opts: BrainServiceOptions) {
             source: 'chat',
             body: `${base}\n\n${sections.join('\n\n')}`,
           };
+      if (knowledge) note = { ...note, knowledge, body: renderKnowledgeBody(note.body, knowledge) };
+      const selfRefs = new Set(
+        [
+          note.title,
+          note.path,
+          ...sources.flatMap((n) => [n.title, n.path, n.path.replace(/\.md$/iu, '')]),
+        ].map((r) => r.toLowerCase()),
+      );
+      note = {
+        ...note,
+        extra: identityExtra(note, sources),
+        body: note.body.replace(
+          /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gu,
+          (all, ref: string, alias?: string) =>
+            selfRefs.has(ref.toLowerCase()) ? (alias ?? note.title) : all,
+        ),
+        links: note.links.filter((l) => !selfRefs.has(l.toLowerCase())),
+      };
       // Chi citava una nota unita ora cita la pagina: il grafo resta intero (anche in Obsidian).
       const rewritten = new Map<string, BrainNote>();
-      for (const n of sources) {
-        const citing = await opts.index.list(userId, {
-          linkedTo: n.title,
-          includePrivate: true,
-          limit: 100,
-        });
-        for (const c of citing) {
-          if (c.path === note.path || sources.some((s) => s.path === c.path)) continue;
-          const cur = rewritten.get(c.path) ?? (await readNote(userId, c.path));
-          if (!cur) continue;
-          const re = new RegExp(
-            `\\[\\[${n.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\|[^\\]]*)?\\]\\]`,
-            'gi',
+      const before = new Map<string, string | null>();
+      for (const path of await v.list()) before.set(path, await v.read(path));
+      // Anche riferimenti con percorso e alias, senza il limite dei primi 100 backlink.
+      const refs = new Set(
+        sources
+          .flatMap((n) => [n.title, n.path, n.path.replace(/\.md$/iu, '')])
+          .map((s) => s.toLowerCase()),
+      );
+      const titles = new Set(sources.map((n) => n.title.toLowerCase()));
+      const destination = (ref: string) => (titles.has(ref.toLowerCase()) ? note.title : note.path);
+      for (const [path, raw] of before) {
+        if (!raw || path === note.path || sources.some((n) => n.path === path)) continue;
+        const cur = parseNote(path, raw);
+        const rewrite = (text: string) =>
+          text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gu, (all, ref: string, alias?: string) =>
+            refs.has(ref.toLowerCase())
+              ? `[[${destination(ref)}${alias ? `|${alias}` : ''}]]`
+              : all,
           );
-          const body = cur.body.replace(re, `[[${note.title}]]`);
-          const curLinks = [
-            ...new Set(
-              cur.links.map((l) => (l.toLowerCase() === n.title.toLowerCase() ? note.title : l)),
-            ),
-          ];
-          rewritten.set(c.path, { ...cur, links: curLinks, body });
+        let body = rewrite(cur.body);
+        // Aggiorna il checksum solo di blocchi integri prima della riscrittura dei link.
+        for (const match of cur.body.matchAll(
+          /<!-- ernie:(family-profile|consolidated) ([a-f0-9]{64}) -->\n([\s\S]*?)\n<!-- \/ernie:\1 -->/gu,
+        )) {
+          if (contentHash(match[3] ?? '') !== match[2]) continue;
+          const text = rewrite(match[3] ?? '');
+          body = body.replace(
+            rewrite(match[0]),
+            `<!-- ernie:${match[1]} ${contentHash(text)} -->\n${text}\n<!-- /ernie:${match[1]} -->`,
+          );
         }
+        const links = [
+          ...new Set(cur.links.map((l) => (refs.has(l.toLowerCase()) ? destination(l) : l))),
+        ];
+        if (body !== cur.body || JSON.stringify(links) !== JSON.stringify(cur.links))
+          rewritten.set(path, { ...cur, links, body });
       }
+      before.set(note.path, target ? (originals.get(target.path) ?? null) : null);
+      // I sorgenti letti all'inizio devono essere ancora identici al momento del commit.
+      for (const source of sources) before.set(source.path, originals.get(source.path) ?? null);
       const files = [
         { path: note.path, content: serializeNote(note) },
         ...sources.map((n) => ({ path: n.path, content: null })),
         ...[...rewritten.values()].map((n) => ({ path: n.path, content: serializeNote(n) })),
       ];
-      await v.commit(files, `Ernie: unite ${sources.length} note in «${note.title}»`);
+      await v.commit(files, `Ernie: unite ${sources.length} note in «${note.title}»`, before);
       await opts.index.upsert(userId, note);
       for (const n of sources) await opts.index.remove(userId, n.path);
       for (const n of rewritten.values()) await opts.index.upsert(userId, n);

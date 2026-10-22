@@ -1,0 +1,543 @@
+{
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "reminder-one",
+      "area": "reminders",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Ricordami il 20 novembre 2031 alle 18 di ritirare il quaderno.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 1
+            },
+            {
+              "kind": "reminder",
+              "words": ["ritirare", "quaderno"],
+              "at": "2031-11-20T17:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reminder-two-times",
+      "area": "reminders",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Il 20 novembre 2031 ricordami alle 18 di chiamare Paolo e alle 19 di ritirare il libro. Sono due impegni separati.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 2
+            },
+            {
+              "kind": "reminder",
+              "words": ["chiamare", "Paolo"],
+              "at": "2031-11-20T17:00:00Z"
+            },
+            {
+              "kind": "reminder",
+              "words": ["ritirare", "libro"],
+              "at": "2031-11-20T18:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reminder-prealert",
+      "area": "reminders",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Il 20 novembre 2031 alle 15 ho il dentista. Avvisami cinque minuti prima.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 1
+            },
+            {
+              "kind": "reminder",
+              "words": ["dentista"],
+              "at": "2031-11-20T13:55:00Z",
+              "eventAt": "2031-11-20T14:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reminder-deadline",
+      "area": "reminders",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Il 20 novembre 2031 alle 18 scade la consegna del modulo. Ricordami di consegnarlo alle 17, conservando anche la scadenza delle 18.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 1
+            },
+            {
+              "kind": "reminder",
+              "words": ["modulo"],
+              "at": "2031-11-20T16:00:00Z",
+              "eventAt": "2031-11-20T17:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shopping-explicit",
+      "area": "shopping",
+      "seed": {
+        "shopping": [
+          {
+            "name": "Spesa"
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Aggiungi il miele nella lista Spesa.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "shopping",
+              "value": 1
+            },
+            {
+              "kind": "shopping",
+              "list": "Spesa",
+              "items": [
+                {
+                  "name": "miele"
+                }
+              ],
+              "exactCount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shopping-ambiguous-one",
+      "area": "shopping",
+      "seed": {
+        "shopping": [
+          {
+            "name": "Spesa"
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Aggiungi il miele nella lista di cose da acquistare.",
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["shopping"]
+            },
+            {
+              "kind": "shoppingChoice",
+              "names": ["Spesa"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shopping-ambiguous-two",
+      "area": "shopping",
+      "seed": {
+        "shopping": [
+          {
+            "name": "Spesa"
+          },
+          {
+            "name": "Viaggio"
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Aggiungi 2 kg di farina e il miele nella lista degli acquisti.",
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["shopping"]
+            },
+            {
+              "kind": "shoppingChoice",
+              "names": ["Spesa", "Viaggio"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shopping-choice-then-write",
+      "area": "shopping",
+      "seed": {
+        "shopping": [
+          {
+            "name": "Spesa"
+          },
+          {
+            "name": "Viaggio"
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Aggiungi 2 kg di farina e il miele nella lista degli acquisti.",
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["shopping"]
+            },
+            {
+              "kind": "shoppingChoice",
+              "names": ["Spesa", "Viaggio"]
+            }
+          ]
+        },
+        {
+          "text": "Usa la lista Viaggio: aggiungi 2 kg di farina e il miele.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "shopping",
+              "value": 2
+            },
+            {
+              "kind": "shopping",
+              "list": "Viaggio",
+              "items": [
+                {
+                  "name": "farina",
+                  "quantity": "2 kg"
+                },
+                {
+                  "name": "miele"
+                }
+              ],
+              "exactCount": 2
+            },
+            {
+              "kind": "shopping",
+              "list": "Spesa",
+              "items": [],
+              "exactCount": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shopping-request-replay",
+      "area": "replay",
+      "seed": {
+        "shopping": [
+          {
+            "name": "Spesa"
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Aggiungi il cacao nella lista Spesa.",
+          "checks": [
+            {
+              "kind": "shopping",
+              "list": "Spesa",
+              "items": [
+                {
+                  "name": "cacao"
+                }
+              ],
+              "exactCount": 1
+            }
+          ]
+        },
+        {
+          "text": "Aggiungi il cacao nella lista Spesa.",
+          "replayPrevious": true,
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["shopping"]
+            },
+            {
+              "kind": "shopping",
+              "list": "Spesa",
+              "items": [
+                {
+                  "name": "cacao"
+                }
+              ],
+              "exactCount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "todo-create",
+      "area": "todo",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Crea una lista Todo semplice chiamata Preparativi con due attività: prenotare la sala e stampare gli inviti. Senza orari né promemoria.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "todos",
+              "value": 1
+            },
+            {
+              "kind": "todo",
+              "name": "Preparativi",
+              "items": [
+                {
+                  "title": "Prenotare la sala",
+                  "status": "pending"
+                },
+                {
+                  "title": "Stampare gli inviti",
+                  "status": "pending"
+                }
+              ],
+              "preserveIds": false
+            },
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "todo-add-preserve",
+      "area": "todo",
+      "seed": {
+        "todos": [
+          {
+            "name": "Preparativi",
+            "items": [
+              {
+                "title": "Prenotare la sala",
+                "status": "pending"
+              },
+              {
+                "title": "Stampare gli inviti",
+                "status": "pending"
+              }
+            ]
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Nella lista Todo Preparativi aggiungi comprare i cartoncini. Mantieni le attività già presenti; nessun promemoria.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "todos",
+              "value": 1
+            },
+            {
+              "kind": "todo",
+              "name": "Preparativi",
+              "items": [
+                {
+                  "title": "Prenotare la sala",
+                  "status": "pending"
+                },
+                {
+                  "title": "Stampare gli inviti",
+                  "status": "pending"
+                },
+                {
+                  "title": "Comprare i cartoncini",
+                  "status": "pending"
+                }
+              ],
+              "preserveIds": true
+            },
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "todo-complete-preserve",
+      "area": "todo",
+      "seed": {
+        "todos": [
+          {
+            "name": "Preparativi",
+            "items": [
+              {
+                "title": "Prenotare la sala",
+                "status": "pending"
+              },
+              {
+                "title": "Stampare gli inviti",
+                "status": "pending"
+              }
+            ]
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Nella lista Todo Preparativi segna Prenotare la sala come fatto. Mantieni Stampare gli inviti da fare, senza aggiungere promemoria.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "todos",
+              "value": 1
+            },
+            {
+              "kind": "todo",
+              "name": "Preparativi",
+              "items": [
+                {
+                  "title": "Prenotare la sala",
+                  "status": "done"
+                },
+                {
+                  "title": "Stampare gli inviti",
+                  "status": "pending"
+                }
+              ],
+              "preserveIds": true
+            },
+            {
+              "kind": "count",
+              "domain": "reminders",
+              "value": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "brain-save",
+      "area": "brain",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Salva nel Second Brain una nota intitolata Manuale lampada. Testo: Il filtro di ricambio si chiama Filtro Zeta42. Non aggiungere altre informazioni.",
+          "checks": [
+            {
+              "kind": "brain",
+              "title": "Manuale lampada",
+              "contains": ["Filtro Zeta42"]
+            },
+            {
+              "kind": "toolAny",
+              "tools": ["brain_write"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "brain-retrieve",
+      "area": "brain",
+      "seed": {
+        "brain": [
+          {
+            "title": "Manuale lampada",
+            "body": "Il filtro di ricambio si chiama Filtro Zeta42."
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Cerca nel mio Second Brain la nota Manuale lampada e dimmi il codice del filtro.",
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["brain"]
+            },
+            {
+              "kind": "outputContains",
+              "value": "Zeta42"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "recipe-save",
+      "area": "recipes",
+      "seed": {},
+      "turns": [
+        {
+          "text": "Salva questa ricetta: Ceci semplici. Ingredienti: 200 g di ceci cotti; 1 cucchiaio di olio. Procedimento: Scalda i ceci. Aggiungi l’olio e mescola. Non aggiungere ingredienti o passaggi.",
+          "checks": [
+            {
+              "kind": "count",
+              "domain": "recipes",
+              "value": 1
+            },
+            {
+              "kind": "recipe",
+              "title": "Ceci semplici",
+              "ingredients": ["200", "ceci", "1", "olio"],
+              "ingredientCount": 2,
+              "steps": ["scalda", "mescola"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "recipe-retrieve",
+      "area": "recipes",
+      "seed": {
+        "recipes": [
+          {
+            "title": "Crema di cannellini",
+            "ingredients": ["200 g di cannellini", "10 g di olio"],
+            "steps": ["Frulla i cannellini con l’olio."]
+          }
+        ]
+      },
+      "turns": [
+        {
+          "text": "Mostrami la ricetta salvata Crema di cannellini, senza modificarla o salvarne una copia.",
+          "checks": [
+            {
+              "kind": "unchanged",
+              "domains": ["recipes"]
+            },
+            {
+              "kind": "block",
+              "block": "recipes",
+              "title": "Crema di cannellini"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

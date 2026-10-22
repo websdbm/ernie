@@ -33,6 +33,19 @@ describe('pezzi dei documenti', () => {
     expect(ch.length).toBeGreaterThan(1);
     expect(ch.every((c) => c.page === 1)).toBe(true);
   });
+  it('limita anche un paragrafo OCR senza a capo e conserva tutte le parole', () => {
+    const text = Array.from({ length: 1000 }, (_, i) => `parola${i}`).join(' ');
+    const chunks = chunkDocument([text]);
+    expect(chunks).toHaveLength(5);
+    expect(chunks.every((c) => c.content.split(' ').length <= 220)).toBe(true);
+    expect(chunks.map((c) => c.content).join(' ')).toBe(text);
+    const shortTail = `${Array(220).fill('parola').join(' ')} fine`;
+    expect(
+      chunkDocument([shortTail])
+        .map((c) => c.content)
+        .join(' '),
+    ).toBe(shortTail);
+  });
 });
 
 describe('citazioni verificate', () => {

@@ -17,14 +17,14 @@ export interface BudgetGuard {
   assertWithinBudget(userId: string, budgetUsd: number): Promise<{ spentUsd: number }>;
 }
 
-/** Spesa odierna (UTC) = somma del costo riportato, o stimato dove manca. Deterministico, nessun LLM. */
+/** Spesa odierna UTC dal registro persistente, inclusi Jev e chiamate poi eliminate. */
 export function createBudgetGuard(pool: Pool): BudgetGuard {
   return {
     async assertWithinBudget(userId, budgetUsd) {
       const res = await withUser(pool, userId, (client) =>
         client.query<{ spent: string | null }>(
-          `SELECT COALESCE(SUM(COALESCE(cost_reported_usd, cost_estimated_usd)), 0)::text AS spent
-             FROM llm_calls
+          `SELECT COALESCE(SUM(COALESCE(reported_usd, estimated_usd)), 0)::text AS spent
+             FROM usage_ledger
             WHERE user_id = $1 AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`,
           [userId],
         ),
@@ -34,5 +34,33 @@ export function createBudgetGuard(pool: Pool): BudgetGuard {
         throw new BudgetExceededError(spentUsd, budgetUsd);
       return { spentUsd };
     },
+  };
+}
+
+/** Le pipeline a più chiamate rileggono impostazioni e spesa prima di ogni richiesta pagata. */
+export function createUserBudgetCheck(pool: Pool, defaultLimit: number) {
+  const guard = createBudgetGuard(pool);
+  return async (userId: string): Promise<void> => {
+    const user = await withUser(
+      pool,
+      userId,
+      async (c) =>
+        (
+          await c.query<{ role: string; settings: Record<string, unknown> }>(
+            'SELECT role, settings FROM users WHERE id = $1',
+            [userId],
+          )
+        ).rows[0],
+    );
+    if (!user) throw new Error('utente non disponibile');
+    if (user.settings.killSwitch === true) throw new Error('Ernie è in pausa');
+    const own = user.settings.dailyBudgetUsd;
+    const limit =
+      user.role === 'owner' && typeof own === 'number'
+        ? own
+        : typeof own === 'number' && own > 0
+          ? Math.min(own, defaultLimit || own)
+          : defaultLimit;
+    await guard.assertWithinBudget(userId, limit);
   };
 }
