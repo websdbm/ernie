@@ -1161,6 +1161,10 @@ async function main(): Promise<void> {
           }
           if (preferences.status === 'fulfilled')
             blocks.push(renderOperatingPreferencesContext(preferences.value));
+          else
+            blocks.push(
+              'Preferenze operative temporaneamente non disponibili: per stile e organizzazione segui la richiesta corrente e non recuperare regole da vecchie chat o memorie, perché potrebbero essere state disattivate o eliminate.',
+            );
           return { text: blocks.filter(Boolean).join('\n\n'), untrusted };
         },
         healthNotices: (userId) => health.takeNotices(userId),

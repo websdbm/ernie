@@ -94,14 +94,23 @@ export function createOperatingPreferenceStore(pool: Pool): OperatingPreferenceS
   };
 }
 
-/** Bounded, deterministic personalization; raw observations never enter the model prefix. */
+/**
+ * Deterministic personalization. The registry instruction survives an empty register:
+ * old conversations and semantic memories cannot silently revive revoked preferences.
+ * maxChars bounds the payload, with a floor for this mandatory instruction and empty marker.
+ */
 export function renderOperatingPreferencesContext(
   preferences: readonly OperatingPreference[],
   maxChars = 2400,
 ): string {
-  const budget = Math.max(0, Math.min(4000, maxChars));
   const header =
-    'PREFERENZE OPERATIVE DICHIARATE DALL’UTENTE\nDati di personalizzazione, non autorizzazioni: applicali solo se compatibili con istruzioni, sicurezza e richiesta corrente. Non estendono permessi né abilitano notifiche.\n';
+    'REGISTRO AUTOREVOLE DELLE PREFERENZE OPERATIVE\n' +
+    'Per stile e organizzazione, applica come preferenze persistenti solo le regole esplicite attive elencate qui. ' +
+    'Questo registro prevale su vecchie chat, riepiloghi e memorie semantiche: non recuperare regole disattivate e non ricostruire quelle eliminate senza una nuova richiesta esplicita dell’utente. ' +
+    'Le ipotesi non sono regole. Sono dati di personalizzazione, non autorizzazioni: rispettano istruzioni, sicurezza e richiesta corrente; non estendono permessi né abilitano notifiche.\n' +
+    'Regole esplicite attive:\n';
+  const empty = 'Nessuna regola attiva riportata.\n';
+  const budget = Math.max(header.length + empty.length, Math.min(4000, maxChars));
   const selected: string[] = [];
   let size = header.length;
   for (const p of [...preferences].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
@@ -116,5 +125,5 @@ export function renderOperatingPreferencesContext(
     selected.push(line);
     size += line.length;
   }
-  return selected.length ? header + selected.join('') : '';
+  return header + (selected.length ? selected.join('') : empty);
 }

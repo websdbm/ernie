@@ -128,7 +128,10 @@ describe('persistenza delle preferenze operative', () => {
     expect(rendered).toContain(p.text);
     expect(rendered).not.toMatch(/DISATTIVATA|IPOTESI|Ignora sicurezza/);
     expect(rendered).toContain('non autorizzazioni');
-    expect(renderOperatingPreferencesContext([p], 20)).toBe('');
+    const minimal = renderOperatingPreferencesContext([p], 20);
+    expect(minimal).toContain('REGISTRO AUTOREVOLE');
+    expect(minimal).toContain('Nessuna regola attiva riportata');
+    expect(minimal).not.toContain(p.text);
     expect(
       renderOperatingPreferencesContext(
         Array.from({ length: 30 }, (_, i) => ({
@@ -139,6 +142,30 @@ describe('persistenza delle preferenze operative', () => {
         1000,
       ).length,
     ).toBeLessThanOrEqual(1000);
+  });
+  it('un registro vuoto o disattivato resta autorevole rispetto ai ricordi storici', async () => {
+    const { store } = fixture();
+    const p = await store.save('alice', explicit('Mostrami sempre cinque alternative'));
+    await store.deactivate('alice', p.id);
+    const disabled = renderOperatingPreferencesContext(await store.list('alice'));
+    expect(disabled).toContain('REGISTRO AUTOREVOLE');
+    expect(disabled).toContain('prevale su vecchie chat, riepiloghi e memorie semantiche');
+    expect(disabled).toContain('non recuperare regole disattivate');
+    expect(disabled).toContain('Nessuna regola attiva riportata');
+    expect(disabled).not.toContain(p.text);
+
+    await store.remove('alice', p.id);
+    const removed = renderOperatingPreferencesContext(await store.list('alice'));
+    expect(removed).toBe(disabled);
+    expect(removed).toContain(
+      'non ricostruire quelle eliminate senza una nuova richiesta esplicita',
+    );
+    expect(renderOperatingPreferencesContext([])).toBe(removed);
+
+    const active = await store.save('alice', explicit('Mostrami due alternative'));
+    const current = renderOperatingPreferencesContext(await store.list('alice'));
+    expect(current).toContain(active.text);
+    expect(current).not.toContain(p.text);
   });
   it('le rotte autenticano e non permettono di scegliere un altro account o una fonte fittizia', async () => {
     const { store } = fixture();

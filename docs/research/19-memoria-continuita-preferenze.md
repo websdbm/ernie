@@ -49,6 +49,9 @@ Rimozione e disattivazione via chat richiedono un riferimento testuale preciso;
 nei casi ambigui si chiede quale preferenza. L'interfaccia usa invece l'ID.
 
 Solo le preferenze esplicite attive entrano nel contesto, per massimo 2.400 caratteri.
+Una regola fissa mantiene questo registro autorevole anche quando è vuoto:
+vecchie memorie non possono riattivare preferenze disattivate o ricostruire quelle
+eliminate. Se il registro non è disponibile, le vecchie chat non fanno da ripiego.
 Sono personalizzazione e non autorizzazioni: non estendono permessi SSH o delle
 skill, non disattivano conferme e non abilitano notifiche. Le rotte richiedono scope
 chat e impediscono accesso incrociato fra account.
