@@ -45,7 +45,7 @@ cd apps/ios
 xcodebuild build -project Ernie.xcodeproj -scheme Ernie -configuration Release \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$HOME/Library/Caches/ernie-git-build" \
-  CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=94
+  CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=95
 ```
 
 Questo comando verifica la compilazione senza firmare né caricare una build.
@@ -53,8 +53,8 @@ Il repository contiene progetto Xcode, sorgenti condivisi, estensioni, test e
 sprite; non occorre copiare file da un archivio di rilascio. Il client usa il
 backend già distribuito: compilare l'app non richiede avviare il backend locale.
 
-La build 94 è già su TestFlight. Per un nuovo caricamento scegliere un numero
-libero maggiore di 94 e aggiungere prima la relativa voce in
+La build 95 è già su TestFlight (dettagli in [`build-95.md`](../../docs/releases/build-95.md)). Per un nuovo caricamento scegliere un numero
+libero maggiore di 95 e aggiungere prima la relativa voce in
 `Ernie/Resources/Changelog.json`; passare lo stesso numero tramite
 `CURRENT_PROJECT_VERSION` a `scripts/testflight.sh`. Chiavi App Store Connect,
 certificati e profili di firma restano nella configurazione privata del Mac.
