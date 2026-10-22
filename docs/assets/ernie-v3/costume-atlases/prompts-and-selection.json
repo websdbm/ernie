@@ -1,0 +1,61 @@
+{
+  "method": "image_gen integrato; PNG conservati senza ritocchi",
+  "status": "Integrati nel renderer della build 95; mappa definitiva in apps/ios/Ernie/Resources/BearV3/ernie-bear-v3-atlases.json",
+  "prompt": "Use case: identity-preserve. Production pixel-art GAME SPRITE ATLAS for the Ernie iOS mascot. The supplied approved costume portrait is the identity and outfit reference. Extend that EXACT rugged adult brown bear, blond swept forelock, round ivory-metal glasses, amber eyes, broad muzzle and costume into all expressions. Strong visible square pixel clusters, stepped shading, limited palette, crisp edges. Not a smooth cartoon or baby teddy bear.\nOUTPUT EXACTLY FORTY sprites in FOUR columns and TEN rows, equal-size cells, portrait canvas ratio 2:5. No extra rows. Fill the canvas evenly. Flat opaque uniform dark purple #30204F background everywhere, no gradients, neon frame, sparkles, cell outlines, text, labels, emoji or floating symbols. Each sprite is a complete head-and-shoulders bust centered in its cell, same head scale, same eye-line and shoulder baseline, at least 10% safety margin all around including hats, ears, paws and props. No clipping, no touching neighboring cells. Expression changes must not replace or remove costume pieces. All props stay registered and secondary to the face.\nExact order, left to right within each row:\nROW 1: neutral determined; happy restrained smile; warm affectionate soft eyes; surprised raised brows and small open mouth.\nROW 2: worried brows; fearful eyes and tense muzzle; sad downturned mouth; disgust wrinkled nose.\nROW 3: playful wink; laughing eyes closed and smiling open mouth; cool confident look; proud lifted chin.\nROW 4: angry furrowed brows; firmly determined jaw; embarrassed bashful smile; confused asymmetrical brows.\nROW 5: excited joyful open mouth; sleepy heavy lids; curious inquisitive brow; concentrated narrowed eyes.\nROW 6 = four connected THINKING frames: paw resting under chin eyes left; eyes center slight brow lift; eyes right slight head tilt; return to first chin pose.\nROW 7 = four connected SPEAKING frames, identical head position: closed mouth; small open mouth; medium open mouth; broad open mouth.\nROW 8 = four connected SNEEZE frames: inhaling with narrowed eyes; eyes shut and muzzle wrinkled; brief sneeze head dipped mouth open; recovering half-open eyes. Glasses and costume stay on.\nROW 9 = four connected SLEEP frames: beginning yawn; open yawn eyes closed; sleeping eyes shut mouth closed; sleeping gently breathing with same posture.\nROW 10 = four connected HIGH-FIVE frames: paw starts low beside shoulder; rises halfway; raised open bear paw pads visible; raised paw tilts slightly. Exactly one gesturing paw, anatomically consistent bear digits and short claws.\nReadable silhouette and highlights on dark app backgrounds; actual facial differences in each expression, smooth frame registration within each animation. Only the sprite sheet.",
+  "costumePrompts": {
+    "halloween": "Retain the approved crooked purple-black witch hat with orange edging and buckle, blond tuft visible beneath it, purple cape with orange lining, orange jack-o-lantern clasp. Hat must fit inside EVERY cell, scale head consistently; expressions can show small fangs.",
+    "borg": "Retain approved Borg-like gunmetal asymmetric cybernetic implants on the SAME side throughout, green ocular lens integrated into one round glasses lens, ribbed mechanical collar and shoulder tubes, natural other eye and muzzle. The scanner green light remains present for every expression including closed natural eye. No mechanical implant switching sides.",
+    "jedi": "Retain approved Jedi-like beige tunic and brown robe, hood behind ears, blond tuft and glasses exposed. A short visible blue lightsaber at the same side of the bust stays in a stationary other paw, completely within each cell, never blocking the expression. The high-five uses the free paw. No costume swaps."
+  },
+  "edits": [
+    {
+      "name": "jedi",
+      "path": "/Users/a.grassi/.codex/generated_images/01a1490e-465f-7a10-9816-bf0730196094/exec-a5b05b0b-1d63-412e-978d-a1f116e6d68f.png",
+      "prompt": "Edit ONLY the seventh horizontal row counting from top (the row immediately below four chin-thinking poses and immediately above the sneezing row). This row is the speaking animation: column1 mouth CLOSED, column2 mouth SMALL OPEN showing dark cavity, column3 mouth MEDIUM OPEN showing dark cavity and tiny tongue, column4 mouth WIDE OPEN showing dark cavity and tongue. Make these four mouth apertures clearly different and readable. Keep eyes open and identical, same head position and scale. Preserve the full original FOUR columns and ELEVEN rows exactly, all other cells unchanged. Keep the same rugged brown bear, blond tuft, round glasses, Jedi robe and blue lightsaber. No additional row, no resizing or repositioning sprites, no labels. Retain pixel art and background."
+    },
+    {
+      "name": "borg",
+      "path": "/Users/a.grassi/.codex/generated_images/01a1490e-465f-7a10-9816-bf0730196094/exec-d0877289-0699-47ac-a0e0-ec752714ebbe.png",
+      "prompt": "Edit ONLY the very last bottom row, row11, of this FOUR-column ELEVEN-row pixel-art sprite sheet. Correct the HIGH-FIVE sequence to use the SAME natural brown bear paw on the VIEWER'S LEFT in ALL FOUR bottom-row cells, never switch sides. Column1 paw just visible low beside shoulder; column2 halfway raised palm forward; column3 fully raised open palm with dark pads and five short claws; column4 SAME raised paw same viewer-left position, slight wrist tilt. Do NOT put any paw on viewer's right. Preserve the face, cybernetic green implant on viewer's left, glasses, blond tuft, armor and all other ten rows exactly unchanged. Keep every paw inside its cell with margins. SAME scale and baseline, no extra rows, no labels, crisp pixel art and unchanged dark purple backdrop."
+    }
+  ],
+  "sources": {
+    "halloween": "/Users/a.grassi/.codex/generated_images/01a1490e-465f-7a10-9816-bf0730196094/exec-4ebac55f-9c25-4976-b463-ae048327f2a8.png",
+    "borg": "/Users/a.grassi/.codex/generated_images/01a1490e-465f-7a10-9816-bf0730196094/exec-75ae59fa-a4a4-44fa-8b50-e3f5ad7d3fda.png",
+    "jedi": "/Users/a.grassi/.codex/generated_images/01a1490e-465f-7a10-9816-bf0730196094/exec-8d5de838-83df-430e-9f98-e55b5a851610.png"
+  },
+  "expressions": [
+    "neutral",
+    "happy",
+    "love",
+    "surprised",
+    "worried",
+    "fear",
+    "sad",
+    "disgust",
+    "playful",
+    "laughing",
+    "cool",
+    "proud",
+    "angry",
+    "determined",
+    "embarrassed",
+    "confused",
+    "excited",
+    "sleepy",
+    "curious",
+    "concentrated"
+  ],
+  "layout": {
+    "columns": 4,
+    "physicalRows": 11,
+    "logicalFrames": 40
+  },
+  "notes": [
+    "I generatori hanno prodotto 11 righe: la decima è una sequenza extra di occhi/sonno; le prime cinque contengono le 20 espressioni.",
+    "Righe 6 pensiero, 7 parlato, 8 starnuto, 9 sonno, 11 cinque.",
+    "Nel Borg usare 40,41,42,41 per il cinque: la cella fisica 43 cambia lato della zampa.",
+    "Nel Jedi usare 24,25,27,31 per le aperture del parlato e 28,29,30,24 per lo starnuto. Per il cinque usare 40,42,43,42.",
+    "Bordi di riga e basi misurati sulle immagini originali. Cinque di Halloween ingrandito tramite insets laterali; base virtuale del Jedi riallineata. Test e anteprime native chiaro/scuro nel rilascio 95."
+  ]
+}

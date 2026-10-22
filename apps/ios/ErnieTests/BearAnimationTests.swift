@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import ImageIO
 @testable import Ernie
 
 struct BearAnimationTests {
@@ -41,7 +42,7 @@ struct BearAnimationTests {
     }
 
     @Test @MainActor func tuttiICostumiHannoEspressioniEGestiReali() throws {
-        #expect(BearCostume.costumes.count == 9)
+        #expect(BearCostume.costumes.count == 12)
         for costume in BearCostume.costumes {
             let meta = try #require(BearAtlas.metadata[costume.rawValue])
             #expect(meta.count == 40)
@@ -324,6 +325,45 @@ struct BearAnimationTests {
         }.padding(12).background(Color(red: 0.12, green: 0.1, blue: 0.2))
         try render(monoSheet, to: folder.appendingPathComponent("mono.png"))
         print("BEAR_PREVIEWS: \(folder.path)")
+    }
+
+    @Test @MainActor func nuoviCostumiInChiaroScuroEAnimazione() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-costumes-95")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for costume in [BearCostume.halloween, .borg, .jedi] {
+            for scheme in [ColorScheme.light, .dark] {
+                let sheet = VStack(spacing: 8) {
+                    Text(costume.title).font(.headline)
+                    ForEach(0..<10, id: \.self) { row in
+                        HStack(spacing: 8) {
+                            ForEach(0..<4, id: \.self) { col in
+                                BearFrame(costume: costume, index: row * 4 + col, size: 80)
+                            }
+                        }
+                    }
+                }.padding(12).foregroundStyle(Theme.ink).background(Theme.surface).environment(\.colorScheme, scheme)
+                try render(sheet, to: folder.appendingPathComponent("\(costume.rawValue)-\(scheme).png"))
+            }
+        }
+        let url = folder.appendingPathComponent("costumes-animated.gif")
+        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, "com.compuserve.gif" as CFString, 20, nil))
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+        for index in 20..<40 {
+            let view = HStack(spacing: 18) {
+                ForEach([BearCostume.halloween, .borg, .jedi]) { costume in
+                    VStack {
+                        BearFrame(costume: costume, index: index, size: 128)
+                        Text(costume.title).font(.headline)
+                    }
+                }
+            }.padding(20).foregroundStyle(Theme.ink).background(Theme.surface).environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            let image = try #require(renderer.cgImage)
+            CGImageDestinationAddImage(destination, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.3]] as CFDictionary)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        print("COSTUME_PREVIEWS: \(folder.path)")
     }
 
     @MainActor private func render(_ view: some View, to url: URL) throws {

@@ -1,5 +1,23 @@
 [
   {
+    "build": 95,
+    "date": "2026-10-22",
+    "title": "Tre nuovi aspetti per Ernie",
+    "items": [
+      {
+        "icon": "sparkles",
+        "title": "Halloween, Borg e Jedi",
+        "detail": "Tre nuovi travestimenti con tutte le espressioni e i gesti di Ernie: pensiero, parlato, starnuto, sonno e cinque.",
+        "test": "Tieni premuta la capsula di Ernie, apri Aspetto di Ernie e scegli uno dei nuovi costumi."
+      },
+      {
+        "icon": "moon.fill",
+        "title": "Espressioni anche in tema scuro",
+        "detail": "I nuovi costumi mantengono il loro aspetto durante le attività e sono controllati anche sul fondo scuro."
+      }
+    ]
+  },
+  {
     "build": 94,
     "date": "2026-10-21",
     "title": "Un widget con scorciatoie precise",

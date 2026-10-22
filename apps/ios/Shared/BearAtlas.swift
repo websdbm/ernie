@@ -147,7 +147,7 @@ struct BearAtlasMetadata: Decodable {
     static func decodeMetadata(_ data: Data) -> [String: BearAtlasMetadata] {
         guard data.count <= 65_536,
               let values = try? JSONDecoder().decode([String: BearAtlasMetadata].self, from: data) else { return [:] }
-        let names = ["base", "night", "classic", "aviator", "chef", "detective", "engineer", "explorer", "astronaut", "paws", "paws-tap", "mono"]
+        let names = ["base", "night", "classic", "aviator", "chef", "detective", "engineer", "explorer", "astronaut", "halloween", "borg", "jedi", "paws", "paws-tap", "mono"]
         return values.filter { name, meta in
             names.contains(name) && meta.file == "ernie-bear-v3-\(name)" && meta.isValid
                 && meta.count == (name == "paws" ? 12 : (name == "paws-tap" ? 4 : 40))

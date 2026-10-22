@@ -88,8 +88,8 @@ Al primo avvio l'app propone il server della famiglia (`https://ernie.staging3.e
 ## Avatar
 
 L'orso è un renderer SwiftUI a fotogrammi (`AvatarStage.swift`, `BearAnimation.swift`).
-Nove versioni complete — classico, notte, occhiali scuri, aviatore, cuoco, detective,
-tecnico, esploratore e astronauta — condividono venti espressioni e cinque sequenze:
+Dodici versioni complete — classico, notte, occhiali scuri, aviatore, cuoco, detective,
+tecnico, esploratore, astronauta, Halloween, Borg e Jedi — condividono venti espressioni e cinque sequenze:
 pensiero, parlato, starnuto, sonno e cinque. Il fotogramma e il costume sono scelti
 separatamente: un gesto non riporta mai al foglio del personaggio base.
 

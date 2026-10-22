@@ -4,6 +4,7 @@ import SwiftUI
 /// Il costume e il fotogramma sono indipendenti: parlare o starnutire non toglie il cappello.
 enum BearCostume: String, CaseIterable, Identifiable, Sendable {
     case automatic, base, night, classic, aviator, chef, detective, engineer, explorer, astronaut
+    case halloween, borg, jedi
     var id: String { rawValue }
     static let preferenceKey = "ernie.bearCostume"
     static var costumes: [Self] { allCases.filter { $0 != .automatic } }
@@ -19,6 +20,9 @@ enum BearCostume: String, CaseIterable, Identifiable, Sendable {
         case .engineer: "Tecnico"
         case .explorer: "Esploratore"
         case .astronaut: "Astronauta"
+        case .halloween: "Halloween"
+        case .borg: "Borg"
+        case .jedi: "Jedi"
         }
     }
 
