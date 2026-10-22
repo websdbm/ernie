@@ -45,7 +45,8 @@ jobs:
           --health-retries 12
     env:
       CI: "true"
-      DATABASE_URL: postgres://ernie:ernie@localhost:5432/ernie
+      # Application tests must use the restricted role; the owner bypasses RLS.
+      DATABASE_URL: postgres://ernie_app:ernie_app@localhost:5432/ernie
       MIGRATIONS_DATABASE_URL: postgres://ernie:ernie@localhost:5432/ernie
       APP_DB_PASSWORD: ernie_app
       REDIS_URL: redis://localhost:6379
