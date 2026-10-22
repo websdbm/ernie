@@ -69,7 +69,10 @@ bozze grafiche, script backup e documentazione estranea alla release.
 - Verificati tutti i 536 fotogrammi logici e la corrispondenza dei pixel con i
   sorgenti, incluse risorse condivise e fallback dei widget.
 - SHA-256 IPA: `a6ca45b90f0958a4c7c36bd4076eaa3e7c1aa7b6c7e297e2f2fafb0a1654b059`.
-- Upload completato il 22 ottobre 2026; disponibilità TestFlight ancora da confermare.
+- Upload completato il 22 ottobre 2026 alle 21:34 CEST. Alle 21:44 CEST
+  App Store Connect conferma `VALID`, `IN_BETA_TESTING`, presenza nel gruppo
+  «Interni» e note italiane corrispondenti al changelog. Build ID:
+  `53009b2c-f365-4573-b068-03ea6c1acad4`.
 
 Archivio e IPA: Mac Studio,
 `~/Library/Caches/ernie-builds/build-96-20261022-continuity/`.
