@@ -24,6 +24,8 @@ targets:
     platform: iOS
     sources:
       - path: Ernie
+        excludes:
+          - Resources/BearV2
       - path: Shared
     dependencies:
       - target: ErnieWidgets
@@ -46,7 +48,7 @@ targets:
         NSMicrophoneUsageDescription: "Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi."
         NSSpeechRecognitionUsageDescription: "La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo."
         NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
-        NSCameraUsageDescription: "Per scansionare documenti (il testo viene letto sul telefono, l'immagine non viene conservata) e per scattare le foto da mandare ai familiari."
+        NSCameraUsageDescription: "Per scansionare documenti e aggiungere foto alla tua raccolta Media o ai messaggi in famiglia."
         NSPhotoLibraryAddUsageDescription: "Per salvare nella galleria gli schemi e i riassunti che esporti."
         NSLocationWhenInUseUsageDescription: "Ernie usa la tua posizione approssimata, solo mentre usi l'app, per rispondere su meteo, luoghi vicini e orari senza chiederti dove sei."
         NSAlarmKitUsageDescription: "I promemoria suonano come una sveglia, anche con il telefono in silenzioso, e puoi posticiparli."
@@ -58,7 +60,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         ITSAppUsesNonExemptEncryption: false
-        # Collegamenti dai widget dell'orso: ernie://voice (parla), ernie://chat (scrivi).
+        # Collegamenti widget condivisi: voice, chat, reminders, automations e family.
         CFBundleURLTypes:
           - CFBundleURLName: com.websdbm.ernie
             CFBundleURLSchemes: [ernie]
@@ -90,7 +92,22 @@ targets:
     platform: iOS
     sources:
       - path: ErnieWidgets
+        excludes:
+          - Assets.xcassets
       - path: Shared
+      # Stessi atlas v3 dell'app: il widget usa soltanto i costumi della sua timeline e il monocromatico.
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-atlases.json
+        buildPhase: resources
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-base.png
+        buildPhase: resources
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-night.png
+        buildPhase: resources
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-classic.png
+        buildPhase: resources
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-mono.png
+        buildPhase: resources
+      - path: Ernie/Resources/BearV3/ernie-bear-v3-fallback.png
+        buildPhase: resources
       # Credenziali dal Keychain condiviso: il widget grande chiede il riepilogo al server (GET /v1/widget).
       - path: Ernie/Core/Keychain.swift
       - path: Ernie/Core/Credentials.swift

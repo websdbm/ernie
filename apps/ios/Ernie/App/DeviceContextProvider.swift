@@ -65,6 +65,18 @@ final class DeviceContextProvider: NSObject, CLLocationManagerDelegate {
         manager.requestLocation()
     }
 
+    /// Una lettura dedicata all’apertura della fotocamera, solo se il permesso è già concesso.
+    func refreshForPhoto() {
+        guard Self.locationEnabled, authorized else { return }
+        manager.requestLocation()
+    }
+
+    func photoLocation(capturedAt: Date) -> MediaLocation? {
+        guard Self.locationEnabled, authorized, let fix else { return nil }
+        return MediaLocation.cameraFix(lat: fix.latitude, lon: fix.longitude, accuracy: fix.accuracy,
+                                       fixAt: fix.at, capturedAt: capturedAt)
+    }
+
     /// Contesto da allegare al messaggio: ora e fuso sempre, posizione solo con permesso e opzione attiva.
     func context() -> DeviceContextPayload {
         refresh()

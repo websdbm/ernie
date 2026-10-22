@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla,
 /// ↑ invia. Nella conversazione continua, mentre Ernie risponde, il microfono interrompe e riapre l'ascolto.
 struct InputBar: View {
+    @State private var showMedia = false
     @Binding var draft: String
     var composing: FocusState<Bool>.Binding
     let conversation: ConversationStore
@@ -89,32 +90,30 @@ struct InputBar: View {
             if url.pathExtension.lowercased() == "pdf" || url.pathExtension.lowercased() == "txt" || url.pathExtension.lowercased() == "md" {
                 documents?.importPDF(url)
             } else if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-                documents?.importImages([image], source: "photo")
+                documents?.importPhotos(count: 1, source: "photo") { _ in MediaImportPhoto(image: image, location: MediaLocation.read(data)) }
             }
         }
         .sheet(isPresented: $showFamilyComposer) { FamilyComposerSheet() }
-        .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
+        .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images, preferredItemEncoding: .current)
+        .sheet(isPresented: $showMedia) { MediaLibraryView() }
         .onChange(of: photoItems) { _, items in
-            guard !items.isEmpty else { return }
-            Task {
-                var images: [UIImage] = []
-                for item in items {
-                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { images.append(image) }
-                }
-                photoItems = []
-                if !images.isEmpty { documents?.importImages(images, source: "photo") }
+            guard !items.isEmpty, conversation.isAttached else { return }
+            photoItems = []
+            documents?.importPhotos(count: items.count, source: "photo") { index in
+                guard let data = try await items[index].loadTransferable(type: Data.self) else { throw DocumentReader.ReadError.unreadable }
+                return try MediaImportPhoto(data: data)
             }
         }
     }
 
-    /// «+» a sinistra: scansione, foto, file. Il testo viene letto sul telefono; l'originale non parte mai.
+    /// «+» a sinistra: scansione, foto, file. Le nuove foto restano nella raccolta privata Media.
     private var attachMenu: some View {
         Menu {
             if DocumentScannerView.isSupported {
                 Button("Scansiona", systemImage: "doc.viewfinder") { showScanner = true }
             }
             // Il selettore foto non si presenta da dentro un menu: lo apre un modificatore sulla barra.
-            Button("Foto", systemImage: "photo.on.rectangle") { showPhotos = true }
+            Button("Foto · raccolta Media", systemImage: "photo.on.rectangle") { showPhotos = true }
             Button("File (PDF)", systemImage: "folder") { showFiles = true }
             Divider()
             Button("Messaggio a un familiare", systemImage: "envelope") { showFamilyComposer = true }
@@ -133,24 +132,29 @@ struct InputBar: View {
         HStack(spacing: 8) {
             switch documents.phase {
             case .ready: Image(systemName: "doc.text.fill").foregroundStyle(Color.accentColor)
+            case .mediaReady: Image(systemName: "photo.fill").foregroundStyle(Color.accentColor)
             case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-            default: ProgressView().controlSize(.small)
+            default: BearActivityIcon(status: .working, size: 22)
             }
             Text(documents.statusText)
                 .font(.footnote)
                 .foregroundStyle({ if case .failed = documents.phase { return Color.red } else { return Color.primary } }())
                 .lineLimit(2)
             Spacer(minLength: 4)
+            if documents.mediaSavedCount > 0 {
+                Button { showMedia = true } label: { Image(systemName: "photo.on.rectangle") }
+                    .accessibilityLabel("Apri le immagini salvate in Media")
+            }
             if documents.ready != nil {
-                // Scelta esplicita del tipo di schema (richiesta dell'utente): Auto lascia decidere al riassuntore.
+                // Riconoscimento automatico, con scelta facoltativa dello schema per lo studio.
                 Menu {
-                    Picker("Schema", selection: Binding(get: { documents.schemaChoice }, set: { documents.schemaChoice = $0 })) {
+                    Picker("Uso dell’allegato", selection: Binding(get: { documents.schemaChoice }, set: { documents.schemaChoice = $0 })) {
                         ForEach(DocumentComposer.SchemaChoice.allCases) { c in Label(c.title, systemImage: c.symbol).tag(c) }
                     }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: documents.schemaChoice.symbol)
-                        Text(documents.schemaChoice == .auto ? "Schema" : documents.schemaChoice.title)
+                        Text(documents.schemaChoice == .auto ? "Auto" : documents.schemaChoice.title)
                         Image(systemName: "chevron.down").font(.caption2)
                     }
                     .font(.caption.weight(.medium))
@@ -158,7 +162,7 @@ struct InputBar: View {
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Color.accentColor.opacity(0.12), in: Capsule())
                 }
-                .accessibilityLabel("Tipo di schema")
+                .accessibilityLabel("Uso dell’allegato")
             }
             Button { documents.clear() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                 .buttonStyle(.plain)
@@ -191,8 +195,11 @@ struct InputBar: View {
                 ProgressView(value: progress)
             } else if voice.isWaitingReply {
                 HStack(spacing: 6) {
-                    Image(systemName: conversation.agentState == .speaking ? "speaker.wave.2.fill" : "ellipsis")
-                        .symbolEffect(.variableColor.iterative, isActive: true)
+                    if conversation.agentState == .speaking {
+                        Image(systemName: "speaker.wave.2.fill")
+                    } else {
+                        BearActivityIcon(status: .working, size: 20)
+                    }
                     Text("a mani libere")
                 }
                 .font(.caption2)
@@ -213,7 +220,7 @@ struct InputBar: View {
             Button { voice.interrupt() } label: { icon("mic.fill", fill: Theme.accent) }
                 .accessibilityLabel("Interrompi Ernie e parla")
         default:
-            ProgressView()
+            BearActivityIcon(status: .working, size: 30)
                 .frame(width: 44, height: 44)
                 .accessibilityLabel("Attendi")
         }

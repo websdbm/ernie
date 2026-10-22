@@ -27,6 +27,7 @@ actor ProtocolClient {
     private var pingLoop: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var wantConnected = false
+    private var sessionReady = false
     private var attempt = 0
     private let dedupe = EventDeduper()
     private var tracker: SequenceTracker
@@ -54,12 +55,21 @@ actor ProtocolClient {
 
     func disconnect() {
         wantConnected = false
+        sessionReady = false
         reconnectTask?.cancel()
         receiveLoop?.cancel()
         pingLoop?.cancel()
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         emit.yield(.state(.disconnected))
+    }
+
+    /// Riapre il trasporto mantenendo sessione, sequenza e deduplica.
+    func reconnect() {
+        disconnect()
+        wantConnected = true
+        attempt = 1
+        open()
     }
 
     /// Cambio di conversazione: nuova sessione (sequenze azzerate) o ripresa di una passata dall'ultimo evento visto.
@@ -75,6 +85,7 @@ actor ProtocolClient {
     /// Invia un evento client; restituisce il correlationId usato.
     @discardableResult
     func send(_ payload: EventPayload, correlationId: String = Ids.new(), persist: Bool? = nil) async throws -> String {
+        guard sessionReady else { throw URLError(.notConnectedToInternet) }
         let event = AgentEvent(payload: payload, sessionId: sessionId, correlationId: correlationId, seq: outSeq.next(), persist: persist)
         try await sendRaw(event)
         return correlationId
@@ -83,6 +94,9 @@ actor ProtocolClient {
     // MARK: - privato
 
     private func open() {
+        reconnectTask?.cancel()
+        task?.cancel(with: .goingAway, reason: nil)
+        sessionReady = false
         receiveLoop?.cancel()
         pingLoop?.cancel()
         var request = URLRequest(url: credentials.webSocketURL)
@@ -104,7 +118,7 @@ actor ProtocolClient {
         )
         Task { [weak self] in
             guard let self else { return }
-            do { try await self.sendRaw(start) } catch { await self.handleDisconnect(error) }
+            do { try await self.sendStart(start, on: t) } catch { await self.disconnectIfCurrent(t, error: error) }
         }
         receiveLoop = Task { [weak self] in await self?.runReceiveLoop(on: t) }
         pingLoop = Task { [weak self] in await self?.runPingLoop(on: t) }
@@ -115,10 +129,16 @@ actor ProtocolClient {
         try await task.send(.string(try event.encoded()))
     }
 
+    private func sendStart(_ event: AgentEvent, on t: URLSessionWebSocketTask) async throws {
+        guard task === t else { return }
+        try await t.send(.string(try event.encoded()))
+    }
+
     private func runReceiveLoop(on t: URLSessionWebSocketTask) async {
         while !Task.isCancelled {
             do {
                 let message = try await t.receive()
+                guard !Task.isCancelled, task === t else { return }
                 switch message {
                 case .string(let s): handleIncoming(s)
                 case .data(let d): handleIncoming(String(decoding: d, as: UTF8.self))
@@ -144,10 +164,17 @@ actor ProtocolClient {
         }
     }
 
-    private func handleIncoming(_ json: String) {
+    func handleIncoming(_ json: String) {
         let event: AgentEvent
         do { event = try AgentEvent.decode(json) } catch {
             Log.net.warning("evento non decodificabile: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        guard event.sessionId == sessionId else {
+            // Errori pre-sessione (es. session_forbidden) non spostano il cursore della conversazione.
+            if event.sessionId == "00000000-0000-0000-0000-000000000000", case .error = event.payload {
+                emit.yield(.event(event))
+            }
             return
         }
         if dedupe.isDuplicate(event.id) { return }
@@ -158,15 +185,24 @@ actor ProtocolClient {
         }
         lastSeq = max(lastSeq, event.seq)
         if case .sessionStarted = event.payload {
+            sessionReady = true
             attempt = 0
             emit.yield(.state(.connected))
         }
         emit.yield(.event(event))
     }
 
+    private func disconnectIfCurrent(_ t: URLSessionWebSocketTask, error: any Error) {
+        if task === t { handleDisconnect(error) }
+    }
+
     private func handleDisconnect(_ error: any Error) {
+        sessionReady = false
         Log.net.info("connessione chiusa: \(error.localizedDescription, privacy: .public)")
+        task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        receiveLoop?.cancel()
+        pingLoop?.cancel()
         emit.yield(.state(.disconnected))
         guard wantConnected else { return }
         attempt += 1

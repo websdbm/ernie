@@ -4,26 +4,14 @@ import UIKit
 import UserNotifications
 import WidgetKit
 
-/// Azioni dei widget dell'orso: «Parla» apre l'app in ascolto, «Scrivi» apre la tastiera della chat.
-enum AppLink: Equatable {
-    case voice, chat, family
-
-    init?(url: URL) {
-        guard url.scheme == "ernie" else { return nil }
-        switch url.host() {
-        case "voice": self = .voice
-        case "chat": self = .chat
-        // Widget «Messaggi»: la conversazione, dove c'è il fumetto con «Rispondi».
-        case "family": self = .family
-        default: return nil
-        }
-    }
-}
-
 /// Stato radice: credenziali, profilo, conversazione, voce, notifiche. Una sola conversazione attiva per volta.
 @MainActor
 @Observable
 final class AppModel {
+    private var lifecycle = UUID()
+    private var signInAttempt = UUID()
+    private var pushToken = UserDefaults.standard.string(forKey: "ernie.apnsToken")
+    private var deviceOperation: Task<Void, Never>?
     private(set) var credentials: Credentials?
     private(set) var profile: Profile?
     private(set) var signInError: String?
@@ -35,12 +23,16 @@ final class AppModel {
     let speaker = Speaker()
     /// Allegato in preparazione (skill «Documenti»): lettura sul telefono e caricamento del testo.
     let documents = DocumentComposer()
+    let mediaUploads = MediaUploadQueue.shared
+    let mediaImports = MediaImportCoordinator()
     /// Liste della spesa mostrate nelle schede (spunta, aggiungi, togli via REST).
+    let todoStore = TodoStore()
+    let sshStore = SSHStore()
     let shopping = ShoppingStore()
     /// Promemoria («Ricordami»): copia dei prossimi, notifiche locali, istantanea per il widget.
     let reminders = ReminderStore()
     var settings = LocalSettings.load()
-    /// Azione chiesta da un widget (ernie://voice, ernie://chat): la esegue la chat appena è pronta.
+    /// Destinazione richiesta dal widget, conservata fino a quando la navigazione è pronta.
     var pendingLink: AppLink?
     /// Coda delle condivisioni in elaborazione: una passata alla volta.
     @ObservationIgnored private var isProcessingShares = false
@@ -66,17 +58,21 @@ final class AppModel {
     /// Verifica le credenziali su `/v1/me`, le salva nel Keychain e avvia la conversazione.
     func signIn(serverURL: URL, apiKey: String) async -> Bool {
         signInError = nil
+        let attempt = UUID()
+        signInAttempt = attempt
         let candidate = Credentials(
             serverURL: serverURL,
             apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         do {
             let me = try await ApiClient(credentials: candidate).me()
+            guard signInAttempt == attempt, !Task.isCancelled else { return false }
             try candidate.save()
             profile = me
             await activate(candidate)
             return true
         } catch {
+            guard signInAttempt == attempt, !Task.isCancelled else { return false }
             signInError = Self.describe(error)
             return false
         }
@@ -85,35 +81,54 @@ final class AppModel {
     /// Cambia solo l'indirizzo del server tenendo la chiave: verifica, salva e ricollega la conversazione.
     func changeServer(to url: URL) async -> Bool {
         guard let current = credentials else { return false }
-        conversation?.disconnect()
-        let ok = await signIn(serverURL: url, apiKey: current.apiKey)
-        if !ok { await activate(current) }
-        return ok
+        return await signIn(serverURL: url, apiKey: current.apiKey)
     }
 
     func signOut() {
+        // Cattura l’API prima di cancellare le credenziali; la rete non blocca mai l’uscita.
+        if let api, let token = pushToken {
+            let previous = deviceOperation
+            deviceOperation = Task {
+                await previous?.value
+                try? await api.unregisterDevice(token: token)
+            }
+        }
+        lifecycle = UUID()
+        signInAttempt = UUID()
+        voice?.cancelListening()
         conversation?.disconnect()
         conversation = nil
         voice = nil
         profile = nil
         Credentials.clear()
         credentials = nil
+        speaker.configure(credentials: nil, engine: settings.speechEngine, style: settings.speechStyle)
         inbox.reset()
+        documents.configure(api: nil)
+        todoStore.configure(api: nil)
+        sshStore.configure(api: nil)
+        shopping.configure(api: nil)
+        reminders.configure(api: nil)
         resetLocalState()
+        mediaUploads.configure(nil)
     }
 
     /// All'uscita non resta niente dell'account sul telefono (revisione del 16 ott 2026: le sveglie suonavano ancora,
     /// chi entrava dopo vedeva le chat precedenti e un urgente del vecchio account non si chiudeva più).
     private func resetLocalState() {
+        mediaImports.reset()
         TranscriptStore().clearAll()
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
-        Task { await ReminderAlarms.cancelAll() }
+        ReminderAlarms.cancelAll()
         reminders.clear()
         urgent.clearAll()
         ReminderSnapshot(items: [], updatedAt: .now).save()
         FamilyLatest.clear()
+        FamilyImageCache.clear()
+        MediaImageCache.clear()
+        FamilyMessageSync.pendingRead = []
         if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ReminderSnapshot.appGroup) {
             try? FileManager.default.removeItem(at: group.appendingPathComponent("widget-summary.json"))
         }
@@ -133,6 +148,15 @@ final class AppModel {
         if !on { conversation?.muteSpeech() }
     }
 
+    func setSpeech(engine: SpeechEngine? = nil, style: SpeechStyle? = nil) {
+        conversation?.muteSpeech()
+        if let engine { settings.speechEngine = engine }
+        if let style { settings.speechStyle = style }
+        settings.save()
+        conversation?.settings = settings
+        speaker.configure(credentials: credentials, engine: settings.speechEngine, style: settings.speechStyle)
+    }
+
     /// Impostazioni aggiornate dal server (PATCH /v1/me/settings).
     func applySettings(_ settings: [String: JSONValue]) {
         profile = profile?.with(settings: settings)
@@ -140,13 +164,16 @@ final class AppModel {
 
     func refreshProfile() async {
         guard let api else { return }
-        if let me = try? await api.me() { profile = me }
+        let token = lifecycle
+        if let me = try? await api.me(), lifecycle == token, !Task.isCancelled { profile = me }
     }
 
     func setKillSwitch(_ on: Bool) async -> Bool {
         guard let api else { return false }
+        let token = lifecycle
         do {
             let settings = try await api.updateSettings(["killSwitch": .bool(on)])
+            guard lifecycle == token, !Task.isCancelled else { return false }
             profile = profile?.with(settings: settings)
             return true
         } catch {
@@ -155,18 +182,28 @@ final class AppModel {
     }
 
     func registerDevice(token: String) async {
+        pushToken = token
+        UserDefaults.standard.set(token, forKey: "ernie.apnsToken")
         guard let api else { return }
+        let generation = lifecycle
+        let previous = deviceOperation
         #if DEBUG
         let environment = "development"
         #else
         let environment = "production"
         #endif
-        do {
-            try await api.registerDevice(token: token, environment: environment)
-            Log.push.info("dispositivo registrato per le notifiche push")
-        } catch {
-            Log.push.warning("registrazione dispositivo fallita: \(Self.describe(error), privacy: .public)")
+        let operation = Task {
+            await previous?.value
+            guard lifecycle == generation else { return }
+            do {
+                try await api.registerDevice(token: token, environment: environment)
+                Log.push.info("dispositivo registrato per le notifiche push")
+            } catch {
+                Log.push.warning("registrazione dispositivo fallita: \(Self.describe(error), privacy: .public)")
+            }
         }
+        deviceOperation = operation
+        await operation.value
     }
 
     // MARK: - condivisioni
@@ -177,10 +214,13 @@ final class AppModel {
     /// Messaggi in famiglia nuovi dal server (avvio, primo piano, notifica).
     /// `urgentId`: notifica di un urgente; se la sincronizzazione non lo porta (già visto in chat), lo si cerca.
     func syncFamilyMessages(urgentId: String? = nil) async {
-        await FamilyMessageSync.sync(api: api, conversation: conversation)
+        let token = lifecycle
+        let currentAPI = api
+        await FamilyMessageSync.sync(api: currentAPI, conversation: conversation)
+        guard token == lifecycle, !Task.isCancelled else { return }
         if let urgentId, !urgent.pending.contains(where: { $0.id == urgentId }),
-           let recent = try? await api?.familyMessages(since: nil, limit: 30),
-           let m = recent.first(where: { $0.id == urgentId }) {
+           let recent = try? await currentAPI?.familyMessages(since: nil, limit: 30),
+           let m = recent.first(where: { $0.id == urgentId }), token == lifecycle, !Task.isCancelled {
             urgent.note(m)
         }
     }
@@ -191,6 +231,7 @@ final class AppModel {
         defer { isProcessingShares = false }
         var startedDocument = false
         for item in ShareInbox.pending() {
+            guard conversation.isAttached, !Task.isCancelled else { return }
             switch item.kind {
             case .link(let url, let title, let note):
                 if await deliverShare(url: url, text: nil, title: title, note: note, credentials: credentials) {
@@ -203,12 +244,9 @@ final class AppModel {
             case .images(let urls, let note):
                 guard !startedDocument, !documents.isActive else { continue }
                 startedDocument = true
-                let images = urls.compactMap { UIImage(contentsOfFile: $0.path) }
-                guard !images.isEmpty else {
-                    ShareInbox.remove(item)
-                    continue
+                documents.importPhotos(count: urls.count, source: "photo") { index in
+                    try MediaImportPhoto(data: Data(contentsOf: urls[index]))
                 }
-                documents.importImages(images, source: "photo")
                 await attachSharedDocument(item, note: note, conversation: conversation)
             case .pdf(let url, let note):
                 guard !startedDocument, !documents.isActive else { continue }
@@ -235,8 +273,12 @@ final class AppModel {
     /// Attende la lettura del documento condiviso; se è pronto lo lascia nella barra con la richiesta di metterlo
     /// nel second brain. Se la lettura fallisce l'elemento resta in coda.
     private func attachSharedDocument(_ item: ShareInbox.Item, note: String?, conversation: ConversationStore) async {
-        guard await documentReady() else { return }
+        guard await documentReady(), conversation.isAttached, !Task.isCancelled else { return }
         ShareInbox.remove(item)
+        if documents.ready == nil {
+            if let note { conversation.composerSuggestion = note }
+            return
+        }
         let request = "Metti questo documento nel second brain"
         conversation.composerSuggestion = note.map { "\(request): \($0)" } ?? request
     }
@@ -244,9 +286,9 @@ final class AppModel {
     /// Aspetta che il documento in lettura sia pronto (`true`) o fallito/annullato (`false`); al massimo dieci minuti.
     private func documentReady() async -> Bool {
         let deadline = ContinuousClock.now.advanced(by: .seconds(600))
-        while ContinuousClock.now < deadline {
+        while ContinuousClock.now < deadline, !Task.isCancelled {
             switch documents.phase {
-            case .ready: return true
+            case .ready, .mediaReady: return true
             case .failed, .idle: return false
             case .reading, .uploading: try? await Task.sleep(for: .milliseconds(200))
             }
@@ -257,18 +299,36 @@ final class AppModel {
     // MARK: - privato
 
     private func activate(_ creds: Credentials) async {
+        lifecycle = UUID()
+        let token = lifecycle
+        voice?.cancelListening()
+        conversation?.disconnect()
+        if let old = credentials, old != creds { resetLocalState() }
         credentials = creds
+        mediaUploads.configure(creds)
+        speaker.configure(credentials: creds, engine: settings.speechEngine, style: settings.speechStyle)
         let api = ApiClient(credentials: creds)
-        if profile == nil { profile = try? await api.me() }
+        if profile == nil {
+            let fetched = try? await api.me()
+            guard token == lifecycle, !Task.isCancelled else { return }
+            profile = fetched
+        }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
         store.onFamilyMessage = { [urgent] m in urgent.note(m) }
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
         documents.configure(api: api)
+        todoStore.configure(api: api)
+        sshStore.configure(api: api)
+        todoStore.onChanged = { [weak self] in await self?.reminders.refresh() }
         shopping.configure(api: api)
         reminders.configure(api: api)
-        store.onBlock = { [shopping, reminders] block in
+        store.onBlock = { [shopping, reminders, todoStore] block in
+            if case .todoList(let b) = block {
+                todoStore.apply(b.list)
+                Task { await reminders.refresh() }
+            }
             shopping.apply(block)
             reminders.apply(block)
         }
@@ -279,7 +339,9 @@ final class AppModel {
         Task { await self.voice?.prewarm() }
         store.connect()
         await inbox.refresh()
+        guard token == lifecycle, !Task.isCancelled else { return }
         await requestPushAuthorization()
+        guard token == lifecycle, !Task.isCancelled else { return }
         // Ora e posizione per il contesto dei turni: il permesso si chiede una volta, dopo quello delle notifiche.
         DeviceContextProvider.shared.start()
         // Condivisioni fatte dal foglio «Ernie» mentre l'app era chiusa o in secondo piano.
@@ -320,7 +382,7 @@ final class AppModel {
         UIApplication.shared.registerForRemoteNotifications()
     }
 
-    static func describe(_ error: Error) -> String {
+    nonisolated static func describe(_ error: Error) -> String {
         if let e = error as? ApiError { return e.message }
         return error.localizedDescription
     }
@@ -334,6 +396,8 @@ struct LocalSettings: Codable, Sendable, Equatable {
     var speakTextReplies = false
     /// Conversazione continua (M8): un tocco sul microfono apre un dialogo a mani libere, finché non si tocca ✕.
     var continuousVoice = false
+    var speechEngine: SpeechEngine = .drama
+    var speechStyle: SpeechStyle = .warm
     /// Avatar galleggiante: dove è agganciato, quanto è grande, se è ridotto a badge o nascosto nella linguetta.
     var avatarAnchor: AvatarAnchor = .top
     var avatarSize: Double = 132
@@ -352,6 +416,8 @@ struct LocalSettings: Codable, Sendable, Equatable {
         voiceOutput = try c.decodeIfPresent(Bool.self, forKey: .voiceOutput) ?? true
         speakTextReplies = try c.decodeIfPresent(Bool.self, forKey: .speakTextReplies) ?? false
         continuousVoice = try c.decodeIfPresent(Bool.self, forKey: .continuousVoice) ?? false
+        speechEngine = try c.decodeIfPresent(SpeechEngine.self, forKey: .speechEngine) ?? .drama
+        speechStyle = try c.decodeIfPresent(SpeechStyle.self, forKey: .speechStyle) ?? .warm
         avatarAnchor = try c.decodeIfPresent(AvatarAnchor.self, forKey: .avatarAnchor) ?? .top
         avatarSize = try c.decodeIfPresent(Double.self, forKey: .avatarSize) ?? 132
         avatarCompact = try c.decodeIfPresent(Bool.self, forKey: .avatarCompact) ?? false

@@ -4,7 +4,7 @@ import PDFKit
 import UIKit
 import Vision
 
-/// Documento letto sul telefono: solo testo per pagina (l'originale non lascia il dispositivo e non viene conservato).
+/// Testo letto sul telefono. Le nuove foto sono conservate separatamente nella raccolta Media; i PDF restano solo testo.
 struct ImportedDocument: Sendable, Equatable {
     var title: String?
     var source: String   // scan | photo | pdf
@@ -39,6 +39,7 @@ enum DocumentReader {
         guard count <= maxPages else { throw ReadError.tooManyPages(count) }
         var pages: [String] = []
         for i in 0..<count {
+            try Task.checkCancellation()
             progress(i + 1, count)
             guard let page = pdf.page(at: i) else { pages.append(""); continue }
             let native = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,6 +62,7 @@ enum DocumentReader {
         guard images.count <= maxPages else { throw ReadError.tooManyPages(images.count) }
         var pages: [String] = []
         for (i, image) in images.enumerated() {
+            try Task.checkCancellation()
             progress(i + 1, images.count)
             guard let cg = image.cgImage else { pages.append(""); continue }
             pages.append(try await recognize(cg, orientation: cgOrientation(image.imageOrientation)))
@@ -79,6 +81,7 @@ enum DocumentReader {
         var pages: [String] = []
         var i = 0
         while i < paragraphs.count { pages.append(paragraphs[i..<min(i + 3, paragraphs.count)].joined(separator: "\n\n")); i += 3 }
+        guard pages.count <= maxPages else { throw ReadError.tooManyPages(pages.count) }
         return ImportedDocument(title: nil, source: "pdf", pages: pages)
     }
 
@@ -86,12 +89,14 @@ enum DocumentReader {
 
     /// Vision (iOS 26): riconoscimento del documento con struttura; ripiego sul riconoscimento del testo.
     static func recognize(_ image: CGImage, orientation: CGImagePropertyOrientation = .up) async throws -> String {
+        try Task.checkCancellation()
         var documents = RecognizeDocumentsRequest()
         documents.textRecognitionOptions.recognitionLanguages = languages
         if let observation = try await documents.perform(on: image, orientation: orientation).first {
             let transcript = observation.document.text.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             if !transcript.isEmpty { return transcript }
         }
+        try Task.checkCancellation()
         var text = RecognizeTextRequest()
         text.recognitionLevel = .accurate
         text.recognitionLanguages = languages
@@ -101,10 +106,13 @@ enum DocumentReader {
 
     static func render(page: PDFPage, dpi: CGFloat = 150) -> CGImage? {
         let bounds = page.bounds(for: .mediaBox)
-        let scale = dpi / 72
+        guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0, dpi.isFinite, dpi > 0 else { return nil }
+        let scale = min(dpi / 72, 2400 / max(bounds.width, bounds.height))
         let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
         guard size.width > 0, size.height > 0 else { return nil }
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let image = renderer.image { ctx in
             UIColor.white.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))

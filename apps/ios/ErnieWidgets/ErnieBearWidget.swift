@@ -6,7 +6,7 @@ import WidgetKit
 /// «Scrivi»), grande (anche impegni, automazioni e attività). Sulla schermata di blocco: circolare (l'orso) e
 /// rettangolare (orso e azione). I widget non possono riprodurre animazioni continue: l'orso cambia espressione nel
 /// corso della giornata (voci della timeline con transizione), dorme di notte o quando Ernie è in pausa e si stupisce
-/// prima di un promemoria. Il tocco apre sempre Ernie nella modalità scelta nella configurazione del widget.
+/// prima di un promemoria. Le aree informative aprono la propria scheda; il tocco sull’orso mantiene la modalità configurata.
 
 // MARK: - Configurazione e interazioni
 
@@ -21,7 +21,7 @@ enum ErnieTapAction: String, AppEnum {
         .chat: "Apri la chat",
     ]
 
-    var url: URL { URL(string: "ernie://\(rawValue)")! }
+    var url: URL { (self == .voice ? AppLink.voice : .chat).url }
 }
 
 struct ErnieWidgetIntent: WidgetConfigurationIntent {
@@ -153,19 +153,30 @@ struct WidgetBear: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Image(mono ? "BearMono\(frame)" : "Bear\(frame)")
-                .resizable()
-                .interpolation(.none)
-                // Home in modalità colorata o trasparente (iOS 18+): senza questo l'immagine diventa una sagoma
-                // in tinta unica e l'orso non si vede (segnalato sull'iPhone di Giorgio, 15 ott 2026).
-                .widgetAccentedRenderingMode(mono ? .accented : .fullColor)
-                .scaledToFit()
-                .clipShape(Circle())
-                .overlay {
-                    if ring && !mono { Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: max(1, size / 60)) }
-                }
-                .id(frame)
-                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            let selection = BearWidgetArtwork.selection(legacyFrame: frame)
+            let monochrome = mono ? BearAtlas.cell(costume: "mono", index: selection.index) : nil
+            let image = monochrome ?? BearAtlas.cell(costume: selection.costume, index: selection.index)
+            if let monochrome {
+                BearPortraitArtwork(image: monochrome,
+                                    baseline: BearAtlas.portraitBaseline(costume: "mono", index: selection.index, image: monochrome),
+                                    size: size, monochrome: true)
+                    .widgetAccentable()
+                    .id(frame)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            } else if let image {
+                BearPortraitArtwork(image: image,
+                                    baseline: BearAtlas.portraitBaseline(costume: selection.costume, index: selection.index, image: image),
+                                    size: size)
+                    .overlay {
+                        if ring && !mono { Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: max(1, size / 60)) }
+                    }
+                    .id(frame)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            } else if let fallback = BearAtlas.fallback {
+                Image(uiImage: fallback).resizable().interpolation(.none)
+                    .widgetAccentedRenderingMode(.fullColor)
+                    .scaledToFit().frame(width: size, height: size).clipShape(Circle())
+            }
             if let badge {
                 Text(badge)
                     .font(.system(size: max(10, size * 0.2), weight: .heavy, design: .rounded))
@@ -245,7 +256,7 @@ struct ErnieBearWidgetView: View {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Fmt.greeting(entry.date)).font(.headline).foregroundStyle(ErnieWidgetStyle.ink)
-                    Text(statusLine).font(.caption).foregroundStyle(ErnieWidgetStyle.inkSecondary).lineLimit(2)
+                    statusLink
                 }
                 Spacer(minLength: 0)
                 actionButtons(compact: true)
@@ -262,19 +273,19 @@ struct ErnieBearWidgetView: View {
                 bear(size: 64)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Fmt.greeting(entry.date)).font(.headline).foregroundStyle(ErnieWidgetStyle.ink)
-                    Text(statusLine).font(.caption).foregroundStyle(ErnieWidgetStyle.inkSecondary).lineLimit(2)
+                    statusLink
                 }
                 Spacer(minLength: 0)
             }
             actionButtons(compact: false)
-            section("Prossimi impegni", systemImage: "bell.fill") {
+            linkedSection("Prossimi impegni", systemImage: "bell.fill", destination: .reminders) {
                 if entry.reminders.isEmpty {
                     emptyLine("Nessun promemoria in arrivo")
                 } else {
                     ForEach(entry.reminders.prefix(3)) { r in reminderRow(r) }
                 }
             }
-            section("Automazioni", systemImage: "gearshape.2.fill") {
+            linkedSection("Automazioni", systemImage: "gearshape.2.fill", destination: .automations) {
                 if let list = entry.summary?.automations, !list.isEmpty {
                     ForEach(list.prefix(entry.reminders.count > 2 ? 2 : 3)) { a in automationRow(a) }
                 } else {
@@ -305,14 +316,42 @@ struct ErnieBearWidgetView: View {
     }
 
     private func pill(_ title: String, systemImage: String, prominent: Bool, compact: Bool) -> some View {
-        Label(title, systemImage: systemImage)
+        ViewThatFits(in: .horizontal) {
+            Label(title, systemImage: systemImage).fixedSize(horizontal: true, vertical: false)
+            Image(systemName: systemImage)
+        }
             .font((compact ? Font.caption : Font.subheadline).weight(.semibold))
             .lineLimit(1)
+            .accessibilityLabel(title)
             .foregroundStyle(prominent ? ErnieWidgetStyle.top : ErnieWidgetStyle.ink)
             .padding(.horizontal, compact ? 10 : 14)
             .padding(.vertical, compact ? 7 : 8)
             .frame(maxWidth: .infinity)
             .background(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(ErnieWidgetStyle.card), in: Capsule())
+    }
+
+    @ViewBuilder private var statusLink: some View {
+        if !entry.reminders.isEmpty {
+            Link(destination: AppLink.reminders.url) {
+                Text(statusLine).font(.caption).foregroundStyle(ErnieWidgetStyle.inkSecondary)
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityHint("Apri gli impegni")
+        } else {
+            Text(statusLine).font(.caption).foregroundStyle(ErnieWidgetStyle.inkSecondary).lineLimit(2)
+        }
+    }
+
+    private func linkedSection<Content: View>(_ title: String, systemImage: String,
+                                              destination: AppLink, @ViewBuilder content: () -> Content) -> some View {
+        Link(destination: destination.url) {
+            section(title, systemImage: systemImage, content: content)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Apri \(title.lowercased()) nell’app")
     }
 
     private func section<Content: View>(_ title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {

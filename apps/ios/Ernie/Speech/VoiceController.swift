@@ -58,7 +58,10 @@ final class VoiceController {
         case .listening:
             if !liveTranscript.isEmpty { liveTranscript } else if continuous { "Ti ascolto. Parla: invio da solo quando fai una pausa." } else { "Ti ascolto. Parla, poi tocca ↑ per inviare." }
         case .finalizing: liveTranscript.isEmpty ? "Trascrivo…" : liveTranscript
-        case .waitingReply: speaker.isSpeaking ? "Ernie parla. Tocca il microfono per interromperlo, ✕ per chiudere." : "Ernie risponde… il microfono si riapre alla fine."
+        case .waitingReply:
+            if speaker.isPreparingAudio { "Preparo la voce di Ernie… Tocca il microfono per interrompere." }
+            else if speaker.isSpeaking { "Ernie parla. Tocca il microfono per interromperlo, ✕ per chiudere." }
+            else { "Ernie risponde… il microfono si riapre alla fine." }
         }
     }
 
@@ -67,6 +70,7 @@ final class VoiceController {
     private var capture: MicrophoneCapture?
     private var engine: (any SpeechInput)?
     private var reader: Task<Void, Never>?
+    private var captureGeneration = UUID()
     private var starter: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
@@ -118,11 +122,13 @@ final class VoiceController {
         ticker?.cancel()
         conversation.currentTrace = LatencyTrace()
         conversation.currentTrace?.mark(.pttReleased)
-        Task { await finishAndSend() }
+        let token = captureGeneration
+        Task { await finishAndSend(token: token) }
     }
 
     /// ✕: annulla l'ascolto e chiude la conversazione continua (Ernie, se sta parlando, finisce la frase).
     func cancelListening() {
+        captureGeneration = UUID()
         continuous = false
         starter?.cancel()
         ticker?.cancel()
@@ -130,7 +136,7 @@ final class VoiceController {
         liveTranscript = ""
         inputLevel = 0
         conversation.setListening(false)
-        Task { await teardown(keepSession: false) }
+        teardown(keepSession: false)
     }
 
     /// Barge-in dalla conversazione continua: ferma Ernie, dice al server fin dove è stato sentito, riapre il microfono.
@@ -150,10 +156,12 @@ final class VoiceController {
         inputLevel = 0
         if speaker.isSpeaking || conversation.isBusy { conversation.bargeIn() }
         phase = .preparing
-        starter = Task { await startCapture() }
+        captureGeneration = UUID()
+        let token = captureGeneration
+        starter = Task { await startCapture(token: token) }
     }
 
-    private func startCapture() async {
+    private func startCapture(token: UUID) async {
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw NSError(domain: "Ernie.Speech", code: 4, userInfo: [
@@ -161,7 +169,7 @@ final class VoiceController {
                 ])
             }
             try Task.checkCancellation()
-            await ensureModelWithProgress()
+            await ensureModelWithProgress(token: token)
             try Task.checkCancellation()
             phase = .preparing
             // Mai aprire il microfono mentre la sintesi è in corso (mute logico): `beginCapture` l'ha già fermata.
@@ -172,21 +180,24 @@ final class VoiceController {
                 Task { @MainActor [weak self] in self?.updateLevel(level) }
             }
             let audio = try await capture.start()
+            guard captureGeneration == token, !Task.isCancelled else { capture.stop(); return }
             guard let format = capture.format else { throw NSError(domain: "Ernie.Speech", code: 5) }
             self.capture = capture
             voiceProcessingActive = capture.voiceProcessing
             let engine = await SpeechInputFactory.make()
+            guard captureGeneration == token, !Task.isCancelled else { return }
             self.engine = engine
             engineName = engine.engineName
             let updates = try await engine.start(audio: audio, inputFormat: format)
             try Task.checkCancellation()
+            guard captureGeneration == token else { return }
             phase = .listening
             detector = continuous ? TurnDetector() : nil
             conversation.setListening(true)
             Log.speech.info("ascolto avviato con \(engine.engineName, privacy: .public), continuo \(self.continuous)")
             reader = Task { [weak self] in
                 for await update in updates {
-                    guard let self else { return }
+                    guard let self, self.captureGeneration == token, !Task.isCancelled else { return }
                     self.liveTranscript = update.text
                     self.detector?.transcript(update.text, at: .now)
                     if update.isFinal { self.lastFinalText = update.text }
@@ -194,8 +205,10 @@ final class VoiceController {
             }
             if continuous { startTicker() }
         } catch is CancellationError {
-            await teardown(keepSession: continuous)
+            guard captureGeneration == token else { return }
+            teardown(keepSession: continuous)
         } catch {
+            guard captureGeneration == token, !Task.isCancelled else { return }
             Log.speech.error("avvio ascolto fallito: \(error.localizedDescription, privacy: .public)")
             fail(error.localizedDescription)
         }
@@ -224,14 +237,15 @@ final class VoiceController {
     }
 
     /// Se il modello italiano manca, lo scarica mostrando l'avanzamento; se fallisce si prosegue col ripiego (SFSpeechRecognizer).
-    private func ensureModelWithProgress() async {
+    private func ensureModelWithProgress(token: UUID) async {
         modelState = await SpeechModel.shared.refresh()
+        guard captureGeneration == token, !Task.isCancelled else { return }
         guard case .notInstalled = modelState else { return }
         phase = .downloadingModel(0)
         let install = Task { try await SpeechModel.shared.ensureInstalled() }
         let poller = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                if case .downloading(let p) = await SpeechModel.shared.state { self?.phase = .downloadingModel(p) }
+                if case .downloading(let p) = await SpeechModel.shared.state, self?.captureGeneration == token { self?.phase = .downloadingModel(p) }
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
@@ -256,10 +270,11 @@ final class VoiceController {
         phase = .idle
         inputLevel = 0
         conversation.setListening(false)
-        Task { await teardown(keepSession: false) }
+        teardown(keepSession: false)
     }
 
-    private func finishAndSend() async {
+    private func finishAndSend(token: UUID) async {
+        guard captureGeneration == token, phase == .finalizing else { return }
         guard let engine, let capture else {
             phase = .idle
             continuous = false
@@ -275,13 +290,13 @@ final class VoiceController {
         }
         stopTask.cancel()
         // ✕ premuto mentre trascrivevo: cancelListening ha già chiuso tutto, il messaggio non parte.
-        guard phase == .finalizing else { return }
+        guard captureGeneration == token, phase == .finalizing else { return }
         let text = (lastFinalText ?? liveTranscript).trimmingCharacters(in: .whitespacesAndNewlines)
         conversation.currentTrace?.mark(.transcriptFinal)
         let heard = heardSpeech
         let name = engineName
         let keepGoing = continuous
-        await teardown(keepSession: keepGoing)
+        teardown(keepSession: keepGoing)
         inputLevel = 0
         conversation.setListening(false)
         liveTranscript = ""
@@ -315,7 +330,7 @@ final class VoiceController {
         beginCapture()
     }
 
-    private func teardown(keepSession: Bool) async {
+    private func teardown(keepSession: Bool) {
         reader?.cancel()
         reader = nil
         ticker?.cancel()
@@ -402,7 +417,7 @@ final class VoiceController {
             phase = .idle
             conversation.setListening(false)
             Task {
-                await teardown(keepSession: true)
+                teardown(keepSession: true)
                 self.continuous = keep
                 self.beginCapture()
             }

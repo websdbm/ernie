@@ -3,6 +3,15 @@ import AVFoundation
 /// Sessione audio per la conversazione vocale: registrazione e riproduzione insieme, altoparlante, Bluetooth.
 /// La cancellazione d'eco e l'AGC si attivano su `AVAudioEngine.inputNode.setVoiceProcessingEnabled(true)` (A.13).
 enum AudioSessionController {
+    /// La sintesi avviene a microfono chiuso: voiceChat senza Voice I/O riduce il livello d'uscita.
+    /// Playback conserva l'uscita scelta dall'utente (altoparlante/cuffie) e il normale volume multimediale.
+    static func activateForSpeechPlayback() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try session.setActive(true)
+        Log.speech.info("riproduzione: \(describe(), privacy: .public)")
+    }
+
     static func activateForVoice() throws {
         let session = AVAudioSession.sharedInstance()
         // `.duckOthers` (che include la miscelazione): mentre Ernie ascolta o parla, musica, video e podcast si
@@ -31,7 +40,7 @@ enum AudioSessionController {
         let outs = s.currentRoute.outputs.map(\.portType.rawValue).joined(separator: "+")
         return "sessione \(Int(s.sampleRate)) Hz, canali in ingresso \(s.inputNumberOfChannels), ingresso disponibile \(s.isInputAvailable ? "sì" : "no"), "
             + "route \(ins.isEmpty ? "nessuno" : ins) → \(outs.isEmpty ? "nessuno" : outs), altre app audio \(s.isOtherAudioPlaying ? "sì" : "no"), "
-            + "categoria \(s.category.rawValue), modo \(s.mode.rawValue)"
+            + "categoria \(s.category.rawValue), modo \(s.mode.rawValue), volume \(Int((s.outputVolume * 100).rounded()))%"
     }
 }
 
@@ -47,8 +56,11 @@ struct AudioChunk: @unchecked Sendable {
 /// riproduzione: `installTap` con quel formato solleva un'eccezione e chiude l'app (crash log della build 8).
 /// Qui il formato viene atteso con qualche tentativo, la sessione riattivata, e in ultima istanza si rinuncia
 /// all'elaborazione vocale; se resta vuoto si segnala un errore con la diagnostica della sessione.
+@MainActor
 final class MicrophoneCapture {
-    private let engine = AVAudioEngine()
+    private let engine: AVAudioEngine
+    private var streamContinuation: AsyncStream<AudioChunk>.Continuation?
+    private var hasTap = false
     private(set) var format: AVAudioFormat?
     private(set) var voiceProcessing = false
     /// Ultima diagnostica della sessione raccolta durante l'avvio (vuota se tutto è andato bene al primo colpo).
@@ -56,7 +68,15 @@ final class MicrophoneCapture {
     /// Livello d'ingresso (0…1, scala percettiva) per ogni buffer del tap (~40 ms): da impostare prima di `start()`.
     var onLevel: (@Sendable (Float) -> Void)?
 
+    init(engine: AVAudioEngine = AVAudioEngine()) {
+        self.engine = engine
+    }
+
     func start() async throws -> AsyncStream<AudioChunk> {
+        try Task.checkCancellation()
+        stop()
+        var started = false
+        defer { if !started { stop() } }
         let input = engine.inputNode
         // L'elaborazione vocale (AEC/AGC) va attivata prima di leggere il formato e installare il tap;
         // su alcuni dispositivi non è disponibile: si prosegue senza.
@@ -67,6 +87,7 @@ final class MicrophoneCapture {
             setVoiceProcessing(false, on: input)
             fmt = await waitForFormat(of: input)
         }
+        try Task.checkCancellation()
         guard let fmt else {
             throw NSError(domain: "Ernie.Speech", code: 6, userInfo: [
                 NSLocalizedDescriptionKey: "microfono non disponibile (formato audio vuoto; \(diagnostics))",
@@ -76,28 +97,38 @@ final class MicrophoneCapture {
         Log.speech.info("microfono: \(Int(fmt.sampleRate)) Hz, \(fmt.channelCount) canali, voice processing \(self.voiceProcessing)")
         // 512 buffer ≈ 20 s a 48 kHz: l'audio detto mentre il trascrittore si avvia non va perso.
         let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self, bufferingPolicy: .bufferingNewest(512))
+        streamContinuation = continuation
         let level = onLevel
         // `format: nil` = formato d'uscita del nodo, lo stesso appena verificato.
-        input.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+        // AVAudioNodeTapBlock non è annotato Sendable nell'SDK: senza l'annotazione esplicita
+        // Swift eredita MainActor e termina l'app al primo buffer sul thread audio (SIGTRAP).
+        input.installTap(onBus: 0, bufferSize: 2048, format: nil) { @Sendable buffer, _ in
             level?(AudioLevel.normalized(rms: AudioLevel.rms(of: buffer)))
             // Il buffer del tap vale solo durante la callback: ne serve una copia per consumarlo altrove.
             if let copy = buffer.deepCopy() { continuation.yield(AudioChunk(buffer: copy)) }
         }
+        hasTap = true
         engine.prepare()
-        do {
-            try engine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            continuation.finish()
-            throw error
-        }
-        continuation.onTermination = { @Sendable _ in }
+        try Task.checkCancellation()
+        try engine.start()
+        started = true
         return stream
     }
 
     func stop() {
-        engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        let input = engine.inputNode
+        if hasTap {
+            input.removeTap(onBus: 0)
+            hasTap = false
+        }
+        streamContinuation?.finish()
+        streamContinuation = nil
+        // AVAudioPlayer è esterno al percorso Voice I/O: lasciarlo abilitato può attenuare la risposta.
+        // Va disattivato subito, anche se il trascrittore trattiene ancora il capture locale.
+        setVoiceProcessing(false, on: input)
+        engine.reset()
+        format = nil
     }
 
     private func setVoiceProcessing(_ enabled: Bool, on input: AVAudioInputNode) {
@@ -115,6 +146,7 @@ final class MicrophoneCapture {
     /// con riattivazione della sessione a metà strada. Solo il formato d'uscita conta: è quello usato dal tap.
     private func waitForFormat(of input: AVAudioInputNode) async -> AVAudioFormat? {
         for attempt in 1...4 {
+            guard !Task.isCancelled else { return nil }
             let out = input.outputFormat(forBus: 0)
             if out.sampleRate > 0, out.channelCount > 0 { return out }
             let hw = input.inputFormat(forBus: 0)

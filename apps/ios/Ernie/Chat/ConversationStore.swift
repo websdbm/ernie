@@ -27,19 +27,41 @@ final class ConversationStore {
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?
+    private var speechCorrelationId: String?
     private var lastSeq = -1
     private let speaker: Speaker
     private let inbox: InboxStore
-    private let transcript = TranscriptStore()
+    private let transcript: TranscriptStore
+    private let deviceContext: () -> DeviceContextPayload?
+    private let performanceQueue: PerformanceObservationQueue
+    private let performance: PerformanceTurnRecorder
     private let client: ProtocolClient
+    private var sessionSwitch: Task<Void, Never>?
     private var pump: Task<Void, Never>?
     private var isListening = false
+    private var activeRequest: ChatRequestRecovery?
+    private var failedRequest: ChatRequestRecovery?
+    private var safeRequestReplay = false
+    private var turnWatch: Task<Void, Never>?
+    private var wantsConnection = false
+    private(set) var isAttached = true
+    private var mutedCorrelationId: String?
+    private(set) var recoveryStatus: String?
+    var canRecoverRequest: Bool { failedRequest?.isRecoverable == true && activeCorrelationId == nil }
 
-    init(credentials: Credentials, speaker: Speaker, inbox: InboxStore, settings: LocalSettings) {
+
+    init(credentials: Credentials, speaker: Speaker, inbox: InboxStore, settings: LocalSettings, transcript: TranscriptStore = TranscriptStore(), performanceQueue: PerformanceObservationQueue? = nil,
+         deviceContext: @escaping () -> DeviceContextPayload? = { DeviceContextProvider.shared.context() }) {
+        self.deviceContext = deviceContext
+        let api = ApiClient(credentials: credentials)
+        let queue = performanceQueue ?? PerformanceObservationQueue(send: { try await api.performanceObservations($0) })
+        self.performanceQueue = queue
+        self.performance = PerformanceTurnRecorder(emit: { queue.enqueue($0) })
+        self.transcript = transcript
         self.speaker = speaker
         self.inbox = inbox
         self.settings = settings
-        let store = TranscriptStore()
+        let store = transcript
         let sid = store.currentSessionId ?? Ids.new()
         var loadedItems: [ChatItem] = []
         var loadedSeq = -1
@@ -61,6 +83,7 @@ final class ConversationStore {
         client = ProtocolClient(credentials: credentials, sessionId: sid, lastSeq: loadedSeq)
         // Messaggi rimasti «in attesa» quando l'app è stata chiusa: partono appena c'è la connessione.
         outbox = Self.pendingOutbox(loadedItems)
+        restoreRequest(loadedItems)
         wireSpeaker()
         inbox.onCards = { [weak self] cards in self?.merge(cards) }
     }
@@ -68,6 +91,8 @@ final class ConversationStore {
     // MARK: - connessione
 
     func connect() {
+        isAttached = true
+        wantsConnection = true
         #if DEBUG
         // Solo per le verifiche in simulatore: SIMCTL_CHILD_ERNIE_DEBUG_EMOTION=happy|sad|surprised|playful|love.
         if let e = ProcessInfo.processInfo.environment["ERNIE_DEBUG_EMOTION"], !e.isEmpty {
@@ -77,7 +102,9 @@ final class ConversationStore {
         pump?.cancel()
         pump = Task { [weak self] in
             guard let self else { return }
-            Task { await self.client.connect() }
+            guard self.isAttached, !Task.isCancelled else { return }
+            await self.client.connect()
+            guard self.isAttached, !Task.isCancelled else { await self.client.disconnect(); return }
             for await signal in self.client.signals {
                 if Task.isCancelled { return }
                 self.handle(signal)
@@ -86,6 +113,20 @@ final class ConversationStore {
     }
 
     func disconnect() {
+        performanceQueue.invalidate()
+        performance.end(.abandoned)
+        isAttached = false
+        onSettled = nil
+        onBlock = nil
+        onFamilyMessage = nil
+        speaker.onSpeakingChanged = nil
+        speaker.onAudibleStarted = nil
+        speaker.onPlaybackFailed = nil
+        _ = speaker.stop()
+        wantsConnection = false
+        turnWatch?.cancel()
+        sessionSwitch?.cancel()
+        emotionTask?.cancel()
         pump?.cancel()
         Task { await client.disconnect() }
     }
@@ -104,12 +145,18 @@ final class ConversationStore {
         persist()
         let sid = sessionId
         Log.chat.info("sessione salvata non disponibile: nuova sessione \(sid, privacy: .public)")
-        Task { await client.switchSession(to: sid) }
+        switchTransport(to: sid)
     }
 
     func startNewSession() {
+        guard isAttached else { return }
+        performance.end(.abandoned)
         _ = speaker.stop()
         activeCorrelationId = nil
+        activeRequest = nil
+        failedRequest = nil
+        recoveryStatus = nil
+        safeRequestReplay = false
         agentState = .idle
         // I messaggi in coda appartenevano alla conversazione di prima: non devono partire in questa.
         outbox = []
@@ -119,7 +166,17 @@ final class ConversationStore {
         transcript.setCurrent(sessionId)
         persist()
         let sid = sessionId
-        Task { await client.switchSession(to: sid) }
+        switchTransport(to: sid)
+    }
+
+    private func switchTransport(to target: String, lastSeq: Int = -1) {
+        let previous = sessionSwitch
+        sessionSwitch = Task {
+            await previous?.value
+            guard isAttached, sessionId == target, !Task.isCancelled else { return }
+            await client.switchSession(to: target, lastSeq: lastSeq)
+            if !isAttached { await client.disconnect() }
+        }
     }
 
     /// Conversazioni passate salvate sul telefono (pannello laterale).
@@ -128,9 +185,14 @@ final class ConversationStore {
     /// Riprende una conversazione passata: messaggi e schede dal telefono, stessa sessione sul server (che ne ricorda
     /// la memoria), ripresa degli eventi dall'ultimo numero di sequenza visto.
     func resume(sessionId target: String) {
-        guard target != sessionId, let file = transcript.load(target) else { return }
+        guard isAttached, target != sessionId, let file = transcript.load(target) else { return }
+        performance.end(.abandoned)
         _ = speaker.stop()
         activeCorrelationId = nil
+        activeRequest = nil
+        failedRequest = nil
+        recoveryStatus = nil
+        safeRequestReplay = false
         agentState = .idle
         outbox = []
         items = file.items.map { item in
@@ -144,8 +206,9 @@ final class ConversationStore {
         sessionId = target
         transcript.setCurrent(target)
         outbox = Self.pendingOutbox(items)
+        restoreRequest(items)
         let seq = file.lastSeq
-        Task { await client.switchSession(to: target, lastSeq: seq) }
+        switchTransport(to: target, lastSeq: seq)
     }
 
     /// Toglie una conversazione passata dal telefono (non quella aperta).
@@ -157,7 +220,7 @@ final class ConversationStore {
     // MARK: - azioni dell'utente
 
     /// Messaggi scritti o toccati (schede) mentre Ernie sta ancora rispondendo: partono uno alla volta a turno finito.
-    private struct Outgoing { let messageId: String; let text: String; let inputMode: String; let attachments: [DocumentRef] }
+    private struct Outgoing { let messageId: String; let text: String; let inputMode: String; let attachments: [DocumentRef]; var payload: UserMessagePayload? = nil; var trace: LatencyTrace? = nil }
     private var outbox: [Outgoing] = []
     var queuedCount: Int { outbox.count }
 
@@ -165,7 +228,7 @@ final class ConversationStore {
     private static func pendingOutbox(_ items: [ChatItem]) -> [Outgoing] {
         items.compactMap { item in
             guard case .message(let m) = item, m.role == .user, m.queued == true else { return nil }
-            return Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: [])
+            return Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: [], payload: m.requestPayload)
         }
     }
 
@@ -173,18 +236,27 @@ final class ConversationStore {
     private var turnActivityAt = Date.distantPast
 
     func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = []) {
+        guard isAttached else { return }
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty, !attachments.isEmpty { text = "Riassumi questo documento per studiarlo e fammi lo schema." }
+        if text.isEmpty, !attachments.isEmpty { text = "Leggi questo allegato." }
         guard !text.isEmpty else { return }
+        if canRecoverRequest, ["riprova", "riprendi", "riprova."].contains(text.lowercased()) {
+            recoverLastRequest()
+            return
+        }
         // Risposta a voce in corso: si zittisce la voce ma il turno continua (la risposta scritta arriva intera);
         // il nuovo messaggio si mette in coda e parte a turno finito.
         if speaker.isSpeaking { muteSpeech() }
+        let payload = UserMessagePayload(text: text, inputMode: inputMode, locale: "it-IT",
+            attachments: attachments.isEmpty ? nil : attachments.map { DocumentAttachment(id: $0.id) },
+            device: deviceContext())
         let info = attachments.map { AttachmentInfo(id: $0.id, title: $0.title, pages: $0.pages) }
         let messageId = Ids.new()
         let queued = activeCorrelationId != nil
-        items.append(.message(ChatMessage(id: messageId, correlationId: queued ? "" : Ids.new(), role: .user, text: text, inputMode: inputMode, createdAt: .now, attachments: info.isEmpty ? nil : info, queued: queued ? true : nil)))
+        failedRequest = nil
+        items.append(.message(ChatMessage(id: messageId, correlationId: queued ? "" : Ids.new(), role: .user, text: text, inputMode: inputMode, createdAt: .now, attachments: info.isEmpty ? nil : info, queued: queued ? true : nil, requestPayload: payload)))
         lastError = nil
-        let outgoing = Outgoing(messageId: messageId, text: text, inputMode: inputMode, attachments: attachments)
+        let outgoing = Outgoing(messageId: messageId, text: text, inputMode: inputMode, attachments: attachments, payload: payload, trace: inputMode == "voice" ? currentTrace : nil)
         if queued {
             outbox.append(outgoing)
             persist()
@@ -195,10 +267,19 @@ final class ConversationStore {
 
     /// Invia davvero un messaggio: apre il turno e lo manda al server.
     private func dispatch(_ out: Outgoing) {
+        guard isAttached else { return }
         let correlationId = Ids.new()
-        if let i = items.firstIndex(where: { $0.id == out.messageId }), case .message(var m) = items[i] {
+        let payload = out.payload ?? UserMessagePayload(text: out.text, inputMode: out.inputMode, locale: "it-IT",
+            attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) },
+            device: deviceContext())
+        activeRequest = ChatRequestRecovery(messageId: out.messageId, correlationId: correlationId, payload: payload)
+        recoveryStatus = nil
+        if let i = items.firstIndex(where: { $0.id == "m:\(out.messageId)" }), case .message(var m) = items[i] {
             m.correlationId = correlationId
             m.queued = nil
+            m.requestPayload = payload
+            m.awaitingResponse = true
+            m.recoveryNeeded = nil
             items[i] = .message(m)
         }
         activeCorrelationId = correlationId
@@ -206,51 +287,119 @@ final class ConversationStore {
         turnActivityAt = .now
         agentState = .thinking
         watchTurn(correlationId)
-        if currentTrace == nil || out.inputMode == "text" { currentTrace = LatencyTrace() }
+        currentTrace = out.trace ?? LatencyTrace()
         currentTrace?.mark(.messageSent)
+        performance.begin(session: sessionId, request: correlationId, mode: out.inputMode, trace: currentTrace!)
         persist()
+        guard connection == .connected else {
+            recoveryStatus = "Attendo la connessione per inviare la richiesta…"
+            return
+        }
         Task {
             do {
-                let payload = UserMessagePayload(
-                    text: out.text, inputMode: out.inputMode, locale: "it-IT",
-                    attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) },
-                    device: DeviceContextProvider.shared.context()
-                )
                 try await client.send(.userMessage(payload), correlationId: correlationId)
             } catch {
-                // Non è partito (connessione assente o in ripresa): torna in coda e riparte da solo alla
-                // riconnessione, invece di lasciare il turno aperto per sempre.
-                self.backToQueue(out, correlationId: correlationId)
+                // Esito del trasporto incerto: recupera con la stessa identità, senza duplicare azioni.
+                guard self.wantsConnection, self.activeCorrelationId == correlationId else { return }
+                self.recoveryStatus = "Connessione interrotta. Recupero la richiesta…"
+                Task { await self.client.reconnect() }
             }
         }
     }
 
-    private func backToQueue(_ out: Outgoing, correlationId: String) {
-        if let i = items.firstIndex(where: { $0.id == out.messageId }), case .message(var m) = items[i] {
-            m.queued = true
-            items[i] = .message(m)
+    private func restoreRequest(_ loaded: [ChatItem]) {
+        for item in loaded.reversed() {
+            guard case .message(let message) = item, message.role == .user else { continue }
+            if message.queued == true { continue }
+            if message.awaitingResponse == true, let request = ChatRequestRecovery.from(message) {
+                activeRequest = request
+                activeCorrelationId = request.correlationId
+                activeInputMode = request.payload.inputMode
+                turnActivityAt = .now
+                agentState = .thinking
+            } else if message.recoveryNeeded == true {
+                failedRequest = ChatRequestRecovery.from(message)
+            }
+            break
         }
-        outbox.insert(out, at: 0)
-        if activeCorrelationId == correlationId { activeCorrelationId = nil }
-        lastError = "Non sono collegato: lo mando appena torna la connessione."
-        closeTrace()
-        recomputeState()
+    }
+
+    private func markRequest(_ request: ChatRequestRecovery, pending: Bool, failed: Bool = false) {
+        guard let i = items.firstIndex(where: { $0.id == "m:\(request.messageId)" }),
+              case .message(var message) = items[i] else { return }
+        message.awaitingResponse = pending
+        message.recoveryNeeded = failed
+        items[i] = .message(message)
+    }
+
+    func recoverLastRequest() {
+        guard canRecoverRequest, var request = failedRequest else { return }
+        failedRequest = nil
+        request.attempts = 0
+        activeRequest = request
+        activeCorrelationId = request.correlationId
+        activeInputMode = request.payload.inputMode
+        markRequest(request, pending: true)
+        turnActivityAt = .now
+        agentState = .thinking
+        lastError = nil
         persist()
+        watchTurn(request.correlationId)
+        if connection == .connected { recoverActiveRequest() }
+        else { Task { await client.reconnect() } }
+    }
+
+    private func recoverActiveRequest() {
+        performance.reconnect()
+        guard var request = activeRequest, request.correlationId == activeCorrelationId else { return }
+        guard request.isRecoverable else {
+            interruptTurn(request.correlationId, recoverable: false)
+            return
+        }
+        guard safeRequestReplay else {
+            interruptTurn(request.correlationId)
+            return
+        }
+        guard request.nextAttempt() else {
+            interruptTurn(request.correlationId)
+            return
+        }
+        activeRequest = request
+        recoveryStatus = "Recupero della risposta (\(request.attempts)/3)…"
+        turnActivityAt = .now
+        watchTurn(request.correlationId)
+        Task { [weak self] in
+            guard let self else { return }
+            do { try await self.client.send(.userMessage(request.payload), correlationId: request.correlationId) }
+            catch {
+                guard self.wantsConnection, self.activeCorrelationId == request.correlationId else { return }
+                try? await Task.sleep(for: .seconds(Double(request.attempts * 2)))
+                guard self.wantsConnection, self.activeCorrelationId == request.correlationId else { return }
+                await self.client.reconnect()
+            }
+        }
     }
 
     /// Turno senza notizie (connessione persa a metà, server riavviato): dopo due minuti si chiude da solo, tranne
     /// mentre aspetta una conferma dell'utente.
     private func watchTurn(_ correlationId: String) {
-        Task { [weak self] in
+        turnWatch?.cancel()
+        turnWatch = Task { [weak self] in
             while true {
                 try? await Task.sleep(for: .seconds(20))
-                guard let self, self.activeCorrelationId == correlationId else { return }
+                guard !Task.isCancelled, let self, self.activeCorrelationId == correlationId else { return }
                 let waiting = self.items.contains { item in
                     if case .confirmation(let c) = item { return c.correlationId == correlationId && c.decision == nil }
                     return false
                 }
                 if !waiting, Date().timeIntervalSince(self.turnActivityAt) > 120 {
-                    self.interruptTurn(correlationId)
+                    if self.connection == .connected, self.safeRequestReplay,
+                       let request = self.activeRequest, request.attempts < 3 {
+                        self.turnActivityAt = .now
+                        await self.client.reconnect()
+                    } else {
+                        self.interruptTurn(correlationId)
+                    }
                     return
                 }
             }
@@ -259,17 +408,24 @@ final class ConversationStore {
 
     /// Chiude in locale un turno di cui il server non manderà più la fine (revisione del 16 ott 2026: dopo una
     /// disconnessione si restava su «ci penso» per sempre e i nuovi messaggi aspettavano senza partire).
-    private func interruptTurn(_ correlationId: String) {
+    private func interruptTurn(_ correlationId: String, recoverable: Bool = true) {
         guard activeCorrelationId == correlationId else { return }
+        if let request = activeRequest {
+            failedRequest = recoverable ? request : nil
+            markRequest(request, pending: false, failed: recoverable)
+        }
+        activeRequest = nil
+        recoveryStatus = nil
         if let i = items.lastIndex(where: { if case .message(let m) = $0 { return m.role == .assistant && m.correlationId == correlationId }; return false }),
            case .message(var m) = items[i] {
             m.isStreaming = false
             m.cancelled = true
             items[i] = .message(m)
         } else {
-            items.append(.message(ChatMessage(id: Ids.new(), correlationId: Ids.new(), role: .system, text: "La risposta si è persa per un problema di connessione: riprova.", createdAt: .now)))
+            items.append(.message(ChatMessage(id: Ids.new(), correlationId: Ids.new(), role: .system, text: "Non riesco a recuperare la risposta dopo più tentativi. Puoi riprendere la stessa richiesta con «Recupera risposta».", createdAt: .now)))
         }
         activeCorrelationId = nil
+        performance.end(.interrupted)
         closeTrace()
         recomputeState()
         persist()
@@ -279,32 +435,30 @@ final class ConversationStore {
     /// Riconnessione: parte la coda; il turno aperto, se nella ripresa non arriva niente, era perso.
     private func onReconnected() {
         lastError = nil
-        if let corr = activeCorrelationId {
-            let since = Date.now
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(4))
-                guard let self, self.activeCorrelationId == corr, self.turnActivityAt < since else { return }
-                self.interruptTurn(corr)
-            }
-        } else {
-            drainOutbox()
-        }
+        if activeCorrelationId != nil { recoverActiveRequest() }
+        else { drainOutbox() }
     }
 
     /// A turno chiuso, parte il primo messaggio in coda (se c'è).
     private func drainOutbox() {
+        guard isAttached else { return }
         guard activeCorrelationId == nil, !outbox.isEmpty else { return }
         dispatch(outbox.removeFirst())
     }
 
     /// Il server ha rifiutato il messaggio perché un turno era ancora aperto: torna in coda e riparte da solo.
     private func requeue(correlationId: String) {
+        performance.complete(request: correlationId, outcome: .error, speaking: false)
         guard let i = items.firstIndex(where: { if case .message(let m) = $0 { return m.correlationId == correlationId && m.role == .user } ; return false }),
               case .message(var m) = items[i] else { return }
         m.queued = true
         items[i] = .message(m)
-        outbox.insert(Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: []), at: 0)
-        if activeCorrelationId == correlationId { activeCorrelationId = nil }
+        outbox.insert(Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: [], payload: m.requestPayload), at: 0)
+        if activeCorrelationId == correlationId {
+            activeCorrelationId = nil
+            activeRequest = nil
+            turnWatch?.cancel()
+        }
         recomputeState()
         persist()
         Task {
@@ -315,6 +469,8 @@ final class ConversationStore {
 
     /// Barge-in: ferma la voce subito e dice al server fino a dove l'utente ha sentito.
     func bargeIn() {
+        performance.end(.cancelled)
+        mutedCorrelationId = activeCorrelationId
         let spokenThrough = speaker.stop()
         if let corr = activeCorrelationId {
             Task { try? await client.send(.userCancel(UserCancelPayload(targetCorrelationId: corr, spokenThroughIndex: spokenThrough))) }
@@ -322,7 +478,7 @@ final class ConversationStore {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(3))
                 guard let self, self.activeCorrelationId == corr, !self.speaker.isSpeaking else { return }
-                self.interruptTurn(corr)
+                self.interruptTurn(corr, recoverable: false)
             }
         }
         agentState = isListening ? .listening : .idle
@@ -406,11 +562,14 @@ final class ConversationStore {
     // MARK: - eventi
 
     private func handle(_ signal: ProtocolClient.Signal) {
+        guard isAttached else { return }
         switch signal {
         case .state(let s):
-            let wasConnected = connection == .connected
             connection = s
-            if s == .connected, !wasConnected { onReconnected() }
+            if s != .connected, activeCorrelationId != nil {
+                recoveryStatus = "Connessione interrotta. Recupero la richiesta…"
+                performance.reconnect()
+            }
         case .gap(let expected, let received):
             Log.net.info("buco di sequenza: atteso \(expected) ricevuto \(received)")
         case .event(let e):
@@ -418,13 +577,19 @@ final class ConversationStore {
         }
     }
 
-    private func apply(_ e: AgentEvent) {
+    func apply(_ e: AgentEvent) {
+        guard isAttached else { return }
         // Eventi di un'altra conversazione (risposta in corso quando si è aperta «Nuova conversazione»): fuori.
         if e.sessionId != sessionId, e.sessionId != Self.noSession { return }
-        lastSeq = max(lastSeq, e.seq)
-        if e.correlationId == activeCorrelationId { turnActivityAt = .now }
+        if e.sessionId == sessionId { lastSeq = max(lastSeq, e.seq) }
+        if e.correlationId == activeCorrelationId {
+            turnActivityAt = .now
+            if e.type != "session.pong" { recoveryStatus = nil }
+        }
         switch e.payload {
         case .sessionStarted(let p):
+            safeRequestReplay = p.safeRequestReplay == true
+            onReconnected()
             if let replayed = p.replayed, replayed > 0 { Log.net.info("ripresa: \(replayed) eventi rinviati") }
         case .assistantStarted(let p):
             upsertAssistant(for: e.correlationId) { m in
@@ -432,18 +597,21 @@ final class ConversationStore {
                 m.modelClass = p.modelClass
                 m.isStreaming = true
             }
-            if shouldSpeak(e.correlationId) { speaker.beginTurn() }
+            if shouldSpeak(e.correlationId) { speaker.beginTurn(); speechCorrelationId = e.correlationId }
             if activeCorrelationId == e.correlationId { agentState = .thinking }
         case .assistantTextDelta(let p):
-            currentTrace?.mark(.firstToken)
+            if !p.delta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { performance.mark(.firstToken, request: e.correlationId) }
+            if e.correlationId == activeCorrelationId { currentTrace?.mark(.firstToken) }
             upsertAssistant(for: e.correlationId) { $0.text += p.delta }
-            if shouldSpeak(e.correlationId) { speaker.feed(p.delta) }
+            if shouldSpeak(e.correlationId) { speechCorrelationId = e.correlationId; speaker.feed(p.delta) }
         case .assistantTextCompleted(let p):
-            currentTrace?.mark(.textCompleted)
+            if !p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { performance.mark(.firstToken, request: e.correlationId) }
+            if e.correlationId == activeCorrelationId { currentTrace?.mark(.textCompleted) }
             upsertAssistant(for: e.correlationId) { $0.text = p.text }
-            if shouldSpeak(e.correlationId) { speaker.flush(fullText: p.text) }
+            if shouldSpeak(e.correlationId) { speechCorrelationId = e.correlationId; speaker.flush(fullText: p.text) }
         case .toolStarted(let p):
             upsertAssistant(for: e.correlationId) { m in
+                if m.tools.contains(where: { $0.id == p.toolCallId }) { return }
                 m.tools.append(ToolActivity(id: p.toolCallId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview))
             }
         case .toolCompleted(let p):
@@ -455,23 +623,33 @@ final class ConversationStore {
                 }
             }
         case .assistantCompleted(let p):
+            let outcome: PerformanceObservation.Outcome = switch p.finishReason {
+            case "error": .error
+            case "cancelled": .cancelled
+            default: .completed
+            }
+            performance.complete(request: e.correlationId, outcome: outcome, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
             upsertAssistant(for: e.correlationId) { m in
                 m.isStreaming = false
                 m.usage = p.usage
             }
             finishTurn(e.correlationId)
         case .assistantCancelled:
+            performance.complete(request: e.correlationId, outcome: .cancelled, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
             upsertAssistant(for: e.correlationId) { m in
                 m.isStreaming = false
                 m.cancelled = true
             }
             finishTurn(e.correlationId)
         case .toolConfirmationRequested(let p):
-            items.append(.confirmation(ConfirmationCard(approvalId: p.approvalId, correlationId: e.correlationId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview, reason: p.reason, expiresAt: p.expiresAt, allowAlways: p.allowAlways)))
+            performance.mark(.firstToken, request: e.correlationId)
+            items.append(.confirmation(ConfirmationCard(approvalId: p.approvalId, correlationId: e.correlationId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview, reason: p.reason, expiresAt: p.expiresAt, allowAlways: p.allowAlways, presentation: p.presentation)))
             persist()
         case .toolConfirmationResolved(let p):
             update(confirmation: p.approvalId) { $0.decision = p.decision }
         case .assistantBlock(let p):
+            if case .unknown = p.block { /* No visible content to measure. */ }
+            else { performance.mark(.firstToken, request: e.correlationId) }
             // Messaggio in famiglia: un fumetto suo nella conversazione, non dentro la risposta di Ernie.
             if case .familyMessage(let f) = p.block {
                 addFamily(f)
@@ -479,7 +657,22 @@ final class ConversationStore {
             }
             onBlock?(p.block)
             if case .unknown = p.block { break }
+            if case .todoList(let update) = p.block,
+               activeCorrelationId != e.correlationId,
+               !items.contains(where: { if case .message(let m) = $0 { return m.correlationId == e.correlationId }; return false }) {
+                // Gli aggiornamenti dei promemoria hanno un correlationId autonomo: non sono nuovi turni.
+                items.refreshTodoList(update.list)
+                persist()
+                break
+            }
             upsertAssistant(for: e.correlationId) { m in
+                switch p.block {
+                case .shoppingList, .todoList:
+                    m.blocks.append(p.block)
+                    m.coalesceListSnapshots()
+                    return
+                default: break
+                }
                 // Più promemoria creati nello stesso turno: una scheda sola con tutti, non una per promemoria.
                 if case .reminders(let incoming) = p.block,
                    let i = m.blocks.firstIndex(where: { if case .reminders = $0 { return true }; return false }),
@@ -513,6 +706,7 @@ final class ConversationStore {
                 break
             }
             if p.code == "session_forbidden" { break }
+            performance.complete(request: e.correlationId, outcome: .error, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
             fail(p.message)
             if activeCorrelationId == e.correlationId { finishTurn(e.correlationId) }
         case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .sessionPing, .toolConfirmationRespond:
@@ -521,18 +715,30 @@ final class ConversationStore {
     }
 
     private func shouldSpeak(_ correlationId: String) -> Bool {
-        guard correlationId == activeCorrelationId, settings.voiceOutput else { return false }
+        guard isAttached, correlationId != mutedCorrelationId, correlationId == activeCorrelationId, settings.voiceOutput else { return false }
         return activeInputMode == "voice" || settings.speakTextReplies
     }
 
     /// Zittisce la voce (pulsante in alto) lasciando che il turno continui per iscritto.
     func muteSpeech() {
+        if speaker.isSpeaking, let speechCorrelationId { performance.interruptSpeech(request: speechCorrelationId) }
+        mutedCorrelationId = activeCorrelationId
         _ = speaker.stop()
         recomputeState()
     }
 
     private func finishTurn(_ correlationId: String) {
+        // Anche una risposta arrivata dopo il limite di recupero va salvata nella cronologia.
+        defer { persist() }
+        if let request = failedRequest, request.correlationId == correlationId {
+            markRequest(request, pending: false)
+            failedRequest = nil
+        }
         guard activeCorrelationId == correlationId else { return }
+        if let request = activeRequest { markRequest(request, pending: false) }
+        activeRequest = nil
+        turnWatch?.cancel()
+        recoveryStatus = nil
         activeCorrelationId = nil
         if !speaker.isSpeaking { closeTrace() }
         recomputeState()
@@ -562,12 +768,19 @@ final class ConversationStore {
     // MARK: - voce
 
     private func wireSpeaker() {
+        speaker.onPlaybackFailed = { [weak self] in
+            guard let self, let request = self.speechCorrelationId else { return }
+            self.performance.speechFailed(request: request)
+        }
+        speaker.onAudibleStarted = { [weak self] in
+            self?.currentTrace?.mark(.firstSpeech)
+            if let self, let request = self.speechCorrelationId { self.performance.audibleStarted(request: request) }
+        }
         speaker.onSpeakingChanged = { [weak self] speaking in
             guard let self else { return }
-            if speaking {
-                self.currentTrace?.mark(.firstSpeech)
-            } else {
-                self.currentTrace?.mark(.speechEnded)
+            if !speaking {
+                self.currentTrace?.markSpeechEnded()
+                if let request = self.speechCorrelationId { self.performance.speechStopped(request: request) }
                 if self.activeCorrelationId == nil { self.closeTrace() }
             }
             self.recomputeState()
@@ -601,6 +814,7 @@ final class ConversationStore {
     }
 
     private func merge(_ cards: [NotificationCard]) {
+        guard isAttached else { return }
         var changed = false
         var fresh: [NotificationCard] = []
         for card in cards {
@@ -623,6 +837,7 @@ final class ConversationStore {
 
     /// Messaggio in famiglia (ricevuto o mandato): una volta sola per id, in fondo alla conversazione.
     func addFamily(_ m: FamilyMessageBlock) {
+        guard isAttached else { return }
         FamilyMessageSync.noteSeen(m)
         FamilyLatest(block: m)?.saveAndReload()
         onFamilyMessage?(m)
@@ -644,6 +859,7 @@ final class ConversationStore {
     }
 
     private func persist() {
+        guard isAttached else { return }
         if items.count > 400 { items.removeFirst(items.count - 400) }
         transcript.save(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now))
     }

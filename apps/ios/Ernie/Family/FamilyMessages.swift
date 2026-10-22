@@ -75,6 +75,12 @@ private extension CharacterSet {
 
 @MainActor
 enum FamilyImageCache {
+    private static var generation = UUID()
+    static func clear() {
+        generation = UUID()
+        memory.removeAllObjects()
+        if let folder = fileURL("cache")?.deletingLastPathComponent() { try? FileManager.default.removeItem(at: folder) }
+    }
     /// In memoria al più una trentina di foto decodificate (circa 10 MB l'una): il resto si rilegge dal disco.
     private static let memory: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
@@ -89,12 +95,14 @@ enum FamilyImageCache {
     }
 
     static func image(id: String, api: ApiClient?) async -> UIImage? {
+        let token = generation
         if let m = memory.object(forKey: id as NSString) { return m }
         if let url = fileURL(id), let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
             memory.setObject(img, forKey: id as NSString)
             return img
         }
         guard let api, let data = try? await api.familyMessageImage(id: id), let img = UIImage(data: data) else { return nil }
+        guard token == generation, !Task.isCancelled else { return nil }
         memory.setObject(img, forKey: id as NSString)
         if let url = fileURL(id) {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -491,6 +499,7 @@ struct FamilyComposerSheet: View {
                 replyTo: replyTo,
                 urgent: urgent && canUrgent
             )
+            guard model.credentials == api.credentials, !Task.isCancelled else { return }
             if let prepared { FamilyImageCache.store(prepared.data, id: sent.id) }
             model.conversation?.addFamily(sent)
             dismiss()
@@ -503,6 +512,7 @@ struct FamilyComposerSheet: View {
 /// Fotocamera di sistema per una foto da mandare.
 struct CameraPicker: UIViewControllerRepresentable {
     var onFinish: (UIImage?) -> Void
+    var onCapture: ((MediaImportPhoto) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
@@ -513,14 +523,21 @@ struct CameraPicker: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
+    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish, onCapture: onCapture) }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onFinish: (UIImage?) -> Void
-        init(onFinish: @escaping (UIImage?) -> Void) { self.onFinish = onFinish }
+        let onCapture: ((MediaImportPhoto) -> Void)?
+        init(onFinish: @escaping (UIImage?) -> Void, onCapture: ((MediaImportPhoto) -> Void)?) { self.onFinish = onFinish; self.onCapture = onCapture }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            onFinish(info[.originalImage] as? UIImage)
+            guard let onCapture, let image = info[.originalImage] as? UIImage else {
+                onFinish(info[.originalImage] as? UIImage); return
+            }
+            let properties = info[.mediaMetadata] as? [String: Any] ?? [:]
+            let capturedAt = MediaLocation.cameraDate(properties: properties)
+            let location = MediaLocation.read(properties: properties) ?? DeviceContextProvider.shared.photoLocation(capturedAt: capturedAt)
+            onCapture(MediaImportPhoto(image: image, location: location))
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { onFinish(nil) }
@@ -549,9 +566,10 @@ enum FamilyMessageSync {
         // Prima volta su questo telefono: gli ultimi messaggi, per non partire da una chat vuota.
         let since = lastSeen
         guard let list = try? await api.familyMessages(since: since, limit: since == nil ? 20 : 100) else { return }
+        guard conversation.isAttached, !Task.isCancelled else { return }
         for m in list { conversation.addFamily(m) }
         let ids = Array(pendingRead)
-        if !ids.isEmpty, (try? await api.markFamilyMessagesRead(ids: ids)) != nil { pendingRead.subtract(ids) }
+        if !ids.isEmpty, (try? await api.markFamilyMessagesRead(ids: ids)) != nil, conversation.isAttached { pendingRead.subtract(ids) }
     }
 }
 

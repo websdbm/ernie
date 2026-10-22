@@ -39,6 +39,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.
             if phase == .active {
+                Task { await model.mediaUploads.resume() }
                 Task { await model.processShareInbox() }
                 // Promemoria rimessi in pari: anche quelli legati a un luogo scattati mentre l'app era chiusa.
                 Task { await model.reminders.refresh() }
@@ -47,7 +48,10 @@ struct RootView: View {
                 Task { await model.syncFamilyMessages() }
             }
             // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.
-            if phase == .background { WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear") }
+            if phase == .background {
+                model.voice?.cancelListening()
+                WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear")
+            }
         }
     }
 }

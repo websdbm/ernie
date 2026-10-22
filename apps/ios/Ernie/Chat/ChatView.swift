@@ -6,8 +6,17 @@ import SwiftUI
 struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
+    @State private var showUsage = false
+    @State private var showUsageAdmin = false
     @State private var showBrain = false
+    @State private var showSSH = false
+    @State private var listSheet: ListSheet?
+    @State private var showRecipes = false
+    @State private var showMedia = false
     @State private var showReminders = false
+    @State private var showAutomations = false
+    @State private var dismissingForLink = false
+    @State private var handledWidgetLink = false
     @State private var showSkills = false
     @State private var showFamily = false
     @State private var showProfile = false
@@ -16,6 +25,7 @@ struct ChatView: View {
     @State private var whatsNew: [ChangelogEntry]?
     @State private var debugIcons = false
     @State private var draft = ""
+    @AppStorage(BearCostume.preferenceKey) private var bearCostume = BearCostume.automatic.rawValue
     @FocusState private var composing: Bool
 
     var body: some View {
@@ -43,11 +53,20 @@ struct ChatView: View {
                                     composing: composing,
                                     mouthOpen: model.speaker.mouthOpen
                                 )
+                                .transition(.identity)
                             }
                         }
                     }
                     .frame(maxHeight: .infinity)
                     .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
+                    if let status = conversation.recoveryStatus {
+                        Text(status).font(.footnote).foregroundStyle(Theme.inkSecondary)
+                            .padding(.horizontal).accessibilityAddTraits(.updatesFrequently)
+                    }
+                    if conversation.canRecoverRequest {
+                        Button("Recupera risposta") { conversation.recoverLastRequest() }
+                            .buttonStyle(.bordered).padding(.horizontal)
+                    }
                     InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents)
                 }
                 if Self.showsListening(voice.phase) {
@@ -61,12 +80,25 @@ struct ChatView: View {
                 ProgressView()
             }
         }
+        .environment(\.bearContext, BearContext.latest(in: model.conversation?.items ?? []))
         .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
-        .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showBrain) { SecondBrainView() }
-        .sheet(isPresented: $showReminders) { RemindersView() }
-        .sheet(isPresented: $showSkills) { SkillsSheet() }
-        .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { whatsNew = nil } })) {
+        .sheet(isPresented: $showSettings, onDismiss: sheetDidDismiss) { SettingsView() }
+        .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
+        .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
+        .sheet(isPresented: $showBrain, onDismiss: sheetDidDismiss) { SecondBrainView() }
+        .sheet(isPresented: $showSSH, onDismiss: sheetDidDismiss) { SSHHomeView(store: model.sshStore) }
+        .sheet(item: $listSheet, onDismiss: sheetDidDismiss) { destination in
+            switch destination {
+            case .todo(let id): TodoLibraryView(listId: id)
+            case .shopping(let id): ShoppingListDetailView(listId: id)
+            }
+        }
+        .sheet(isPresented: $showRecipes, onDismiss: sheetDidDismiss) { RecipeLibraryView() }
+        .sheet(isPresented: $showMedia, onDismiss: sheetDidDismiss) { MediaLibraryView() }
+        .sheet(isPresented: $showReminders, onDismiss: sheetDidDismiss) { RemindersView() }
+        .sheet(isPresented: $showAutomations, onDismiss: sheetDidDismiss) { AutomationsView() }
+        .sheet(isPresented: $showSkills, onDismiss: sheetDidDismiss) { SkillsSheet() }
+        .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { whatsNew = nil } }), onDismiss: sheetDidDismiss) {
             WhatsNewView(entries: whatsNew ?? [])
         }
         .task {
@@ -75,25 +107,38 @@ struct ChatView: View {
             Changelog.markSeen()
             if !unseen.isEmpty {
                 try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, !handledWidgetLink, model.pendingLink == nil else { return }
                 whatsNew = unseen
             }
         }
-        .sheet(isPresented: $showFamily) { ClosableSheet { FamilyView() } }
+        .sheet(isPresented: $showFamily, onDismiss: sheetDidDismiss) { ClosableSheet { FamilyView() } }
         // Widget dell'orso: «Parla» avvia l'ascolto, «Scrivi» apre la tastiera (anche ad app appena aperta).
         .onChange(of: model.pendingLink) { consumeLink() }
         .onChange(of: model.voice != nil) { consumeLink() }
         .onAppear { consumeLink() }
-        .sheet(isPresented: $showProfile) { ClosableSheet { ProfileView() } }
+        .sheet(isPresented: $showProfile, onDismiss: sheetDidDismiss) { ClosableSheet { ProfileView() } }
         #if DEBUG
-        .sheet(isPresented: $debugIcons) { IconGalleryView() }
+        .sheet(isPresented: $debugIcons, onDismiss: sheetDidDismiss) { IconGalleryView() }
         .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
         #endif
     }
 
     private func consumeLink() {
         guard let link = model.pendingLink, let voice = model.voice else { return }
-        model.pendingLink = nil
+        guard !dismissingForLink else { return }
+        handledWidgetLink = true
         panelOpen = false
+        // Non attivare microfono/tastiera o una seconda scheda sotto un foglio esistente.
+        if hasPresentedSheet {
+            dismissingForLink = true
+            showSettings = false; showUsage = false; showUsageAdmin = false
+            showBrain = false; showSSH = false; listSheet = nil
+            showRecipes = false; showMedia = false; showReminders = false
+            showAutomations = false; showSkills = false; showFamily = false
+            showProfile = false; whatsNew = nil; debugIcons = false
+            return
+        }
+        model.pendingLink = nil
         switch link {
         case .voice:
             composing = false
@@ -101,10 +146,25 @@ struct ChatView: View {
         case .chat:
             if voice.isActive { voice.cancelListening() }
             composing = true
+        case .reminders, .automations:
+            if voice.isActive { voice.cancelListening() }
+            composing = false
+            if link == .reminders { showReminders = true } else { showAutomations = true }
         case .family:
             if voice.isActive { voice.cancelListening() }
             composing = false
         }
+    }
+
+    private var hasPresentedSheet: Bool {
+        showSettings || showUsage || showUsageAdmin || showBrain || showSSH || listSheet != nil
+        || showRecipes || showMedia || showReminders || showAutomations || showSkills
+        || showFamily || showProfile || whatsNew != nil || debugIcons
+    }
+
+    private func sheetDidDismiss() {
+        dismissingForLink = false
+        consumeLink()
     }
 
     /// La schermata di ascolto copre la chat mentre si parla; quando Ernie risponde torna la conversazione.
@@ -119,17 +179,38 @@ struct ChatView: View {
         switch destination {
         case .newConversation: model.newConversation()
         case .conversation(let id): model.conversation?.resume(sessionId: id)
+        case .ssh: showSSH = true
+        case .todo: listSheet = .todo(nil)
+        case .todoList(let id): listSheet = .todo(id)
+        case .shoppingList(let id): listSheet = .shopping(id)
         case .reminders: showReminders = true
+        case .automations: showAutomations = true
         case .brain, .health: showBrain = true
+        case .recipes: showRecipes = true
+        case .media: showMedia = true
         case .family: showFamily = true
         case .profile: showProfile = true
         case .skills: showSkills = true
         case .settings: showSettings = true
+        case .usage: showUsage = true
+        case .usageAdmin:
+            if model.profile?.capabilities?.usageAdmin == true { showUsageAdmin = true }
         case .whatsNew: whatsNew = Array(Changelog.load().prefix(3))
         }
     }
 
     // MARK: barra in alto
+
+    private enum ListSheet: Identifiable {
+        case todo(String?)
+        case shopping(String)
+        var id: String {
+            switch self {
+            case .todo(let id): "todo:\(id ?? "library")"
+            case .shopping(let id): "shopping:\(id)"
+            }
+        }
+    }
 
     private func topBar(_ conversation: ConversationStore) -> some View {
         HStack(spacing: 10) {
@@ -156,26 +237,48 @@ struct ChatView: View {
         .animation(.spring(duration: 0.4), value: conversation.items.isEmpty)
     }
 
-    /// Capsula al centro: l'orso piccolo (animato) con nome e stato. Tenendola premuta: nuova conversazione e avatar.
+    /// Un solo orso: nella capsula, leggermente sporgente, oppure galleggiante sulla chat.
+    /// Nome, stato e menu restano accessibili anche quando l'avatar è fuori dalla capsula.
     private func companionCapsule(_ conversation: ConversationStore) -> some View {
         let caption = AvatarCaption.text(connection: conversation.connection, state: conversation.agentState) ?? "pronto"
+        let docked = !model.settings.avatarFloating
         return HStack(spacing: 8) {
-            PixelBearView(state: conversation.agentState, mouthOpen: model.speaker.mouthOpen, size: 32, emotion: conversation.lastAvatarEmotion)
-                .frame(width: 36, height: 36)
-                .background(Theme.accent, in: Circle())
-                .clipShape(Circle())
-                .overlay(Circle().strokeBorder(Self.ring(conversation.agentState), lineWidth: 2))
+            if docked {
+                // Il posto resta compatto; l'orso viene disegnato sopra il vetro, senza tagliarlo.
+                Color.clear.frame(width: 36, height: 36)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.companionName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
                 Text(caption).font(.caption2).foregroundStyle(Self.captionColor(conversation))
                     .contentTransition(.opacity)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
         }
-        .padding(.leading, 4)
+        .frame(minHeight: 36)
+        .padding(.leading, docked ? 4 : 14)
         .padding(.trailing, 14)
         .padding(.vertical, 4)
         .ernieGlass(in: Capsule())
+        .overlay(alignment: .leading) {
+            if docked {
+                PixelBearView(state: conversation.agentState, mouthOpen: model.speaker.mouthOpen,
+                              size: 32 * 1.15, emotion: conversation.lastAvatarEmotion)
+                    .frame(width: 36 * 1.15, height: 36 * 1.15)
+                    .background(Theme.accent, in: Circle())
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(Self.ring(conversation.agentState), lineWidth: 2))
+                    .offset(x: -4)
+                    // Niente seconda faccia durante la transizione all'avatar galleggiante.
+                    .transition(.identity)
+            }
+        }
+        // Include la sporgenza nel centraggio: volto, testo e pulsanti restano sullo stesso asse.
+        .padding(.leading, docked ? 4 : 0)
         .contextMenu {
+            Picker("Aspetto di Ernie", selection: $bearCostume) {
+                ForEach(BearCostume.allCases) { costume in Text(costume.title).tag(costume.rawValue) }
+            }
             Button("Nuova conversazione", systemImage: "plus.bubble") { model.newConversation() }
             Button(model.settings.avatarFloating ? "Avatar nella capsula" : "Avatar galleggiante", systemImage: "circle.dashed") {
                 withAnimation(.spring(duration: 0.35)) {
@@ -339,11 +442,11 @@ struct MessageRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 if !message.tools.isEmpty {
                     ForEach(message.tools) { tool in
-                        ToolPill(name: tool.displayName ?? tool.toolId, ok: tool.ok)
+                        ToolPill(name: ToolLabels.name(tool.toolId, displayName: tool.displayName), ok: tool.ok)
                     }
                 }
                 if message.text.isEmpty, message.isStreaming, message.blocks.isEmpty {
-                    ThinkingDots()
+                    BearThinkingIndicator()
                 } else if !message.text.isEmpty {
                     // Risposte di Ernie in testo pieno, senza fumetto (bozzetto 2).
                     MarkdownText(text: message.text)
@@ -377,18 +480,11 @@ struct ToolPill: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            ZStack {
-                Circle().fill(ok == false ? Color.red.opacity(0.14) : Theme.accentSoft)
-                Image(systemName: ok == nil ? "ellipsis" : (ok == true ? "checkmark" : "xmark"))
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(ok == false ? Color.red : Theme.accentText)
-                    .symbolEffect(.variableColor.iterative, isActive: ok == nil)
-            }
-            .frame(width: 20, height: 20)
+            BearActivityIcon(status: ok == nil ? .working : (ok == true ? .success : .failed), size: 24)
             Text(name)
                 .font(.footnote)
                 .foregroundStyle(Theme.inkSecondary)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.leading, 4)
         .padding(.trailing, 12)
@@ -400,77 +496,221 @@ struct ToolPill: View {
     }
 }
 
-struct ThinkingDots: View {
-    @State private var phase = 0
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle().frame(width: 6, height: 6).opacity(phase == i ? 1 : 0.3)
-            }
-        }
-        .foregroundStyle(.secondary)
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(350))
-                phase = (phase + 1) % 3
-            }
-        }
-    }
-}
-
 struct ConfirmationCardView: View {
     let card: ConfirmationCard
     let conversation: ConversationStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Serve la tua conferma", systemImage: "hand.raised.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SkillTint.reminders.color)
-            Text(card.displayName ?? card.toolId)
-            if let args = card.argsPreview {
-                Text(args).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(4)
-            }
-            if let reason = card.reason {
-                Text(reason).font(.caption).foregroundStyle(.secondary)
-            }
-            if let decision = card.decision {
-                Text(decision == "approved" ? (card.always == true ? "Approvata · d'ora in poi senza chiedere" : "Approvata") : decision == "denied" ? "Rifiutata" : "Scaduta")
-                    .font(.caption.weight(.semibold))
-            } else {
-                HStack {
-                    Button("Rifiuta", role: .destructive) { conversation.respond(to: card, approve: false) }
-                    Button("Approva") {
-                        Task {
-                            if await StepUp.authenticate(reason: "Conferma l'azione richiesta da Ernie") {
-                                conversation.respond(to: card, approve: true)
-                            }
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            ConfirmationCardContent(card: card, now: context.date) { approve, always in
+                if approve {
+                    let reason = always ? ConfirmationCopy.alwaysLabel(for: card.toolId) : ConfirmationCopy.presentation(for: card).confirmLabel
+                    guard await StepUp.authenticate(reason: reason) else { return false }
                 }
-                .buttonStyle(.bordered)
-                if card.allowAlways == true {
-                    Button {
-                        Task {
-                            if await StepUp.authenticate(reason: "Consenti sempre questa azione a Ernie") {
-                                conversation.respond(to: card, approve: true, always: true)
+                guard conversation.isAttached, ConfirmationCopy.decision(for: card, now: .now) == nil else { return false }
+                conversation.respond(to: card, approve: approve, always: always)
+                return true
+            }
+        }
+    }
+}
+
+/// Contenuto separato per verificare il layout reale anche a 320 punti e con Dynamic Type.
+struct ConfirmationCardContent: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let card: ConfirmationCard
+    var now = Date.now
+    var onDecision: (Bool, Bool) async -> Bool = { _, _ in false }
+    @State var detailsExpanded = false
+    @State var reviewExpanded = false
+    @State private var optionsExpanded = false
+    @State private var submitting = false
+    @State private var authenticationFailed = false
+
+    private var presentation: ConfirmationPresentation { ConfirmationCopy.presentation(for: card) }
+    private var decision: String? { ConfirmationCopy.decision(for: card, now: now) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let decision {
+                reviewHeader(decision)
+                if reviewExpanded {
+                    Divider()
+                    Text(presentation.summary).font(.callout).foregroundStyle(Theme.ink)
+                    details
+                    reason
+                    if card.always == true {
+                        Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
+                            .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                    }
+                    if decision == "expired" {
+                        Text("Richiesta scaduta. Chiedi a Ernie di ripeterla.")
+                            .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                    }
+                }
+            } else {
+                Label(presentation.title, systemImage: "hand.raised")
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                    .accessibilityAddTraits(.isHeader)
+                Text(ConfirmationCopy.compactSummary(for: card))
+                    .font(.callout).foregroundStyle(Theme.ink)
+                if !presentation.details.isEmpty {
+                    DisclosureGroup(isExpanded: $detailsExpanded) {
+                        details.padding(.top, 6)
+                    } label: {
+                        Text(card.toolId == "recipe_save" ? "Ingredienti e preparazione" : "Dettagli dell’azione")
+                            .font(.subheadline.weight(.medium))
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                }
+                reason
+                if presentation.incomplete == true {
+                    Text("I dettagli di questa richiesta sono incompleti. Annullala e chiedi a Ernie di ripeterla.")
+                        .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { cancelButton.fixedSize(); approveButton.fixedSize() }
+                    VStack(spacing: 10) { approveButton; cancelButton }
+                }
+                .disabled(submitting)
+                if authenticationFailed {
+                    Text("Conferma non completata. Riprova.").font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                }
+                if card.allowAlways == true, presentation.incomplete != true {
+                    DisclosureGroup(isExpanded: $optionsExpanded) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
+                                .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                            Button { send(approve: true, always: true) } label: {
+                                Label(ConfirmationCopy.alwaysLabel(for: card.toolId), systemImage: "checkmark.shield")
+                                    .font(.subheadline.weight(.medium))
+                                    .frame(minHeight: 44, alignment: .leading)
                             }
+                            .buttonStyle(.borderless)
+                            .disabled(submitting)
                         }
                     } label: {
-                        Label("Consenti sempre", systemImage: "checkmark.shield")
+                        Text("Opzioni di conferma").font(.footnote.weight(.medium))
+                            .frame(minHeight: 44, alignment: .leading)
                     }
-                    .font(.caption)
-                    .buttonStyle(.borderless)
-                    Text("Revocabile in Impostazioni → Conferme.")
-                        .font(.caption2).foregroundStyle(.secondary)
                 }
             }
         }
-        .padding()
-        .ernieSurface()
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .ernieSurface(radius: 18)
+        .tint(Theme.accentText)
+        .onChange(of: decision) { _, newValue in
+            if newValue != nil {
+                reviewExpanded = false
+                detailsExpanded = false
+                optionsExpanded = false
+            }
+        }
     }
+
+    private func reviewHeader(_ decision: String) -> some View {
+        Button { reviewExpanded.toggle() } label: {
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top, spacing: 8) {
+                            reviewTitle
+                            Spacer(minLength: 0)
+                            reviewChevron
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            reviewIcon(decision).font(.system(size: 20))
+                            reviewStatus(decision)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        reviewIcon(decision).font(.title3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            reviewTitle
+                            reviewStatus(decision)
+                        }
+                        Spacer(minLength: 4)
+                        reviewChevron
+                    }
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(reviewExpanded ? "Dettagli aperti" : "Dettagli chiusi")
+        .accessibilityHint(reviewExpanded ? "Tocca per chiudere i dettagli" : "Tocca per rivedere la richiesta e i suoi dettagli")
+    }
+
+    private var reviewTitle: some View {
+        Text(ConfirmationCopy.compactTitle(for: card))
+            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+    }
+
+    private func reviewStatus(_ decision: String) -> some View {
+        Text(ConfirmationCopy.status(for: card, decision: decision))
+            .font(.caption).foregroundStyle(Theme.inkSecondary)
+    }
+
+    private func reviewIcon(_ decision: String) -> some View {
+        Image(systemName: decision == "approved" ? "checkmark.circle" : decision == "denied" ? "xmark.circle" : "clock")
+            .foregroundStyle(Theme.accentText).accessibilityHidden(true)
+    }
+
+    private var reviewChevron: some View {
+        Image(systemName: reviewExpanded ? "chevron.up" : "chevron.down")
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.inkSecondary)
+            .accessibilityHidden(true)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(presentation.details.enumerated()), id: \.offset) { _, detail in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(detail.label).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
+                    Text(detail.value).font(.callout).foregroundStyle(Theme.ink).textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    @ViewBuilder private var reason: some View {
+        if let reason = ConfirmationCopy.reason(card.reason) {
+            Text(reason).font(.footnote).foregroundStyle(Theme.inkSecondary)
+        }
+    }
+
+    private var cancelButton: some View {
+        Button("Annulla") { send(approve: false) }
+            .buttonStyle(.bordered).controlSize(.large)
+    }
+
+    private var approveButton: some View {
+        Button(presentation.confirmLabel) { send(approve: true) }
+            .buttonStyle(.borderedProminent).controlSize(.large)
+            .tint(presentation.destructive == true ? Color.red : Theme.accent)
+            .disabled(presentation.incomplete == true)
+    }
+
+    private func send(approve: Bool, always: Bool = false) {
+        guard !submitting else { return }
+        submitting = true
+        authenticationFailed = false
+        Task {
+            let sent = await onDecision(approve, always)
+            authenticationFailed = !sent
+            submitting = false
+        }
+    }
+
 }
 
 struct NotificationCardView: View {

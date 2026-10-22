@@ -1,0 +1,201 @@
+{
+  "base": {
+    "file": "ernie-bear-base",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      180,
+      357,
+      536,
+      719,
+      902,
+      1089,
+      1272,
+      1457,
+      1649,
+      1836
+    ]
+  },
+  "night": {
+    "file": "ernie-bear-night",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      176,
+      357,
+      539,
+      723,
+      908,
+      1091,
+      1277,
+      1458,
+      1647,
+      1840
+    ]
+  },
+  "classic": {
+    "file": "ernie-bear-classic",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      186,
+      369,
+      555,
+      740,
+      927,
+      1117,
+      1307,
+      1497,
+      1687,
+      1900
+    ]
+  },
+  "aviator": {
+    "file": "ernie-bear-aviator",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      174,
+      351,
+      526,
+      706,
+      887,
+      1069,
+      1252,
+      1434,
+      1629,
+      1814
+    ]
+  },
+  "chef": {
+    "file": "ernie-bear-chef",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      192,
+      390,
+      585,
+      782,
+      980,
+      1173,
+      1368,
+      1555,
+      1745,
+      1949
+    ]
+  },
+  "detective": {
+    "file": "ernie-bear-detective",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      185,
+      369,
+      553,
+      739,
+      927,
+      1114,
+      1302,
+      1483,
+      1671,
+      1864
+    ],
+    "insetsByIndex": {
+      "39": {
+        "left": 0,
+        "top": 9,
+        "right": 0,
+        "bottom": 0
+      }
+    }
+  },
+  "engineer": {
+    "file": "ernie-bear-engineer",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      189,
+      370,
+      558,
+      742,
+      932,
+      1116,
+      1302,
+      1486,
+      1678,
+      1879
+    ],
+    "insetsByIndex": {
+      "39": {
+        "left": 18,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    }
+  },
+  "explorer": {
+    "file": "ernie-bear-explorer",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      185,
+      371,
+      558,
+      745,
+      932,
+      1117,
+      1303,
+      1488,
+      1677,
+      1870
+    ]
+  },
+  "astronaut": {
+    "file": "ernie-bear-astronaut",
+    "width": 793,
+    "height": 1983,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      181,
+      364,
+      549,
+      736,
+      927,
+      1113,
+      1300,
+      1483,
+      1674,
+      1869
+    ]
+  },
+  "paws": {
+    "file": "ernie-bear-paws",
+    "width": 1448,
+    "height": 1086,
+    "columns": 4,
+    "rowEdges": [
+      0,
+      350,
+      712,
+      1086
+    ]
+  }
+}

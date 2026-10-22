@@ -5,6 +5,18 @@ import UIKit
 @testable import Ernie
 
 struct DocumentsTests {
+    @MainActor @Test func allegatoRiconosciutoSenzaSchemaImplicito() {
+        let composer = DocumentComposer()
+        #expect(composer.schemaChoice == .auto)
+        #expect(composer.messageText(draft: "") == "Leggi questo allegato.")
+        #expect(composer.messageText(draft: "Acquisisci questa ricetta") == "Acquisisci questa ricetta")
+        composer.schemaChoice = .outline
+        #expect(composer.messageText(draft: "").contains("schema a frecce"))
+        #expect(composer.messageText(draft: "Acquisisci questa ricetta") == "Acquisisci questa ricetta")
+        composer.clear()
+        #expect(composer.schemaChoice == .auto)
+    }
+
     @Test func decodificaBlocchiDocumentoESchema() throws {
         let json = """
         [

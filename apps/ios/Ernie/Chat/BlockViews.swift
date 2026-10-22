@@ -19,6 +19,8 @@ struct BlockView: View {
             DocumentCard(block: block, conversation: conversation)
         case .schema(let block):
             SchemaCard(block: block, conversation: conversation)
+        case .todoList(let block):
+            TodoCard(list: block.list)
         case .shoppingList(let block):
             ShoppingListCard(block: block, conversation: conversation)
         case .shoppingLists(let block):
@@ -1491,6 +1493,8 @@ struct RecipesCard: View {
     let recipes: [RecipeItem]
     var conversation: ConversationStore?
     @State private var expanded: Set<String> = []
+    @State private var showLibrary = false
+    @State private var selectedRecipe: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1507,6 +1511,10 @@ struct RecipesCard: View {
                                     .font(.caption)
                                     .foregroundStyle(Theme.inkSecondary)
                             }
+                        }
+                        if recipe.category != nil || !(recipe.tags ?? []).isEmpty {
+                            Text(([recipe.category].compactMap { $0 } + (recipe.tags ?? [])).joined(separator: " · "))
+                                .font(.caption).foregroundStyle(Theme.accentText)
                         }
                         if !recipe.ingredients.isEmpty {
                             SectionLabel("Ingredienti")
@@ -1545,7 +1553,11 @@ struct RecipesCard: View {
                     }
                 }
             }
+            Button("Apri raccolta ricette", systemImage: "books.vertical") {
+                selectedRecipe = nil; showLibrary = true
+            }.font(.subheadline).buttonStyle(.bordered)
         }
+        .sheet(isPresented: $showLibrary) { RecipeLibraryView(recipeId: selectedRecipe) }
     }
 
     /// «30 min · 4 porzioni»: tempo e dosi sulla riga sotto il titolo.
@@ -1557,10 +1569,17 @@ struct RecipesCard: View {
     @ViewBuilder
     private func actions(for recipe: RecipeItem) -> some View {
         ErnieFlow(spacing: 8) {
+            if let recipeId = recipe.recipeId {
+                Button { selectedRecipe = recipeId; showLibrary = true } label: {
+                    ErnieChip(text: "Apri scheda", systemImage: "book", style: .suggestion)
+                }
+            }
             if let conversation {
+                if recipe.recipeId == nil {
                 Button {
                     conversation.send("Salva la ricetta «\(recipe.title)» tra le mie ricette, con gli ingredienti e i passaggi mostrati.", inputMode: "text")
                 } label: { ErnieChip(text: "Salva", systemImage: "bookmark", style: .suggestion) }
+                }
                 Button {
                     conversation.composerSuggestion = "Affina la ricetta «\(recipe.title)»: "
                 } label: { ErnieChip(text: "Affina", systemImage: "slider.horizontal.3", style: .suggestion) }
@@ -1568,7 +1587,7 @@ struct RecipesCard: View {
                     conversation.send("aggiungi alla lista \(recipe.ingredients.joined(separator: ", "))", inputMode: "text")
                 } label: { ErnieChip(text: "Ingredienti", systemImage: "cart.badge.plus", style: .suggestion) }
             }
-            if let raw = recipe.url, let url = URL(string: raw) {
+            if let url = RecipePresentation.sourceURL(recipe.url) {
                 Link(destination: url) {
                     ErnieChip(text: recipe.source ?? "Fonte", systemImage: "safari", style: .suggestion)
                 }
@@ -1584,6 +1603,7 @@ struct RecipesCard: View {
 struct ShoppingListCard: View {
     let block: ShoppingListBlock
     var conversation: ConversationStore?
+    var refreshOnAppear = true
     @Environment(AppModel.self) private var model
     @State private var newItem = ""
     @State private var confirmDelete = false
@@ -1622,7 +1642,7 @@ struct ShoppingListCard: View {
         }
         .animation(.easeInOut(duration: 0.2), value: list)
         .opacity(isBusy ? 0.85 : 1)
-        .task(id: block.listId) { await model.shopping.refresh(block.listId) }
+        .task(id: block.listId) { if refreshOnAppear { await model.shopping.refresh(block.listId) } }
         .confirmationDialog("Eliminare la lista «\(list.name)» con tutte le voci?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Elimina", role: .destructive) { Task { await model.shopping.delete(listId: list.listId) } }
             Button("Annulla", role: .cancel) {}

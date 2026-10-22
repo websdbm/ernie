@@ -16,12 +16,18 @@ final class ReminderStore {
     /// Promemoria a cui l'utente ha acceso l'email senza un indirizzo nella scheda: la vista chiede l'indirizzo.
     private(set) var needsEmailFor: String? = nil
     private var api: ApiClient?
+    private var generation = UUID()
+    private var revision = 0
 
-    func configure(api: ApiClient?) { self.api = api }
+    func configure(api: ApiClient?) {
+        if self.api != nil || api == nil { clear() }
+        self.api = api
+    }
 
     /// Blocchi `reminders` in arrivo: aggiorna la copia, le notifiche locali e il widget.
     func apply(_ block: ContentBlock) {
         guard case .reminders(let b) = block else { return }
+        revision += 1
         for r in b.reminders where !firedPlaces.contains(r.id) {
             if r.status == "scheduled" {
                 if let i = items.firstIndex(where: { $0.id == r.id }) { items[i] = r } else { items.append(r) }
@@ -70,6 +76,12 @@ final class ReminderStore {
     /// Rilegge dal server (all'avvio e al ritorno in primo piano).
     /// Uscita dall'account: niente promemoria in memoria né luoghi già scattati.
     func clear() {
+        generation = UUID()
+        refreshing?.cancel(); refreshing = nil
+        syncDebounce?.cancel(); syncDebounce = nil
+        pendingSync?.cancel(); pendingSync = nil
+        geocoded = []; replaced = [:]; needsEmailFor = nil
+        lastError = nil; lastRefreshAt = .distantPast
         items = []
         firedPlaces = []
         armedPlaces = []
@@ -87,34 +99,47 @@ final class ReminderStore {
 
     func refresh() async {
         if let running = refreshing { return await running.value }
+        guard api != nil else { return }
+        let token = generation
         let task = Task { await self.reload() }
         refreshing = task
         await task.value
-        refreshing = nil
+        if generation == token { refreshing = nil }
     }
 
     private func reload() async {
         guard let api else { return }
+        let token = generation
         lastRefreshAt = .now
+        let version = revision
         do {
             // Una rilettura partita prima della cancellazione di un promemoria per luogo appena scattato non lo
             // deve riportare in vita (né riprogrammarne la notifica).
-            items = try await api.reminders().filter { !firedPlaces.contains($0.id) }
+            let loaded = try await api.reminders()
+            guard generation == token, !Task.isCancelled else { return }
+            guard revision == version else { return }
+            items = loaded.filter { !firedPlaces.contains($0.id) }
             lastError = nil
             sync()
         } catch {
+            guard generation == token, !Task.isCancelled else { return }
             lastError = AppModel.describe(error)
         }
     }
 
     func cancel(_ r: ReminderItem) async {
         guard let api else { return }
+        let token = generation
         do {
+            revision += 1
             try await api.deleteReminder(id: resolve(r.id))
+            guard generation == token, !Task.isCancelled else { return }
+            revision += 1
             items.removeAll { $0.id == resolve(r.id) }
             lastError = nil
             sync()
         } catch {
+            guard generation == token, !Task.isCancelled else { return }
             lastError = AppModel.describe(error)
         }
     }
@@ -145,8 +170,12 @@ final class ReminderStore {
     /// Modifica dalla scheda: testo e/o ora; il server sostituisce il promemoria (id nuovo).
     func update(_ r: ReminderItem, text: String?, at: Date?) async -> Bool {
         guard let api else { return false }
+        let token = generation
         do {
+            revision += 1
             let updated = try await api.updateReminder(id: r.id, text: text, at: at)
+            guard generation == token, !Task.isCancelled else { return false }
+            revision += 1
             items.removeAll { $0.id == r.id }
             items.append(updated)
             if updated.id != r.id { replaced[r.id] = updated.id }
@@ -154,6 +183,7 @@ final class ReminderStore {
             sync()
             return true
         } catch {
+            guard generation == token, !Task.isCancelled else { return false }
             lastError = AppModel.describe(error)
             return false
         }
@@ -162,14 +192,19 @@ final class ReminderStore {
     /// Canali di un promemoria (sveglia, email): si passa solo il valore cambiato; il server risponde con il promemoria.
     func setChannels(_ r: ReminderItem, email: Bool?, alarm: Bool?) async -> Bool {
         guard let api else { return false }
+        let token = generation
         do {
+            revision += 1
             let (updated, needsEmail) = try await api.updateReminderChannels(id: resolve(r.id), email: email, alarm: alarm)
+            guard generation == token, !Task.isCancelled else { return false }
+            revision += 1
             if let i = items.firstIndex(where: { $0.id == updated.id }) { items[i] = updated } else { items.append(updated) }
             needsEmailFor = needsEmail ? updated.id : nil
             lastError = nil
             sync()
             return true
         } catch {
+            guard generation == token, !Task.isCancelled else { return false }
             lastError = AppModel.describe(error)
             return false
         }
@@ -181,13 +216,16 @@ final class ReminderStore {
     /// Salva l'email nelle impostazioni: il server la copia anche nella scheda anagrafica.
     func saveEmail(_ email: String) async -> Bool {
         guard let api else { return false }
+        let token = generation
         let clean = email.trimmingCharacters(in: .whitespaces)
         do {
             _ = try await api.updateSettings(["email": .string(clean)])
+            guard generation == token, !Task.isCancelled else { return false }
             needsEmailFor = nil
             lastError = nil
             return true
         } catch {
+            guard generation == token, !Task.isCancelled else { return false }
             lastError = AppModel.describe(error)
             return false
         }
@@ -232,11 +270,16 @@ final class ReminderStore {
         // In fila: all'avvio arrivano insieme la rilettura e i blocchi della chat; in parallelo chiederebbero
         // il permesso più volte e potrebbero programmare due volte la stessa sveglia.
         let previous = pendingSync
+        previous?.cancel()
+        let token = generation
         pendingSync = Task {
             await previous?.value
+            guard generation == token, !Task.isCancelled else { return }
             // Le sveglie scelgono da sole: canale del promemoria, altrimenti l'opzione generale.
             let alarmed = await ReminderAlarms.sync(own)
+            guard generation == token, !Task.isCancelled else { return }
             await Self.scheduleLocalNotifications(own.filter { !alarmed.contains($0.id) })
+            guard generation == token, !Task.isCancelled else { return }
             await self.syncPlaces()
         }
     }
@@ -252,6 +295,8 @@ final class ReminderStore {
     /// Notifiche di posizione dei miei promemoria per luogo: cerca le coordinate che mancano (dall'indirizzo, sul
     /// telefono) e le salva nella scheda, toglie dal server quelli scattati, programma i nuovi.
     private func syncPlaces() async {
+        guard let api else { return }
+        let token = generation
         let center = UNUserNotificationCenter.current()
         let mine = {
             self.items.filter {
@@ -263,12 +308,15 @@ final class ReminderStore {
                   !geocoded.contains(address) else { continue }
             geocoded.insert(address)
             guard let coordinate = await Self.geocode(address) else { continue }
+            guard generation == token, !Task.isCancelled else { return }
             setCoordinates(placeId: placeId, coordinate)
-            _ = try? await api?.setPlaceCoordinates(id: placeId, lat: coordinate.latitude, lng: coordinate.longitude)
+            _ = try? await api.setPlaceCoordinates(id: placeId, lat: coordinate.latitude, lng: coordinate.longitude)
         }
+        guard generation == token, !Task.isCancelled else { return }
         let current = mine()
         if current.contains(where: { $0.place?.located == true }) { PlacePermission.requestIfNeeded() }
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("place-") })
+        guard generation == token, !Task.isCancelled else { return }
         var wanted: [String: ReminderItem] = [:]
         for r in current { if let id = Self.placeRequestId(r) { wanted[id] = r } }
         // Di troppo (annullati, luogo spostato): li togliamo noi, quindi non contano come scattati.
@@ -279,14 +327,16 @@ final class ReminderStore {
         }
         // Scattati: programmati qui, non più in attesa, stessa zona; i ripetuti restano.
         for id in armedPlaces where !pending.contains(id) {
+            guard generation == token, !Task.isCancelled else { return }
             armedPlaces.remove(id)
             guard let r = wanted[id], r.place?.repeats != true else { continue }
             wanted[id] = nil
             firedPlaces.insert(r.id)
             items.removeAll { $0.id == r.id }
-            try? await api?.deleteReminder(id: r.id)
+            try? await api.deleteReminder(id: r.id)
         }
         for (id, r) in wanted where !pending.contains(id) {
+            guard generation == token, !Task.isCancelled else { return }
             guard let place = r.place, let lat = place.lat, let lng = place.lng else { continue }
             let maxRadius = CLLocationManager().maximumRegionMonitoringDistance
             let radius = min(max(place.radius ?? 150, 100), maxRadius > 0 ? maxRadius : 1000)
@@ -303,6 +353,9 @@ final class ReminderStore {
             let trigger = UNLocationNotificationTrigger(region: region, repeats: place.repeats == true)
             do {
                 try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+                guard generation == token, !Task.isCancelled else {
+                    center.removePendingNotificationRequests(withIdentifiers: [id]); return
+                }
                 armedPlaces.insert(id)
             } catch {
                 // Senza permesso di posizione la richiesta non entra: riproviamo alla prossima sincronizzazione.
@@ -336,6 +389,7 @@ final class ReminderStore {
     private static func scheduleLocalNotifications(_ items: [ReminderSnapshot.Item]) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("reminder-") }
+        guard !Task.isCancelled else { return }
         // Una richiesta per le una tantum; per i ricorrenti una richiesta ripetuta per ogni giorno della settimana.
         var requests: [(id: String, item: ReminderSnapshot.Item, comps: DateComponents, repeats: Bool)] = []
         for item in items {
@@ -356,6 +410,7 @@ final class ReminderStore {
         let stale = pending.filter { !wanted.contains($0) }
         if !stale.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stale) }
         for r in requests where !pending.contains(r.id) {
+            guard !Task.isCancelled else { return }
             let content = UNMutableNotificationContent()
             content.title = r.item.from.map { "Promemoria da \($0)" } ?? "Promemoria"
             content.body = r.item.text
@@ -364,6 +419,7 @@ final class ReminderStore {
             content.interruptionLevel = .timeSensitive
             let trigger = UNCalendarNotificationTrigger(dateMatching: r.comps, repeats: r.repeats)
             try? await center.add(UNNotificationRequest(identifier: r.id, content: content, trigger: trigger))
+            if Task.isCancelled { center.removePendingNotificationRequests(withIdentifiers: [r.id]); return }
         }
     }
 }

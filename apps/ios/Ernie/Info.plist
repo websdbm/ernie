@@ -45,7 +45,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Per scansionare documenti (il testo viene letto sul telefono, l'immagine non viene conservata) e per scattare le foto da mandare ai familiari.</string>
+	<string>Per scansionare documenti e aggiungere foto alla tua raccolta Media o ai messaggi in famiglia.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conferma delle azioni sensibili: approvazioni e interruttore di emergenza.</string>
 	<key>NSLocalNetworkUsageDescription</key>

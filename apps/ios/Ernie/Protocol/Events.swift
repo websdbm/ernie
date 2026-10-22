@@ -70,6 +70,7 @@ struct SessionStartedPayload: Codable, Sendable, Equatable {
     var protocolMinor: Int?
     var resumedFromSeq: Int?
     var replayed: Int?
+    var safeRequestReplay: Bool? = nil
 }
 
 struct SessionPongPayload: Codable, Sendable, Equatable { var serverTime: String }
@@ -131,6 +132,20 @@ struct ToolConfirmationRequestedPayload: Codable, Sendable, Equatable {
     var expiresAt: String
     /// v1.9: il server ammette «Consenti sempre» per questo tool.
     var allowAlways: Bool?
+    var presentation: ConfirmationPresentation? = nil
+}
+
+struct ConfirmationPresentation: Codable, Sendable, Equatable {
+    struct Detail: Codable, Sendable, Equatable {
+        var label: String
+        var value: String
+    }
+    var title: String
+    var summary: String
+    var confirmLabel: String
+    var details: [Detail]
+    var destructive: Bool? = nil
+    var incomplete: Bool? = nil
 }
 
 struct ToolConfirmationResolvedPayload: Codable, Sendable, Equatable {
@@ -184,7 +199,10 @@ struct ListBlockItem: Codable, Sendable, Equatable, Identifiable {
 }
 
 struct RecipeItem: Codable, Sendable, Equatable, Identifiable {
-    var id: String { title }
+    var id: String { recipeId ?? title }
+    var recipeId: String?
+    var category: String?
+    var tags: [String]?
     var title: String
     var time: String?
     var servings: String?
@@ -596,6 +614,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case recipes([RecipeItem])
     case document(DocumentBlock)
     case schema(SchemaBlock)
+    case todoList(TodoListBlock)
     case shoppingList(ShoppingListBlock)
     case shoppingLists(ShoppingListsBlock)
     case documents(DocumentsBlock)
@@ -624,6 +643,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .document(try DocumentBlock(from: decoder))
         case "schema":
             self = .schema(try SchemaBlock(from: decoder))
+        case "todo_list":
+            self = .todoList(try TodoListBlock(from: decoder))
         case "shopping_list":
             self = .shoppingList(try ShoppingListBlock(from: decoder))
         case "shopping_lists":
@@ -668,6 +689,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .schema(let block):
             try c.encode("schema", forKey: .kind)
+            try block.encode(to: encoder)
+        case .todoList(let block):
+            try c.encode("todo_list", forKey: .kind)
             try block.encode(to: encoder)
         case .shoppingList(let block):
             try c.encode("shopping_list", forKey: .kind)

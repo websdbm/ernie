@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showChangeServer = false
     @State private var alarmReminders = ReminderAlarms.enabled
     @State private var useLocation = DeviceContextProvider.locationEnabled
+    @State private var previewingVoice = false
 
     // Gate della proattività (M9 A3): messaggi spontanei, ore di quiete, tetto giornaliero.
     @State private var proactive = true
@@ -144,6 +145,36 @@ struct SettingsView: View {
                     Text("Un tocco sul microfono apre un dialogo a mani libere: la frase parte da sola quando fai una pausa, Ernie risponde e torna ad ascoltarti; ✕ chiude. Senza questa opzione, tieni il microfono premuto a lungo per lo stesso effetto una volta sola.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    Picker("Voce di Ernie", selection: Binding(
+                        get: { model.settings.speechEngine },
+                        set: { model.setSpeech(engine: $0) }
+                    )) {
+                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    if model.settings.speechEngine == .drama {
+                        Picker("Interpretazione", selection: Binding(
+                            get: { model.settings.speechStyle },
+                            set: { model.setSpeech(style: $0) }
+                        )) {
+                            ForEach(SpeechStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        Text("Una voce espressiva per Ernie. Richiede internet; se non disponibile, la frase viene letta dalla voce di iOS. L’interpretazione cambia il modo di parlare.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    SpeechVolumeControl()
+                    Button {
+                        if previewingVoice {
+                            _ = model.speaker.stop()
+                            previewingVoice = false
+                        } else {
+                            model.speaker.beginTurn()
+                            model.speaker.flush(fullText: "Ciao, sono Ernie. Sono qui per darti una mano, con un po’ di buonumore.")
+                            previewingVoice = true
+                        }
+                    } label: {
+                        Label(previewingVoice ? "Ferma l’esempio" : "Ascolta un esempio", systemImage: previewingVoice ? "stop.fill" : "play.fill")
+                    }
+                    .disabled(!previewingVoice && (model.conversation?.isBusy == true || model.voice?.isActive == true))
                     LabeledContent("Voce", value: model.speaker.voiceDescription)
                 }
                 Section {
@@ -277,6 +308,12 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } } }
             .sheet(isPresented: $showChangeServer) { ChangeServerView() }
+            .onChange(of: model.speaker.isSpeaking) { _, speaking in
+                if !speaking { previewingVoice = false }
+            }
+            .onDisappear {
+                if previewingVoice { _ = model.speaker.stop(); previewingVoice = false }
+            }
             .task {
                 await model.refreshProfile()
                 killSwitch = model.profile?.killSwitch ?? false

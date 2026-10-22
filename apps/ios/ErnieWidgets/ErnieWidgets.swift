@@ -113,6 +113,7 @@ struct ErnieReminderWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ErnieReminders", provider: ReminderProvider()) { entry in
             ReminderWidgetView(entry: entry)
+                .widgetURL(AppLink.reminders.url)
         }
         .configurationDisplayName("Promemoria di Ernie")
         .description("I prossimi promemoria, anche sulla schermata di blocco.")

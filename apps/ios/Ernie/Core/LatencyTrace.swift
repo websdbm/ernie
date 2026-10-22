@@ -3,19 +3,32 @@ import Foundation
 /// Latenza di un turno vocale per stadio (A.14): dal rilascio del pulsante alla prima parola pronunciata.
 struct LatencyTrace: Sendable, Equatable, Codable {
     enum Stage: String, CaseIterable, Sendable, Codable {
-        case pttReleased, transcriptFinal, messageSent, firstToken, textCompleted, firstSpeech, speechEnded
+        case pttReleased, transcriptFinal, messageSent, firstToken, textCompleted, firstSpeech, speechEnded, responseCompleted
     }
 
     private(set) var marks: [Stage: Date] = [:]
+    private var monotonicMarks: [Stage: Double]? = [:]
     let startedAt: Date
 
     init(startedAt: Date = .now) { self.startedAt = startedAt }
 
-    mutating func mark(_ stage: Stage, at date: Date = .now) {
-        if marks[stage] == nil { marks[stage] = date }
+    mutating func mark(_ stage: Stage) {
+        mark(stage, at: .now, uptime: ProcessInfo.processInfo.systemUptime)
+    }
+
+    mutating func mark(_ stage: Stage, at date: Date, uptime: Double? = nil, replacing: Bool = false) {
+        guard replacing || marks[stage] == nil else { return }
+        marks[stage] = date
+        if monotonicMarks == nil { monotonicMarks = [:] }
+        monotonicMarks?[stage] = uptime
+    }
+
+    mutating func markSpeechEnded() {
+        mark(.speechEnded, at: .now, uptime: ProcessInfo.processInfo.systemUptime, replacing: true)
     }
 
     func seconds(from a: Stage, to b: Stage) -> Double? {
+        if let x = monotonicMarks?[a], let y = monotonicMarks?[b] { return y - x }
         guard let x = marks[a], let y = marks[b] else { return nil }
         return y.timeIntervalSince(x)
     }

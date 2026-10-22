@@ -2,8 +2,56 @@ import Foundation
 import SwiftUI
 
 enum Markdown {
+    private static let breakTag = try! NSRegularExpression(pattern: #"(?i)<br\s*/?\s*>"#)
+
+    /// Compatibilità per gli a capo HTML prodotti dal modello, senza interpretare HTML.
+    /// Codice inline, blocchi di codice e tag esplicitamente escapati restano letterali.
+    static func normalizingLineBreaks(_ text: String) -> String {
+        var fence: (marker: Character, length: Int)?
+        var inlineTicks = 0
+        return text.components(separatedBy: "\n").map { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let marker = trimmed.first, marker == "`" || marker == "~" {
+                let length = trimmed.prefix(while: { $0 == marker }).count
+                if let current = fence {
+                    if marker == current.marker, length >= current.length,
+                       trimmed.dropFirst(length).trimmingCharacters(in: .whitespaces).isEmpty { fence = nil }
+                    return line
+                }
+                if inlineTicks == 0, length >= 3 { fence = (marker, length); return line }
+            }
+            if fence != nil { return line }
+            var output = ""
+            var index = line.startIndex
+            while index < line.endIndex {
+                let character = line[index]
+                if character == "\\", inlineTicks == 0 {
+                    output.append(character); index = line.index(after: index)
+                    if index < line.endIndex { output.append(line[index]); index = line.index(after: index) }
+                    continue
+                }
+                if character == "`" {
+                    let start = index
+                    while index < line.endIndex, line[index] == "`" { index = line.index(after: index) }
+                    let length = line.distance(from: start, to: index)
+                    if inlineTicks == 0 { inlineTicks = length } else if inlineTicks == length { inlineTicks = 0 }
+                    output.append(contentsOf: line[start..<index])
+                    continue
+                }
+                if inlineTicks == 0, character == "<",
+                   let match = breakTag.firstMatch(in: line, options: .anchored, range: NSRange(index..<line.endIndex, in: line)),
+                   let range = Range(match.range, in: line) {
+                    output.append("\n"); index = range.upperBound; continue
+                }
+                output.append(character); index = line.index(after: index)
+            }
+            return output
+        }.joined(separator: "\n")
+    }
+
     /// Solo sintassi inline (grassetto, corsivo, codice, link): nessuna immagine remota.
     static func render(_ text: String) -> AttributedString {
+        let text = normalizingLineBreaks(text)
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .inlineOnlyPreservingWhitespace
         options.failurePolicy = .returnPartiallyParsedIfPossible
@@ -95,7 +143,7 @@ enum Markdown {
             if !numbered.isEmpty { out.append(.numbered(start: numberedStart, numbered)); numbered = [] }
         }
 
-        for rawLine in text.components(separatedBy: "\n") {
+        for rawLine in normalizingLineBreaks(text).components(separatedBy: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
                 if let c = code { out.append(.code(c.joined(separator: "\n"))); code = nil } else { flushParagraph(); flushLists(); code = [] }
@@ -141,6 +189,7 @@ enum Markdown {
 struct MarkdownText: View {
     let text: String
     var font: Font = .body
+    var quoteColor: Color = .secondary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -152,11 +201,12 @@ struct MarkdownText: View {
                         Text(Markdown.render(part)).font(font).lineSpacing(3)
                     }
                 case .heading(let s):
-                    Text(Markdown.render(s)).font(.headline).padding(.top, 2)
+                    Text(Markdown.render(s)).font(.headline)
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
                 case .quote(let s):
                     HStack(alignment: .top, spacing: 8) {
                         RoundedRectangle(cornerRadius: 2).fill(.secondary.opacity(0.4)).frame(width: 3)
-                        Text(Markdown.render(s)).font(font).foregroundStyle(.secondary)
+                        Text(Markdown.render(s)).font(font).foregroundStyle(quoteColor)
                     }
                 case .code(let s):
                     Text(s)

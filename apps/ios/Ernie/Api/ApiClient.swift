@@ -262,8 +262,11 @@ struct Profile: Codable, Sendable, Equatable {
     var role: String
     var settings: [String: JSONValue]
     var server: ServerInfo?
+    /// Concessioni server: il ruolo owner da solo non abilita i dati delle altre installazioni.
+    var capabilities: Capabilities? = nil
 
     struct ServerInfo: Codable, Sendable, Equatable { var version: String }
+    struct Capabilities: Codable, Sendable, Equatable { var usageAdmin: Bool }
 
     var killSwitch: Bool { settings["killSwitch"]?.boolValue ?? false }
 
@@ -330,9 +333,15 @@ struct ApprovalResult: Codable, Sendable, Equatable {
 /// REST del backend con la chiave API dell'utente (stessa autenticazione del WebSocket).
 struct ApiClient: Sendable {
     let credentials: Credentials
-    private let session = URLSession.shared
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private let transport: Transport
+    let usesBackgroundMedia: Bool
 
-    init(credentials: Credentials) { self.credentials = credentials }
+    init(credentials: Credentials, transport: Transport? = nil) {
+        self.credentials = credentials
+        self.usesBackgroundMedia = transport == nil
+        self.transport = transport ?? { try await URLSession.shared.data(for: $0) }
+    }
 
     func me() async throws -> Profile { try await request("GET", "/v1/me") }
 
@@ -340,6 +349,12 @@ struct ApiClient: Sendable {
         struct Out: Decodable { var settings: [String: JSONValue] }
         let out: Out = try await request("PATCH", "/v1/me/settings", body: patch)
         return out.settings
+    }
+
+    func automations() async throws -> [AutomationItem] {
+        struct Out: Decodable { var automations: [AutomationItem] }
+        let out: Out = try await request("GET", "/v1/automations")
+        return out.automations.filter { !$0.key.hasPrefix("promemoria_") }
     }
 
     func notifications(unreadOnly: Bool, limit: Int = 50) async throws -> [NotificationItem] {
@@ -389,6 +404,13 @@ struct ApiClient: Sendable {
     // MARK: liste della spesa (scheda interattiva, v1.4)
 
     private struct BlockOut: Decodable { var block: ContentBlock }
+
+    func shoppingLists() async throws -> [ShoppingListSummary] {
+        struct Entry: Decodable { var id: String; var name: String; var status: String; var open: Int; var bought: Int }
+        struct Out: Decodable { var lists: [Entry] }
+        let out: Out = try await request("GET", "/v1/shopping/lists?archived=1")
+        return out.lists.map { .init(id: $0.id, name: $0.name, open: $0.open, bought: $0.bought, archived: $0.status == "archived") }
+    }
 
     func shoppingList(id: String) async throws -> ContentBlock {
         let out: BlockOut = try await request("GET", "/v1/shopping/lists/\(id)")
@@ -559,6 +581,12 @@ struct ApiClient: Sendable {
         try await requestNoContent("DELETE", "/v1/reminders/\(id)")
     }
 
+    func unregisterDevice(token: String) async throws {
+        let allowed = CharacterSet.alphanumerics
+        guard !token.isEmpty, token.unicodeScalars.allSatisfy(allowed.contains) else { return }
+        try await requestNoContent("DELETE", "/v1/devices/\(token)")
+    }
+
     func registerDevice(token: String, environment: String) async throws {
         struct Body: Encodable { var platform = "ios"; var token: String; var environment: String; var appVersion: String?; var locale: String? }
         struct Out: Decodable { var id: String }
@@ -568,13 +596,27 @@ struct ApiClient: Sendable {
 
     // MARK: - privato
 
+    func mediaImageData(_ id: String, thumbnail: Bool) async throws -> Data {
+        guard let url = URL(string: "/v1/media/\(id)/image?size=\(thumbnail ? "thumbnail" : "full")", relativeTo: credentials.serverURL) else { throw URLError(.badURL) }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        req.setValue("Bearer \(credentials.apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await transport(req)
+        try Task.checkCancellation()
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
+            throw ApiError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, code: "image", message: "Immagine non disponibile")
+        }
+        guard response.mimeType == "image/jpeg", data.count <= 3_000_000 else { throw URLError(.cannotDecodeContentData) }
+        return data
+    }
+
     /// Richiesta che non restituisce un corpo (204): errore se lo stato non è 2xx.
-    private func requestNoContent(_ method: String, _ path: String) async throws {
+    func requestNoContent(_ method: String, _ path: String) async throws {
         guard let url = URL(string: path, relativeTo: credentials.serverURL) else { throw ApiError(status: 0, code: "bad_url", message: "URL non valido") }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(credentials.apiKey)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await transport(req)
+        try Task.checkCancellation()
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             struct Failure: Decodable { var error: String?; var message: String? }
@@ -593,7 +635,8 @@ struct ApiClient: Sendable {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONEncoder().encode(body)
         }
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await transport(req)
+        try Task.checkCancellation()
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let f = try? JSONDecoder().decode(ApiFailure.self, from: data)
@@ -607,3 +650,43 @@ struct ApiClient: Sendable {
 struct EmptyResponse: Decodable, Sendable {}
 
 private struct ApiFailure: Decodable { var error: String?; var message: String? }
+
+extension ApiClient {
+    func todoLists() async throws -> [TodoList] {
+        struct Response: Decodable { var lists: [TodoList] }
+        let response: Response = try await request("GET", "/v1/todo/lists")
+        return response.lists
+    }
+    func todoList(id: String) async throws -> TodoList {
+        struct Response: Decodable { var list: TodoList }
+        let response: Response = try await request("GET", "/v1/todo/lists/\(id)")
+        return response.list
+    }
+    func todoCreate(_ list: TodoList) async throws -> TodoList {
+        struct Response: Decodable { var list: TodoList }
+        let response: Response = try await request("POST", "/v1/todo/lists", body: TodoWriteBody(list: list, creating: true))
+        return response.list
+    }
+    func todoUpdate(_ list: TodoList) async throws -> TodoList {
+        struct Response: Decodable { var list: TodoList }
+        let response: Response = try await request("PUT", "/v1/todo/lists/\(list.id)", body: TodoWriteBody(list: list, creating: false))
+        return response.list
+    }
+}
+
+private struct TodoWriteBody: Encodable, Sendable {
+    let list: TodoList
+    let creating: Bool
+    enum CodingKeys: CodingKey { case id, name, mode, day, timezone, revision, items }
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if creating { try c.encode(list.id, forKey: .id) }
+        else { try c.encode(list.revision, forKey: .revision) }
+        try c.encode(list.name, forKey: .name)
+        try c.encode(list.mode, forKey: .mode)
+        if let day = list.day { try c.encode(day, forKey: .day) }
+        else { try c.encodeNil(forKey: .day) }
+        try c.encode(list.timezone, forKey: .timezone)
+        try c.encode(list.items, forKey: .items)
+    }
+}

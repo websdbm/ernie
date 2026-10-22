@@ -4,13 +4,22 @@ import SwiftUI
 enum PanelDestination: Hashable {
     case newConversation
     case conversation(String)
+    case ssh
+    case todo
+    case todoList(String)
+    case shoppingList(String)
     case reminders
+    case automations
+    case recipes
+    case media
     case brain
     case health
     case family
     case profile
     case skills
     case settings
+    case usage
+    case usageAdmin
     case whatsNew
 }
 
@@ -22,7 +31,7 @@ struct SidePanel: View {
     @Environment(AppModel.self) private var model
     /// Conversazioni passate, ricaricate ogni volta che il pannello si apre.
     @State private var sessions: [TranscriptStore.SessionSummary] = []
-    /// Skill dell'account: serve solo per sapere se «Salute» è attiva.
+    /// Skill dell'account: determina quali sezioni mostrare.
     @State private var skills: [SkillInfo] = []
     /// Spostamento durante il trascinamento verso sinistra (mai positivo).
     @State private var dragOffset: CGFloat = 0
@@ -49,7 +58,12 @@ struct SidePanel: View {
             guard isOpen else { return }
             dragOffset = 0
             sessions = model.conversation?.pastSessions() ?? []
-            skills = (try? await model.api?.skills()) ?? skills
+            let updatedSkills = try? await model.api?.skills()
+            guard !Task.isCancelled else { return }
+            skills = updatedSkills ?? skills
+            async let shopping: Void = refreshShoppingLists()
+            async let todo: Void = refreshTodoLists()
+            _ = await (shopping, todo)
         }
     }
 
@@ -69,22 +83,37 @@ struct SidePanel: View {
 
     /// Il pannello vero e proprio: a tutta altezza, sotto la barra di stato.
     private func panel(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            // Il pulsante e l'avviso di controllo genitori sono in un gruppo senza spazio: se l'avviso è vuoto non resta un vuoto.
-            VStack(alignment: .leading, spacing: 0) {
-                newConversationButton
-                SupervisionNotice(compact: false)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                // Il pulsante e l'avviso di controllo genitori sono in un gruppo senza spazio: se l'avviso è vuoto non resta un vuoto.
+                VStack(alignment: .leading, spacing: 0) {
+                    newConversationButton
+                    SupervisionNotice(compact: false)
+                }
+                ListShortcutsSection(
+                    shopping: isSkillActive("shopping_list") ? model.shopping.summaries : [],
+                    todo: isSkillActive("todo") ? model.todoStore.orderedLists : [],
+                    onSelect: choose
+                )
+                if isSkillActive("shopping_list"), let error = model.shopping.catalogError {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(error).font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        Button("Riprova") { Task { await refreshShoppingLists() } }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
+                    }.padding(.horizontal, 12)
+                }
+                sectionRows
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(height: 1)
+                historyArea
             }
-            sectionRows
-            Rectangle()
-                .fill(Theme.hairline)
-                .frame(height: 1)
-            historyArea
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .accessibilityIdentifier("side-panel-scroll")
         .frame(width: width)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(panelFill.ignoresSafeArea())
@@ -153,10 +182,31 @@ struct SidePanel: View {
 
     // MARK: - sezioni
 
+    private func isSkillActive(_ id: String) -> Bool { skills.contains { $0.id == id && $0.active } }
+
+    private func refreshShoppingLists() async {
+        if isSkillActive("shopping_list") { await model.shopping.load() }
+    }
+
+    private func refreshTodoLists() async {
+        if isSkillActive("todo") { await model.todoStore.load() }
+    }
+
     /// Promemoria, Second brain (se attiva), Salute (se attiva), Skill, Famiglia, Novità.
     private var sectionRows: some View {
         VStack(spacing: 2) {
+            sectionRow("Automazioni", icon: "gearshape.2.fill", tint: .neutral, destination: .automations)
             sectionRow("Promemoria", icon: "bell.fill", tint: .reminders, badge: upcomingReminders, destination: .reminders)
+            if skills.contains(where: { $0.id == "ssh" && $0.active }) {
+                sectionRow("Server e siti", icon: "terminal", tint: .brain, destination: .ssh)
+            }
+            if skills.contains(where: { $0.id == "todo" && $0.active }) {
+                sectionRow("Attività", icon: "checklist", tint: .brain, destination: .todo)
+            }
+            sectionRow("Media", icon: "photo.on.rectangle.angled", tint: .neutral, destination: .media)
+            if skills.contains(where: { $0.id == "ricette" && $0.active }) {
+                sectionRow("Ricette", icon: "fork.knife", tint: .recipes, destination: .recipes)
+            }
             if showsBrain {
                 sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)
             }
@@ -165,6 +215,10 @@ struct SidePanel: View {
             }
             sectionRow("Skill", icon: "bolt.shield.fill", tint: .neutral, destination: .skills)
             sectionRow("Famiglia", icon: "person.2.fill", tint: .neutral, destination: .family)
+            sectionRow("I miei consumi", icon: "chart.bar.xaxis", tint: .brain, destination: .usage)
+            if model.profile?.capabilities?.usageAdmin == true {
+                sectionRow("Consumi installazioni", icon: "chart.bar.doc.horizontal", tint: .neutral, destination: .usageAdmin)
+            }
             sectionRow("Novità", icon: "sparkles", tint: .brain, destination: .whatsNew)
         }
     }
@@ -246,30 +300,26 @@ struct SidePanel: View {
                         .font(.subheadline)
                         .foregroundStyle(Theme.inkSecondary)
                         .padding(.horizontal, 12)
-                    Spacer(minLength: 0)
                 }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        eyebrow
-                            .padding(.bottom, 4)
-                        ForEach(historyGroups) { group in
-                            Text(group.bucket.title)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.inkSecondary)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 10)
-                                .padding(.bottom, 2)
-                            ForEach(group.sessions) { session in
-                                sessionRow(session)
-                            }
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    eyebrow
+                        .padding(.bottom, 4)
+                    ForEach(historyGroups) { group in
+                        Text(group.bucket.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.inkSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 10)
+                            .padding(.bottom, 2)
+                        ForEach(group.sessions) { session in
+                            sessionRow(session)
                         }
                     }
-                    .padding(.bottom, 12)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var eyebrow: some View {
@@ -338,7 +388,8 @@ struct SidePanel: View {
                 dragOffset = min(0, value.translation.width)
             }
             .onEnded { value in
-                let shouldClose = value.translation.width < -90 || value.predictedEndTranslation.width < -160
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
+                let shouldClose = isHorizontal && (value.translation.width < -90 || value.predictedEndTranslation.width < -160)
                 if shouldClose {
                     close()
                 } else {

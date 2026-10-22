@@ -73,7 +73,7 @@ struct ListeningOverlay: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Pallino rosso mentre ascolta; altrove una rotellina che gira.
+    /// Pallino rosso mentre ascolta; zampa animata durante preparazione e trascrizione.
     @ViewBuilder
     private var statusMark: some View {
         if voice.phase == .listening {
@@ -82,8 +82,7 @@ struct ListeningOverlay: View {
                 .frame(width: 9, height: 9)
                 .accessibilityHidden(true)
         } else {
-            ProgressView()
-                .controlSize(.small)
+            BearActivityIcon(status: .working, size: 22)
         }
     }
 

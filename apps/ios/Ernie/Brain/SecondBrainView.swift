@@ -17,7 +17,54 @@ struct BrainNoteSummary: Codable, Sendable, Identifiable, Hashable {
     var links: [String]
     var `private`: Bool
     var excerpt: String
+    var resource: BrainResource? = nil
     var id: String { path }
+}
+
+struct BrainOverview: Codable, Sendable {
+    struct Fact: Codable, Sendable {
+        var text: String
+        var sourcePath: String
+        var sourceTitle: String
+        var date: String?
+    }
+    struct Place: Codable, Sendable, Identifiable {
+        var path: String
+        var title: String
+        var address: String?
+        var coords: [Double]?
+        var id: String { path }
+        var mapsURL: URL? { BrainLocation.mapsURL(coords: coords, title: title) }
+    }
+    var facts: [Fact]
+    var places: [Place]
+}
+
+/// Valida dati esterni prima di passare una posizione a MapKit o Mappe.
+enum BrainLocation {
+    static func coordinate(_ coords: [Double]?) -> CLLocationCoordinate2D? {
+        guard let coords, coords.count == 2,
+              coords.allSatisfy(\.isFinite), (-90...90).contains(coords[0]), (-180...180).contains(coords[1]) else { return nil }
+        return CLLocationCoordinate2D(latitude: coords[0], longitude: coords[1])
+    }
+
+    static func mapsURL(coords: [Double]?, title: String) -> URL? {
+        guard let coordinate = coordinate(coords) else { return nil }
+        var url = URLComponents()
+        url.scheme = "https"
+        url.host = "maps.apple.com"
+        url.queryItems = [URLQueryItem(name: "ll", value: "\(coordinate.latitude),\(coordinate.longitude)"),
+                          URLQueryItem(name: "q", value: title)]
+        return url.url
+    }
+
+    static func noteURL(path: String) -> URL? {
+        var url = URLComponents()
+        url.scheme = "ernie-brain"
+        url.host = "note"
+        url.queryItems = [BrainDestination.reference(path).queryItem]
+        return url.url
+    }
 }
 
 struct BrainNoteDetail: Codable, Sendable {
@@ -28,33 +75,71 @@ struct BrainNoteDetail: Codable, Sendable {
     var refersFrom: String?
     var refersTo: String?
     var place: String?
+    var coords: [Double]?
     var links: [String]
     var `private`: Bool
     var source: String?
     var body: String
+    var overview: BrainOverview?
+    var resource: BrainResource? = nil
+    var resourceLinks: [String]? = nil
+    var knowledge: BrainKnowledge? = nil
+    var hasKnowledge: Bool { knowledge?.version == 1 && (!(knowledge?.facts.isEmpty ?? true) || !(knowledge?.routines.isEmpty ?? true)) }
+
+    /// Un server precedente può non inviare il riepilogo: il corpo resta allora interamente visibile.
+    var hasOverview: Bool {
+        guard type == "persona" || type == "luogo", let overview else { return false }
+        return !overview.facts.isEmpty || !overview.places.isEmpty
+    }
+
+    var visiblePlaces: [BrainOverview.Place] {
+        var places = hasOverview ? overview?.places ?? [] : []
+        if BrainLocation.coordinate(coords) != nil {
+            if let index = places.firstIndex(where: { $0.path == path }) {
+                if BrainLocation.coordinate(places[index].coords) == nil { places[index].coords = coords }
+            } else {
+                let linkedPlace = place?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let positionTitle = type == "immagine"
+                    ? (linkedPlace?.isEmpty == false ? linkedPlace! : "Posizione dello scatto")
+                    : (type == "luogo" ? title : "Posizione citata")
+                places.insert(.init(path: path, title: positionTitle, coords: coords), at: 0)
+            }
+        }
+        func rank(_ place: BrainOverview.Place) -> Int {
+            if place.path == path { return 0 }
+            if BrainLocation.coordinate(place.coords) != nil { return 1 }
+            if let address = place.address, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return 2 }
+            return 3
+        }
+        return places.enumerated().sorted { lhs, rhs in
+            let left = rank(lhs.element), right = rank(rhs.element)
+            return left == right ? lhs.offset < rhs.offset : left < right
+        }.map(\.element)
+    }
 }
 
 struct BrainNoteResponse: Decodable, Sendable {
     var note: BrainNoteDetail
     var backlinks: [String]
+    var related: [BrainRelatedNote]? = nil
 }
 
 extension ApiClient {
-    func brainNotes(query: String?, type: String?) async throws -> [BrainNoteSummary] {
+    func brainNotes(query: String?, type: String?, limit: Int? = nil) async throws -> [BrainNoteSummary] {
         struct Out: Decodable { var notes: [BrainNoteSummary] }
         var items: [URLQueryItem] = []
         if let query, !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
         if let type { items.append(URLQueryItem(name: "type", value: type)) }
+        if let limit { items.append(URLQueryItem(name: "limit", value: String(min(200, max(1, limit))))) }
         var c = URLComponents()
         c.queryItems = items.isEmpty ? nil : items
+        c.percentEncodedQuery = c.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         let out: Out = try await request("GET", "/v1/brain/notes\(c.percentEncodedQuery.map { "?\($0)" } ?? "")")
         return out.notes
     }
 
     func brainNote(title: String) async throws -> BrainNoteResponse {
-        var c = URLComponents()
-        c.queryItems = [URLQueryItem(name: "title", value: title)]
-        return try await request("GET", "/v1/brain/note?\(c.percentEncodedQuery ?? "")")
+        try await brainNote(destination: .title(title))
     }
 
     /// Crea una pagina (POST /v1/brain/notes): il server risponde 201 con la nota e i backlink.
@@ -107,7 +192,7 @@ extension ApiClient {
 // MARK: - aspetto per tipo
 
 enum BrainType: String, CaseIterable, Identifiable {
-    case nota, persona, luogo, progetto, argomento, documento, salute
+    case nota, persona, luogo, progetto, argomento, documento, salute, ricetta, immagine
     var id: String { rawValue }
 
     var label: String {
@@ -119,11 +204,15 @@ enum BrainType: String, CaseIterable, Identifiable {
         case .argomento: "Argomenti"
         case .documento: "Documenti"
         case .salute: "Salute"
+        case .ricetta: "Ricette"
+        case .immagine: "Immagini"
         }
     }
 
     static func icon(_ type: String) -> String {
         switch type {
+        case "ricetta": "fork.knife"
+        case "immagine": "photo.fill"
         case "persona": "person.fill"
         case "luogo": "mappin.and.ellipse"
         case "progetto": "hammer.fill"
@@ -150,6 +239,31 @@ enum BrainFormat {
         return day(from ?? created)
     }
 
+    /// I marcatori gestiscono la sincronizzazione sul server: non sono contenuto della scheda.
+    /// Vale anche per anteprime troncate nel mezzo di un commento; il testo originale resta nell'editor.
+    static func visibleText(_ body: String) -> String {
+        body.replacingOccurrences(of: #"<!--\s*/?ernie:[\s\S]*?(?:-->|$)"#, with: "", options: .regularExpression)
+    }
+
+    static func displayBody(_ body: String, title: String) -> String {
+        var text = visibleText(body).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Il titolo è già nell'intestazione: togli solo la prima intestazione identica, non le altre sezioni.
+        if let first = text.components(separatedBy: "\n").first,
+           first.replacingOccurrences(of: #"^#{1,6}\s+"#, with: "", options: .regularExpression) == title,
+           first.hasPrefix("#") {
+            text = String(text.dropFirst(first.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return text.components(separatedBy: "\n").map { line in
+            if let m = line.firstMatch(of: /^Nascita: (\d{4}-\d{2}-\d{2})\.$/) {
+                return "Nascita: \(when(created: String(m.1), from: nil, to: nil))."
+            }
+            if line.hasPrefix("### "), let m = line.firstMatch(of: /\s· (\d{4}-\d{2}-\d{2})$/) {
+                return String(line[..<m.range.lowerBound]) + " · " + when(created: String(m.1), from: nil, to: nil)
+            }
+            return line
+        }.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+    }
+
     /// `[[Titolo|alias]]` → link toccabile `ernie-brain://note?title=…` che la vista intercetta.
     static func linkify(_ body: String) -> String {
         let regex = try? NSRegularExpression(pattern: #"\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|([^\]\n]+))?\]\]"#)
@@ -164,7 +278,7 @@ enum BrainFormat {
             var c = URLComponents()
             c.scheme = "ernie-brain"
             c.host = "note"
-            c.queryItems = [URLQueryItem(name: "title", value: title)]
+            c.queryItems = [BrainDestination.reference(title).queryItem]
             out += "[\(label)](\(c.url?.absoluteString ?? ""))"
             last = m.range.location + m.range.length
         }
@@ -173,15 +287,90 @@ enum BrainFormat {
     }
 }
 
+/// Suddivisione solo visiva: conserva ordine, testo e collegamenti del Markdown originale.
+struct BrainPageSection: Equatable {
+    var title: String?
+    var date: String?
+    var level: Int
+    var body: String
+}
+
+enum BrainPageLayout {
+    static func dateLabel(_ text: String) -> String? {
+        let value = text.trimmingCharacters(in: .whitespaces)
+        let format: String
+        if value.wholeMatch(of: /\d{4}-\d{2}-\d{2}/) != nil { format = "yyyy-MM-dd" }
+        else if value.wholeMatch(of: /\d{1,2} [A-Za-z]+ \d{4}/) != nil { format = "d MMMM yyyy" }
+        else { return nil }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "it_IT")
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.timeZone = TimeZone(secondsFromGMT: 0)
+        parser.isLenient = false
+        parser.dateFormat = format
+        guard let date = parser.date(from: value),
+              parser.string(from: date).lowercased() == value.lowercased() else { return nil }
+        parser.dateFormat = "d MMMM yyyy"
+        return parser.string(from: date)
+    }
+
+    static func heading(_ text: String) -> (title: String?, date: String?) {
+        if let date = dateLabel(text) { return (nil, date) }
+        if let range = text.range(of: " · ", options: .backwards),
+           let date = dateLabel(String(text[range.upperBound...])) {
+            return (String(text[..<range.lowerBound]), date)
+        }
+        if let m = text.firstMatch(of: /^(.+) \(([^()]+)\)$/), let date = dateLabel(String(m.2)) {
+            return (String(m.1), date)
+        }
+        return (text, nil)
+    }
+
+    static func sections(_ body: String, title: String) -> [BrainPageSection] {
+        let visible = BrainFormat.displayBody(body, title: title)
+        var result: [BrainPageSection] = []
+        var current = BrainPageSection(title: nil, date: nil, level: 0, body: "")
+        var lines: [String] = []
+        var fence: String?
+        func flush() {
+            current.body = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if current.title != nil || current.date != nil || !current.body.isEmpty { result.append(current) }
+            lines = []
+        }
+        for line in visible.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let opening = fence {
+                lines.append(line)
+                if trimmed.hasPrefix(opening) { fence = nil }
+                continue
+            }
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                fence = String(trimmed.prefix(3)); lines.append(line); continue
+            }
+            if let m = trimmed.firstMatch(of: /^(#{1,6})\s+(.+)$/) {
+                let level = m.1.count
+                let h = heading(String(m.2))
+                // I sottotitoli di una voce datata rimangono nel suo riquadro.
+                if current.date != nil, h.date == nil, level > current.level { lines.append(line); continue }
+                flush()
+                current = BrainPageSection(title: h.title, date: h.date, level: level, body: "")
+            } else { lines.append(line) }
+        }
+        flush()
+        return result
+    }
+}
+
 // MARK: - elenco
 
 /// Modo di vista della schermata Second brain.
 enum BrainViewMode: String, CaseIterable, Identifiable {
-    case elenco, tempo, mappa
+    case indice, elenco, tempo, mappa
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .indice: "Indice"
         case .elenco: "Elenco"
         case .tempo: "Tempo"
         case .mappa: "Mappa"
@@ -210,12 +399,15 @@ struct SecondBrainView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var notes: [BrainNoteSummary] = []
+    @State private var loadGeneration = UUID()
     @State private var query = ""
-    @State private var type: BrainType?
+    @State private var type: String?
     @State private var loading = true
     @State private var error: String?
-    @State private var path: [String] = []
-    @State private var mode: BrainViewMode = .elenco
+    @State private var path: [BrainDestination] = []
+    @State private var mode: BrainViewMode = .indice
+    @State private var directory: BrainDirectory?
+    @State private var showAgenda = false
     @State private var camera: MapCameraPosition = .automatic
     /// Foglio «Nuova nota» aperto.
     @State private var creating = false
@@ -224,29 +416,39 @@ struct SecondBrainView: View {
     /// Titolo della nota appena creata: si apre quando il foglio «Nuova nota» si chiude.
     @State private var openAfterCreate: String?
 
+    init(initialPath: String? = nil) {
+        _path = State(initialValue: initialPath.map { [.path($0)] } ?? [])
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             List {
                 Section {
-                    Picker("Vista", selection: $mode) {
-                        ForEach(BrainViewMode.allCases) { m in Text(m.label).tag(m) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    BrainModePicker(mode: $mode)
                 }
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             chip("Tutte", selected: type == nil) { type = nil }
                             ForEach(BrainType.allCases) { t in
-                                chip(t.label, selected: type == t) { type = (type == t ? nil : t) }
+                                chip(t.label, selected: type == t.rawValue) { type = (type == t.rawValue ? nil : t.rawValue) }
                             }
                         }
                         .padding(.vertical, 2)
                     }
                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                 }
-                if mode != .mappa, notes.isEmpty, !loading {
+                if mode == .indice {
+                    Section {
+                        Button("Orari per data", systemImage: "calendar") { showAgenda = true }
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                }
+                if loading { Section { ProgressView("Carico le schede…") } }
+                if mode != .indice, notes.count >= 200 {
+                    Section { Text("Prime 200 schede visualizzate. Restringi la ricerca per trovare le altre.").font(.footnote).foregroundStyle(.secondary) }
+                }
+                if mode != .mappa, notes.isEmpty, (directory?.total ?? 0) == 0, !loading, error == nil {
                     Section {
                         Text(query.isEmpty
                              ? "Ancora vuoto. Di' a Ernie «annota che…» oppure mandagli una foto da salvare: le note compaiono qui e in Obsidian."
@@ -255,15 +457,21 @@ struct SecondBrainView: View {
                     }
                 }
                 switch mode {
+                case .indice:
+                    if let directory {
+                        BrainDirectorySections(directory: directory, searching: !query.isEmpty || type != nil) { selected in
+                            type = selected; mode = .elenco
+                        }
+                    }
                 case .elenco:
                     ForEach(notes) { n in
-                        NavigationLink(value: n.title) { row(n) }
+                        NavigationLink(value: BrainDestination.path(n.path)) { row(n) }
                     }
                 case .tempo:
                     ForEach(timeline) { m in
                         Section {
                             ForEach(m.notes) { n in
-                                NavigationLink(value: n.title) { row(n) }
+                                NavigationLink(value: BrainDestination.path(n.path)) { row(n) }
                             }
                         } header: {
                             Text(m.title)
@@ -278,7 +486,7 @@ struct SecondBrainView: View {
                             Map(position: $camera) {
                                 ForEach(pins) { p in
                                     Annotation(p.note.title, coordinate: p.coordinate) {
-                                        Button { path.append(p.note.title) } label: {
+                                        Button { path.append(.path(p.note.path)) } label: {
                                             Image(systemName: BrainType.icon(p.note.type))
                                                 .font(.body.weight(.semibold))
                                                 .foregroundStyle(.white)
@@ -294,14 +502,11 @@ struct SecondBrainView: View {
                         }
                     }
                 }
-                if let error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
+                if let error { Section { Text(error).font(.footnote).foregroundStyle(.red); Button("Riprova") { Task { await load() } } } }
             }
             .navigationTitle("Second brain")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Cerca nelle note")
-            .onSubmit(of: .search) { Task { await load() } }
-            .onChange(of: query) { if query.isEmpty { Task { await load() } } }
-            .onChange(of: type) { Task { await load() } }
             .onChange(of: path) { _, newPath in if newPath.isEmpty { Task { await load() } } }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -324,13 +529,26 @@ struct SecondBrainView: View {
                     Task { await load() }
                 }
             }
+            .sheet(isPresented: $showAgenda) {
+                NavigationStack {
+                    BrainAgendaView { source in showAgenda = false; path.append(.reference(source)) }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fine") { showAgenda = false } } }
+                }
+            }
             .sheet(isPresented: $showInbox) {
                 BrainInboxSheet()
             }
-            .navigationDestination(for: String.self) { title in
-                BrainNoteView(title: title, path: $path)
+            .navigationDestination(for: BrainDestination.self) { target in
+                BrainNoteView(target: target, path: $path)
             }
-            .task { await load() }
+            .task(id: [query, type ?? "", mode.rawValue]) {
+                do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                await load()
+            }
+            .onChange(of: model.credentials) { _, _ in
+                loadGeneration = UUID(); notes = []; directory = nil; error = nil
+                Task { await load() }
+            }
             .refreshable { await load() }
         }
     }
@@ -372,52 +590,57 @@ struct SecondBrainView: View {
     /// Note con una posizione valida (`[lat, lon]`).
     private var pins: [BrainPin] {
         notes.compactMap { n in
-            guard let c = n.coords, c.count == 2 else { return nil }
-            return BrainPin(note: n, coordinate: CLLocationCoordinate2D(latitude: c[0], longitude: c[1]))
+            guard let coordinate = BrainLocation.coordinate(n.coords) else { return nil }
+            return BrainPin(note: n, coordinate: coordinate)
         }
     }
 
     private func row(_ n: BrainNoteSummary) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: BrainType.icon(n.type)).foregroundStyle(Color.accentColor).frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(n.title).font(.body.weight(.medium)).lineLimit(1)
-                    if n.private { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary) }
-                }
-                Text([BrainFormat.when(created: n.created, from: n.refersFrom, to: n.refersTo), n.place].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-                if !n.excerpt.isEmpty {
-                    Text(Self.plain(n.excerpt))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }
-            }
-        }
+        BrainNoteRow(note: n)
     }
 
     /// Anteprima senza segni di markdown né parentesi dei collegamenti.
     static func plain(_ s: String) -> String {
-        var t = s.replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
+        var t = BrainFormat.visibleText(s)
+            .replacingOccurrences(of: #"\[\[[^\]|]+\|([^\]]+)\]\]"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
         for mark in ["**", "__", "`"] { t = t.replacingOccurrences(of: mark, with: "") }
         return t.replacingOccurrences(of: #"(^|\s)#{1,6}\s"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"(^|\s)[-*]\s"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(^|\s)[>*-]\s"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
     }
 
     /// Dopo il foglio «Nuova nota»: apre la pagina appena creata (se il foglio ha salvato).
     private func openCreatedNote() {
         guard let title = openAfterCreate else { return }
         openAfterCreate = nil
-        path.append(title)
+        path.append(.path(title))
     }
 
     private func load() async {
-        guard let api = model.api else { return }
-        loading = true
-        defer { loading = false }
+        guard let api = model.api else { notes = []; directory = nil; loading = false; return }
+        let token = UUID()
+        loadGeneration = token
+        let search = query
+        let filter = type
+        let viewMode = mode
+        loading = true; notes = []; directory = nil; error = nil
+        defer { if loadGeneration == token { loading = false } }
         do {
-            notes = try await api.brainNotes(query: query.trimmingCharacters(in: .whitespaces), type: type?.rawValue)
+            let result: [BrainNoteSummary]
+            let index: BrainDirectory?
+            if viewMode == .indice, search.trimmingCharacters(in: .whitespaces).isEmpty, filter == nil {
+                index = try await api.brainDirectory()
+                result = []
+            } else {
+                result = try await api.brainNotes(query: search.trimmingCharacters(in: .whitespaces), type: filter, limit: 200)
+                index = viewMode == .indice ? .searchResults(result) : nil
+            }
+            guard loadGeneration == token, query == search, type == filter, mode == viewMode, model.credentials == api.credentials, !Task.isCancelled else { return }
+            notes = result; directory = index
             error = nil
         } catch {
+            guard loadGeneration == token, query == search, type == filter, mode == viewMode, model.credentials == api.credentials, !Task.isCancelled else { return }
             self.error = AppModel.describe(error)
         }
     }
@@ -427,59 +650,290 @@ struct SecondBrainView: View {
 
 extension BrainNoteDetail {
     /// Pagine che Ernie aggiorna da sola (anagrafica e saluto): non si modificano né si eliminano a mano.
-    var isGenerated: Bool { type == "chi-sono" || type == "salute" }
+    var isGenerated: Bool { type == "chi-sono" || type == "salute" || isResourceProjection }
+    var isResourceProjection: Bool { resource != nil || type == "ricetta" || type == "immagine" }
 
     /// Si può modificare o eliminare: la pagina esiste sul disco (ha un percorso) e non è generata da Ernie.
     var isEditable: Bool { !path.isEmpty && !isGenerated }
 }
 
+/// Anteprima: titolo, data e riassunto hanno ruoli tipografici distinti.
+struct BrainNoteRow: View {
+    let note: BrainNoteSummary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: BrainType.icon(note.type))
+                .font(.body).foregroundStyle(Theme.accentText)
+                .frame(width: 34, height: 34)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(note.title).font(.headline).foregroundStyle(Theme.ink).lineLimit(2)
+                    if note.private { Image(systemName: "lock.fill").font(.caption).foregroundStyle(Theme.inkSecondary).accessibilityLabel("Riservata") }
+                }
+                Label(BrainFormat.when(created: note.created, from: note.refersFrom, to: note.refersTo), systemImage: "calendar")
+                    .font(.caption.weight(.medium)).foregroundStyle(Theme.accentText)
+                if let place = note.place, !place.isEmpty {
+                    Label(place, systemImage: "mappin.and.ellipse").font(.caption).foregroundStyle(Theme.inkSecondary)
+                }
+                if !note.excerpt.isEmpty {
+                    Text(SecondBrainView.plain(note.excerpt))
+                        .font(.subheadline).foregroundStyle(Theme.inkSecondary).lineSpacing(2).lineLimit(3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+/// Contenuto di lettura condiviso dalla scheda e dalle verifiche visive; l'editor conserva il markdown originale.
+struct BrainNoteContent: View {
+    let note: BrainNoteDetail
+    let backlinks: [String]
+    var openAgenda: (() -> Void)?
+    @State private var historyExpanded: Bool
+
+    init(note: BrainNoteDetail, historyExpanded: Bool = false, backlinks: [String] = [], openAgenda: (() -> Void)? = nil) {
+        self.openAgenda = openAgenda
+        self.note = note
+        self.backlinks = backlinks
+        _historyExpanded = State(initialValue: historyExpanded)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            header
+            Divider()
+            if note.hasKnowledge, let knowledge = note.knowledge {
+                BrainKnowledgeContent(knowledge: knowledge, openAgenda: openAgenda)
+            }
+            if note.hasOverview || note.hasKnowledge {
+                if !note.hasKnowledge, let overview = note.overview, !overview.facts.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Riepilogo").font(.headline).accessibilityAddTraits(.isHeader)
+                        ForEach(Array(overview.facts.enumerated()), id: \.offset) { _, fact in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(Markdown.render(BrainFormat.linkify(BrainFormat.displayBody(fact.text, title: ""))))
+                                    .font(.body).lineSpacing(2).foregroundStyle(Theme.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if fact.sourcePath != note.path || fact.date != nil {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        if let date = fact.date {
+                                            Text("Aggiornamento del \(BrainFormat.when(created: date, from: nil, to: nil))")
+                                        }
+                                        if fact.sourcePath != note.path, let url = BrainLocation.noteURL(path: fact.sourcePath) {
+                                            Link("Fonte: \(fact.sourceTitle)", destination: url)
+                                        }
+                                    }
+                                    .font(.caption).foregroundStyle(Theme.inkSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                places
+                Divider()
+                DisclosureGroup(isExpanded: $historyExpanded) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if let source = note.source, !source.isEmpty {
+                            Text("Origine della scheda: \(source)").font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        }
+                        originalContent
+                        if !backlinks.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Pagine che citano questa nota").font(.headline)
+                                ForEach(backlinks, id: \.self) { title in
+                                    if let url = BrainLocation.noteURL(path: title) {
+                                        Link(title, destination: url).font(.callout)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 12)
+                } label: {
+                    Label("Storico e fonti", systemImage: "clock.arrow.circlepath")
+                        .font(.headline).foregroundStyle(Theme.ink)
+                }
+            } else {
+                places
+                originalContent
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
+        .tint(Theme.accentText)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: BrainType.icon(note.type))
+                    .font(.title3).foregroundStyle(Theme.accentText)
+                    .frame(width: 32, height: 36).accessibilityHidden(true)
+                Text(note.title).font(.title2.bold()).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(note.refersFrom == nil ? "Scheda del" : "Periodo") \(BrainFormat.when(created: note.created, from: note.refersFrom, to: note.refersTo))")
+                if note.visiblePlaces.isEmpty, let place = note.place, !place.isEmpty {
+                    Text("Luogo citato: \(place)")
+                }
+                if !note.hasOverview, let source = note.source, !source.isEmpty { Text("Fonte: \(source)") }
+                if note.private { Label("Pagina riservata", systemImage: "lock.fill") }
+            }
+            .font(.caption).foregroundStyle(Theme.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder private var places: some View {
+        if !note.visiblePlaces.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(note.type == "luogo" ? "Posizione" : "Luoghi collegati")
+                    .font(.headline).accessibilityAddTraits(.isHeader)
+                ForEach(note.visiblePlaces) { place in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(place.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let address = place.address, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(address).font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if place.mapsURL != nil {
+                            Text("Posizione salvata").font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                        }
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 20) { placeActions(place) }
+                                .fixedSize(horizontal: true, vertical: false)
+                            VStack(alignment: .leading, spacing: 2) { placeActions(place) }
+                        }
+                        .font(.subheadline.weight(.medium))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func placeActions(_ place: BrainOverview.Place) -> some View {
+        if let mapsURL = place.mapsURL {
+            Link(destination: mapsURL) { Label("Apri in Mappe", systemImage: "map") }
+                .accessibilityLabel("Apri \(place.title) in Mappe")
+                .frame(minHeight: 44, alignment: .leading)
+        }
+        if place.path != note.path, let url = BrainLocation.noteURL(path: place.path) {
+            Link(destination: url) { Label("Apri la scheda", systemImage: "arrow.up.right.square") }
+                .accessibilityLabel("Apri la scheda \(place.title)")
+                .frame(minHeight: 44, alignment: .leading)
+        }
+    }
+
+    private var originalContent: some View {
+        ForEach(Array(BrainPageLayout.sections(note.body, title: note.title).enumerated()), id: \.offset) { _, section in
+            BrainPageSectionView(section: section)
+        }
+    }
+}
+
+private struct BrainPageSectionView: View {
+    let section: BrainPageSection
+
+    var body: some View {
+        if let date = section.date {
+            VStack(alignment: .leading, spacing: 14) {
+                Label(date, systemImage: "calendar")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                if let title = section.title {
+                    Text(Markdown.render(BrainFormat.linkify(title)))
+                        .font(.headline).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                if !section.body.isEmpty {
+                    Divider()
+                    content
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.hairline, lineWidth: 1))
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                if let title = section.title {
+                    Text(Markdown.render(BrainFormat.linkify(title)))
+                        .font(section.level <= 2 ? .title3.weight(.bold) : .headline)
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                if !section.body.isEmpty { content }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var content: some View {
+        MarkdownText(text: BrainFormat.linkify(section.body), quoteColor: Theme.ink)
+            .foregroundStyle(Theme.ink)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 struct BrainNoteView: View {
-    let title: String
-    @Binding var path: [String]
+    let target: BrainDestination
+    private var title: String { target.displayName }
+    @Binding var path: [BrainDestination]
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var data: BrainNoteResponse?
+    @State private var loadGeneration = UUID()
     @State private var error: String?
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var deleting = false
     @State private var actionError: String?
+    @State private var openedResource: BrainResource?
+    @State private var linking = false
+    @State private var showAgenda = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 24) {
                 if let n = data?.note {
-                    HStack(spacing: 8) {
-                        Image(systemName: BrainType.icon(n.type)).foregroundStyle(Color.accentColor)
-                        Text(n.title).font(.title2.weight(.semibold))
-                        if n.private { Image(systemName: "lock.fill").foregroundStyle(.secondary) }
-                    }
-                    let meta = [
-                        BrainFormat.when(created: n.created, from: n.refersFrom, to: n.refersTo),
-                        n.place,
-                        n.source.map { "da \($0)" },
-                    ].compactMap { $0 }
-                    Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(.secondary)
-                    MarkdownText(text: BrainFormat.linkify(n.body))
+                    BrainNoteContent(note: n, backlinks: data?.related == nil ? data?.backlinks ?? [] : [], openAgenda: { showAgenda = true })
                         .environment(\.openURL, OpenURLAction { url in
-                            guard url.scheme == "ernie-brain",
-                                  let t = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "title" })?.value
-                            else { return .systemAction }
-                            path.append(t)
+                            guard let destination = BrainDestination(url: url) else { return .systemAction }
+                            path.append(destination)
                             return .handled
                         })
-                    if n.isGenerated {
+                    if n.isResourceProjection {
+                        BrainResourceActions(resource: n.resource, type: n.type, open: { openedResource = $0 }, link: { linking = true })
+                    } else if n.isGenerated {
                         Text("Pagina generata da Ernie: si aggiorna da sola.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     if let actionError {
                         Text(actionError).font(.footnote).foregroundStyle(.red)
                     }
-                    if !(data?.backlinks ?? []).isEmpty {
+                    if let related = data?.related, !related.isEmpty {
+                        BrainRelatedNotes(notes: related, openMedia: { openedResource = $0 }) { path.append(.path($0)) }
+                    }
+                    if data?.related == nil, !n.hasOverview, !(data?.backlinks ?? []).isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Citata da").font(.subheadline.weight(.semibold))
+                            Divider().padding(.bottom, 8)
+                            Text("Pagine che citano questa nota").font(.headline).accessibilityAddTraits(.isHeader)
                             ForEach(data?.backlinks ?? [], id: \.self) { b in
-                                Button { path.append(b) } label: {
+                                Button { path.append(.reference(b)) } label: {
                                     Label(b, systemImage: "arrow.turn.down.right").font(.callout)
                                 }
                             }
@@ -492,16 +946,18 @@ struct BrainNoteView: View {
                     ProgressView().frame(maxWidth: .infinity)
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20).padding(.vertical, 24)
+            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        .background(Theme.surface)
         .navigationTitle(data?.note.title ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let n = data?.note, n.isEditable {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { editing = true } label: { Label("Modifica", systemImage: "pencil") }
+                        Button { editing = true } label: { Label(n.hasKnowledge ? "Modifica testo" : "Modifica", systemImage: "pencil") }
                         Button(role: .destructive) { confirmDelete = true } label: { Label("Elimina", systemImage: "trash") }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -511,9 +967,25 @@ struct BrainNoteView: View {
                 }
             }
         }
+        .sheet(isPresented: $showAgenda) {
+            NavigationStack {
+                BrainAgendaView(ref: data?.note.path) { source in
+                    showAgenda = false
+                    if source != data?.note.path { path.append(.reference(source)) }
+                }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fine") { showAgenda = false } } }
+            }
+        }
         .sheet(isPresented: $editing) {
             if let n = data?.note {
-                BrainNoteEditor(note: n) { updated in data = updated }
+                BrainNoteEditor(note: n) { updated in loadGeneration = UUID(); data = updated }
+            }
+        }
+        .sheet(item: $openedResource, onDismiss: { Task { await load() } }) { resource in
+            BrainOriginalResourceView(resource: resource)
+        }
+        .sheet(isPresented: $linking) {
+            if let note = data?.note, let resource = note.resource {
+                BrainResourceLinksSheet(resource: resource, initial: note.resourceLinks ?? []) { Task { await load() } }
             }
         }
         .confirmationDialog("Eliminare «\(data?.note.title ?? title)»?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -530,11 +1002,16 @@ struct BrainNoteView: View {
 
     private func load() async {
         guard let api = model.api else { return }
+        let token = UUID()
+        loadGeneration = token
         do {
-            data = try await api.brainNote(title: title)
+            let result = try await api.brainNote(destination: target)
+            guard loadGeneration == token, model.credentials == api.credentials, !Task.isCancelled else { return }
+            data = result
             error = nil
         } catch {
-            self.error = "La pagina «\(title)» non esiste ancora: Ernie la crea quando ne parlate."
+            guard loadGeneration == token, model.credentials == api.credentials, !Task.isCancelled else { return }
+            self.error = BrainLoadingError.message(error, title: title)
         }
     }
 
@@ -578,6 +1055,10 @@ struct BrainNoteEditor: View {
                     Text(note.title).foregroundStyle(.secondary)
                 }
                 Section("Testo") {
+                    if note.hasKnowledge {
+                        Text("Fatti e orari si aggiornano tramite la chat con Ernie. Qui puoi modificare il testo della pagina.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     TextEditor(text: $text)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 240)
@@ -741,7 +1222,7 @@ struct BrainNewNoteSheet: View {
                 type: kind.rawValue,
                 isPrivate: isPrivate
             )
-            onCreated(created.note.title)
+            onCreated(created.note.path)
             dismiss()
         } catch {
             self.error = AppModel.describe(error)
@@ -901,5 +1382,15 @@ struct BrainInboxSheet: View {
         guard let at = t.firstIndex(of: "@"), at != t.startIndex else { return false }
         let domain = t[t.index(after: at)...]
         return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".") && !t.contains(" ")
+    }
+}
+
+/// Un problema di rete non equivale a una pagina inesistente.
+enum BrainLoadingError {
+    static func message(_ error: any Error, title: String) -> String {
+        if let error = error as? ApiError, error.status == 404 {
+            return "La pagina «\(title)» non esiste ancora: Ernie la crea quando ne parlate."
+        }
+        return "Non riesco a caricare la pagina: \(AppModel.describe(error))"
     }
 }

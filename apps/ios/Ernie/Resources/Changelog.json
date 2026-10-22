@@ -1,5 +1,610 @@
 [
   {
+    "build": 94,
+    "date": "2026-10-21",
+    "title": "Un widget con scorciatoie precise",
+    "items": [
+      {
+        "icon": "hand.tap",
+        "title": "Ogni area apre la sua scheda",
+        "detail": "Tocca gli impegni per aprire i promemoria, Automazioni per consultarne l’elenco, Scrivi per la chat e Parla per l’ascolto. Anche il prossimo impegno nel widget medio è un collegamento."
+      },
+      {
+        "icon": "gearshape.2",
+        "title": "Le tue automazioni",
+        "detail": "La nuova schermata mostra le automazioni del tuo account, con stato e tipo di programmazione. È accessibile anche dal pannello laterale."
+      }
+    ]
+  },
+  {
+    "build": 93,
+    "date": "2026-10-21",
+    "title": "Una zampa più naturale",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Ernie tamburella con le dita",
+        "detail": "Durante l’attesa il polso resta appoggiato e le dita si muovono una alla volta, con piccole pause. La nuova animazione mantiene lo stile pixel art e rispetta Riduci movimento."
+      }
+    ]
+  },
+  {
+    "build": 92,
+    "date": "2026-10-21",
+    "title": "Un Second Brain più facile da consultare",
+    "items": [
+      {
+        "icon": "list.bullet.rectangle",
+        "title": "Indice delle schede",
+        "detail": "Il Second Brain si apre con un indice alfabetico organizzato per categoria. Restano disponibili ricerca, elenco, cronologia e mappa."
+      },
+      {
+        "icon": "person.text.rectangle",
+        "title": "Informazioni e orari in evidenza",
+        "detail": "Le schede possono raccogliere fatti attuali e orari abituali prima dello storico. Accompagnamento, attività, ritiro e rientro previsto restano distinti."
+      },
+      {
+        "icon": "calendar",
+        "title": "Consulta una giornata",
+        "detail": "Puoi consultare gli orari per una data o chiederli a Ernie. Variazioni e annullamenti riguardano il giorno indicato; memorizzare una routine non crea notifiche."
+      }
+    ]
+  },
+  {
+    "build": 91,
+    "date": "2026-10-21",
+    "title": "Tempi di risposta sotto controllo",
+    "items": [
+      {
+        "icon": "speedometer",
+        "title": "Misure della reattività",
+        "detail": "Ernie misura separatamente l’arrivo della risposta e l’avvio della voce, per individuare i rallentamenti. In queste misure vengono raccolti solo tempi ed esiti, senza il contenuto dei messaggi.",
+        "test": "Continua a usare Ernie normalmente, con richieste scritte o vocali."
+      },
+      {
+        "icon": "arrow.triangle.2.circlepath",
+        "title": "Errori e riconnessioni distinti",
+        "detail": "Le richieste interrotte e i recuperi di connessione vengono riconosciuti separatamente, per non confonderli con risposte completate velocemente."
+      }
+    ]
+  },
+  {
+    "build": 90,
+    "date": "2026-10-21",
+    "title": "Ernie senza bordi tagliati",
+    "items": [
+      {
+        "icon": "person.crop.circle",
+        "title": "Ritratto ben inquadrato",
+        "detail": "Eliminato il taglio orizzontale sotto il volto. Capsula, avatar e widget Home e blocco schermo condividono la stessa inquadratura, per tutti i travestimenti e le espressioni.",
+        "test": "Controlla il bordo del ritratto nella capsula, nell’avatar estratto e nei widget."
+      },
+      {
+        "icon": "rectangle.compress.vertical",
+        "title": "Pulsanti leggibili nei widget",
+        "detail": "Quando lo spazio è ridotto, Parla e Scrivi mostrano icone riconoscibili senza parole troncate. Le etichette complete restano disponibili con VoiceOver.",
+        "test": "Controlla il widget medio, anche con caratteri ingranditi."
+      }
+    ]
+  },
+  {
+    "build": 89,
+    "date": "2026-10-21",
+    "title": "Ernie torna più orso",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Un volto più grintoso",
+        "detail": "Nuovo volto in pixel art, con pelo scuro, ciuffo chiaro e occhiali sottili, ispirato all’icona di Ernie. Lo stesso stile accompagna tutte le espressioni e tutti i travestimenti.",
+        "test": "Tieni premuta la capsula e cambia Aspetto di Ernie: prova anche cuoco, notte e i due occhiali da sole."
+      },
+      {
+        "icon": "hand.wave.fill",
+        "title": "Gesti ed espressioni coerenti",
+        "detail": "Pensiero, parlato, starnuto, sonno e cinque conservano il costume scelto. Anche le zampe delle attività seguono il nuovo stile. Riduci movimento e pausa in background restano rispettati.",
+        "test": "Fai una richiesta e osserva avatar e indicatore di attività. Prova la capsula e l’avatar galleggiante."
+      },
+      {
+        "icon": "rectangle.3.group",
+        "title": "Lo stesso Ernie nei widget",
+        "detail": "I widget Home e blocco schermo usano il nuovo volto, con una versione monocromatica leggibile. Restano i consueti aggiornamenti del sistema e gli accessi rapidi a Ernie.",
+        "test": "Controlla i widget in Home e sul blocco schermo dopo l’aggiornamento."
+      }
+    ]
+  },
+  {
+    "build": 88,
+    "date": "2026-10-20",
+    "title": "Liste attività senza doppioni",
+    "items": [
+      {
+        "icon": "checklist",
+        "title": "Una scheda che si aggiorna",
+        "detail": "Quando aggiungi o modifichi un’attività, la lista si aggiorna nella stessa scheda. Anche la sincronizzazione dei promemoria aggiorna la scheda esistente. Le copie superflue vengono riunite quando riapri le conversazioni precedenti.",
+        "test": "Aggiungi un’attività a una lista e riapri la chat: per quella risposta compare una sola scheda aggiornata."
+      },
+      {
+        "icon": "text.alignleft",
+        "title": "Risposte più pulite",
+        "detail": "Gli a capo HTML prodotti occasionalmente da Ernie diventano normali interruzioni di riga, anche nella lettura vocale. Gli esempi di codice rimangono invariati.",
+        "test": "Le risposte non mostrano più i tag BR usati per andare a capo."
+      }
+    ]
+  },
+  {
+    "build": 87,
+    "date": "2026-10-20",
+    "title": "Consumi più chiari e risposte più fluide",
+    "items": [
+      {
+        "icon": "chart.bar.xaxis",
+        "title": "Grafici leggibili",
+        "detail": "Etichette distanziate, importi a tre decimali e dettaglio toccando il grafico. Totale e andamento sono subito visibili; le spiegazioni si aprono quando servono.",
+        "test": "Prova giorno, settimana, mese e anno, anche con testo grande. Tocca una barra per leggerne il valore."
+      },
+      {
+        "icon": "person.2.fill",
+        "title": "Solo le installazioni Ernie",
+        "detail": "Il riepilogo amministrativo mostra gli utenti con l’app installata e i loro consumi. Account tecnici e di collaudo sono esclusi anche dai totali.",
+        "test": "Apri Consumi installazioni e controlla gli utenti e il dettaglio dei loro consumi."
+      },
+      {
+        "icon": "waveform",
+        "title": "Meno pause nella voce",
+        "detail": "Mentre Ernie parla prepara la frase successiva, mantenendo l’ordine e la possibilità di interromperlo subito.",
+        "test": "Ascolta una risposta di più frasi e prova a fermarla durante la riproduzione."
+      },
+      {
+        "icon": "bolt.fill",
+        "title": "Meno attese durante le risposte",
+        "detail": "Le letture indipendenti partono insieme e il lavoro di memoria prosegue in background. Ridotte anche le attese tecniche durante l’arrivo del testo.",
+        "test": "Prova una normale conversazione: modelli, conferme e funzioni disponibili restano gli stessi."
+      }
+    ]
+  },
+  {
+    "build": 86,
+    "date": "2026-10-20",
+    "title": "I consumi di Ernie",
+    "items": [
+      {
+        "icon": "chart.bar.xaxis",
+        "title": "La spesa, giorno per giorno",
+        "detail": "Dal pannello laterale apri I miei consumi: consulta giorno, settimana, mese o anno, con grafico e dettagli per modello, attività e servizio. I costi comunicati dai servizi sono distinti dalle stime.",
+        "test": "Cambia periodo e data, controlla il grafico e apri i dettagli. Gli importi sono espressi in dollari USA."
+      },
+      {
+        "icon": "person.2.badge.key.fill",
+        "title": "Una vista riservata sulle installazioni",
+        "detail": "L’account amministratore autorizzato dispone anche di Consumi installazioni: un riepilogo per account, il relativo dettaglio e il saldo OpenRouter. Gli altri account vedono soltanto i propri consumi.",
+        "test": "Con l’account autorizzato apri Consumi installazioni e scegli un account. Il saldo OpenRouter è separato dalla spesa del periodo."
+      },
+      {
+        "icon": "clock.arrow.circlepath",
+        "title": "Uno storico che resta",
+        "detail": "Il nuovo registro conserva i consumi anche quando viene eliminata una conversazione. Lo storico precedente può essere incompleto; la schermata indica sempre copertura e limiti dei dati.",
+        "test": "Consulta la nota Copertura dei dati. I dispositivi collegati allo stesso account condividono il conteggio."
+      }
+    ]
+  },
+  {
+    "build": 85,
+    "date": "2026-10-20",
+    "title": "Capsula di Ernie allineata",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Un allineamento più preciso",
+        "detail": "Il volto di Ernie è allineato al nome e ai pulsanti della barra. La capsula è centrata considerando anche la sporgenza laterale dell’orso, che mantiene la dimensione più grande.",
+        "test": "Osserva la barra con la tastiera aperta e chiusa. Passando all’avatar galleggiante, nella capsula restano soltanto nome e stato."
+      }
+    ]
+  },
+  {
+    "build": 84,
+    "date": "2026-10-20",
+    "title": "Ernie si affaccia dalla capsula",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Un po’ più grande",
+        "detail": "Il volto di Ernie nella barra è più grande del 15% e sporge leggermente dalla capsula, lasciando spazio alla conversazione.",
+        "test": "Osserva il volto nella barra durante una conversazione: animazioni e travestimenti restano attivi."
+      },
+      {
+        "icon": "circle.dashed",
+        "title": "Un solo Ernie",
+        "detail": "Quando scegli l’avatar galleggiante, il volto scompare dalla capsula, che conserva nome e stato. Puoi sempre riportarlo nella capsula dal suo menu.",
+        "test": "Tieni premuta la capsula, scegli Avatar galleggiante e spostalo nella chat. Poi scegli Avatar nella capsula: deve essere visibile sempre un solo volto."
+      }
+    ]
+  },
+  {
+    "build": 83,
+    "date": "2026-10-20",
+    "title": "Ernie prende vita",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Un pensiero da orso",
+        "detail": "Una zampa animata accompagna il lavoro di Ernie. Quando un’attività riesce dà il cinque e poi resta il pollice alzato. Gli errori conservano un segnale distinto.",
+        "test": "Invia una richiesta e osserva la zampa durante il lavoro e al completamento."
+      },
+      {
+        "icon": "theatermasks.fill",
+        "title": "Espressioni e travestimenti animati",
+        "detail": "Ernie classico e otto travestimenti condividono venti espressioni e i gesti di pensiero, parlato, starnuto, sonno e cinque. Cappelli e occhiali restano presenti durante ogni animazione.",
+        "test": "Tieni premuta la capsula di Ernie, scegli Aspetto di Ernie e prova un costume durante una risposta vocale."
+      },
+      {
+        "icon": "moon.stars",
+        "title": "L’aspetto giusto al momento giusto",
+        "detail": "In Automatico Ernie si veste in base all’attività e indossa il berretto da notte la sera. Le animazioni si fermano in background e rispettano Riduci movimento.",
+        "test": "Scegli Automatico oppure un costume fisso. Verifica che la scelta resti mentre Ernie pensa e parla."
+      }
+    ]
+  },
+  {
+    "build": 82,
+    "date": "2026-10-20",
+    "title": "Conferme più compatte",
+    "items": [
+      {
+        "icon": "rectangle.compress.vertical",
+        "title": "Più spazio alla conversazione",
+        "detail": "Dopo la risposta, le richieste di conferma diventano un riepilogo compatto con azione ed esito. Tocca la riga per riaprire i dettagli, anche nelle conversazioni precedenti.",
+        "test": "Apri una chat con conferme già approvate o annullate e toccane una per espanderla e richiuderla."
+      },
+      {
+        "icon": "hand.raised",
+        "title": "Conferme più essenziali",
+        "detail": "Le richieste ancora da approvare hanno meno spazi e ripetizioni, con ingredienti e dettagli espandibili. Il consenso per le prossime volte è disponibile in Opzioni di conferma, insieme alla spiegazione.",
+        "test": "Controlla una nuova richiesta: apri i dettagli e verifica che Salva e Annulla siano sempre raggiungibili, anche con caratteri grandi."
+      }
+    ]
+  },
+  {
+    "build": 81,
+    "date": "2026-10-19",
+    "title": "Server e siti con la skill SSH",
+    "items": [
+      {
+        "icon": "terminal",
+        "title": "I tuoi server, in un solo pannello",
+        "detail": "Attiva la skill Server e siti per configurare una chiave SSH personale, aggiungere o importare server e siti e verificare i collegamenti. Ogni account conserva il proprio inventario.",
+        "test": "Apri Skill, attiva Server e siti e apri la nuova sezione dal pannello laterale. Genera la pubblica e controlla le istruzioni di installazione."
+      },
+      {
+        "icon": "checkmark.shield",
+        "title": "Diagnosi e interventi da approvare",
+        "detail": "Ernie usa il modello avanzato per le attività sui server. Può diagnosticare SSH e WordPress e preparare una proposta con comando, verifica, backup e recupero. Le modifiche partono soltanto dopo la tua approvazione; un esito incerto non viene ritentato automaticamente.",
+        "test": "Dopo avere configurato un server di prova, chiedi una diagnosi e poi una proposta. Controlla i dettagli prima di approvarla."
+      },
+      {
+        "icon": "network",
+        "title": "Vultr e Contabo",
+        "detail": "Collega i provider tramite campi protetti, consulta le istanze e associale ai server. Il riavvio tramite API è separato da SSH e richiede una proposta e una conferma esplicita.",
+        "test": "Apri il collegamento del provider e segui la configurazione; verifica le istanze prima di associarle a un server."
+      },
+      {
+        "icon": "sidebar.left",
+        "title": "Il pannello laterale scorre tutto",
+        "detail": "Profilo, sezioni e conversazioni scorrono insieme: lo storico può occupare tutta l’altezza del pannello ed è più semplice raggiungere ogni voce.",
+        "test": "Apri il pannello e scorri partendo dalle voci del menu: anche l’intestazione si sposta e lo storico sale a piena altezza."
+      },
+      {
+        "icon": "checklist",
+        "title": "Le tue liste nel pannello laterale",
+        "detail": "Apri direttamente le liste della spesa e di attività dal gruppo Le tue liste. Il gruppo compare quando ci sono liste e mostra le voci ancora da completare. Con Mostra tutte raggiungi anche le altre liste.",
+        "test": "Apri il pannello con almeno una lista della spesa o Todo: tocca il suo nome, modifica una voce e controlla che la stessa scheda in chat sia aggiornata."
+      }
+    ]
+  },
+  {
+    "build": 80,
+    "date": "2026-10-19",
+    "title": "Microfono stabile e agenda Todo",
+    "items": [
+      {
+        "icon": "mic.fill",
+        "title": "Corretto il crash del microfono",
+        "detail": "Corretto il problema che poteva chiudere Ernie appena iniziava ad ascoltare. L’acquisizione audio gestisce correttamente il primo suono ricevuto dal microfono.",
+        "test": "Tocca il microfono, pronuncia una frase e controlla che Ernie resti aperto e mostri la trascrizione. Puoi anche annullare e riaprire l’ascolto."
+      },
+      {
+        "icon": "checklist",
+        "title": "Le attività, organizzate insieme a Ernie",
+        "detail": "La nuova sezione Todo raccoglie liste semplici e giornate con orari, gruppi e sottoattività. Racconta cosa devi fare: Ernie considera gli impegni esistenti, le durate, le dipendenze e gli eventuali conflitti.",
+        "test": "Chiedi di organizzare una giornata con due appuntamenti fissi, una preparazione da anticipare e un’attività divisibile. Apri la scheda e controlla gruppi e orari."
+      },
+      {
+        "icon": "calendar.badge.clock",
+        "title": "La giornata a colpo d’occhio",
+        "detail": "Una linea verticale mostra l’avanzare dell’ora. Le spunte indicano separatamente le attività completate. Puoi aggiungere, modificare o annullare impegni dalla scheda o in chat; i promemoria seguono gli orari. Convertendo la giornata in lista semplice, attività e gruppi restano e gli avvisi vengono rimossi.",
+        "test": "Modifica un’attività dalla scheda, poi chiedi a Ernie di spostarla. Infine converti la lista senza orari e controlla che le attività siano ancora presenti."
+      }
+    ]
+  },
+  {
+    "build": 79,
+    "date": "2026-10-18",
+    "title": "Ricette e immagini collegate ai tuoi ricordi",
+    "items": [
+      {
+        "icon": "brain.head.profile",
+        "title": "Tutto ritrovabile nel Second Brain",
+        "detail": "Ricette e immagini hanno anche una scheda nel Second Brain: ritrovale dai nuovi filtri e apri l’originale nella sua raccolta. Puoi collegarle a persone, luoghi, argomenti e progetti.",
+        "test": "Apri una ricetta, scegli Apri nel Second Brain e collegala a una persona. Verifica il collegamento anche dalla scheda della persona."
+      },
+      {
+        "icon": "photo.on.rectangle",
+        "title": "Le foto dei tuoi luoghi",
+        "detail": "Le foto con una posizione salvata si collegano ai luoghi. Le schede dei luoghi mostrano miniature tappabili. Per i nuovi scatti, Ernie usa una posizione recente solo se già autorizzata; senza dati affidabili non inventa il luogo.",
+        "test": "Importa una foto con GPS e controlla la scheda del luogo. Una foto senza posizione deve restare senza luogo automatico."
+      }
+    ]
+  },
+  {
+    "build": 78,
+    "date": "2026-10-18",
+    "title": "Tutte le foto, anche in secondo piano",
+    "items": [
+      {
+        "icon": "photo.stack",
+        "title": "Più foto nella stessa selezione",
+        "detail": "Ogni foto ha una coda e un esito indipendenti: un errore non ferma le altre. La raccolta mostra quante immagini restano da caricare.",
+        "test": "Seleziona quattro foto diverse e controlla di ritrovarle tutte in Media."
+      },
+      {
+        "icon": "arrow.up.circle",
+        "title": "Caricamenti che continuano",
+        "detail": "Le foto preparate vengono affidate a iOS e restano sul telefono finché il salvataggio non è confermato. Puoi cambiare schermata o passare a un’altra app.",
+        "test": "Aggiungi più foto, attendi che siano state acquisite e passa alla schermata Home. Riapri Media per vedere l’esito."
+      },
+      {
+        "icon": "arrow.clockwise",
+        "title": "Ripresa senza doppioni",
+        "detail": "I problemi temporanei vengono ritentati fino a tre volte. Se serve un nuovo tentativo, trovi Riprova nella raccolta. Dopo una chiusura forzata, riapri Ernie per riprendere la coda.",
+        "test": "Interrompi temporaneamente la connessione durante un caricamento, poi riattivala e controlla che ogni foto abbia una sola scheda."
+      }
+    ]
+  },
+  {
+    "build": 77,
+    "date": "2026-10-18",
+    "title": "Le tue immagini, tutte in Media",
+    "items": [
+      {
+        "icon": "photo.on.rectangle.angled",
+        "title": "Una raccolta da sfogliare",
+        "detail": "Le nuove foto hanno una galleria a colonne, una scheda dedicata e le immagini nelle loro proporzioni. Le ritrovi anche quando non contengono testo.",
+        "test": "Apri il menu laterale → Media e aggiungi una foto con +."
+      },
+      {
+        "icon": "tag",
+        "title": "Titoli, categorie e tag modificabili",
+        "detail": "Ernie propone titolo e tag per le nuove foto. Puoi modificarli, cercare le immagini e filtrare per categoria, tag e anno di caricamento.",
+        "test": "Apri una scheda, scegli Modifica e poi ritrovala dalla ricerca. Dal menu + puoi disattivare le proposte automatiche."
+      },
+      {
+        "icon": "checkmark.circle",
+        "title": "Caricamenti senza doppioni",
+        "detail": "Le nuove foto e scansioni allegate alla chat sono conservate nella raccolta. Se ripeti il caricamento della stessa immagine, la scheda rimane una sola.",
+        "test": "Carica due volte la stessa foto e controlla che compaia una sola scheda."
+      }
+    ]
+  },
+  {
+    "build": 76,
+    "date": "2026-10-18",
+    "title": "Voce più chiara dopo il microfono",
+    "items": [
+      {
+        "icon": "speaker.wave.3",
+        "title": "La risposta non resta nel percorso del microfono",
+        "detail": "Alla fine dell’ascolto Ernie chiude anche il processore vocale che può attenuare la riproduzione. Gli avvii annullati non riattivano la modalità di ascolto.",
+        "test": "Fai una domanda a voce, ascolta la risposta e ripeti il ciclo."
+      },
+      {
+        "icon": "slider.horizontal.3",
+        "title": "Il volume a portata di mano",
+        "detail": "Nelle impostazioni vocali trovi il cursore del volume di iOS e la percentuale corrente.",
+        "test": "Apri Impostazioni → Voce, tocca Ascolta un esempio e regola il volume."
+      }
+    ]
+  },
+  {
+    "build": 75,
+    "date": "2026-10-18",
+    "title": "Una sola lista della spesa",
+    "items": [
+      {
+        "icon": "cart",
+        "title": "La lista si aggiorna senza duplicarsi",
+        "detail": "Creazione e aggiunta degli ingredienti aggiornano la stessa scheda. Anche le conversazioni già salvate mostrano una sola scheda per lista nella stessa risposta.",
+        "test": "Chiedi la spesa di una ricetta: deve comparire una sola scheda con tutti gli ingredienti. Liste diverse restano separate."
+      }
+    ]
+  },
+  {
+    "build": 74,
+    "date": "2026-10-18",
+    "title": "Conferme più chiare",
+    "items": [
+      {
+        "icon": "checkmark.bubble",
+        "title": "Sai sempre cosa stai confermando",
+        "detail": "Le richieste mostrano un riepilogo in italiano, i dettagli consultabili e pulsanti espliciti come Salva ricetta. Spariscono i dati grezzi e le spiegazioni tecniche.",
+        "test": "Salva una ricetta da una foto o dal web: apri Ingredienti e preparazione e controlla il riepilogo prima di confermare."
+      },
+      {
+        "icon": "checkmark.shield",
+        "title": "Consensi e scadenze comprensibili",
+        "detail": "Il consenso per le prossime volte spiega a quali azioni si applica. Le richieste scadute e quelle vecchie con dettagli incompleti invitano a ripetere la richiesta.",
+        "test": "Controlla una vecchia conferma nella cronologia e il testo sotto Salva sempre senza chiedere."
+      }
+    ]
+  },
+  {
+    "build": 73,
+    "date": "2026-10-17",
+    "title": "Più stabile, anche quando interrompi",
+    "items": [
+      {
+        "icon": "person.crop.circle.badge.checkmark",
+        "title": "Uscita dall’account più completa",
+        "detail": "Le operazioni in corso non riportano più dati, allegati o promemoria dell’account precedente. Il microfono si chiude quando esci o metti l’app in secondo piano.",
+        "test": "Avvia un allegato, annullalo e scegline un altro: la preparazione deve restare coerente."
+      },
+      {
+        "icon": "hand.raised",
+        "title": "Stop della voce e ricerca più affidabili",
+        "detail": "Dopo Stop, la risposta continua solo per iscritto. La ricerca nel Second Brain mantiene i risultati più recenti e distingue gli errori di connessione dalle pagine assenti. I PDF richiedono meno memoria durante la lettura.",
+        "test": "Interrompi una risposta mentre parla, poi cerca rapidamente due parole diverse nel Second Brain."
+      }
+    ]
+  },
+  {
+    "build": 72,
+    "date": "2026-10-17",
+    "title": "La tua raccolta ricette",
+    "items": [
+      {
+        "icon": "books.vertical",
+        "title": "Ritrova le ricette salvate",
+        "detail": "Nel pannello trovi Ricette: cerca per titolo o ingrediente e combina categoria e tag. Ogni ricetta ha la sua scheda con ingredienti, preparazione e fonte.",
+        "test": "Apri Ricette dal pannello, cerca un ingrediente e prova ad aggiungere e rimuovere i filtri."
+      },
+      {
+        "icon": "folder",
+        "title": "Organizza e affina",
+        "detail": "Dal menu della scheda puoi assegnare categoria e tag, oppure eliminare una ricetta con conferma. «Affina con Ernie» prepara una richiesta in chat.",
+        "test": "Organizza una ricetta, riaprila e verifica i tag. Per acquisirne una nuova, allega una foto con + nella chat e chiedi di salvarla."
+      }
+    ]
+  },
+  {
+    "build": 71,
+    "date": "2026-10-17",
+    "title": "Le informazioni subito in chiaro",
+    "items": [
+      {
+        "icon": "list.bullet.rectangle",
+        "title": "Riepilogo di persone e luoghi",
+        "detail": "I fatti raccolti sono riuniti in alto, senza ripetizioni. Il testo originale e gli aggiornamenti restano in «Storico e fonti», da aprire quando servono.",
+        "test": "Apri una scheda persona con più aggiornamenti: leggi il riepilogo, poi espandi lo storico."
+      },
+      {
+        "icon": "map",
+        "title": "Le posizioni salvate si aprono in Mappe",
+        "detail": "I luoghi collegati mostrano l’indirizzo disponibile o la posizione salvata. Puoi aprire Mappe o passare alla scheda del luogo.",
+        "test": "Apri una persona con un luogo collegato e coordinate salvate. Tocca «Apri in Mappe» e controlla il punto."
+      }
+    ]
+  },
+  {
+    "build": 70,
+    "date": "2026-10-17",
+    "title": "Second Brain più leggibile",
+    "items": [
+      {
+        "icon": "calendar",
+        "title": "Date separate dai contenuti",
+        "detail": "Gli aggiornamenti datati hanno un riquadro dedicato, con la data in evidenza e il testo sotto. Le fonti collegate mostrano separatamente data, titolo e contenuto.",
+        "test": "Apri una pagina con aggiornamenti di giorni diversi e una scheda persona con informazioni collegate."
+      },
+      {
+        "icon": "text.alignleft",
+        "title": "Pagine più ordinate",
+        "detail": "Titoli più chiari, maggior spazio fra le sezioni e dati della pagina separati dal testo. Anche l’elenco distingue meglio titolo, data, luogo e anteprima.",
+        "test": "Prova il Second Brain con caratteri grandi e tema scuro: i testi devono restare leggibili e i link aprirsi come prima."
+      }
+    ]
+  },
+  {
+    "build": 69,
+    "date": "2026-10-17",
+    "title": "Voce più udibile",
+    "items": [
+      {
+        "icon": "speaker.wave.3.fill",
+        "title": "Volume della voce corretto",
+        "detail": "Ernie usa ora il normale volume multimediale del telefono anche dopo un messaggio vocale. La correzione vale per Drama e per la voce iOS.",
+        "test": "Ascolta un esempio in Impostazioni › Voce, poi fai una domanda al microfono: confronta il volume delle due risposte e prova anche con le cuffie."
+      }
+    ]
+  },
+  {
+    "build": 68,
+    "date": "2026-10-17",
+    "title": "La nuova voce di Ernie",
+    "items": [
+      {
+        "icon": "waveform",
+        "title": "Voce Drama",
+        "detail": "Ernie parla con Drama. In Impostazioni › Voce scegli un’interpretazione calda, vivace o tranquilla e ascolta un esempio. Puoi tornare alla voce iOS in qualsiasi momento.",
+        "test": "Ascolta le tre interpretazioni e prova una conversazione con l’altoparlante acceso."
+      },
+      {
+        "icon": "speaker.slash.fill",
+        "title": "Interruzione e ripiego automatico",
+        "detail": "Lo stop interrompe anche la preparazione della voce. Se la sintesi online non riesce, la frase viene letta con la voce iOS.",
+        "test": "Interrompi Ernie mentre prepara o legge una risposta: non deve ripartire da solo."
+      }
+    ]
+  },
+  {
+    "build": 67,
+    "date": "2026-10-17",
+    "title": "Richieste più affidabili",
+    "items": [
+      {
+        "icon": "arrow.clockwise",
+        "title": "Ripresa automatica",
+        "detail": "Se cade la connessione, Ernie conserva la richiesta e prova a recuperare la risposta. Gli errori temporanei del modello vengono ritentati fino a tre volte, senza rilanciare le azioni già eseguite.",
+        "test": "Durante una risposta disattiva e riattiva la rete: la stessa richiesta deve riprendere senza un nuovo messaggio «Riprova»."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Attività in italiano",
+        "detail": "Le attività mostrano nomi comprensibili, come «Salvataggio del luogo» e «Unione delle schede», anche nelle conversazioni precedenti.",
+        "test": "Apri una conversazione con attività già completate e controlla le etichette."
+      }
+    ]
+  },
+  {
+    "build": 65,
+    "date": "2026-10-17",
+    "title": "Second Brain più leggibile",
+    "items": [
+      {
+        "icon": "doc.text",
+        "title": "Schede pulite e leggibili",
+        "detail": "Le schede del Second Brain nascondono i marcatori tecnici, mostrano il titolo una sola volta nel contenuto e le date in italiano. I dati anagrafici generati non vengono ripetuti; fonti e collegamenti restano accessibili.",
+        "test": "Apri la scheda di una persona nel Second Brain: controlla i dati e apri il luogo collegato. Prova anche con il testo ingrandito."
+      }
+    ]
+  },
+  {
+    "build": 64,
+    "date": "2026-10-17",
+    "title": "Foto e Second Brain",
+    "items": [
+      {
+        "icon": "camera",
+        "title": "Una foto, il contenuto giusto",
+        "detail": "Ernie legge la foto e riconosce il contenuto. Le ricette diventano schede Ricetta; puoi continuare a chiedere uno schema per studiare. Ti chiede una scelta solo nei casi ambigui.",
+        "test": "Fotografa una ricetta e inviala senza scrivere una richiesta: deve comparire la scheda Ricetta, senza inventare dosi assenti."
+      },
+      {
+        "icon": "link",
+        "title": "Informazioni collegate",
+        "detail": "Il Second Brain collega periodicamente le informazioni coerenti alle pagine delle persone, dei luoghi e degli argomenti. Conserva fonti e cronologia; nei casi dubbi ti fa una domanda.",
+        "test": "Memorizza un luogo con il nome di una persona già presente nel Second Brain e controlla i collegamenti dopo la revisione."
+      }
+    ]
+  },
+  {
     "build": 63,
     "date": "2026-10-16",
     "title": "Più stabile",

@@ -13,7 +13,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().setNotificationCategories([Self.familyCategory, Self.urgentCategory])
         // Rapporti di iOS su blocchi e chiusure per errore: al server, per la diagnosi.
         DiagnosticsReporter.shared.start()
+        if let credentials = Credentials.load() { MediaUploadQueue.shared.configure(credentials) }
         return true
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        MediaUploadQueue.shared.handleBackgroundEvents(identifier, completion: completionHandler)
     }
 
     // MARK: - messaggi in famiglia: «Rispondi» dalla notifica, anche a telefono bloccato

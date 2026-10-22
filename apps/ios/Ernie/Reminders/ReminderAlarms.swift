@@ -17,7 +17,7 @@ enum ReminderAlarms {
     static var authorization: AlarmManager.AuthorizationState { AlarmManager.shared.authorizationState }
 
     /// Uscita dall'account: tutte le sveglie di Ernie, in qualsiasi stato.
-    static func cancelAll() async {
+    static func cancelAll() {
         let manager = AlarmManager.shared
         for alarm in (try? manager.alarms) ?? [] { try? manager.cancel(id: alarm.id) }
     }
@@ -26,6 +26,7 @@ enum ReminderAlarms {
     /// Ogni promemoria può scegliere (v1.11): `alarm == true` suona anche con l'opzione generale spenta,
     /// `alarm == false` resta una notifica anche con l'opzione accesa.
     static func sync(_ items: [ReminderSnapshot.Item]) async -> Set<String> {
+        guard !Task.isCancelled else { return [] }
         let manager = AlarmManager.shared
         let existing = (try? manager.alarms) ?? []
         let ringing = items.filter { $0.alarm ?? enabled }
@@ -37,7 +38,7 @@ enum ReminderAlarms {
         if state == .notDetermined {
             state = (try? await manager.requestAuthorization()) ?? .denied
         }
-        guard state == .authorized else { return [] }
+        guard !Task.isCancelled, state == .authorized else { return [] }
 
         var wanted: [UUID: ReminderSnapshot.Item] = [:]
         for item in ringing { if let id = UUID(uuidString: item.id) { wanted[id] = item } }
@@ -48,9 +49,11 @@ enum ReminderAlarms {
         let placed = Set(existing.map(\.id))
         var covered: Set<String> = []
         for (id, item) in wanted {
+            guard !Task.isCancelled else { return covered }
             if placed.contains(id) { covered.insert(item.id); continue }
             do {
                 _ = try await manager.schedule(id: id, configuration: configuration(item))
+                guard !Task.isCancelled else { try? manager.cancel(id: id); return covered }
                 covered.insert(item.id)
             } catch {
                 continue // limite raggiunto o errore: resta la notifica locale
