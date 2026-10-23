@@ -42,7 +42,9 @@ function setup() {
   });
   const service = {
     snapshot: vi.fn(async () => snapshot),
-    diagnose: vi.fn(async () => ({ output: 'Codice uscita: 0\nok' })),
+    diagnose: vi.fn(async (_user: string, _input: { serverId: string; check: string }) => ({
+      output: 'Codice uscita: 0\nok',
+    })),
     providerInstances: vi.fn(async () => ({
       instances: [
         { id: 'own-instance', status: 'running' },
@@ -125,6 +127,39 @@ describe('account scoped site runbook', () => {
     expect(result.status).toBe('partial');
     expect(JSON.stringify(result)).not.toContain('do-not-leak');
     expect(JSON.stringify(result)).not.toContain('other-instance');
+  });
+  it('keeps failed services unresolved even when HTTPS 200 and SSH succeed', async () => {
+    const { run, service, probe } = setup();
+    probe.mockResolvedValue({
+      dns: { status: 'ok', addresses: ['203.0.113.9'] },
+      http: { status: 301, error: null },
+      https: { status: 200, error: null },
+      limitations: [],
+    });
+    service.diagnose.mockImplementation(async (_user, input) => ({
+      output:
+        input.check === 'services'
+          ? 'Codice uscita: 0\nUNIT LOAD ACTIVE SUB DESCRIPTION\napache2.service loaded active running Apache\n● systemd-networkd-wait-online.service loaded failed failed Wait for network\nworker.service loaded failed failed Worker\n'
+          : 'Codice uscita: 0\nok',
+    }));
+    const report = await run();
+    expect(report.status).toBe('complete'); // Collection completed, not system health.
+    expect(report.unresolvedFindings).toEqual([
+      {
+        unit: 'systemd-networkd-wait-online.service',
+        observedState: 'failed',
+        cause: 'not_verified',
+        impact: 'not_verified',
+      },
+      {
+        unit: 'worker.service',
+        observedState: 'failed',
+        cause: 'not_verified',
+        impact: 'not_verified',
+      },
+    ]);
+    expect(report.unresolvedFindings.some((f) => f.unit === 'apache2.service')).toBe(false);
+    expect(service.providerInstances).not.toHaveBeenCalled();
   });
   it('cancellation prevents subsequent SSH checks', async () => {
     const { run, service } = setup();

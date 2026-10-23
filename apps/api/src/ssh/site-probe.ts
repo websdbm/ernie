@@ -47,7 +47,8 @@ export async function probeSite(domain: string, signal?: AbortSignal): Promise<S
   const empty = { status: null, error: 'non_eseguito' };
   const limitations = [
     'Verifica esterna dal backend Ernie, solo HEAD alla radice; nessun redirect seguito.',
-    'Un risultato HTTP non verifica login, contenuto o funzionamento completo del sito.',
+    'HTTP 200 su HEAD prova soltanto la risposta alla richiesta: corpo della pagina, rendering, login, moduli e funzionamento applicativo non verificati.',
+    'Per risposte 3xx la destinazione del reindirizzamento non è stata verificata; non presumere HTTPS.',
     'DNS diversi dall’IP del server possono indicare CDN o proxy, non necessariamente un errore.',
   ];
   if (!addresses.length || addresses.some((a) => !publicProbeAddress(a)))

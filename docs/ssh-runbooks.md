@@ -77,3 +77,22 @@ applicativo); nessun redirect seguito. Verifiche di rilascio riportate sotto.
   conservata come `ernie-app:before-ssh-runbooks-20261023`; per rollback ripristinare
   quella immagine e i sorgenti del manifest, poi ricreare solo API/worker con gli
   stessi due Compose. Non ripristinare il database.
+
+## Precisione delle conclusioni — 23 ottobre 2026
+
+Dopo la prova sul dominio reale, la procedura condivide le stesse regole di
+interpretazione tra skill e risultato tool:
+
+- «Verificato» contiene soltanto osservazioni dei controlli eseguiti.
+  «Da verificare» esplicita i limiti. Le eventuali «Ipotesi» includono il controllo
+  necessario per confermarle, senza essere presentate come diagnosi già accertate.
+- `HEAD /` con HTTP 200 è soltanto una risposta al probe: non dimostra contenuto,
+  rendering o funzionamento delle pagine. Non si descrive come «pagina caricata».
+  Un 3xx non prova la destinazione del redirect, che non è stata letta né seguita.
+- `running` indica lo stato dichiarato da systemd, non una verifica applicativa.
+  Le righe dei servizi `failed` sono riportate anche in `unresolvedFindings`,
+  con `cause: not_verified` e `impact: not_verified`. La raggiungibilità di rete
+  e SSH non permette di liquidare questi errori come innocui o non correlati;
+  non permette nemmeno di attribuire loro il guasto senza altre prove.
+- Il test di regressione combina HTTPS 200, SSH riuscito, Apache attivo e due
+  unità failed: entrambe restano anomalie aperte, senza azioni sul server.
