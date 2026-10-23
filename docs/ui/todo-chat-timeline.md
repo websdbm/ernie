@@ -25,6 +25,9 @@ Apri timeline apre il dettaglio della stessa lista, senza scritture automatiche.
 - Riproduzione prima della correzione: fallivano i controlli che confrontano
   il rendering cambiando orario, modalità e una fascia dopo la quarta.
 - Dopo la correzione: 23 test Todo in 4 suite passati su simulatore iOS 26.5.
+- Release: 3 test della scheda passati con `ENABLE_TESTABILITY=YES` e
+  `ONLY_ACTIVE_ARCH=YES`; la prima invocazione senza testability non poteva
+  importare il modulo per i test. Nessun ciclo AttributeGraph nei due log finali.
 - Rendering nativo a 320 e 390 punti, tema chiaro/scuro, classico/Borg e testo
   standard/accessibilità; anteprime ispezionate. Nessuna prova su iPhone fisico.
 - Nessuna modifica backend, nessuna chiamata LLM richiesta dalla timeline.
