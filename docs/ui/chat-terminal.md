@@ -28,3 +28,12 @@ prima dell'archive sul Mac Studio. La skin si attiva nelle impostazioni dopo ave
 installato questa build. La verifica su iPhone fisico resta da eseguire.
 
 Dettagli e verifiche del rilascio: [build 97](../releases/build-97.md).
+
+## Correzione della scrittura (build 98)
+
+La prima integrazione usava un `FocusState` senza un corrispondente campo SwiftUI
+nella skin Terminale. Il test del solo editor non intercettava il problema della
+barra completa: la digitazione progressiva perdeva il focus e generava cicli
+AttributeGraph. La gestione del focus ora è distinta tra editor UIKit e campo
+classico, con una bozza condivisa. Verifiche e distribuzione nella
+[build 98](../releases/build-98.md).

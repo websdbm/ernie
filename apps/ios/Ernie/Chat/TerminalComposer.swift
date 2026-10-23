@@ -13,10 +13,12 @@ final class TerminalTextView: UITextView {
 
     func configureFont(size: CGFloat = 17) {
         // SwiftUI fornisce la misura scalata, anche con una categoria impostata nell’ambiente.
-        font = .monospacedSystemFont(ofSize: size, weight: .regular)
+        let desiredFont = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        if font != desiredFont { font = desiredFont }
         adjustsFontForContentSizeCategory = false
         // Spazio anche per il cursore a blocco al termine di una riga piena.
-        textContainerInset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: ceil(font?.pointSize ?? 17))
+        let inset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: ceil(size))
+        if textContainerInset != inset { textContainerInset = inset }
     }
 }
 
@@ -53,8 +55,7 @@ struct TerminalComposer: UIViewRepresentable {
             view.selectedRange = NSRange(location: min(selection.location, length), length: min(selection.length, max(0, length - selection.location)))
             view.invalidateIntrinsicContentSize()
         }
-        if focused, !view.isFirstResponder { view.becomeFirstResponder() }
-        if !focused, view.isFirstResponder { view.resignFirstResponder() }
+        context.coordinator.synchronizeFocus(view)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: TerminalTextView, context: Context) -> CGSize? {
@@ -66,15 +67,35 @@ struct TerminalComposer: UIViewRepresentable {
         return CGSize(width: width, height: min(maxHeight, max(44, desired)))
     }
 
+    static func dismantleUIView(_ view: TerminalTextView, coordinator: Coordinator) {
+        coordinator.focusTask?.cancel()
+        view.delegate = nil
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: TerminalComposer
+        var focusTask: Task<Void, Never>?
         init(_ parent: TerminalComposer) { self.parent = parent }
+        func synchronizeFocus(_ view: TerminalTextView) {
+            focusTask?.cancel()
+            guard parent.focused != view.isFirstResponder else { return }
+            // Keyboard notifications and delegate callbacks must not reenter a SwiftUI update.
+            focusTask = Task { @MainActor [weak self, weak view] in
+                guard !Task.isCancelled, let self, let view, view.window != nil else { return }
+                if self.parent.focused, !view.isFirstResponder { view.becomeFirstResponder() }
+                if !self.parent.focused, view.isFirstResponder { view.resignFirstResponder() }
+            }
+        }
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
             textView.invalidateIntrinsicContentSize()
         }
-        func textViewDidBeginEditing(_ textView: UITextView) { parent.focused = true }
-        func textViewDidEndEditing(_ textView: UITextView) { parent.focused = false }
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            if !parent.focused { parent.focused = true }
+        }
+        func textViewDidEndEditing(_ textView: UITextView) {
+            if parent.focused { parent.focused = false }
+        }
     }
 }

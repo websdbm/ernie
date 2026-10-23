@@ -28,7 +28,7 @@ struct ChatView: View {
     @State private var debugIcons = false
     @State private var draft = ""
     @AppStorage(BearCostume.preferenceKey) private var bearCostume = BearCostume.automatic.rawValue
-    @FocusState private var composing: Bool
+    @State private var composing = false
 
     var body: some View {
         ZStack {

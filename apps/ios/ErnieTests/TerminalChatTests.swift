@@ -51,6 +51,76 @@ struct TerminalChatTests {
         #expect(findEditor(host.view)?.isScrollEnabled == false)
     }
 
+    @Test @MainActor func digitazioneProgressivaNellaBarraCompleta() async throws {
+        let host = UIHostingController(rootView: TerminalPreview(terminal: true, draft: ""))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(300))
+        let editor = try #require(findEditor(host.view))
+        editor.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(300))
+        var expected = ""
+        for character in "Ciao Ernie 🐻, questa è una prova.\nSeconda riga." {
+            expected.append(character)
+            editor.insertText(String(character))
+            try await Task.sleep(for: .milliseconds(30))
+            host.view.layoutIfNeeded()
+            #expect(editor.text == expected)
+            #expect(editor.isFirstResponder)
+        }
+        for _ in 0..<10 {
+            editor.deleteBackward()
+            expected.removeLast()
+            try await Task.sleep(for: .milliseconds(30))
+            #expect(editor.text == expected)
+        }
+        editor.setMarkedText("composizione", selectedRange: NSRange(location: 12, length: 0))
+        try await Task.sleep(for: .milliseconds(100))
+        editor.unmarkText()
+        editor.insertText(" conclusa")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(editor.text.hasSuffix("composizione conclusa"))
+    }
+
+    @Test @MainActor func focusProgrammaticoECambioSkinNellaBarraCompleta() async throws {
+        let state = ComposerState()
+        let host = UIHostingController(rootView: TerminalPreview(terminal: true, state: state))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(250))
+        for terminal in [true, false, true] {
+            state.terminal = terminal
+            state.focused = true
+            try await Task.sleep(for: .milliseconds(250))
+            let responder = try #require(findFirstResponder(host.view))
+            #expect((responder is TerminalTextView) == terminal)
+            let input = try #require(responder as? UIKeyInput)
+            input.insertText("Ciao ")
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(state.focused)
+            #expect(state.text.hasSuffix("Ciao "))
+            state.focused = false
+            try await Task.sleep(for: .milliseconds(200))
+            #expect(findFirstResponder(host.view) == nil)
+        }
+        #expect(state.text == "Ciao Ciao Ciao ")
+    }
+
+    @MainActor private func findFirstResponder(_ root: UIView) -> UIView? {
+        if root.isFirstResponder { return root }
+        return root.subviews.lazy.compactMap { findFirstResponder($0) }.first
+    }
+
     @Test @MainActor func anteprimeETemaLocale() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("terminal-chat-preview")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -120,16 +190,17 @@ private struct ComposerHarness: View {
 }
 
 private struct TerminalPreview: View {
-    let terminal: Bool
-    @State private var text = "Ricordami di preparare l’impasto"
-    @FocusState private var focused: Bool
+    @Bindable private var state: ComposerState
+    private var terminal: Bool { state.terminal }
     private let model = AppModel()
     private let conversation: ConversationStore
     private let voice: VoiceController
     private let documents = DocumentComposer()
 
-    init(terminal: Bool) {
-        self.terminal = terminal
+    init(terminal: Bool, draft: String = "Ricordami di preparare l’impasto", state: ComposerState? = nil) {
+        let value = state ?? ComposerState()
+        if state == nil { value.text = draft; value.terminal = terminal }
+        _state = Bindable(wrappedValue: value)
         let speaker = Speaker()
         let suite = "terminal-preview-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -163,7 +234,7 @@ private struct TerminalPreview: View {
                         MessageRow(message: ChatMessage(id: "2", correlationId: "1", role: .assistant, text: "Ecco i tuoi impegni:\n\n- **15:00** — accompagna Cloe.\n- **18:00** — vai a riprenderla.\n\nHai tempo per preparare l’impasto della pizza nel pomeriggio.", createdAt: .now))
                     }
                 }
-                InputBar(draft: $text, composing: $focused, conversation: conversation, voice: voice, documents: documents)
+                InputBar(draft: $state.text, composing: $state.focused, conversation: conversation, voice: voice, documents: documents)
             }.padding()
             .foregroundStyle(terminal ? ChatPalette.phosphor : Theme.ink)
         }.chatAppearance(terminal: terminal).environment(model)

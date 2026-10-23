@@ -10,7 +10,8 @@ struct InputBar: View {
     @Environment(\.chatPalette) private var palette
     @State private var showMedia = false
     @Binding var draft: String
-    var composing: FocusState<Bool>.Binding
+    @Binding var composing: Bool
+    @FocusState private var classicFocused: Bool
     let conversation: ConversationStore
     let voice: VoiceController
     /// Allegato in preparazione (skill «Documenti»): «+» a sinistra del campo.
@@ -55,11 +56,9 @@ struct InputBar: View {
                         HStack(alignment: .top, spacing: 6) {
                             Text(">").foregroundStyle(palette.inkSecondary)
                                 .padding(.top, 11).accessibilityHidden(true)
-                            TerminalComposer(text: $draft, focused: Binding(
-                                get: { composing.wrappedValue }, set: { composing.wrappedValue = $0 }
-                            ), placeholder: "Chiedi a \(conversationName)")
+                            TerminalComposer(text: $draft, focused: $composing, placeholder: "Chiedi a \(conversationName)")
                             .overlay(alignment: .topLeading) {
-                                if draft.isEmpty && !composing.wrappedValue {
+                                if draft.isEmpty && !composing {
                                     Text("Chiedi a \(conversationName)…")
                                         .foregroundStyle(palette.inkSecondary)
                                         .padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true)
@@ -70,7 +69,7 @@ struct InputBar: View {
                     } else {
                         TextField("Chiedi a \(conversationName)…", text: $draft, axis: .vertical)
                             .lineLimit(1...6)
-                            .focused(composing)
+                            .focused($classicFocused)
                             .font(.body)
                             .foregroundStyle(palette.ink)
                             .padding(.horizontal, 6)
@@ -87,12 +86,23 @@ struct InputBar: View {
         .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 6)
+        // UIKit owns focus in Terminale; FocusState only belongs to the mounted SwiftUI field.
+        .onChange(of: classicFocused) { _, focused in
+            if !palette.terminal, composing != focused { composing = focused }
+        }
+        .onChange(of: composing) { _, focused in
+            if !palette.terminal, classicFocused != focused { classicFocused = focused }
+        }
+        .onChange(of: palette.terminal) { _, terminal in
+            classicFocused = terminal ? false : composing
+        }
+        .onAppear { if !palette.terminal { classicFocused = composing } }
         .animation(.easeInOut(duration: 0.15), value: voice.phase)
         .onChange(of: conversation.composerSuggestion) { _, suggestion in
             guard let suggestion else { return }
             draft = suggestion
             conversation.composerSuggestion = nil
-            composing.wrappedValue = true
+            composing = true
         }
         .fullScreenCover(isPresented: $showScanner) {
             DocumentScannerView(
@@ -256,14 +266,14 @@ struct InputBar: View {
                 .accessibilityLabel("Interrompi")
         case .mic, .voice:
             Button {
-                composing.wrappedValue = false
+                composing = false
                 voice.startListening()
             } label: {
                 icon("mic.fill", fill: palette.accent)
             }
             // Pressione lunga: conversazione continua anche senza l'impostazione (il tocco al rilascio è ignorato perché l'ascolto è già partito).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                composing.wrappedValue = false
+                composing = false
                 voice.startListening(continuous: true)
             })
             .accessibilityLabel("Parla: un tocco avvia l'ascolto, tieni premuto per la conversazione continua")

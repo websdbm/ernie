@@ -1,5 +1,23 @@
 [
   {
+    "build": 98,
+    "date": "2026-10-23",
+    "title": "Scrittura stabile nella skin Terminale",
+    "items": [
+      {
+        "icon": "keyboard",
+        "title": "Tastiera stabile",
+        "detail": "Corretta la gestione del campo Terminale che poteva bloccare la chat quando iniziavi a scrivere. Il cursore verde a blocco rimane disponibile.",
+        "test": "Attiva la skin Terminale e scrivi un messaggio, anche su più righe. Puoi usare emoji, selezionare e correggere il testo."
+      },
+      {
+        "icon": "arrow.triangle.2.circlepath",
+        "title": "Cambio di stile",
+        "detail": "La gestione della tastiera è separata tra la skin classica e Terminale, mantenendo la bozza quando cambi stile."
+      }
+    ]
+  },
+  {
     "build": 97,
     "date": "2026-10-23",
     "title": "La chat in stile Terminale",
