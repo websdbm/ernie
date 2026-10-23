@@ -63,4 +63,5 @@ sono verificati con rapporto minimo 4,5:1. Le anteprime usano dati sintetici off
 - [Palette scure](bear-palettes-dark.jpg)
 - [Cursore Borg durante la scrittura](borg-block-cursor.png)
 
-Per commit, prove e stato TestFlight effettivo: [build 99](../releases/build-99.md).
+Build 99 disponibile su TestFlight, verificata il 23 ottobre 2026 alle 08:42 CEST.
+Per commit, prove e stato del rilascio: [build 99](../releases/build-99.md).
