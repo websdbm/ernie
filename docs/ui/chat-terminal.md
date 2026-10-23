@@ -21,4 +21,6 @@ Le schermate di anteprima mostrano componenti reali con una conversazione sintet
 
 ## Distribuzione
 
-Questa modifica è preparata nei sorgenti. Nessuna nuova build distribuita o caricata su TestFlight in questo intervento. Prima della prossima distribuzione aggiornare numero e changelog, pubblicare il commit sorgenti su GitHub e compilare da quel commit, come richiesto da `AGENTS.md`.
+Inclusa nella build 97 in preparazione. Numero, changelog e progetto sono aggiornati;
+la distribuzione sarà documentata in [build 97](../releases/build-97.md) dopo la
+verifica del commit GitHub e di App Store Connect. Nessuna build 97 ancora dichiarata disponibile.

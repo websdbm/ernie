@@ -1,5 +1,23 @@
 [
   {
+    "build": 97,
+    "date": "2026-10-23",
+    "title": "La chat in stile Terminale",
+    "items": [
+      {
+        "icon": "terminal",
+        "title": "Skin Terminale",
+        "detail": "Un aspetto alternativo per la chat: fondo scuro, testo verde fosforo, font monospaziato e cursore a blocco. La scelta resta salvata sul dispositivo.",
+        "test": "Apri Impostazioni → Aspetto della chat e attiva Skin Terminale. Puoi tornare allo stile classico in qualsiasi momento."
+      },
+      {
+        "icon": "text.cursor",
+        "title": "Scrittura comoda anche nel terminale",
+        "detail": "La barra supporta più righe, emoji, selezione del testo e caratteri più grandi. Cambiando stile, la bozza rimane disponibile."
+      }
+    ]
+  },
+  {
     "build": 96,
     "date": "2026-10-22",
     "title": "Una memoria più chiara e continua",
