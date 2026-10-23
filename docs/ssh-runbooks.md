@@ -53,3 +53,27 @@ annullamento, modello avanzato e caricamento della procedura anche se il router
 propone una conversazione generica. Controllo reale del probe pubblico sul dominio
 API Ernie: DNS risolto, HTTP 308, HTTPS 404 alla radice (la radice non è un endpoint
 applicativo); nessun redirect seguito. Verifiche di rilascio riportate sotto.
+
+### Rilascio backend verificato
+
+- Sorgenti pubblicati su GitHub `main`: `6a0a0d7bde7da3e904e0ddef2e236579a3c1b21e`.
+- Immagine API/worker: `sha256:db3481ae9af50572fbe2b4818a2814382f7d9e60d3fff7a60bdf558d91392756`.
+  Applicata il 23 ottobre 2026; `/health` e `/ready` pubblici positivi. Nessuna
+  migrazione e nessuna nuova build iOS. I sette moduli compilati principali
+  confrontati con gli artefatti locali hanno SHA-256 identici.
+- 88 test mirati passati, TypeScript e Biome passati. Nove test PostgreSQL della
+  suite preesistente saltati localmente perché le variabili DB non erano impostate.
+- Diagnosi reale sul server staging3: overview/disco/servizi con uscita zero,
+  probe web completato. Associazione dominio/server sintetica solo in memoria
+  per questa prova: nessuna modifica all'inventario e nessun nuovo intervento.
+- Conversazione di collaudo su account temporaneo separato: modello avanzato,
+  `ssh_investigate` seguito da `present_choices`, una scheda con tre scelte,
+  zero operazioni SSH create. Provato il caso parziale senza chiave SSH: il
+  modello segnala il limite e offre approfondimento/configurazione/stop. Account
+  eliminato a fine prova, consumo LLM rilevato 0,1906258 USD. Il testo generato
+  resta interpretazione del modello, non una certificazione della causa.
+- Backup di sorgenti precedenti, manifest e log del rilascio:
+  `/srv/staging3/backups/ernie/20261023-ssh-runbooks/`. Immagine precedente
+  conservata come `ernie-app:before-ssh-runbooks-20261023`; per rollback ripristinare
+  quella immagine e i sorgenti del manifest, poi ricreare solo API/worker con gli
+  stessi due Compose. Non ripristinare il database.
