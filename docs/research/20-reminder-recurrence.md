@@ -30,4 +30,23 @@ non vengono eliminate silenziosamente né convertite in un avviso singolo.
 - TypeScript e controllo Biome sui file modificati superati.
 - Verificato il salto del fine settimana durante il cambio dell'ora: da venerdì
   23 ottobre dopo le 07:55, prossima occorrenza lunedì 26 alle 07:55 CET.
-- Verifica backend reale e stato di deployment da registrare dopo il rilascio.
+- Due prove reali WebSocket sul servizio pubblico: una formulazione conversazionale
+  passa dal modello e da `reminder_create`, una breve usa il parser deterministico.
+  Entrambe creano esattamente un record cron `55 7 * * 1,2,3,4,5`, restituiscono la
+  scheda con ricorrenza e sono cancellabili solo dal proprietario. Fixture eliminate.
+- Costo registrato della verifica completa: 0,134 USD; nessun avviso inviato a utenti reali.
+- Backend pubblicato il 23 ottobre 2026: `0.1.0-reminder-repeat-20261023.1`,
+  API healthy e worker running, PostgreSQL/Redis ready. Verificati gli hash dei
+  24 file compilati distribuiti. Sorgenti GitHub:
+  `4870a86dc82f2cded13667bfcf13b63a222fb831`.
+- Immagine API/worker:
+  `sha256:9930493d4b02ac372673b00d38fedc15f2e7707986b5539fa9faa51bf923c9aa`.
+- Backup verificato di DB, vault, sorgenti e configurazione in
+  `/srv/staging3/backups/ernie/20261023-reminder-repeat/`.
+  Rollback: immagine `ernie-app:before-reminder-20261023`, sorgenti/configurazione
+  dal backup; nessuna migrazione dati. Non ripristinare il DB sullo stato corrente
+  senza prima preservare i dati creati successivamente.
+- Evidenze locali: `/tmp/ernie-reminder-20261023/`. La prima connessione del client
+  di test non ha completato l'handshake; entrambe le prove successive sono riuscite
+  usando IPv4 esplicito. Nessuna modifica di rete applicata al servizio.
+- La skin Terminale è distribuita separatamente nella [build 97](../releases/build-97.md).
