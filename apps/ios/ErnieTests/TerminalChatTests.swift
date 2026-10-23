@@ -102,7 +102,11 @@ struct TerminalChatTests {
             state.terminal = terminal
             state.focused = true
             try await Task.sleep(for: .milliseconds(250))
-            let responder = try #require(findFirstResponder(host.view))
+            // La comparsa della tastiera può completarsi dopo l'animazione del cambio skin.
+            for _ in 0..<20 where findFirstResponder(host.view) == nil {
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            let responder = try #require(findFirstResponder(host.view), "terminal=\(terminal), requestedFocus=\(state.focused)")
             #expect((responder is TerminalTextView) == terminal)
             let input = try #require(responder as? UIKeyInput)
             input.insertText("Ciao ")

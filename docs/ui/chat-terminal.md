@@ -21,13 +21,13 @@ Le schermate di anteprima mostrano componenti reali con una conversazione sintet
 
 ## Distribuzione
 
-Disponibile nella **build 97 su TestFlight**, verificata il 23 ottobre 2026 alle
-06:15 CEST: `VALID`, `IN_BETA_TESTING`, gruppo «Interni» e note italiane aggiornate.
-Sorgenti compilati: `0a0171215d607c85039defad7ba7eb33151bb8b8`, pubblicati su GitHub
-prima dell'archive sul Mac Studio. La skin si attiva nelle impostazioni dopo aver
-installato questa build. La verifica su iPhone fisico resta da eseguire.
+Disponibile nella **build 98 su TestFlight**, verificata il 23 ottobre 2026 alle
+08:04 CEST: `VALID`, `IN_BETA_TESTING`, gruppo «Interni» e note italiane aggiornate.
+Sorgenti compilati: `c783c37e18d66d14032d1d973429a9f08a198ee7`, pubblicati su GitHub
+prima dell'archive sul Mac Studio. La build 98 corregge la gestione del focus
+introdotta nella 97. La verifica su iPhone fisico resta da eseguire.
 
-Dettagli e verifiche del rilascio: [build 97](../releases/build-97.md).
+Dettagli e verifiche del rilascio: [build 98](../releases/build-98.md).
 
 ## Correzione della scrittura (build 98)
 
