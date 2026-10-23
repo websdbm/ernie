@@ -96,3 +96,9 @@ interpretazione tra skill e risultato tool:
   non permette nemmeno di attribuire loro il guasto senza altre prove.
 - Il test di regressione combina HTTPS 200, SSH riuscito, Apache attivo e due
   unità failed: entrambe restano anomalie aperte, senza azioni sul server.
+- La ripetizione reale ha fatto emergere anche una conclusione DNS troppo netta:
+  il controllo del resolver del backend era fallito. Il probe ora conserva i
+  codici separati delle query A/AAAA, distinguendo timeout, assenza di nome e
+  limite di sicurezza. La regola di prudenza si applica anche alla frase iniziale:
+  un errore da quel punto di osservazione non dimostra un guasto DNS generale o
+  la causa del disservizio. Occorrono riscontri indipendenti.

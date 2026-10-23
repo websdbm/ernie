@@ -70,6 +70,27 @@ describe('bounded public site probe', () => {
     expect((await probeSite('example.it')).dns.status).toBe('failed');
     expect(mocks.request).not.toHaveBeenCalled();
   });
+  it('preserves query error codes so resolver timeouts are not confused with missing names', async () => {
+    mocks.resolve4.mockRejectedValue(
+      Object.assign(new Error('private details'), { code: 'ETIMEOUT' }),
+    );
+    mocks.resolve6.mockRejectedValue(
+      Object.assign(new Error('private details'), { code: 'ENOTFOUND' }),
+    );
+    const result = await probeSite('example.it');
+    expect(result.dns).toEqual({
+      status: 'failed',
+      addresses: [],
+      queries: [
+        { type: 'A', status: 'failed', error: 'ETIMEOUT' },
+        { type: 'AAAA', status: 'failed', error: 'ENOTFOUND' },
+      ],
+    });
+    expect(result.http.error).toBe('non_eseguito');
+    expect(result.https.error).toBe('non_eseguito');
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('private details');
+  });
   it('pins IP, preserves Host/TLS identity, uses HEAD root and does not follow redirects', async () => {
     const result = await probeSite('example.it');
     expect(result.https.status).toBe(302);
