@@ -99,9 +99,26 @@ describe('SSH REST and model-only planning boundary', () => {
     expect(tools.map((t) => t.id)).toEqual([
       'ssh_inventory',
       'ssh_diagnose',
+      'ssh_investigate',
       'ssh_plan',
       'ssh_operation',
     ]);
+    const investigation = tools.find((t) => t.id === 'ssh_investigate');
+    if (!investigation) throw new Error('investigation');
+    expect(
+      await investigation.execute({ domain: 'example.it' }, {
+        userId,
+        modelClass: 'standard',
+        scopes: ['chat'],
+      } as never),
+    ).toMatchObject({ error: 'advanced_model_required' });
+    expect(
+      await investigation.execute({ domain: 'example.it' }, {
+        userId,
+        modelClass: 'heavy',
+        scopes: [],
+      } as never),
+    ).toMatchObject({ error: 'scope_required' });
     const inventory = tools[0];
     if (!inventory) throw new Error('inventory');
     expect(

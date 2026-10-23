@@ -36,8 +36,18 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     description:
       'Gestisci i tuoi server e siti con chiave personale, diagnostica SSH e WP-CLI, proposte da approvare e accesso alle API Vultr e Contabo. Richiede attivazione e configurazione; le attività sui server usano il modello avanzato.',
     kind: 'guided',
-    tools: ['ssh_inventory', 'ssh_diagnose', 'ssh_plan', 'ssh_operation'],
+    tools: [
+      'ssh_inventory',
+      'ssh_investigate',
+      'ssh_diagnose',
+      'ssh_plan',
+      'ssh_operation',
+      'present_choices',
+    ],
+    sharedTools: ['present_choices'],
     examples: [
+      'il dominio example.it non risponde',
+      'il sito example.it è lento o dà errore 502',
       'controlla il mio server',
       'verifica i siti WordPress',
       'controlla spazio disco e Docker',

@@ -1160,37 +1160,42 @@ describe('ClientConnection: routing', () => {
     expect(st.tags.get(sessionId)).toEqual(['cucina']);
   });
 
-  it('SSH attiva forza heavy anche se il router propone standard', async () => {
-    const st = fakeStore(),
-      socket = fakeSocket(),
-      sessionId = randomUUID(),
-      c = client(sessionId);
-    const registry = new SkillRegistry().register(createSshSkill());
-    const seen: TurnInput[] = [];
-    const d = deps(
-      {
-        getCompanion: async (_auth, session) =>
-          ({
-            ...companion,
-            profile: { ...companion.profile, modelClass: session.modelClass },
-          }) as never,
-        skills: { registryFor: async () => registry },
-        runTurn: async (input) => {
-          seen.push(input);
-          await input.emit('assistant.completed', {});
+  it.each(['Controlla il mio server SSH', 'example.it non risponde'])(
+    'SSH attiva forza heavy e procedura per %s anche se il router propone standard',
+    async (message) => {
+      const st = fakeStore(),
+        socket = fakeSocket(),
+        sessionId = randomUUID(),
+        c = client(sessionId);
+      const registry = new SkillRegistry().register(createSshSkill());
+      const seen: TurnInput[] = [];
+      const d = deps(
+        {
+          getCompanion: async (_auth, session) =>
+            ({
+              ...companion,
+              profile: { ...companion.profile, modelClass: session.modelClass },
+            }) as never,
+          skills: { registryFor: async () => registry },
+          runTurn: async (input) => {
+            seen.push(input);
+            await input.emit('assistant.completed', {});
+          },
         },
-      },
-      st,
-      fakeRouter({ modelClass: 'standard', requestedModelClass: 'standard' }),
-    );
-    const conn = new ClientConnection(socket.socket, auth, d);
-    await conn.handleRaw(c.start());
-    await conn.handleRaw(c.message('Controlla il mio server SSH'));
-    await tick();
-    expect(st.classes.get(sessionId)).toBe('heavy');
-    expect(seen[0]?.decision?.modelClass).toBe('heavy');
-    expect(d.invalidateCompanion).toHaveBeenCalledWith(sessionId);
-  });
+        st,
+        fakeRouter({ modelClass: 'standard', requestedModelClass: 'standard' }),
+      );
+      const conn = new ClientConnection(socket.socket, auth, d);
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message(message));
+      await tick();
+      expect(st.classes.get(sessionId)).toBe('heavy');
+      expect(seen[0]?.decision?.modelClass).toBe('heavy');
+      expect(seen[0]?.memoryContext).toContain('ssh_investigate');
+      expect(seen[0]?.memoryContext).toContain('present_choices');
+      expect(d.invalidateCompanion).toHaveBeenCalledWith(sessionId);
+    },
+  );
 
   it('una decisione Jev heavy alza la classe prima del turno e passa la decisione a runTurn', async () => {
     const st = fakeStore();

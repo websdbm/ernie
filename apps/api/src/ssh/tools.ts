@@ -2,6 +2,7 @@ import { SshDiagnosticInput, SshOperation, SshPlanInput } from '@ernie/protocol'
 import { defineTool, type ToolContext, type ToolSpec } from '@ernie/tools';
 import { z } from 'zod';
 import { SshInventoryInput, SshInventoryResult, sshInventoryPage } from './inventory.js';
+import { investigateSite, SshInvestigateInput, SshInvestigation } from './runbook.js';
 import type { SshService } from './service.js';
 import { SshError } from './types.js';
 
@@ -57,8 +58,34 @@ export function createSshTools(service: SshService): ToolSpec[] {
       requiredScopes: ['chat'],
       inputSchema: SshDiagnosticInput,
       outputSchema: z.union([z.object({ output: z.string() }), Failure]),
-      execute: async (input, ctx) => call(ctx, () => service.diagnose(ctx.userId, input)),
+      execute: async (input, ctx) =>
+        call(ctx, () => service.diagnose(ctx.userId, input, ctx.signal)),
       untrustedSource: (input) => `ssh:${input.serverId}`,
+    }),
+    defineTool({
+      id: 'ssh_investigate',
+      version: '1.0.0',
+      category: 'ssh',
+      description:
+        'Procedura site_unreachable_v1: dato un dominio, risolve il sito e server esclusivamente nell’inventario dell’account. Se ambiguo restituisce candidati senza collegarsi. Raccoglie DNS, HTTP/HTTPS, accesso SSH, disco e servizi, oppure stato provider già associato. Nessuna modifica, nessun riavvio; poi riepiloga le prove e usa present_choices per il passo successivo. siteId solo per risolvere una scelta tra i candidati restituiti.',
+      risk: { ...risk, ingestsUntrusted: true },
+      requiredScopes: ['chat'],
+      timeoutMs: 95_000,
+      oncePerTurn: true,
+      maxResultChars: 32_000,
+      retry: { attempts: 1, backoffMs: 0 },
+      inputSchema: SshInvestigateInput,
+      outputSchema: z.union([SshInvestigation, Failure]),
+      execute: async (input, ctx) =>
+        call(ctx, () =>
+          investigateSite(
+            service,
+            ctx.userId,
+            input,
+            AbortSignal.any([AbortSignal.timeout(90_000), ...(ctx.signal ? [ctx.signal] : [])]),
+          ),
+        ),
+      untrustedSource: (input) => `ssh-investigation:${input.domain}`,
     }),
     defineTool({
       id: 'ssh_plan',

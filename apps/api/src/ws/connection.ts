@@ -861,7 +861,9 @@ export class ClientConnection {
     const sshTurn =
       Boolean(skills?.get('ssh')) && requiresSshModel(modelText, routed.skillId, this.recentTurns);
     const decision = await this.settleModelClass(
-      sshTurn ? { ...routed, modelClass: 'heavy', requestedModelClass: 'heavy' } : routed,
+      sshTurn
+        ? { ...routed, skillId: 'ssh', modelClass: 'heavy', requestedModelClass: 'heavy' }
+        : routed,
       sessionId,
     );
     ac.signal.throwIfAborted();

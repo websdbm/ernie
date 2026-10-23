@@ -176,7 +176,7 @@ export function diagnosticCommand(
     case 'disk':
       return 'df -hP; df -iP';
     case 'services':
-      return 'systemctl --no-pager --plain list-units --type=service --state=running';
+      return 'systemctl --no-pager --plain list-units --type=service --state=running,failed';
     case 'logs':
       return 'journalctl --no-pager -n 80 --output=short-iso';
     case 'docker':
@@ -702,11 +702,15 @@ export function createSshService(opts: SshServiceOptions) {
     async diagnose(
       u: string,
       input: z.input<typeof SshDiagnosticInput>,
+      signal?: AbortSignal,
     ): Promise<{ output: string }> {
       const value = parse(SshDiagnosticInput, input),
         runId = randomUUID(),
         controller = new AbortController();
       await guard(u);
+      signal?.throwIfAborted();
+      const abort = () => controller.abort();
+      signal?.addEventListener('abort', abort, { once: true });
       active.set(runId, { userId: u, controller });
       try {
         const dispatched = await lock(u, async (c) => {
@@ -727,6 +731,7 @@ export function createSshService(opts: SshServiceOptions) {
             );
           const command = diagnosticCommand(value, si);
           await audit(c, u, 'diagnose', { serverId: s.id, check: value.check });
+          controller.signal.throwIfAborted();
           return {
             pending: started(opts.transport.run(s, privateKey, command, controller.signal)),
             privateKey,
@@ -750,6 +755,7 @@ export function createSshService(opts: SshServiceOptions) {
           502,
         );
       } finally {
+        signal?.removeEventListener('abort', abort);
         active.delete(runId);
       }
     },

@@ -16,6 +16,12 @@ describe('SSH activation and advanced routing', () => {
     expect(requiresSshModel('controlla Docker sul server', null)).toBe(true);
     expect(requiresSshModel('fallo', null, ['utente: controlla il server'])).toBe(true);
     expect(requiresSshModel('controlla example.it', 'ssh')).toBe(true);
+    expect(requiresSshModel('example.it non risponde', null)).toBe(true);
+    expect(requiresSshModel('errore 502 su https://example.it', null)).toBe(true);
+    expect(requiresSshModel('Approfondisci la diagnosi', null, ['example.it non risponde'])).toBe(
+      true,
+    );
+    expect(requiresSshModel('riassumi https://example.it', null)).toBe(false);
     expect(requiresSshModel('fammi i muffin', null)).toBe(false);
   });
 });

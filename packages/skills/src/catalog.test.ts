@@ -168,6 +168,7 @@ describe('catalogo delle skill', () => {
       'health_report',
       'ssh_diagnose',
       'ssh_inventory',
+      'ssh_investigate',
       'ssh_operation',
       'ssh_plan',
     ]);

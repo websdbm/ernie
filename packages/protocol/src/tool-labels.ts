@@ -1,6 +1,7 @@
 /** Etichette per le attività mostrate all’utente; gli identificativi restano interni. */
 export const TOOL_LABELS: Readonly<Record<string, string>> = {
   ssh_inventory: 'Consultazione di server e siti',
+  ssh_investigate: 'Analisi del dominio e del server',
   ssh_diagnose: 'Diagnostica del server',
   ssh_plan: 'Preparazione della proposta di intervento',
   ssh_operation: 'Verifica dell’intervento',
