@@ -102,3 +102,36 @@ interpretazione tra skill e risultato tool:
   limite di sicurezza. La regola di prudenza si applica anche alla frase iniziale:
   un errore da quel punto di osservazione non dimostra un guasto DNS generale o
   la causa del disservizio. Occorrono riscontri indipendenti.
+
+### Rilascio e ripetizione verificati
+
+- Sorgenti GitHub `main`: `c6df65f183945dd550b7c88f9367cd1f971e6251`, poi
+  rifinitura DNS `61d03645ad4f2e6c12e16932e62aa8a128fb8d32`.
+- Immagine finale API/worker:
+  `sha256:0aaf172c415715397767d077937d7591f94f073e7c5558398edaab033379e227`.
+  Applicata il 23 ottobre 2026 alle 14:19 CEST. Health e readiness positivi;
+  SHA-256 dei tre moduli compilati modificati corrispondenti agli artefatti locali.
+  Nessuna migrazione o nuova build iOS.
+- TypeScript e Biome passati. Prima correzione: 89 test mirati passati e nove test
+  PostgreSQL preesistenti saltati per variabili DB locali assenti. Dopo la
+  rifinitura DNS: 15 test mirati passati, inclusa la conservazione distinta di
+  `ETIMEOUT` e `ENOTFOUND` senza includere dettagli arbitrari dell'errore.
+- Ripetizione reale conclusa alle 14:20 CEST con il modello avanzato configurato,
+  Soul e inventario dell'account, tool reali e sola diagnosi. Server identificato
+  correttamente. La risposta distingue HEAD HTTPS 200 dal caricamento della pagina,
+  HTTP 301 dalla destinazione non verificata, stato running dalla verifica
+  funzionale. L'unità wait-online failed resta un'anomalia aperta con causa e
+  impatto non verificati. Il timeout AAAA viene distinto dalla risposta A positiva.
+- Una domanda con quattro alternative di approfondimento/arresto. Nessun piano
+  creato; inventario, configurazione server, chiave e operazioni invariati nel
+  confronto prima/dopo. Sono aggiornati soltanto i normali metadati di diagnosi,
+  audit e consumo LLM. Nessuna modifica operativa al server del sito.
+- Il collaudo è una sessione controllata nel backend, con soli tool di inventario,
+  indagine e scelte; non è un test dell'interfaccia iOS né dell'esecuzione degli
+  approfondimenti proposti. Le anomalie del sito non sono state risolte o escluse.
+- Backup e report completi privati:
+  `/srv/staging3/backups/ernie/20261023-ssh-evidence/` e
+  `/srv/staging3/backups/ernie/20261023-ssh-evidence-dns/`.
+  Le immagini precedenti sono conservate come `ernie-app:before-ssh-evidence-20261023`
+  e `ernie-app:before-ssh-evidence-dns-20261023`. Per rollback ripristinare immagine
+  e sorgenti del relativo manifest e ricreare solo API/worker, senza rollback DB.
