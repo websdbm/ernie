@@ -156,18 +156,12 @@ extension ErnieCard where Action == EmptyView {
 extension View {
     /// Superficie delle schede: bianca con ombra morbida (di sera: viola scuro con filo chiaro).
     func ernieSurface(radius: CGFloat = Theme.cardRadius) -> some View {
-        background(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Theme.surface)
-                .shadow(color: Color.black.opacity(0.05), radius: 12, y: 6)
-                .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
-        )
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Theme.hairline.opacity(0.6), lineWidth: 0.5))
+        modifier(ChatSurfaceModifier(radius: radius))
     }
 
     /// Vetro (Liquid Glass di iOS 26) per barre e pulsanti che galleggiano sul contenuto.
     func ernieGlass<S: Shape>(in shape: S) -> some View {
-        glassEffect(.regular, in: shape)
+        modifier(ChatGlassModifier(shape: shape))
     }
 }
 
@@ -245,5 +239,34 @@ struct GlassCircleButton: View {
         .buttonStyle(.plain)
         .ernieGlass(in: Circle())
         .accessibilityLabel(label)
+    }
+}
+
+/// Questi modificatori leggono l'ambiente: fuori dalla chat restano identici.
+private struct ChatSurfaceModifier: ViewModifier {
+    @Environment(\.chatPalette) private var palette
+    let radius: CGFloat
+    func body(content: Content) -> some View {
+        content.background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(palette.surface)
+                .shadow(color: .black.opacity(0.05), radius: 12, y: 6)
+                .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        )
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(palette.hairline.opacity(palette.terminal ? 1 : 0.6), lineWidth: palette.terminal ? 1 : 0.5))
+    }
+}
+
+private struct ChatGlassModifier<S: Shape>: ViewModifier {
+    @Environment(\.chatPalette) private var palette
+    let shape: S
+    @ViewBuilder func body(content: Content) -> some View {
+        if palette.terminal {
+            content.background(palette.surface, in: shape)
+                .overlay(shape.stroke(palette.hairline, lineWidth: 1).allowsHitTesting(false))
+        } else {
+            content.glassEffect(.regular, in: shape)
+        }
     }
 }

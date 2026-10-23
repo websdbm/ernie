@@ -145,6 +145,7 @@ targets:
       - path: Ernie/Core/Keychain.swift
       - path: Ernie/Core/Credentials.swift
       - path: Ernie/Design/Theme.swift
+      - path: Ernie/Design/ChatAppearance.swift
     info:
       path: ErnieShare/Info.plist
       properties:

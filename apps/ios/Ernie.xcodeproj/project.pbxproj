@@ -15,6 +15,7 @@
 		08E6402FAF1BDEB99D25F429 /* FamilyUrgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 860E218E32A82AC0C49756A5 /* FamilyUrgent.swift */; };
 		09718FD74781734D1FEF82A6 /* ErnieNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 21F1479C50742BE5670EC030 /* ErnieNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0ACEE371F780EF496956D4F0 /* DeviceContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */; };
+		0BDF3D6AB4D226A1343F26EB /* ChatAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E97819581F2B938AE812A5E /* ChatAppearance.swift */; };
 		0C01A4B963B90A8F934620C3 /* Ordering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC159589ACD4766C7B1AA7D /* Ordering.swift */; };
 		0C22B870BD2B8B142D9DBEAE /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84D0D5D16796D58DC8FD0706 /* UsageStore.swift */; };
 		0E52BFE72216D4AC9AABFFD9 /* OutlineDiagram.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */; };
@@ -30,6 +31,7 @@
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
 		1AD7B1A4F74390207ABDC6CA /* ernie-bear-v3-fallback.png in Resources */ = {isa = PBXBuildFile; fileRef = 567C3C7EEA2BAEEFD1AE5176 /* ernie-bear-v3-fallback.png */; };
 		1E20EE93269DFEFF1DFB9110 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
+		20B6E697B4947C1107E185F5 /* TerminalChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1104EFE6E4A879E7E316F3E7 /* TerminalChatTests.swift */; };
 		20F58779EAD18A8A0F4D56DA /* ernie-bear-v3-explorer.png in Resources */ = {isa = PBXBuildFile; fileRef = 6A7367F1397707A3FE394CBC /* ernie-bear-v3-explorer.png */; };
 		24A95C8605017621BC54120B /* DocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957834F4A9047230E5195B26 /* DocumentsTests.swift */; };
 		25AD8C039D97C5B7C4E33A08 /* ernie-bear-v3-classic.png in Resources */ = {isa = PBXBuildFile; fileRef = 1183B47F868369335880B88E /* ernie-bear-v3-classic.png */; };
@@ -43,6 +45,7 @@
 		304C2301640DC87017A9BDBD /* ListShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1964BA5CB9FA63960ECCA089 /* ListShortcuts.swift */; };
 		308CBF03835CB246EF4E5725 /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		3245123D616C09F255370BCB /* UsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079B338D379031F111D0A8D4 /* UsageModels.swift */; };
+		332A101BFA23D4DD73D48FCA /* TerminalComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B729EB06A87AB40BDD38D4 /* TerminalComposer.swift */; };
 		3383E54C8EE818E4EE28F64A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B910048AA5B7CF4CF88553 /* AppDelegate.swift */; };
 		39AA7E9D4F45C1331F2469C4 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */; };
 		3C977B24C48B8296D9129DB9 /* UsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 098A7CA1392994E9472FCEE3 /* UsageView.swift */; };
@@ -120,6 +123,7 @@
 		A525AF6B03592F73930C696C /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
+		AB71A44F9F5D3FC78ED5ABBA /* ChatAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E97819581F2B938AE812A5E /* ChatAppearance.swift */; };
 		AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */; };
 		AE769145BB80C4FCFBA50830 /* ernie-bear-v3-night.png in Resources */ = {isa = PBXBuildFile; fileRef = 4ACB8BB3C74086AE6C9519EC /* ernie-bear-v3-night.png */; };
 		B0B554C488FBF0023B3E9475 /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
@@ -252,6 +256,7 @@
 		100F77260DB4B3216594535C /* SSHDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHDetails.swift; sourceTree = "<group>"; };
 		1072AD1394544857B5BED36D /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
 		10CE16F21C672E0074F4A59C /* PlacePermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacePermission.swift; sourceTree = "<group>"; };
+		1104EFE6E4A879E7E316F3E7 /* TerminalChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalChatTests.swift; sourceTree = "<group>"; };
 		1183B47F868369335880B88E /* ernie-bear-v3-classic.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-classic.png"; sourceTree = "<group>"; };
 		11A9CC4C21451448B8D02BFA /* ErnieSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieSummary.swift; sourceTree = "<group>"; };
 		124F4848C59674EF5F7A5CD8 /* Ids.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ids.swift; sourceTree = "<group>"; };
@@ -296,12 +301,14 @@
 		4ACB8BB3C74086AE6C9519EC /* ernie-bear-v3-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-night.png"; sourceTree = "<group>"; };
 		4C582BDD29CFEE84A945F289 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeServerView.swift; sourceTree = "<group>"; };
+		4E97819581F2B938AE812A5E /* ChatAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAppearance.swift; sourceTree = "<group>"; };
 		52FF043456831431801189D0 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		54C358554D2B07798B83D777 /* Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Events.swift; sourceTree = "<group>"; };
 		550CE04DCC8104FD3D59AEA8 /* AutomationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationsView.swift; sourceTree = "<group>"; };
 		5625CB5A1D7224D40E394A01 /* FamilyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyView.swift; sourceTree = "<group>"; };
 		567C3C7EEA2BAEEFD1AE5176 /* ernie-bear-v3-fallback.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-fallback.png"; sourceTree = "<group>"; };
 		56A53493E18F80754F8C51E7 /* ReminderAlarms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderAlarms.swift; sourceTree = "<group>"; };
+		56B729EB06A87AB40BDD38D4 /* TerminalComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalComposer.swift; sourceTree = "<group>"; };
 		57D740CD468593D036873A37 /* SSHModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHModels.swift; sourceTree = "<group>"; };
 		5805C7F8E13A9BB5B66DD2A3 /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 		585A161721BF631A7CFAD1DC /* ReminderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderStore.swift; sourceTree = "<group>"; };
@@ -447,6 +454,7 @@
 				191C6CE16907D39919854571 /* ShoppingCardTests.swift */,
 				8D07BF5B3DFD216187A1FAED /* SpeechTests.swift */,
 				43B33A6E44E071A365EA8BCE /* SSHTests.swift */,
+				1104EFE6E4A879E7E316F3E7 /* TerminalChatTests.swift */,
 				190E476F7A4B520D7A77930F /* TodoTests.swift */,
 				94BF9C574E0EAF58A5AA418A /* UsageTests.swift */,
 				AD343071ED74C53EE49555CE /* VoiceTests.swift */,
@@ -471,6 +479,7 @@
 		284DF727F2F3AE2EEDD92D35 /* Design */ = {
 			isa = PBXGroup;
 			children = (
+				4E97819581F2B938AE812A5E /* ChatAppearance.swift */,
 				5F71764273FF93B42753C6E1 /* Theme.swift */,
 			);
 			path = Design;
@@ -629,6 +638,7 @@
 				B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */,
 				CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */,
 				85F58EACDFBE9E63C81E0664 /* SidePanel.swift */,
+				56B729EB06A87AB40BDD38D4 /* TerminalComposer.swift */,
 				4641ED6FC207DC238A34CBDD /* TranscriptStore.swift */,
 			);
 			path = Chat;
@@ -998,6 +1008,7 @@
 				0667916CCD1A0CAA2D015131 /* SSHTests.swift in Sources */,
 				9B9DF1D50EA65E3D8CEFE2F7 /* ShoppingCardTests.swift in Sources */,
 				530915FB409B912C50D89900 /* SpeechTests.swift in Sources */,
+				20B6E697B4947C1107E185F5 /* TerminalChatTests.swift in Sources */,
 				5F859D76A470DB1E5138F838 /* TodoTests.swift in Sources */,
 				B2731FAE282BAC9E65F37857 /* UsageTests.swift in Sources */,
 				85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */,
@@ -1040,6 +1051,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BDF3D6AB4D226A1343F26EB /* ChatAppearance.swift in Sources */,
 				14EC76FF04AD1E9CA8821C30 /* Credentials.swift in Sources */,
 				1E20EE93269DFEFF1DFB9110 /* Keychain.swift in Sources */,
 				072027F14DC8984C8D8DFD0E /* ShareInbox.swift in Sources */,
@@ -1069,6 +1081,7 @@
 				EB26D98812FF40A929765FC1 /* BrainResources.swift in Sources */,
 				8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */,
 				561D42B9AB9454058424BA69 /* ChangeServerView.swift in Sources */,
+				AB71A44F9F5D3FC78ED5ABBA /* ChatAppearance.swift in Sources */,
 				4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */,
 				C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */,
 				F64CDA48A475C654E2F80861 /* ConfirmationCopy.swift in Sources */,
@@ -1141,6 +1154,7 @@
 				C4666B871148CB2179C835C5 /* SpeechVolumeControl.swift in Sources */,
 				7FE6B143B6EB5698C61E6D83 /* StyleView.swift in Sources */,
 				A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */,
+				332A101BFA23D4DD73D48FCA /* TerminalComposer.swift in Sources */,
 				5422E1784BA6E9BDE114CE27 /* Theme.swift in Sources */,
 				5F03AC027E3815A0BAB7DE88 /* TodoEditors.swift in Sources */,
 				5498BE11F1CBDA950EE30FB5 /* TodoModels.swift in Sources */,

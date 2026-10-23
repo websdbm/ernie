@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// Ernie parla. In ascolto la barra mostra lo stato, il livello del microfono e la trascrizione in tempo reale; ✕ annulla,
 /// ↑ invia. Nella conversazione continua, mentre Ernie risponde, il microfono interrompe e riapre l'ascolto.
 struct InputBar: View {
+    @Environment(\.chatPalette) private var palette
     @State private var showMedia = false
     @Binding var draft: String
     var composing: FocusState<Bool>.Binding
@@ -50,20 +51,38 @@ struct InputBar: View {
                     voiceButton
                 } else {
                     if documents != nil { attachMenu }
-                    TextField("Chiedi a \(conversationName)…", text: $draft, axis: .vertical)
-                        .lineLimit(1...6)
-                        .focused(composing)
-                        .font(.body)
-                        .foregroundStyle(Theme.ink)
+                    if palette.terminal {
+                        HStack(alignment: .top, spacing: 6) {
+                            Text(">").foregroundStyle(palette.inkSecondary)
+                                .padding(.top, 11).accessibilityHidden(true)
+                            TerminalComposer(text: $draft, focused: Binding(
+                                get: { composing.wrappedValue }, set: { composing.wrappedValue = $0 }
+                            ), placeholder: "Chiedi a \(conversationName)")
+                            .overlay(alignment: .topLeading) {
+                                if draft.isEmpty && !composing.wrappedValue {
+                                    Text("Chiedi a \(conversationName)…")
+                                        .foregroundStyle(palette.inkSecondary)
+                                        .padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true)
+                                }
+                            }
+                        }
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 12)
-                        .onSubmit(sendDraft)
+                    } else {
+                        TextField("Chiedi a \(conversationName)…", text: $draft, axis: .vertical)
+                            .lineLimit(1...6)
+                            .focused(composing)
+                            .font(.body)
+                            .foregroundStyle(palette.ink)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 12)
+                            .onSubmit(sendDraft)
+                    }
                     actionButton
                 }
             }
             .padding(6)
             .ernieGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .shadow(color: Theme.accent.opacity(0.10), radius: 14, y: 6)
+            .shadow(color: palette.accent.opacity(0.10), radius: 14, y: 6)
         }
         .padding(.horizontal, 12)
         .padding(.top, 4)
@@ -120,9 +139,9 @@ struct InputBar: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Theme.accentText)
+                .foregroundStyle(palette.accentText)
                 .frame(width: 44, height: 44)
-                .background(Theme.surfaceMuted, in: Circle())
+                .background(palette.surfaceMuted, in: Circle())
         }
         .accessibilityLabel("Allega un documento")
     }
@@ -217,7 +236,7 @@ struct InputBar: View {
             Button { voice.finishListening() } label: { icon("arrow.up", fill: .red) }
                 .accessibilityLabel("Invia quello che ho detto")
         case .waitingReply:
-            Button { voice.interrupt() } label: { icon("mic.fill", fill: Theme.accent) }
+            Button { voice.interrupt() } label: { icon("mic.fill", fill: palette.accent) }
                 .accessibilityLabel("Interrompi Ernie e parla")
         default:
             BearActivityIcon(status: .working, size: 30)
@@ -230,17 +249,17 @@ struct InputBar: View {
     private var actionButton: some View {
         switch mode {
         case .send:
-            Button(action: sendDraft) { icon("arrow.up", fill: Theme.accent) }
+            Button(action: sendDraft) { icon("arrow.up", fill: palette.accent) }
                 .accessibilityLabel("Invia")
         case .stop:
-            Button { conversation.bargeIn() } label: { icon("stop.fill", fill: Theme.inkSecondary) }
+            Button { conversation.bargeIn() } label: { icon("stop.fill", fill: palette.inkSecondary) }
                 .accessibilityLabel("Interrompi")
         case .mic, .voice:
             Button {
                 composing.wrappedValue = false
                 voice.startListening()
             } label: {
-                icon("mic.fill", fill: Theme.accent)
+                icon("mic.fill", fill: palette.accent)
             }
             // Pressione lunga: conversazione continua anche senza l'impostazione (il tocco al rilascio è ignorato perché l'ascolto è già partito).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in

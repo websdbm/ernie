@@ -98,6 +98,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                ChatAppearanceSettings()
                 Section {
                     NavigationLink {
                         ProfileView()

@@ -4,6 +4,7 @@ import SwiftUI
 /// aspettare. Orso grande con lo stato, saluto con il nome, i prossimi promemoria, scorciatoie alle sezioni e
 /// suggerimenti toccabili. Al primo messaggio lascia il posto alla conversazione.
 struct HomeView: View {
+    @Environment(\.chatPalette) private var palette
     let conversation: ConversationStore
     let onOpen: (PanelDestination) -> Void
     @Environment(AppModel.self) private var model
@@ -41,10 +42,10 @@ struct HomeView: View {
                 Text(statusText)
             }
             .font(.footnote)
-            .foregroundStyle(Theme.inkSecondary)
+            .foregroundStyle(palette.inkSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Theme.surface.opacity(0.85), in: Capsule())
+            .background(palette.surface.opacity(0.85), in: Capsule())
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -56,7 +57,7 @@ struct HomeView: View {
 
     private var statusColor: Color {
         switch conversation.connection {
-        case .connected: conversation.agentState == .listening ? .red : Theme.positive
+        case .connected: conversation.agentState == .listening ? .red : palette.positive
         case .connecting, .reconnecting: .orange
         case .disconnected: .gray
         }
@@ -66,11 +67,11 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(Self.salutation(for: .now, name: model.profile?.displayName))
                 .font(Theme.title(30))
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text("\(Self.dayLine(.now)) · ecco cosa ti aspetta")
                 .font(.subheadline)
-                .foregroundStyle(Theme.inkSecondary)
+                .foregroundStyle(palette.inkSecondary)
         }
         .padding(.horizontal, 4)
     }
@@ -137,17 +138,17 @@ struct HomeView: View {
                         .foregroundStyle(tint.color)
                     Text(title)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(palette.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text(detail)
                         .font(.footnote)
-                        .foregroundStyle(Theme.inkSecondary)
+                        .foregroundStyle(palette.inkSecondary)
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.inkSecondary.opacity(0.7))
+                    .foregroundStyle(palette.inkSecondary.opacity(0.7))
             }
             .padding(14)
             .ernieSurface(radius: 20)
@@ -199,13 +200,13 @@ struct HomeView: View {
                 SkillIcon(systemName: icon, tint: tint, size: 36)
                 Text(title)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(palette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Theme.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
     }

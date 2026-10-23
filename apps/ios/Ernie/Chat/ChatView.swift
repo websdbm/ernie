@@ -4,6 +4,8 @@ import SwiftUI
 /// capsula con l'orso, voce), «Oggi» quando la conversazione è vuota, poi la conversazione; barra di scrittura in
 /// vetro; in ascolto la schermata dedicata; il pannello laterale raccoglie sezioni e conversazioni passate.
 struct ChatView: View {
+    @AppStorage(ChatPalette.preferenceKey) private var terminal = false
+    private var palette: ChatPalette { ChatPalette(terminal: terminal) }
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var showUsage = false
@@ -60,7 +62,7 @@ struct ChatView: View {
                     .frame(maxHeight: .infinity)
                     .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
                     if let status = conversation.recoveryStatus {
-                        Text(status).font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        Text(status).font(.footnote).foregroundStyle(palette.inkSecondary)
                             .padding(.horizontal).accessibilityAddTraits(.updatesFrequently)
                     }
                     if conversation.canRecoverRequest {
@@ -80,6 +82,7 @@ struct ChatView: View {
                 ProgressView()
             }
         }
+        .chatAppearance(terminal: terminal)
         .environment(\.bearContext, BearContext.latest(in: model.conversation?.items ?? []))
         .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
         .sheet(isPresented: $showSettings, onDismiss: sheetDidDismiss) { SettingsView() }
@@ -214,7 +217,7 @@ struct ChatView: View {
 
     private func topBar(_ conversation: ConversationStore) -> some View {
         HStack(spacing: 10) {
-            GlassCircleButton(systemName: "sidebar.leading", label: "Apri il pannello") {
+            GlassCircleButton(systemName: "sidebar.leading", tint: palette.ink, label: "Apri il pannello") {
                 withAnimation(.spring(duration: 0.35)) { panelOpen = true }
             }
             Spacer(minLength: 0)
@@ -225,7 +228,7 @@ struct ChatView: View {
             }
             GlassCircleButton(
                 systemName: model.settings.voiceOutput ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                tint: model.settings.voiceOutput ? Theme.accentText : Theme.inkSecondary,
+                tint: model.settings.voiceOutput ? palette.accentText : palette.inkSecondary,
                 label: model.settings.voiceOutput ? "Voce accesa: tocca per spegnerla" : "Voce spenta: tocca per accenderla"
             ) {
                 model.setVoiceOutput(!model.settings.voiceOutput)
@@ -248,7 +251,7 @@ struct ChatView: View {
                 Color.clear.frame(width: 36, height: 36)
             }
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.companionName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(model.companionName).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
                 Text(caption).font(.caption2).foregroundStyle(Self.captionColor(conversation))
                     .contentTransition(.opacity)
             }
@@ -265,7 +268,7 @@ struct ChatView: View {
                 PixelBearView(state: conversation.agentState, mouthOpen: model.speaker.mouthOpen,
                               size: 32 * 1.15, emotion: conversation.lastAvatarEmotion)
                     .frame(width: 36 * 1.15, height: 36 * 1.15)
-                    .background(Theme.accent, in: Circle())
+                    .background(palette.accent, in: Circle())
                     .clipShape(Circle())
                     .overlay(Circle().strokeBorder(Self.ring(conversation.agentState), lineWidth: 2))
                     .offset(x: -4)
@@ -327,11 +330,12 @@ struct ClosableSheet<Content: View>: View {
 
 /// Sfondo: lilla tenue con un alone viola sfumato in alto (quasi nero viola di sera).
 struct ChatBackdrop: View {
+    @Environment(\.chatPalette) private var palette
     var body: some View {
         ZStack(alignment: .top) {
-            Theme.ground
+            palette.ground
             Circle()
-                .fill(Theme.glow)
+                .fill(palette.glow)
                 .frame(width: 320, height: 320)
                 .blur(radius: 70)
                 .offset(y: -160)
@@ -404,6 +408,7 @@ struct MessageList: View {
 }
 
 struct MessageRow: View {
+    @Environment(\.chatPalette) private var palette
     let message: ChatMessage
     var conversation: ConversationStore?
 
@@ -417,26 +422,27 @@ struct MessageRow: View {
                         ForEach(attachments, id: \.id) { a in
                             Label("\(a.title) · \(a.pages) \(a.pages == 1 ? "pagina" : "pagine")", systemImage: "doc.text.fill")
                                 .font(.caption)
-                                .foregroundStyle(.white.opacity(0.85))
+                                .foregroundStyle(palette.bubbleText.opacity(0.85))
                                 .lineLimit(1)
                         }
                     }
                     Text(message.text)
+                        .font(palette.terminal ? .system(.body, design: .monospaced) : .body)
                     if message.queued == true {
                         Label("in attesa che Ernie finisca", systemImage: "clock")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(palette.bubbleText.opacity(0.8))
                     }
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(palette.bubbleText)
                 .opacity(message.queued == true ? 0.75 : 1)
                 .padding(.horizontal, 15)
                 .padding(.vertical, 11)
                 .background(
-                    Theme.accent,
+                    palette.bubble,
                     in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 20, bottomTrailingRadius: 6, topTrailingRadius: 20, style: .continuous)
                 )
-                .shadow(color: Theme.accent.opacity(0.18), radius: 8, y: 4)
+                .shadow(color: palette.accent.opacity(0.18), radius: 8, y: 4)
             }
         case .assistant:
             VStack(alignment: .leading, spacing: 6) {
@@ -450,7 +456,7 @@ struct MessageRow: View {
                 } else if !message.text.isEmpty {
                     // Risposte di Ernie in testo pieno, senza fumetto (bozzetto 2).
                     MarkdownText(text: message.text)
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(palette.ink)
                         .lineSpacing(2)
                         .padding(.horizontal, 2)
                 }
@@ -475,6 +481,7 @@ struct MessageRow: View {
 
 /// Cosa sta facendo Ernie («Cerco nel second brain…»): etichetta discreta con lo stato; in corso, un riflesso animato.
 struct ToolPill: View {
+    @Environment(\.chatPalette) private var palette
     let name: String
     let ok: Bool?
 
@@ -483,14 +490,14 @@ struct ToolPill: View {
             BearActivityIcon(status: ok == nil ? .working : (ok == true ? .success : .failed), size: 24)
             Text(name)
                 .font(.footnote)
-                .foregroundStyle(Theme.inkSecondary)
+                .foregroundStyle(palette.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.leading, 4)
         .padding(.trailing, 12)
         .padding(.vertical, 4)
-        .background(Theme.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.hairline))
+        .background(palette.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(palette.hairline))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ok == nil ? "\(name), in corso" : ok == true ? "\(name), fatto" : "\(name), non riuscito")
     }
@@ -517,6 +524,7 @@ struct ConfirmationCardView: View {
 
 /// Contenuto separato per verificare il layout reale anche a 320 punti e con Dynamic Type.
 struct ConfirmationCardContent: View {
+    @Environment(\.chatPalette) private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let card: ConfirmationCard
     var now = Date.now
@@ -536,25 +544,25 @@ struct ConfirmationCardContent: View {
                 reviewHeader(decision)
                 if reviewExpanded {
                     Divider()
-                    Text(presentation.summary).font(.callout).foregroundStyle(Theme.ink)
+                    Text(presentation.summary).font(.callout).foregroundStyle(palette.ink)
                     details
                     reason
                     if card.always == true {
                         Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
-                            .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                            .font(.footnote).foregroundStyle(palette.inkSecondary)
                     }
                     if decision == "expired" {
                         Text("Richiesta scaduta. Chiedi a Ernie di ripeterla.")
-                            .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                            .font(.footnote).foregroundStyle(palette.inkSecondary)
                     }
                 }
             } else {
                 Label(presentation.title, systemImage: "hand.raised")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(palette.ink)
                     .accessibilityAddTraits(.isHeader)
                 Text(ConfirmationCopy.compactSummary(for: card))
-                    .font(.callout).foregroundStyle(Theme.ink)
+                    .font(.callout).foregroundStyle(palette.ink)
                 if !presentation.details.isEmpty {
                     DisclosureGroup(isExpanded: $detailsExpanded) {
                         details.padding(.top, 6)
@@ -567,7 +575,7 @@ struct ConfirmationCardContent: View {
                 reason
                 if presentation.incomplete == true {
                     Text("I dettagli di questa richiesta sono incompleti. Annullala e chiedi a Ernie di ripeterla.")
-                        .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        .font(.footnote).foregroundStyle(palette.inkSecondary)
                 }
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { cancelButton.fixedSize(); approveButton.fixedSize() }
@@ -575,13 +583,13 @@ struct ConfirmationCardContent: View {
                 }
                 .disabled(submitting)
                 if authenticationFailed {
-                    Text("Conferma non completata. Riprova.").font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                    Text("Conferma non completata. Riprova.").font(.subheadline).foregroundStyle(palette.inkSecondary)
                 }
                 if card.allowAlways == true, presentation.incomplete != true {
                     DisclosureGroup(isExpanded: $optionsExpanded) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
-                                .font(.footnote).foregroundStyle(Theme.inkSecondary)
+                                .font(.footnote).foregroundStyle(palette.inkSecondary)
                             Button { send(approve: true, always: true) } label: {
                                 Label(ConfirmationCopy.alwaysLabel(for: card.toolId), systemImage: "checkmark.shield")
                                     .font(.subheadline.weight(.medium))
@@ -601,7 +609,7 @@ struct ConfirmationCardContent: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .ernieSurface(radius: 18)
-        .tint(Theme.accentText)
+        .tint(palette.accentText)
         .onChange(of: decision) { _, newValue in
             if newValue != nil {
                 reviewExpanded = false
@@ -650,22 +658,22 @@ struct ConfirmationCardContent: View {
 
     private var reviewTitle: some View {
         Text(ConfirmationCopy.compactTitle(for: card))
-            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+            .font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
     }
 
     private func reviewStatus(_ decision: String) -> some View {
         Text(ConfirmationCopy.status(for: card, decision: decision))
-            .font(.caption).foregroundStyle(Theme.inkSecondary)
+            .font(.caption).foregroundStyle(palette.inkSecondary)
     }
 
     private func reviewIcon(_ decision: String) -> some View {
         Image(systemName: decision == "approved" ? "checkmark.circle" : decision == "denied" ? "xmark.circle" : "clock")
-            .foregroundStyle(Theme.accentText).accessibilityHidden(true)
+            .foregroundStyle(palette.accentText).accessibilityHidden(true)
     }
 
     private var reviewChevron: some View {
         Image(systemName: reviewExpanded ? "chevron.up" : "chevron.down")
-            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.inkSecondary)
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.inkSecondary)
             .accessibilityHidden(true)
     }
 
@@ -673,8 +681,8 @@ struct ConfirmationCardContent: View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(presentation.details.enumerated()), id: \.offset) { _, detail in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(detail.label).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
-                    Text(detail.value).font(.callout).foregroundStyle(Theme.ink).textSelection(.enabled)
+                    Text(detail.label).font(.subheadline.weight(.semibold)).foregroundStyle(palette.inkSecondary)
+                    Text(detail.value).font(.callout).foregroundStyle(palette.ink).textSelection(.enabled)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
@@ -684,7 +692,7 @@ struct ConfirmationCardContent: View {
 
     @ViewBuilder private var reason: some View {
         if let reason = ConfirmationCopy.reason(card.reason) {
-            Text(reason).font(.footnote).foregroundStyle(Theme.inkSecondary)
+            Text(reason).font(.footnote).foregroundStyle(palette.inkSecondary)
         }
     }
 
@@ -696,7 +704,7 @@ struct ConfirmationCardContent: View {
     private var approveButton: some View {
         Button(presentation.confirmLabel) { send(approve: true) }
             .buttonStyle(.borderedProminent).controlSize(.large)
-            .tint(presentation.destructive == true ? Color.red : Theme.accent)
+            .tint(presentation.destructive == true ? Color.red : palette.accent)
             .disabled(presentation.incomplete == true)
     }
 
