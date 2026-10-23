@@ -1,5 +1,18 @@
 [
   {
+    "build": 100,
+    "date": "2026-10-23",
+    "title": "La timeline direttamente in chat",
+    "items": [
+      {
+        "icon": "calendar",
+        "title": "Gli orari subito visibili",
+        "detail": "Le liste con orari mostrano una timeline anche nella chat: tutte le fasce, avanzamento del tempo e attività con orario da definire. Funziona anche senza promemoria e segue la palette del tuo orso.",
+        "test": "Apri una conversazione con una lista oraria: gli orari sono già nella scheda. Tocca Apri timeline per gestirla."
+      }
+    ]
+  },
+  {
     "build": 99,
     "date": "2026-10-23",
     "title": "Un mondo di colori per ogni orso",

@@ -343,3 +343,60 @@ struct TodoTests {
         }
     }
 }
+
+@MainActor struct TodoChatTimelineTests {
+    private let now = TodoTime.date("2026-10-19T15:05:00+02:00")!
+    private func render(_ list: TodoList, width: CGFloat = 390, dark: Bool = false,
+                        large: Bool = false, costume: BearCostume = .base) throws -> UIImage {
+        let content = TodoCardContent(list: list, now: now, open: {})
+            .frame(width: width).chatAppearance(costume: costume)
+            .environment(\.colorScheme, dark ? .dark : .light)
+            .environment(\.dynamicTypeSize, large ? .accessibility2 : .large)
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 1
+        return try #require(renderer.uiImage)
+    }
+
+    @Test func schedaOrariaMostraGliOrariAncheSenzaAvvisi() throws {
+        var list = TodoFixtures.list
+        for index in list.items.indices {
+            for slot in list.items[index].slots.indices { list.items[index].slots[slot].reminderMinutes = nil }
+        }
+        let original = try render(list).pngData()
+        var shifted = list
+        shifted.items[1].slots[0].startAt = "2026-10-19T16:00:00+02:00"
+        shifted.items[1].slots[0].endAt = "2026-10-19T16:15:00+02:00"
+        #expect(try render(shifted).pngData() != original, "La scheda deve rendere visibili gli orari, non solo i titoli")
+        #expect(try render(list.clearingSchedule()).pngData() != original, "Lista semplice e timeline non devono essere identiche")
+    }
+
+    @Test func schedaMostraAncheLeFasceOltreLaQuarta() throws {
+        var list = TodoFixtures.list
+        let original = try render(list).pngData()
+        list.items.append(TodoItem(title: "Ultimo ritiro", position: 6, slots: [
+            TodoSlot(startAt: "2026-10-19T20:30:00+02:00", endAt: "2026-10-19T20:45:00+02:00", reminderMinutes: nil)
+        ]))
+        // Equalize the counter: changing a late slot must still change the card.
+        let withLate = try render(list).pngData()
+        list.items[list.items.count - 1].slots[0].startAt = "2026-10-19T21:30:00+02:00"
+        list.items[list.items.count - 1].slots[0].endAt = "2026-10-19T21:45:00+02:00"
+        #expect(try render(list).pngData() != withLate)
+        #expect(withLate != original)
+    }
+
+    @Test func renderSchedaTimelineChiaroScuroBorgETestoGrande() throws {
+        for width in [CGFloat(320), CGFloat(390)] {
+            for dark in [false, true] {
+                for large in [false, true] {
+                    for costume in [BearCostume.base, .borg] {
+                        let image = try render(TodoFixtures.list, width: width, dark: dark, large: large, costume: costume)
+                        #expect(image.size.width == width)
+                        let file = FileManager.default.temporaryDirectory.appendingPathComponent("todo-chat-\(Int(width))-\(dark)-\(large)-\(costume.rawValue).png")
+                        try #require(image.pngData()).write(to: file)
+                        print("TODO_CHAT_SNAPSHOT: \(file.path)")
+                    }
+                }
+            }
+        }
+    }
+}

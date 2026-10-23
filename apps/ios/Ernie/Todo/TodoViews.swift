@@ -68,24 +68,58 @@ struct TodoCard: View {
     @State private var opening = false
     var body: some View {
         let current = model.todoStore.current(list)
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            TodoCardContent(list: current, now: context.date, open: { opening = true })
+        }
+        .task { model.todoStore.apply(list); await model.todoStore.refresh(list.id) }
+        .sheet(isPresented: $opening) { TodoLibraryView(listId: list.id).environment(model) }
+    }
+}
+
+/// Shared by the live chat card and native rendering checks; no network or store side effects.
+struct TodoCardContent: View {
+    @Environment(\.chatPalette) private var palette
+    let list: TodoList
+    let now: Date
+    var open: () -> Void
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("TODO", systemImage: "checklist").font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
-            Text(current.name).font(.headline)
-            Text("\(current.tasks.filter { $0.status == .done }.count) di \(current.tasks.filter { $0.status != .cancelled }.count) completate")
-                .font(.subheadline).foregroundStyle(Theme.inkSecondary)
-            ForEach(Array(current.orderedItems.filter { $0.kind == .task && $0.status != .cancelled }.prefix(4))) { item in
-                HStack(alignment: .top) {
-                    Image(systemName: item.status == .done ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(item.status == .done ? Theme.positive : Theme.inkSecondary)
-                    Text([current.groupPath(for: item), item.title].compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            Label(list.mode == .scheduled ? "LA TUA TIMELINE" : "TODO",
+                  systemImage: list.mode == .scheduled ? "calendar" : "checklist")
+                .font(.caption.weight(.semibold)).foregroundStyle(palette.accentText)
+            Text(list.name).font(.headline)
+            if let day = TodoTime.dayLabel(list) {
+                Text(day).font(.caption).foregroundStyle(palette.inkSecondary)
+            }
+            Text("\(list.tasks.filter { $0.status == .done }.count) di \(list.tasks.filter { $0.status != .cancelled }.count) completate")
+                .font(.subheadline).foregroundStyle(palette.inkSecondary)
+            if list.mode == .scheduled {
+                TodoTimeline(list: list, now: now, compact: true, toggle: { _ in open() }, edit: { _ in open() })
+                let unscheduled = list.orderedItems.filter { $0.kind == .task && $0.status != .cancelled && $0.slots.isEmpty }
+                if !unscheduled.isEmpty {
+                    Divider().overlay(palette.hairline)
+                    Text("Orario da definire").font(.caption.weight(.semibold)).foregroundStyle(palette.inkSecondary)
+                    ForEach(unscheduled) { item in summaryRow(item) }
+                }
+            } else {
+                ForEach(Array(list.orderedItems.filter { $0.kind == .task && $0.status != .cancelled }.prefix(4))) { item in
+                    summaryRow(item)
                 }
             }
-            Button("Apri lista", systemImage: "arrow.up.right") { opening = true }.buttonStyle(.bordered)
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-            .task { model.todoStore.apply(list); await model.todoStore.refresh(list.id) }
-            .sheet(isPresented: $opening) { TodoLibraryView(listId: list.id).environment(model) }
+            Button(list.mode == .scheduled ? "Apri timeline" : "Apri lista", systemImage: "arrow.up.right", action: open)
+                .buttonStyle(.bordered)
+        }.foregroundStyle(palette.ink)
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
+    }
+    private func summaryRow(_ item: TodoItem) -> some View {
+        HStack(alignment: .top) {
+            Image(systemName: item.status == .done ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.status == .done ? palette.positive : palette.inkSecondary)
+                .accessibilityLabel(item.status == .done ? "Completata" : "Da fare")
+            Text([list.groupPath(for: item), item.title].compactMap { $0 }.joined(separator: " · "))
+                .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -274,35 +308,61 @@ private struct TodoAnchorKey: PreferenceKey {
 
 struct TodoTimeline: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.chatPalette) private var palette
     let list: TodoList
     let now: Date
+    var compact = false
     var toggle: (TodoItem) -> Void
     var edit: (TodoItem) -> Void
     var body: some View {
         let entries = TodoTimelineEntry.entries(list)
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: compact ? 14 : 20) {
             if list.day == TodoTime.day(now, timezone: list.timezone) {
                 Text("Adesso · \(TodoTime.clock(now, timezone: list.timezone))")
-                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
+                    .font(.caption.weight(.semibold)).foregroundStyle(palette.accentText)
             }
             ForEach(entries) { entry in
                 HStack(alignment: .top, spacing: 8) {
                     if !textSize.isAccessibilitySize {
                         Text(entry.slot.start.map { TodoTime.clock($0, timezone: list.timezone) } ?? "—")
-                            .font(.caption.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+                            .font(.caption.monospacedDigit()).foregroundStyle(palette.inkSecondary)
                             .frame(width: 43, alignment: .leading).padding(.top, 15)
                     }
-                    Circle().fill(TodoTime.phase(entry.slot, now: now) == .future ? Theme.hairline : Theme.accentText)
+                    Circle().fill(TodoTime.phase(entry.slot, now: now) == .future ? palette.hairline : palette.accentText)
                         .frame(width: 12, height: 12).padding(.top, 17)
                         .anchorPreference(key: TodoAnchorKey.self, value: .bounds) { [entry.id: $0] }
                         .accessibilityHidden(true)
-                    TodoTaskRow(item: entry.item, group: list.groupPath(for: entry.item), slot: entry.slot,
-                                timezone: list.timezone, now: now, toggle: { toggle(entry.item) }, edit: { edit(entry.item) })
+                    if compact {
+                        Button { edit(entry.item) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if let group = list.groupPath(for: entry.item) {
+                                    Text(group).font(.caption).foregroundStyle(palette.inkSecondary)
+                                }
+                                Text(entry.item.title).font(.subheadline.weight(.medium))
+                                    .foregroundStyle(palette.ink)
+                                if textSize.isAccessibilitySize, let start = entry.slot.start {
+                                    Text(TodoTime.clock(start, timezone: list.timezone))
+                                        .font(.caption.monospacedDigit()).foregroundStyle(palette.inkSecondary)
+                                }
+                                if let status = TodoTime.status(entry.item, slot: entry.slot, now: now) {
+                                    Label(status, systemImage: entry.item.status == .done ? "checkmark.circle.fill" : "clock")
+                                        .font(.caption2).foregroundStyle(entry.item.status == .done ? palette.positive : palette.inkSecondary)
+                                }
+                            }.fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+                                .contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                            .accessibilityLabel("\(entry.slot.start.map { TodoTime.clock($0, timezone: list.timezone) } ?? "") · \(entry.item.title)")
+                            .accessibilityHint("Apri la timeline per gestire questa attività")
+                    } else {
+                        TodoTaskRow(item: entry.item, group: list.groupPath(for: entry.item), slot: entry.slot,
+                                    timezone: list.timezone, now: now, toggle: { toggle(entry.item) }, edit: { edit(entry.item) })
+                    }
                 }
             }
-            if entries.isEmpty { Text("Nessun orario assegnato").foregroundStyle(Theme.inkSecondary) }
-            if !entries.isEmpty { Text("Intervalli compattati · viola: tempo trascorso · grigio: tempo futuro")
-                .font(.caption2).foregroundStyle(Theme.inkSecondary).fixedSize(horizontal: false, vertical: true) }
+            if entries.isEmpty { Text("Nessun orario assegnato").foregroundStyle(palette.inkSecondary) }
+            if !entries.isEmpty { Text("Intervalli compattati · linea colorata: tempo trascorso")
+                .font(.caption2).foregroundStyle(palette.inkSecondary).fixedSize(horizontal: false, vertical: true) }
         }
         .backgroundPreferenceValue(TodoAnchorKey.self) { anchors in
             GeometryReader { proxy in
@@ -313,17 +373,19 @@ struct TodoTimeline: View {
                 }
                 if let first = points.first, let last = points.last {
                     let end = entries.compactMap(\.slot.end).max() ?? last.0
-                    let bottom = CGPoint(x: last.1.x, y: min(proxy.size.height - 25, last.1.y + 80))
+                    let bottom = CGPoint(x: last.1.x, y: min(proxy.size.height - 25, last.1.y + (compact ? 32 : 80)))
                     let endPoints = points + [(max(end, last.0.addingTimeInterval(1)), bottom)]
                     let markerY = Self.markerY(now: now, points: endPoints)
-                    Path { path in path.move(to: first.1); path.addLine(to: bottom) }.stroke(Theme.hairline, lineWidth: 3)
+                    Path { path in path.move(to: first.1); path.addLine(to: bottom) }.stroke(palette.hairline, lineWidth: 3)
                     Path { path in path.move(to: first.1); path.addLine(to: CGPoint(x: first.1.x, y: markerY)) }
-                        .stroke(Theme.accentText, lineWidth: 3)
+                        .stroke(palette.accentText, lineWidth: 3)
                 }
             }.accessibilityHidden(true)
         }
         .overlayPreferenceValue(TodoAnchorKey.self) { anchors in
-            if list.day == TodoTime.day(now, timezone: list.timezone), !entries.isEmpty {
+            if list.day == TodoTime.day(now, timezone: list.timezone),
+               let firstStart = entries.first?.slot.start,
+               let lastEnd = entries.compactMap(\.slot.end).max(), now >= firstStart, now < lastEnd {
                 GeometryReader { proxy in
                     let points: [(Date, CGPoint)] = entries.compactMap { entry in
                         guard let anchor = anchors[entry.id], let start = entry.slot.start else { return nil }
@@ -331,16 +393,16 @@ struct TodoTimeline: View {
                     }
                     if let last = points.last {
                         let end = max(entries.compactMap(\.slot.end).max() ?? last.0, last.0.addingTimeInterval(1))
-                        let bottom = CGPoint(x: last.1.x, y: min(proxy.size.height - 25, last.1.y + 80))
+                        let bottom = CGPoint(x: last.1.x, y: min(proxy.size.height - 25, last.1.y + (compact ? 32 : 80)))
                         let y = Self.markerY(now: now, points: points + [(end, bottom)])
-                        if textSize.isAccessibilitySize {
-                            Circle().fill(Theme.accent).frame(width: 16, height: 16)
+                        if compact || textSize.isAccessibilitySize {
+                            Circle().fill(palette.accent).frame(width: 16, height: 16)
                                 .offset(x: last.1.x - 8, y: y - 8)
                         } else {
                             Text("Adesso")
                                 .font(.caption2.weight(.semibold)).foregroundStyle(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 4)
-                                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 6))
+                                .background(palette.accent, in: RoundedRectangle(cornerRadius: 6))
                                 .offset(x: 0, y: max(0, y - 11))
                         }
                     }
