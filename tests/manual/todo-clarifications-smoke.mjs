@@ -7,6 +7,9 @@ import { loadConfig } from '/app/packages/config/dist/index.js';
 import { createPool } from '/app/packages/db/dist/index.js';
 import { createSoulRepository } from '/app/packages/soul/dist/index.js';
 
+if (process.env.RUN_TODO_CLARIFICATION_SMOKE !== '1')
+  throw new Error('Explicit opt-in required; run inside the staging API container.');
+
 const requireApi = createRequire('/app/apps/api/package.json');
 const WebSocket = createRequire(requireApi.resolve('@fastify/websocket'))('ws');
 const { Redis } = requireApi('ioredis');
@@ -16,8 +19,6 @@ const cfg = loadConfig(),
 const userId = randomUUID(),
   sessionId = randomUUID(),
   key = `ernie_${randomBytes(32).toString('base64url')}`;
-if (process.env.RUN_TODO_CLARIFICATION_SMOKE !== '1')
-  throw new Error('Explicit opt-in required; run inside the staging API container.');
 const base = 'https://ernie.staging3.eklettica.it',
   events = [];
 let ws,
@@ -111,6 +112,12 @@ async function turn(text) {
 const id = randomUUID(),
   fixedId = randomUUID(),
   day = '2030-01-15';
+const localTime = (value) =>
+  new Date(value).toLocaleTimeString('it-IT', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 const snapshot = async () => (await api(`/v1/todo/lists/${id}`)).list;
 const blocks = (es) => es.filter((e) => e.type === 'assistant.block').map((e) => e.payload.block);
 const notSaved = (es) =>
@@ -195,7 +202,7 @@ try {
   const mechanic = afterChoice.items.find((i) => /meccanic/i.test(i.title));
   assert(mechanic);
   assert.equal(mechanic.slots.length, 1);
-  assert.equal(mechanic.slots[0].startAt.slice(11, 16), '12:30');
+  assert.equal(localTime(mechanic.slots[0].startAt), '12:30');
   console.log(
     JSON.stringify({
       phase: 'closed-question',
@@ -233,8 +240,8 @@ try {
   const visit = result.items.find((i) => /sopralluogo|casa nuova/i.test(i.title));
   assert(visit);
   assert.equal(visit.slots.length, 1);
-  assert.equal(visit.slots[0].startAt.slice(11, 16), '13:20');
-  assert.equal(visit.slots[0].endAt.slice(11, 16), '13:50');
+  assert.equal(localTime(visit.slots[0].startAt), '13:20');
+  assert.equal(localTime(visit.slots[0].endAt), '13:50');
   assert(result.items.every((i) => i.slots.every((s) => s.reminderMinutes === null)));
   assert.equal((await api(`/v1/todo/lists?day=${day}`)).lists.length, 1, 'No duplicate day list');
   assert.equal(

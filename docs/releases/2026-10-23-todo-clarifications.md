@@ -34,4 +34,29 @@ crediti LLM reali con budget account di 0,50 USD. Non usa account esistenti.
 Richiede esecuzione nel container API compilato e opt-in
 `RUN_TODO_CLARIFICATION_SMOKE=1`. Rimuove l'account al termine.
 
-Deployment e risultato dello smoke saranno registrati dopo la verifica live.
+## Deployment e collaudo effettivo
+
+Sorgente pubblicato su GitHub: `2ba05c8316542a25b79275414fef9d29e0938c21`.
+Distribuito su staging3: aggiornato solo `packages/skills/src/catalog.ts`, ricompilati
+API e worker, entrambi healthy. Nessuna migrazione o modifica agli account reali.
+SHA-256 del file locale/remoto verificato:
+`345603b9eef906c946dc6d49d7ab8179e56f95f4c7cc2b832b711e0b50e4b113`.
+Immagine API/worker:
+`sha256:84d02af9e83304e39914aac9f7526b4f7bbd9bc3b5d029ff199e8094d7d3d510`.
+Backup del sorgente precedente e log di compilazione in
+`/srv/staging3/backups/ernie/20261023-todo-clarifications`;
+immagine precedente conservata come `ernie-app:before-todo-clarifications-20261023`.
+Per rollback ripristinare il catalogo salvato, ritaggare l'immagine precedente
+`ernie-app:local` e ricreare solo API/worker, senza build o migrazioni.
+
+Smoke reale superato su quattro turni consecutivi:
+
+1. Due opzioni orarie disponibili: una scheda con scelte chiuse, nessun salvataggio.
+2. Scelta delle 12:30: meccanico salvato 12:30–13:00, visita medica invariata.
+3. Tragitto mancante prima del sopralluogo: domanda aperta, lista ancora invariata.
+4. Risposta «20 minuti»: sopralluogo salvato 13:20–13:50 nella stessa lista;
+   impegni precedenti conservati, nessun promemoria o lista duplicata.
+
+Account sintetico rimosso; costo registrato del collaudo: 0,283 USD (10 chiamate LLM).
+Il test controlla blocchi WebSocket e dati persistiti, non è una prova manuale su iPhone.
+La build iOS resta la 100: questa modifica è già disponibile lato backend.
