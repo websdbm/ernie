@@ -1,39 +1,66 @@
-# Skin Terminale della chat
+# Palette della chat associate all'orso
 
-Implementazione del 23 ottobre 2026. Attivabile da **Impostazioni → Aspetto della chat → Skin Terminale**. Disattivata inizialmente; la scelta si conserva sul dispositivo in `ernie.chat.terminal` e non richiede chiamate al server.
+Dal 23 ottobre 2026, build 99, il costume e lo stile della chat sono una sola scelta:
+**Impostazioni → Aspetto di Ernie → Orso e palette**, oppure pressione prolungata
+sulla capsula → Aspetto di Ernie. Il vecchio interruttore Skin Terminale è rimosso;
+la vecchia preferenza `ernie.chat.terminal` non influenza più l'interfaccia.
+Si conserva la scelta del costume in `ernie.bearCostume`, locale al dispositivo.
 
-La chat usa fondo quasi nero, testo verde fosforo, font monospaziato, bordi verdi per barra di inserimento, capsula, pulsanti, schede e attività. Orso, foto e colori semantici di errore restano riconoscibili. La skin ha un proprio fondo scuro anche quando iOS usa il tema chiaro. Le altre sezioni e i widget mantengono il loro aspetto.
+| Orso | Palette |
+| --- | --- |
+| Ernie classico | Viola e lilla |
+| Cappello da notte | Indaco e lavanda |
+| Occhiali scuri | Grafite e menta |
+| Occhiali da aviatore | Petrolio e rame |
+| Cuoco | Crema e terracotta |
+| Detective | Seppia e ambra |
+| Tecnico | Ardesia e ciano |
+| Esploratore | Bosco e salvia |
+| Astronauta | Blu spazio e ghiaccio |
+| Halloween | Prugna e arancio |
+| Borg | Nero e verde fosforo, caratteri monospaziati, cursore a blocco |
+| Jedi | Sabbia e verde |
 
-Il cursore a blocco viene disegnato da un `UITextView` attraverso `caretRect(for:)`: coincide con il punto di inserimento, senza animazioni o timer sovrapposti. La barra supporta selezione, emoji, composizione del testo, dettatura di sistema e più righe; fino a sei righe (massimo 180 punti), poi scorre internamente. Dynamic Type viene passato da SwiftUI al carattere UIKit. Il testo della bozza resta nella stessa proprietà della chat, anche cambiando skin. Microfono, invio e allegati mantengono le azioni già presenti.
+Le palette seguono il tema chiaro/scuro del dispositivo. Borg mantiene un proprio
+fondo scuro. Sfondo, fumetti, barra d'inserimento, capsula, avatar galleggiante e
+pannello laterale condividono la palette. I colori semantici delle skill e degli
+errori restano distinti. Le sezioni dedicate e i widget mantengono il loro tema.
 
-`ChatPalette` è un valore d'ambiente confinato al contenuto della chat. I componenti condivisi hanno un valore predefinito classico; non consultano preferenze globali durante il rendering. Anche l'estensione di condivisione compila le definizioni necessarie senza attivare la skin.
+In Automatico `ChatView` risolve il costume una volta per avatar e palette, usando
+ora, attività e umore. L'ambiente passa la stessa scelta a `PixelBearView`, evitando
+che volto e colori divergano. L'ora e la scadenza del costume legato all'attività
+si aggiornano ogni 15 secondi mentre la scena è attiva. L'animazione dell'orso
+mantiene il proprio ritmo, senza ridisegnare la chat a ogni fotogramma.
+
+## Cursore e stabilità
+
+La sola modifica a `caretRect(for:)` della build 98 produceva una geometria ampia,
+ma su iOS il cursore visibile rimaneva sottile. `TerminalTextView` ora disegna un
+rettangolo verde nella posizione indicata da UITextInput e usa Core Animation per
+la pulsazione, senza timer SwiftUI. Il cursore nativo è trasparente soltanto con
+selezione collassata; durante selezione e composizione IME torna la UI di sistema.
+Il rettangolo scompare perdendo il focus, uscendo dalla finestra o passando in
+background. Con Riduci movimento è fermo. Nessuna API privata.
+
+Selezione, emoji, dettatura, più righe e scorrimento restano affidati a UITextView.
+Dynamic Type arriva da SwiftUI; l'editor cresce fino a sei righe (massimo 180 punti).
+La bozza resta condivisa passando tra Borg e gli altri costumi. Il focus UIKit è
+separato dal FocusState del campo SwiftUI, preservando la correzione della build 98.
+
+Riferimento API: [UITextInput.caretRect](https://developer.apple.com/documentation/uikit/uitextinput/caretrect(for:)).
 
 ## Verifica
 
-- Compilazione nativa iOS Simulator, app e tre estensioni.
-- `TerminalChatTests`: inserimento di emoji e a capo, sostituzione della selezione, posizione e dimensioni del cursore, testo lungo con scorrimento, cambio skin conservando la bozza, svuotamento del campo.
-- Rendering nativo dei componenti di chat con dati sintetici: skin terminale su sistema chiaro/scuro, aspetto classico chiaro/scuro, Dynamic Type accessibile.
-- Regressione: suite `ConfirmationTests` e `ReadabilityTests`; 14 test passati nelle tre suite.
+`TerminalChatTests` verifica la barra completa con digitazione progressiva,
+selezione, IME, emoji, righe, scroll, focus, cambio stile e bozza. Il test del
+cursore verifica anche la vista dipinta e la pulsazione, non solo la geometria.
 
-[Anteprima della skin](terminal-chat.png).
+I dodici costumi sono renderizzati con componenti nativi in entrambi i temi; i
+contrasti principali (testi, testi secondari, fumetti e accenti su superficie)
+sono verificati con rapporto minimo 4,5:1. Le anteprime usano dati sintetici offline.
 
-Le schermate di anteprima mostrano componenti reali con una conversazione sintetica. Non costituiscono una prova su iPhone fisico, né una prova di richieste LLM; il backend non cambia.
+- [Palette chiare](bear-palettes-light.jpg)
+- [Palette scure](bear-palettes-dark.jpg)
+- [Cursore Borg durante la scrittura](borg-block-cursor.png)
 
-## Distribuzione
-
-Disponibile nella **build 98 su TestFlight**, verificata il 23 ottobre 2026 alle
-08:04 CEST: `VALID`, `IN_BETA_TESTING`, gruppo «Interni» e note italiane aggiornate.
-Sorgenti compilati: `c783c37e18d66d14032d1d973429a9f08a198ee7`, pubblicati su GitHub
-prima dell'archive sul Mac Studio. La build 98 corregge la gestione del focus
-introdotta nella 97. La verifica su iPhone fisico resta da eseguire.
-
-Dettagli e verifiche del rilascio: [build 98](../releases/build-98.md).
-
-## Correzione della scrittura (build 98)
-
-La prima integrazione usava un `FocusState` senza un corrispondente campo SwiftUI
-nella skin Terminale. Il test del solo editor non intercettava il problema della
-barra completa: la digitazione progressiva perdeva il focus e generava cicli
-AttributeGraph. La gestione del focus ora è distinta tra editor UIKit e campo
-classico, con una bozza condivisa. Verifiche e distribuzione nella
-[build 98](../releases/build-98.md).
+Per commit, prove e stato TestFlight effettivo: [build 99](../releases/build-99.md).

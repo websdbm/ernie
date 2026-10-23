@@ -1,44 +1,5 @@
 import SwiftUI
 
-/// Ogni costume ha lo stesso repertorio: 20 espressioni e 5 gesti da 4 fotogrammi.
-/// Il costume e il fotogramma sono indipendenti: parlare o starnutire non toglie il cappello.
-enum BearCostume: String, CaseIterable, Identifiable, Sendable {
-    case automatic, base, night, classic, aviator, chef, detective, engineer, explorer, astronaut
-    case halloween, borg, jedi
-    var id: String { rawValue }
-    static let preferenceKey = "ernie.bearCostume"
-    static var costumes: [Self] { allCases.filter { $0 != .automatic } }
-    var title: String {
-        switch self {
-        case .automatic: "Automatico"
-        case .base: "Ernie classico"
-        case .night: "Cappello da notte"
-        case .classic: "Occhiali scuri"
-        case .aviator: "Occhiali da aviatore"
-        case .chef: "Cuoco"
-        case .detective: "Detective"
-        case .engineer: "Tecnico"
-        case .explorer: "Esploratore"
-        case .astronaut: "Astronauta"
-        case .halloween: "Halloween"
-        case .borg: "Borg"
-        case .jedi: "Jedi"
-        }
-    }
-
-    static func resolve(choice: String, hour: Int, tools: [String], emotion: String) -> Self {
-        if let chosen = Self(rawValue: choice), chosen != .automatic { return chosen }
-        for tool in tools.reversed() {
-            if tool.hasPrefix("recipe") || tool.hasPrefix("shopping_") { return .chef }
-            if tool.hasPrefix("ssh_") || tool.hasPrefix("server_") || tool.hasPrefix("wp_") { return .engineer }
-            if tool.hasPrefix("place_") || tool.hasPrefix("weather") { return .explorer }
-            if tool.contains("search") || tool == "web_fetch" { return .detective }
-        }
-        if hour >= 21 || hour < 7 { return .night }
-        if emotion.lowercased() == "cool" { return hour < 15 ? .classic : .aviator }
-        return .base
-    }
-}
 
 struct BearContext: Equatable, Sendable {
     var tools: [String] = []

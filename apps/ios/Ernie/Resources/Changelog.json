@@ -1,5 +1,24 @@
 [
   {
+    "build": 99,
+    "date": "2026-10-23",
+    "title": "Un mondo di colori per ogni orso",
+    "items": [
+      {
+        "icon": "paintpalette",
+        "title": "Orso e palette insieme",
+        "detail": "Ogni costume di Ernie ha la sua combinazione di colori, con varianti chiare e scure. Anche in Automatico i colori seguono l’orso.",
+        "test": "Scegli un orso da Impostazioni → Aspetto di Ernie oppure tieni premuta la capsula nella chat."
+      },
+      {
+        "icon": "terminal",
+        "title": "Il terminale è del Borg",
+        "detail": "La chat Bash si attiva scegliendo Borg: fondo scuro, testo verde e un vero rettangolo pulsante nel punto di inserimento, senza il simbolo >. Non serve più un interruttore separato.",
+        "test": "Scegli Borg e scrivi, sposta il cursore e seleziona il testo. La bozza resta disponibile quando cambi orso."
+      }
+    ]
+  },
+  {
     "build": 98,
     "date": "2026-10-23",
     "title": "Scrittura stabile nella skin Terminale",

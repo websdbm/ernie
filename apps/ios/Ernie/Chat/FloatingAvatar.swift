@@ -14,6 +14,7 @@ enum AvatarAnchor: String, Codable, CaseIterable, Sendable {
 /// - con la tastiera aperta si riduce da solo; nella linguetta l'anello colorato dice comunque cosa fa Ernie.
 /// Posizione, dimensione e stato restano nelle preferenze locali.
 struct FloatingAvatar: View {
+    @Environment(\.chatPalette) private var palette
     let state: AgentState
     let name: String
     let connection: ProtocolClient.ConnectionState
@@ -130,7 +131,7 @@ struct FloatingAvatar: View {
                 .padding(.horizontal, 6)
                 .frame(width: 60, height: 60)
                 .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.35)))
+                .overlay(Capsule().strokeBorder(palette.accentText.opacity(0.35)))
                 .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
         }
         .buttonStyle(.plain)

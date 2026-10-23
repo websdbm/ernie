@@ -4,8 +4,17 @@ import SwiftUI
 /// capsula con l'orso, voce), «Oggi» quando la conversazione è vuota, poi la conversazione; barra di scrittura in
 /// vetro; in ascolto la schermata dedicata; il pannello laterale raccoglie sezioni e conversazioni passate.
 struct ChatView: View {
-    @AppStorage(ChatPalette.preferenceKey) private var terminal = false
-    private var palette: ChatPalette { ChatPalette(terminal: terminal) }
+    @State private var appearanceDate = Date()
+    @State private var appearanceIdleSince = Date()
+    @Environment(\.scenePhase) private var scenePhase
+    private var resolvedCostume: BearCostume {
+        BearCostume.resolve(choice: bearCostume,
+                            hour: Calendar.current.component(.hour, from: appearanceDate),
+                            tools: model.conversation?.agentState == .idle && appearanceDate.timeIntervalSince(appearanceIdleSince) > 45
+                                ? [] : BearContext.latest(in: model.conversation?.items ?? []).tools,
+                            emotion: model.conversation?.lastAvatarEmotion ?? "")
+    }
+    private var palette: ChatPalette { ChatPalette(costume: resolvedCostume) }
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var showUsage = false
@@ -82,7 +91,17 @@ struct ChatView: View {
                 ProgressView()
             }
         }
-        .chatAppearance(terminal: terminal)
+        .chatAppearance(costume: resolvedCostume)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            appearanceDate = .now
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                appearanceDate = .now
+            }
+        }
+        .onChange(of: model.conversation?.agentState) { appearanceIdleSince = .now; appearanceDate = .now }
+        .onChange(of: model.conversation?.lastAvatarEmotion) { appearanceIdleSince = .now; appearanceDate = .now }
         .environment(\.bearContext, BearContext.latest(in: model.conversation?.items ?? []))
         .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
         .sheet(isPresented: $showSettings, onDismiss: sheetDidDismiss) { SettingsView() }
@@ -252,7 +271,7 @@ struct ChatView: View {
             }
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.companionName).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                Text(caption).font(.caption2).foregroundStyle(Self.captionColor(conversation))
+                Text(caption).font(.caption2).foregroundStyle(captionColor(conversation))
                     .contentTransition(.opacity)
             }
             .lineLimit(1)
@@ -270,7 +289,7 @@ struct ChatView: View {
                     .frame(width: 36 * 1.15, height: 36 * 1.15)
                     .background(palette.accent, in: Circle())
                     .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(Self.ring(conversation.agentState), lineWidth: 2))
+                    .overlay(Circle().strokeBorder(ring(conversation.agentState), lineWidth: 2))
                     .offset(x: -4)
                     // Niente seconda faccia durante la transizione all'avatar galleggiante.
                     .transition(.identity)
@@ -296,18 +315,18 @@ struct ChatView: View {
         .accessibilityHint("Tieni premuto per altre opzioni")
     }
 
-    private static func ring(_ state: AgentState) -> Color {
+    private func ring(_ state: AgentState) -> Color {
         switch state {
-        case .idle: Theme.accent.opacity(0.4)
+        case .idle: palette.accent.opacity(0.4)
         case .listening: .red
         case .thinking: .orange
-        case .speaking: Theme.positive
+        case .speaking: palette.positive
         }
     }
 
-    private static func captionColor(_ conversation: ConversationStore) -> Color {
+    private func captionColor(_ conversation: ConversationStore) -> Color {
         if case .connected = conversation.connection {
-            return conversation.agentState == .idle ? Theme.inkSecondary : Theme.positive
+            return conversation.agentState == .idle ? palette.inkSecondary : palette.positive
         }
         return .orange
     }

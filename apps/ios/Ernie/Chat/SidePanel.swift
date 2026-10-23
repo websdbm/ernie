@@ -25,6 +25,7 @@ enum PanelDestination: Hashable {
 
 /// Pannello laterale (bozzetto 4): scheda dell'utente, nuova conversazione, sezioni, storico delle conversazioni.
 struct SidePanel: View {
+    @Environment(\.chatPalette) private var palette
     @Binding var isOpen: Bool
     let onSelect: (PanelDestination) -> Void
 
@@ -98,14 +99,14 @@ struct SidePanel: View {
                 )
                 if isSkillActive("shopping_list"), let error = model.shopping.catalogError {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(error).font(.footnote).foregroundStyle(Theme.inkSecondary)
+                        Text(error).font(.footnote).foregroundStyle(palette.inkSecondary)
                         Button("Riprova") { Task { await refreshShoppingLists() } }
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accentText)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(palette.accentText)
                     }.padding(.horizontal, 12)
                 }
                 sectionRows
                 Rectangle()
-                    .fill(Theme.hairline)
+                    .fill(palette.hairline)
                     .frame(height: 1)
                 historyArea
             }
@@ -126,7 +127,7 @@ struct SidePanel: View {
 
     /// Un gradino più chiaro del fondo delle schermate (di sera, un gradino più chiaro del viola scuro).
     private var panelFill: Color {
-        Theme.dynamic(light: 0xFBFAFE, dark: 0x191525)
+        palette.surface
     }
 
     // MARK: - intestazione
@@ -138,22 +139,22 @@ struct SidePanel: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 48, height: 48)
-                .background(Theme.accent)
+                .background(palette.accent)
                 .clipShape(Circle())
-                .overlay(Circle().strokeBorder(Theme.accent.opacity(0.6), lineWidth: 2))
+                .overlay(Circle().strokeBorder(palette.accent.opacity(0.6), lineWidth: 2))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name.isEmpty ? "Tu" : name)
                     .font(Theme.title(18))
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(palette.ink)
                     .lineLimit(1)
                 Button {
                     choose(.profile)
                 } label: {
                     Text("La tua scheda")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accentText)
+                        .foregroundStyle(palette.accentText)
                 }
                 .buttonStyle(.plain)
             }
@@ -175,7 +176,7 @@ struct SidePanel: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(palette.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -251,7 +252,7 @@ struct SidePanel: View {
                 if locked {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.inkSecondary)
+                        .foregroundStyle(palette.inkSecondary)
                         .accessibilityHidden(true)
                 }
                 if badge > 0 {
@@ -260,7 +261,7 @@ struct SidePanel: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Theme.accent, in: Capsule())
+                        .background(palette.accent, in: Capsule())
                         .accessibilityHidden(true)
                 }
             }
@@ -298,7 +299,7 @@ struct SidePanel: View {
                     eyebrow
                     Text("Le conversazioni passate compariranno qui.")
                         .font(.subheadline)
-                        .foregroundStyle(Theme.inkSecondary)
+                        .foregroundStyle(palette.inkSecondary)
                         .padding(.horizontal, 12)
                 }
             } else {
@@ -308,7 +309,7 @@ struct SidePanel: View {
                     ForEach(historyGroups) { group in
                         Text(group.bucket.title)
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(Theme.inkSecondary)
+                            .foregroundStyle(palette.inkSecondary)
                             .padding(.horizontal, 12)
                             .padding(.top, 10)
                             .padding(.bottom, 2)
@@ -326,7 +327,7 @@ struct SidePanel: View {
         Text("CONVERSAZIONI")
             .font(Theme.eyebrow)
             .kerning(0.4)
-            .foregroundStyle(Theme.inkSecondary)
+            .foregroundStyle(palette.inkSecondary)
             .padding(.horizontal, 12)
     }
 
@@ -343,7 +344,7 @@ struct SidePanel: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(isCurrent ? Theme.surfaceMuted : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(isCurrent ? palette.surfaceMuted : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(PanelRowStyle())
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
@@ -403,11 +404,12 @@ struct SidePanel: View {
 
 /// Stile delle righe toccabili: evidenziazione tenue mentre il dito le preme.
 private struct PanelRowStyle: ButtonStyle {
+    @Environment(\.chatPalette) private var palette
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(configuration.isPressed ? Theme.accentText : Theme.ink)
+            .foregroundStyle(configuration.isPressed ? palette.accentText : palette.ink)
             .background(
-                configuration.isPressed ? Theme.accentSoft : Color.clear,
+                configuration.isPressed ? palette.accentSoft : Color.clear,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

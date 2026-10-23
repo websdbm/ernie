@@ -1,14 +1,93 @@
 import SwiftUI
 import UIKit
 
-/// Il cursore appartiene a UITextInput: segue selezione, dettatura e composizione IME.
-/// Nessun timer aggiuntivo: lampeggio e accessibilità restano gestiti da iOS.
+/// UIKit conserva editing e selezione; un solo rettangolo segue la geometria UITextInput.
+/// Il colore del cursore nativo viene nascosto solo con selezione collassata.
+/// Durante selezione e IME ritorna la UI di sistema, con maniglie e marcatura visibili.
 final class TerminalTextView: UITextView {
+    let blockCursor = UIView()
+    private let phosphor = UIColor(hex: 0x8DFFA8)
+    private var lastSelection = NSRange(location: NSNotFound, length: 0)
+    private var appActive = true
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        blockCursor.backgroundColor = phosphor.withAlphaComponent(0.78)
+        blockCursor.isUserInteractionEnabled = false
+        blockCursor.isAccessibilityElement = false
+        blockCursor.isHidden = true
+        addSubview(blockCursor)
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification,
+                     UIAccessibility.reduceMotionStatusDidChangeNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(updateActivity(_:)), name: name, object: nil)
+        }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit { NotificationCenter.default.removeObserver(self) }
+
     override func caretRect(for position: UITextPosition) -> CGRect {
         var rect = super.caretRect(for: position)
-        let width = ("M" as NSString).size(withAttributes: [.font: font ?? UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)]).width
-        rect.size.width = ceil(width)
+        rect.size.width = ceil(("M" as NSString).size(withAttributes: [
+            .font: font ?? UIFont.monospacedSystemFont(ofSize: 17, weight: .regular)
+        ]).width)
         return rect
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateBlockCursor()
+    }
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        updateBlockCursor()
+        return result
+    }
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        updateBlockCursor()
+        return result
+    }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateBlockCursor()
+    }
+    @objc private func updateActivity(_ notification: Notification) {
+        if notification.name == UIApplication.willResignActiveNotification { appActive = false }
+        if notification.name == UIApplication.didBecomeActiveNotification { appActive = true }
+        blockCursor.layer.removeAllAnimations()
+        updateBlockCursor()
+    }
+    func updateBlockCursor() {
+        let collapsed = selectedTextRange?.isEmpty == true && markedTextRange == nil
+        let color: UIColor = collapsed ? .clear : phosphor
+        if tintColor != color { tintColor = color }
+        guard isFirstResponder, window != nil, appActive, collapsed,
+              let position = selectedTextRange?.start else {
+            blockCursor.isHidden = true
+            blockCursor.layer.removeAllAnimations()
+            return
+        }
+        let rect = caretRect(for: position)
+        guard !rect.isNull, !rect.isInfinite, rect.height > 0 else {
+            blockCursor.isHidden = true
+            return
+        }
+        let restart = blockCursor.isHidden || lastSelection != selectedRange
+        blockCursor.frame = rect
+        blockCursor.isHidden = false
+        bringSubviewToFront(blockCursor)
+        lastSelection = selectedRange
+        if restart { blockCursor.layer.removeAllAnimations() }
+        // Core Animation: nessun timer o aggiornamento SwiftUI durante la digitazione.
+        if !UIAccessibility.isReduceMotionEnabled, blockCursor.layer.animation(forKey: "pulse") == nil {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1
+            pulse.toValue = 0.15
+            pulse.duration = 0.6
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            blockCursor.layer.add(pulse, forKey: "pulse")
+        }
     }
 
     func configureFont(size: CGFloat = 17) {
@@ -33,7 +112,7 @@ struct TerminalComposer: UIViewRepresentable {
         view.delegate = context.coordinator
         view.backgroundColor = .clear
         view.textColor = UIColor(hex: 0x8DFFA8)
-        view.tintColor = UIColor(hex: 0x8DFFA8).withAlphaComponent(0.65)
+        view.tintColor = .clear
         view.keyboardAppearance = .dark
         view.configureFont(size: fontSize)
         view.textContainer.lineFragmentPadding = 0
@@ -55,6 +134,7 @@ struct TerminalComposer: UIViewRepresentable {
             view.selectedRange = NSRange(location: min(selection.location, length), length: min(selection.length, max(0, length - selection.location)))
             view.invalidateIntrinsicContentSize()
         }
+        view.updateBlockCursor()
         context.coordinator.synchronizeFocus(view)
     }
 
@@ -87,7 +167,11 @@ struct TerminalComposer: UIViewRepresentable {
                 if !self.parent.focused, view.isFirstResponder { view.resignFirstResponder() }
             }
         }
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            (textView as? TerminalTextView)?.updateBlockCursor()
+        }
         func textViewDidChange(_ textView: UITextView) {
+            (textView as? TerminalTextView)?.updateBlockCursor()
             parent.text = textView.text
             textView.invalidateIntrinsicContentSize()
         }

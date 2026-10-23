@@ -53,10 +53,7 @@ struct InputBar: View {
                 } else {
                     if documents != nil { attachMenu }
                     if palette.terminal {
-                        HStack(alignment: .top, spacing: 6) {
-                            Text(">").foregroundStyle(palette.inkSecondary)
-                                .padding(.top, 11).accessibilityHidden(true)
-                            TerminalComposer(text: $draft, focused: $composing, placeholder: "Chiedi a \(conversationName)")
+                        TerminalComposer(text: $draft, focused: $composing, placeholder: "Chiedi a \(conversationName)")
                             .overlay(alignment: .topLeading) {
                                 if draft.isEmpty && !composing {
                                     Text("Chiedi a \(conversationName)…")
@@ -64,7 +61,6 @@ struct InputBar: View {
                                         .padding(.top, 11).allowsHitTesting(false).accessibilityHidden(true)
                                 }
                             }
-                        }
                         .padding(.horizontal, 6)
                     } else {
                         TextField("Chiedi a \(conversationName)…", text: $draft, axis: .vertical)

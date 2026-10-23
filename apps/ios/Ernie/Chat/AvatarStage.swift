@@ -5,6 +5,7 @@ import SwiftUI
 /// Il cerchio dell'avatar: alone al neon traslucido, anello dell'accento, anello di stato (ascolto/pensiero/parlato)
 /// e l'orso animato. Usato dall'avatar galleggiante a qualunque dimensione.
 struct AvatarBubble: View {
+    @Environment(\.chatPalette) private var palette
     let state: AgentState
     let emotion: String
     let mouthOpen: Bool
@@ -24,11 +25,11 @@ struct AvatarBubble: View {
         ZStack {
             // L'alone è solo decorativo: non intercetta i tocchi (la chat sotto resta usabile).
             Circle()
-                .fill(RadialGradient(colors: [Color.accentColor.opacity(small ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.5 + 22))
+                .fill(RadialGradient(colors: [palette.accentText.opacity(small ? 0.18 : 0.28), .clear], center: .center, startRadius: size * 0.42, endRadius: size * 0.5 + 22))
                 .frame(width: size + 56, height: size + 56)
                 .allowsHitTesting(false)
             Circle()
-                .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: small ? 1.5 : 2)
+                .strokeBorder(palette.accentText.opacity(0.55), lineWidth: small ? 1.5 : 2)
                 .frame(width: size + 8, height: size + 8)
             Circle()
                 .stroke(ringColor.opacity(0.75), lineWidth: small ? 3 : 5)
@@ -66,6 +67,7 @@ struct PixelBearView: View {
     var emotion: String = ""
     @AppStorage(BearCostume.preferenceKey) private var costumeChoice = BearCostume.automatic.rawValue
     @Environment(\.bearContext) private var bearContext
+    @Environment(\.resolvedBearCostume) private var resolvedCostume
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var idleSince = Date()
@@ -77,7 +79,7 @@ struct PixelBearView: View {
         TimelineView(.animation(minimumInterval: state == .speaking ? 0.14 : 0.24,
                                 paused: reduceMotion || scenePhase != .active)) { timeline in
             let idleFor = max(0, timeline.date.timeIntervalSince(idleSince))
-            let costume = BearCostume.resolve(
+            let costume = resolvedCostume ?? BearCostume.resolve(
                 choice: costumeChoice, hour: Calendar.current.component(.hour, from: timeline.date),
                 tools: state == .idle && idleFor > 45 ? [] : bearContext.tools, emotion: emotion)
             let frame = BearMotion.frame(
