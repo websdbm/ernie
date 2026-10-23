@@ -7,7 +7,7 @@ import {
   nextOccurrences,
   type ProactiveCandidate,
 } from '@ernie/automations';
-import type { ContentBlock } from '@ernie/protocol';
+import { type ContentBlock, ReminderRepeatInput } from '@ernie/protocol';
 import {
   formatWhen,
   leadQuantity,
@@ -443,8 +443,13 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
           }
         );
       }
-      if (!input.at) throw new Error('promemoria senza ora né luogo');
-      const at = new Date(Math.floor(input.at.getTime() / 1000) * 1000);
+      if (input.repeat) ReminderRepeatInput.parse(input.repeat);
+      const recurrence = input.repeat;
+      const requestedAt = recurrence
+        ? nextOccurrences(repeatCron(recurrence), input.timezone, new Date(), 1)[0]
+        : input.at;
+      if (!requestedAt) throw new Error('promemoria senza ora né luogo');
+      const at = new Date(Math.floor(requestedAt.getTime() / 1000) * 1000);
       // Titolo breve dalla frase detta; dal punto di vista di chi lo riceve («chiamarmi» → «Chiamare papà»).
       const titled = async (fromLabel?: string) =>
         clean(
@@ -506,6 +511,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
         at,
         status: 'scheduled',
         for: link.label,
+        ...(input.repeat ? { repeat: input.repeat } : {}),
         ...(eventAt ? { eventAt } : {}),
       };
     },

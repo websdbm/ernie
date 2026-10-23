@@ -18,12 +18,27 @@ Dettagli: [skin Terminale](../ui/chat-terminal.md).
 
 ## Distribuzione
 
-In preparazione. Tutti e quattro i target sono alla build 97. Il commit sorgenti,
-manifest degli input, firma/IPA e stato effettivo TestFlight verranno registrati
-qui dopo ciascuna verifica. Nessun upload prima della pubblicazione GitHub del
-commit esatto usato per compilare.
+- Sorgenti iOS: `0a0171215d607c85039defad7ba7eb33151bb8b8`, pubblicati e
+  verificati su GitHub prima dell'archive. Snapshot pulito dei 257 input iOS,
+  tutti controllati con SHA-256 sul Mac Studio.
+- Tutti e quattro i target sono alla build 97.
+- Archive ed export App Store Connect riusciti. Firme Apple Distribution,
+  profili ed entitlement verificati per app, widget, share e notification extension.
+- Verificati 536 fotogrammi logici e corrispondenza dei pixel con i sorgenti,
+  incluse risorse condivise e fallback dei widget.
+- SHA-256 IPA esportata:
+  `c91e2756e5e095959d91bf804ffb39979afb30c28620ffdbfee6ea529f824864`.
+- Upload completato il 23 ottobre 2026 alle 06:12 CEST. Alle 06:15 CEST
+  App Store Connect conferma `VALID`, `IN_BETA_TESTING`, presenza nel gruppo
+  «Interni» e note italiane corrispondenti al changelog, con la normale
+  rimozione dei simboli non ammessi da TestFlight effettuata da `asc.mjs`.
+- Build ID: `7ea32187-5934-43bc-937a-fe3889727f97`.
+- Nessun tester o gruppo aggiunto o modificato. Nessun deployment backend
+  richiesto per rendere disponibile la skin.
 
 Evidenze native: `/tmp/ernie-terminal-verified.log`.
-Directory di rilascio prevista sul Mac Studio:
+Archivio, IPA e report di verifica sul Mac Studio:
 `~/Library/Caches/ernie-builds/build-97-20261023-terminal/`.
 Rollback client: build 96.
+
+Evidenze di rilascio locali: `/tmp/ernie-terminal-release-20261023/`.

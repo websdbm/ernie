@@ -1,3 +1,7 @@
+import type { ReminderRepeat } from '@ernie/protocol';
+
+export { type ReminderRepeat, repeatLabel } from '@ernie/protocol';
+
 import { addDays, localParts, zonedToUtc } from './zoned.js';
 
 /**
@@ -5,17 +9,6 @@ import { addDays, localParts, zonedToUtc } from './zoned.js';
  * palestra», «ogni lunedì e giovedì alle 18», «ogni giorno alle 8», «nei giorni feriali alle 7:30»,
  * «il 5 di ogni mese». Senza modello; diventano automazioni con orario ricorrente (cron).
  */
-export interface ReminderRepeat {
-  readonly kind: 'daily' | 'weekly' | 'monthly';
-  /** 0 = domenica … 6 = sabato (solo weekly). */
-  readonly weekdays?: readonly number[];
-  /** Giorno del mese (solo monthly). */
-  readonly day?: number;
-  readonly hour: number;
-  readonly minute: number;
-}
-
-const WEEKDAYS = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const WEEKDAY_FORMS: Record<string, number> = {
   domenica: 0,
   domeniche: 0,
@@ -52,21 +45,6 @@ const SMALL: Record<string, number> = {
   venti: 20,
   trenta: 30,
 };
-
-const hhmm = (h: number, m: number) => (m ? `${h}:${String(m).padStart(2, '0')}` : `${h}`);
-
-/** «ogni venerdì alle 9», «ogni lunedì e giovedì alle 18:30», «ogni giorno alle 8», «il 5 di ogni mese alle 9». */
-export function repeatLabel(r: ReminderRepeat): string {
-  const at = `alle ${hhmm(r.hour, r.minute)}`;
-  if (r.kind === 'daily') return `ogni giorno ${at}`;
-  if (r.kind === 'monthly') return `il ${r.day} di ogni mese ${at}`;
-  const days = [...(r.weekdays ?? [])].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
-  if (days.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d)))
-    return `nei giorni feriali ${at}`;
-  const names = days.map((d) => WEEKDAYS[d] ?? '');
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names.at(-1)}` : names[0];
-  return `ogni ${list} ${at}`;
-}
 
 /** Espressione cron (minuto ora giorno mese giorno-della-settimana). */
 export function repeatCron(r: ReminderRepeat): string {
@@ -184,10 +162,28 @@ export function parseRepeat(
     text = text.replace(daily[0], ' ');
   }
   if (!kind) return null;
+  // Espressioni esplicite di esclusione weekend: una sola ricorrenza lun–ven.
+  const weekendException =
+    /\s(?:tranne|eccetto|esclus[oi]|escludendo|salvo)\s+(?:(?:il|i|del|dei)\s+)?(?:week[ -]?end|fine\s+settimana|sabato\s+e\s+(?:la\s+)?domenica)(?=\s|[,.;!?]|$)/iu;
+  if (weekendException.test(text)) {
+    if (kind === 'monthly') return null;
+    weekdays = (kind === 'weekly' ? (weekdays ?? []) : [0, 1, 2, 3, 4, 5, 6]).filter(
+      (d) => d !== 0 && d !== 6,
+    );
+    kind = 'weekly';
+    text = text.replace(weekendException, ' ');
+  }
+  // Condizioni non rappresentabili qui devono passare al modello, mai sparire dal calendario.
+  if (/\b(?:tranne|eccetto|escludendo|esclus[oi]|salvo|fino\s+a|a\s+partire)\b/iu.test(text))
+    return null;
   if (kind === 'weekly' && !weekdays?.length) return null;
 
-  const withPeriod = periodWord ? `${text} ${periodWord} ` : text;
-  const t = timeOfDay(withPeriod);
+  const explicitTime = timeOfDay(text);
+  const t =
+    periodWord && explicitTime.assumed === 'le 9, perché non hai detto l’ora'
+      ? timeOfDay(`${text} ${periodWord} `)
+      : explicitTime;
+  if (t.hour > 23 || t.minute > 59) return null;
   const assumed = t.assumed ? [t.assumed] : [];
   const cleaned = t.text
     .replace(/\s+/g, ' ')

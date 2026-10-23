@@ -1,4 +1,9 @@
-import type { ContentBlock } from '@ernie/protocol';
+import {
+  type ContentBlock,
+  type ReminderRepeat,
+  ReminderRepeatInput,
+  repeatLabel,
+} from '@ernie/protocol';
 import { z } from 'zod';
 import { defineTool, ToolError, type ToolSpec } from '../types.js';
 
@@ -27,6 +32,7 @@ export interface ReminderToolInfo {
   readonly place?: ReminderToolPlace;
   /** Appuntamento con preavviso: ora dell'appuntamento (`at` è l'avviso). */
   readonly eventAt?: Date;
+  readonly repeat?: ReminderRepeat;
   readonly for?: string;
   readonly from?: string;
   readonly channels?: { readonly email?: boolean; readonly alarm?: boolean };
@@ -40,6 +46,7 @@ export interface ReminderToolStore {
       at?: Date;
       place?: { label: string; on: 'arrive' | 'leave'; repeat?: boolean };
       timezone: string;
+      repeat?: ReminderRepeat;
       eventAt?: Date;
       forLabel?: string;
       channels?: { email?: boolean; alarm?: boolean };
@@ -81,6 +88,7 @@ const Info = z.object({
     })
     .optional(),
   eventAt: z.string().optional(),
+  repeat: ReminderRepeatInput.safeExtend({ label: z.string() }).optional(),
   for: z.string().optional(),
   from: z.string().optional(),
 });
@@ -97,6 +105,15 @@ const toInfo = (r: ReminderToolInfo): InfoOut => ({
           on: r.place.on,
           ...(r.place.repeat ? { repeat: true } : {}),
           ...(r.place.address ? { address: r.place.address } : {}),
+        },
+      }
+    : {}),
+  ...(r.repeat
+    ? {
+        repeat: {
+          ...r.repeat,
+          weekdays: r.repeat.weekdays ? [...r.repeat.weekdays] : undefined,
+          label: repeatLabel(r.repeat),
         },
       }
     : {}),
@@ -126,6 +143,15 @@ function block(items: readonly ReminderToolInfo[], title: string): ContentBlock 
                 ? { lat: r.place.lat, lng: r.place.lng }
                 : {}),
               ...(r.place.radius ? { radius: r.place.radius } : {}),
+            },
+          }
+        : {}),
+      ...(r.repeat
+        ? {
+            repeat: {
+              ...r.repeat,
+              weekdays: r.repeat.weekdays ? [...r.repeat.weekdays] : undefined,
+              label: repeatLabel(r.repeat),
             },
           }
         : {}),
@@ -162,10 +188,10 @@ export function createReminderTools(
   return [
     defineTool({
       id: 'reminder_create',
-      version: '1',
+      version: '2',
       category: 'reminders',
       description:
-        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa (`at`) oppure quando arriva in un luogo o lo lascia (`place`, es. «quando arrivo a casa»: label «casa», on «arrive»; «ogni volta che» = repeat true). I luoghi sono quelli della scheda (casa, lavoro…): se l'utente ha appena detto l'indirizzo, salvalo prima con place_set. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
+        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa (`at`) oppure quando arriva in un luogo o lo lascia (`place`, es. «quando arrivo a casa»: label «casa», on «arrive»; «ogni volta che» = repeat true). I luoghi sono quelli della scheda (casa, lavoro…): se l'utente ha appena detto l'indirizzo, salvalo prima con place_set. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Per ricorrenze giornaliere, settimanali o mensili usa `repeat`: ora/minuto locali, weekdays 0=domenica…6=sabato; ogni mattina tranne weekend = weekly, weekdays [1,2,3,4,5]. Non creare tanti avvisi singoli e non dire che la ripetizione non esiste. La prossima occorrenza viene calcolata dal server: ometti `at`, `eventAt` e `place` quando usi `repeat`. Nessuna data iniziale/finale o esclusione di festività è supportata da repeat: se richiesta, chiarisci questo limite prima di salvare. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 8_000,
       inputSchema: z.object({
@@ -180,6 +206,9 @@ export function createReminderTools(
           .describe(
             'Istante dell’avviso, ISO 8601 con fuso (assente se il promemoria è legato a un luogo)',
           ),
+        repeat: ReminderRepeatInput.optional().describe(
+          'Ricorrenza locale. daily: ogni giorno; weekly: weekdays 0–6; monthly: day 1–28. Escluso weekend = weekdays [1,2,3,4,5]. Senza at/eventAt/place.',
+        ),
         place: z
           .object({
             label: z
@@ -209,6 +238,41 @@ export function createReminderTools(
       outputSchema: Info,
       execute: async (input, ctx) => {
         const timezone = zoneOf(ctx.device?.timezone, fallbackTz);
+        if (input.repeat) {
+          if (input.at || input.eventAt || input.place)
+            throw new ToolError(
+              'La ricorrenza usa repeat senza at, eventAt o place. La prossima data viene calcolata dal server.',
+              'invalid_input',
+            );
+          try {
+            const r = await store.create(ctx.userId, {
+              text: input.text,
+              timezone,
+              repeat: {
+                kind: input.repeat.kind,
+                hour: input.repeat.hour,
+                minute: input.repeat.minute,
+                ...(input.repeat.weekdays ? { weekdays: input.repeat.weekdays } : {}),
+                ...(input.repeat.day !== undefined ? { day: input.repeat.day } : {}),
+              },
+              ...(input.forLabel ? { forLabel: input.forLabel } : {}),
+              ...(input.alarm
+                ? { channels: { alarm: true, email: false }, literalTitle: true }
+                : input.email
+                  ? { channels: { email: true } }
+                  : {}),
+            });
+            lastCreated.set(ctx.userId, r);
+            return toInfo(r);
+          } catch (err) {
+            if (err instanceof Error && err.name === 'UnknownPersonError')
+              throw new ToolError(
+                `Nessuna persona collegata si chiama «${input.forLabel}»: chiedi all’utente di collegarla da Impostazioni › Famiglia.`,
+                'invalid_input',
+              );
+            throw err;
+          }
+        }
         if (input.place) {
           if (input.forLabel)
             throw new ToolError(

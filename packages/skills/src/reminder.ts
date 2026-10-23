@@ -977,6 +977,13 @@ function parseSingleReminderCommand(input: string, now: Date, tz: string): Remin
       ...(who ? { who } : {}),
       ...(email ? { email } : {}),
     };
+  // Ricorrenza riconosciuta ma non rappresentabile: niente fallback a un avviso singolo.
+  if (
+    /\b(?:ogni|tutti\s+i\s+giorni|tutte\s+le\s+(?:mattine|sere)|giorni\s+feriali|dal\s+luned[ìi]\s+al\s+venerd[ìi])\b/iu.test(
+      rest,
+    )
+  )
+    return null;
   const parsed = parseWhen(rest, now, tz);
   if (parsed === null) return null;
   // «Ricordati che sono allergico alle noci», senza un quando: è un ricordo, non un promemoria (lo gestisce la

@@ -477,3 +477,40 @@ describe('promemoria legati a un luogo (15 ott 2026)', () => {
     });
   });
 });
+
+it('ricorrenza dal tool: un solo cron feriale, prossima data locale dopo weekend e cambio ora', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-23T06:00:00Z'));
+  try {
+    const f = fakeAutomations();
+    const queue = { add: vi.fn() } as unknown as AutomationQueue;
+    const store = createReminderStore({
+      automations: f.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    const r = await store.create(PAPA, {
+      text: 'Uscire',
+      timezone: 'Europe/Rome',
+      repeat: { kind: 'weekly', weekdays: [1, 2, 3, 4, 5], hour: 7, minute: 55 },
+    });
+    expect(f.rows).toHaveLength(1);
+    expect(f.rows[0]).toMatchObject({
+      trigger: { type: 'cron', pattern: '55 7 * * 1,2,3,4,5' },
+      timezone: 'Europe/Rome',
+      budgetUsd: 0,
+    });
+    expect(r.at?.toISOString()).toBe('2026-10-26T06:55:00.000Z');
+    expect(r.repeat?.weekdays).toEqual([1, 2, 3, 4, 5]);
+    const listed = await store.list(PAPA);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe(r.id);
+    expect(await store.list(GIORGIO)).toEqual([]);
+    expect(await store.remove(GIORGIO, r.id)).toBe(false);
+    expect(await store.remove(PAPA, r.id)).toBe(true);
+    expect(await store.list(PAPA)).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});

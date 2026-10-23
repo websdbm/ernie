@@ -21,6 +21,10 @@ Le schermate di anteprima mostrano componenti reali con una conversazione sintet
 
 ## Distribuzione
 
-Inclusa nella build 97 in preparazione. Numero, changelog e progetto sono aggiornati;
-la distribuzione sarà documentata in [build 97](../releases/build-97.md) dopo la
-verifica del commit GitHub e di App Store Connect. Nessuna build 97 ancora dichiarata disponibile.
+Disponibile nella **build 97 su TestFlight**, verificata il 23 ottobre 2026 alle
+06:15 CEST: `VALID`, `IN_BETA_TESTING`, gruppo «Interni» e note italiane aggiornate.
+Sorgenti compilati: `0a0171215d607c85039defad7ba7eb33151bb8b8`, pubblicati su GitHub
+prima dell'archive sul Mac Studio. La skin si attiva nelle impostazioni dopo aver
+installato questa build. La verifica su iPhone fisico resta da eseguire.
+
+Dettagli e verifiche del rilascio: [build 97](../releases/build-97.md).

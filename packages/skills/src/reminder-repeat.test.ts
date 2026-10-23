@@ -61,3 +61,30 @@ describe('promemoria ricorrenti', () => {
     ).not.toHaveProperty('repeat');
   });
 });
+
+describe('esclusioni esplicite', () => {
+  it.each([
+    'tranne il weekend',
+    'tranne del weekend',
+    'escludendo i weekend',
+    'eccetto sabato e domenica',
+    'escluso il fine settimana',
+  ])('ogni mattina %s resta lunedì–venerdì', (exclusion) => {
+    const command = `Ricordami ogni mattina ${exclusion} alle 7:55 di uscire`;
+    const plan = parseReminderCommand(command, new Date('2026-10-23T06:00:00Z'), TZ);
+    expect(plan).toMatchObject({
+      op: 'create',
+      text: 'uscire',
+      repeat: { kind: 'weekly', weekdays: [1, 2, 3, 4, 5], hour: 7, minute: 55 },
+    });
+    if (plan?.op === 'create') expect(plan.at.toISOString()).toBe('2026-10-26T06:55:00.000Z');
+  });
+  it('non degrada eccezioni o orari non validi a promemoria giornalieri o singoli', () => {
+    for (const command of [
+      'Ricordami ogni mattina tranne il martedì alle 7:55 di uscire',
+      'Ricordami ogni mattina tranne le vacanze scolastiche alle 7:55 di uscire',
+      'Ricordami ogni mattina alle 25:70 di uscire',
+    ])
+      expect(parseReminderCommand(command, NOW, TZ)).toBeNull();
+  });
+});

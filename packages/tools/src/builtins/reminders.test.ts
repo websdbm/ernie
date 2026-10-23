@@ -22,6 +22,7 @@ function fakeStore() {
         id: `id-${created.length}`,
         text: input.eventAt ? `${input.text} alle 19:00` : input.text,
         ...(input.at ? { at: input.at } : {}),
+        ...(input.repeat ? { repeat: input.repeat } : {}),
         ...(input.place ? { place: input.place } : {}),
         ...(input.eventAt ? { eventAt: input.eventAt } : {}),
         ...(input.forLabel ? { for: input.forLabel } : {}),
@@ -136,5 +137,61 @@ describe('promemoria legati a un luogo e luoghi della scheda', () => {
     await expect(
       placeSet.execute({ label: 'pieno', address: 'via Verdi 1, Milano' }, ctx()),
     ).rejects.toThrow(/dieci/);
+  });
+});
+
+describe('ricorrenze accessibili al modello', () => {
+  it('crea una sola ricorrenza feriale senza inventare una data e la mostra in scheda ed elenco', async () => {
+    const f = fakeStore();
+    const tools = createReminderTools(f.store);
+    const create = tools.find((t) => t.id === 'reminder_create');
+    if (!create) throw new Error('tool mancante');
+    const repeat = { kind: 'weekly', weekdays: [1, 2, 3, 4, 5], hour: 7, minute: 55 };
+    const input = create.inputSchema.parse({ text: 'Uscire per andare a scuola', repeat });
+    const out = await create.execute(input, ctx('Europe/Rome'));
+    expect(f.created).toHaveLength(1);
+    expect(f.created[0]).toEqual({
+      text: 'Uscire per andare a scuola',
+      timezone: 'Europe/Rome',
+      repeat,
+    });
+    expect(out).toMatchObject({ repeat: { ...repeat, label: 'nei giorni feriali alle 7:55' } });
+    expect(create.present?.(input, out)).toMatchObject({
+      reminders: [{ repeat: { ...repeat, label: 'nei giorni feriali alle 7:55' } }],
+    });
+    const list = tools.find((t) => t.id === 'reminder_list');
+    if (!list) throw new Error('tool mancante');
+    const listed = await list.execute({}, ctx());
+    expect(listed).toMatchObject({
+      reminders: [{ repeat: { ...repeat, label: 'nei giorni feriali alle 7:55' } }],
+    });
+  });
+  it('non perde i vincoli: rigetta ricorrenze incomplete e modalità incompatibili', async () => {
+    const f = fakeStore();
+    const create = createReminderTools(f.store)[0];
+    if (!create) throw new Error('tool mancante');
+    for (const repeat of [
+      { kind: 'weekly', hour: 7, minute: 55 },
+      { kind: 'weekly', weekdays: [], hour: 7, minute: 55 },
+      { kind: 'weekly', weekdays: [1, 1], hour: 7, minute: 55 },
+      { kind: 'daily', weekdays: [1], hour: 7, minute: 55 },
+      { kind: 'monthly', hour: 7, minute: 55 },
+      { kind: 'daily', hour: 25, minute: 0 },
+      { kind: 'daily', hour: 7, minute: 55, until: '2026-11-01' },
+    ])
+      expect(create.inputSchema.safeParse({ text: 'Uscire', repeat }).success).toBe(false);
+    for (const extra of [
+      { at: future(1) },
+      { eventAt: future(2) },
+      { place: { label: 'casa', on: 'leave' } },
+    ]) {
+      const input = create.inputSchema.parse({
+        text: 'Uscire',
+        repeat: { kind: 'daily', hour: 7, minute: 55 },
+        ...extra,
+      });
+      await expect(create.execute(input, ctx())).rejects.toThrow('senza at');
+    }
+    expect(f.created).toHaveLength(0);
   });
 });
