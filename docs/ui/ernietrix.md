@@ -73,3 +73,15 @@ comandi touch/pressione prolungata, accessibilità e sospensione dell'app.
 
 Nessun deployment backend richiesto. Stato del rilascio in
 [build-101.md](../releases/build-101.md).
+
+## Resa nativa verificata
+
+![ErnieTRIX sul simulatore iPhone 17, dati sintetici](ernietrix-101.png)
+
+## Provenienza dello sprite
+
+File: `apps/ios/Ernie/Assets.xcassets/ErnieTRIXFur.imageset/fur.png`.
+Generato con il tool imagegen integrato, modalità trasparente, senza CLI o
+API a carico del backend Ernie. Prompt completo:
+
+> Create a single production game sprite, not a mockup: one front-facing SQUARE BLOCK made of thick shaggy bear fur for a pixel-art falling block puzzle called ErnieTRIX. Transparent background. Only one square, filling 94 percent of the canvas, centered, front orthographic view, no perspective, no visible side faces, no scene, no text, no shadow outside. Style: beautiful crisp 64x64 pixel art upscaled with hard square pixels, detailed but strongly readable large layered tufts. Neutral grayscale ivory white fur with medium gray shadows and dark gray at lower edge. Broad pointed clumps of fur sweep downward and outward like a bear's cheek, with larger coherent triangular tufts, NOT random dots or confetti. Top edge softly tufted, side fur extends only one or two pixels, bottom roughly square. Square silhouette unmistakable for interlocking square grid cells. Soft bevel implied by light fur at top and left, shaded fur bottom and right. No face, eyes, paws, limbs, decorations, colored tint or border frame. This will be tinted into seven colors by the game's renderer; preserve rich luminance variation with highlights and shadows. Exact square composition, transparent outside fur silhouette.
