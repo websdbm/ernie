@@ -5,6 +5,7 @@ enum PanelDestination: Hashable {
     case newConversation
     case conversation(String)
     case ssh
+    case ernietrix
     case todo
     case todoList(String)
     case shoppingList(String)
@@ -214,6 +215,7 @@ struct SidePanel: View {
             if isHealthActive {
                 sectionRow("Salute", icon: "heart.text.square.fill", tint: .health, locked: true, destination: .health)
             }
+            sectionRow("ErnieTRIX", icon: "gamecontroller.fill", tint: .brain, destination: .ernietrix)
             sectionRow("Skill", icon: "bolt.shield.fill", tint: .neutral, destination: .skills)
             sectionRow("Famiglia", icon: "person.2.fill", tint: .neutral, destination: .family)
             sectionRow("I miei consumi", icon: "chart.bar.xaxis", tint: .brain, destination: .usage)

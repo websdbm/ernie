@@ -22,13 +22,21 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
+    @ViewBuilder private var applicationContent: some View {
+        if model.credentials == nil { OnboardingView() } else { ChatView() }
+    }
+
     var body: some View {
         Group {
-            if model.credentials == nil {
-                OnboardingView()
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["ERNIE_DEBUG_TRIX"] == "1" {
+                ErnieTRIXDebugPreview()
             } else {
-                ChatView()
+                applicationContent
             }
+            #else
+            applicationContent
+            #endif
         }
         .animation(.default, value: model.credentials == nil)
         // Messaggio urgente da confermare: copre tutto finché non si conferma di averlo letto.

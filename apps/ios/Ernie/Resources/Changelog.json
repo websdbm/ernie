@@ -1,5 +1,18 @@
 [
   {
+    "build": 101,
+    "date": "2026-10-24",
+    "title": "Gioca a ErnieTRIX",
+    "items": [
+      {
+        "icon": "gamecontroller.fill",
+        "title": "I pezzi pelosi di Ernie",
+        "detail": "Dì o scrivi «Voglio giocare a ErnieTRIX»: sette forme in pixel art, pad virtuale, livelli e record personale. Puoi aprirlo anche dal pannello laterale. Il gioco funziona sul telefono senza consumare token.",
+        "test": "Apri ErnieTRIX, tocca Gioca e prova frecce, rotazione e Caduta rapida. Chiudi il gioco o passa a un’altra app: la partita resta salvata e in pausa."
+      }
+    ]
+  },
+  {
     "build": 100,
     "date": "2026-10-23",
     "title": "La timeline direttamente in chat",

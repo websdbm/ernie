@@ -18,6 +18,9 @@ final class ConversationStore {
     var settings: LocalSettings
     /// Testo da proporre nel campo di scrittura (es. «Affina la ricetta …»): letto e azzerato dalla barra di input.
     var composerSuggestion: String?
+    /// Local game launch shared by typed input and speech transcription; never queued to the server.
+    private(set) var gameLaunchID: UUID?
+    let gameStorageID: String
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
     var onBlock: ((ContentBlock) -> Void)?
     /// Ogni messaggio in famiglia che entra nella chat (gli urgenti vanno a tutto schermo).
@@ -52,6 +55,7 @@ final class ConversationStore {
 
     init(credentials: Credentials, speaker: Speaker, inbox: InboxStore, settings: LocalSettings, transcript: TranscriptStore = TranscriptStore(), performanceQueue: PerformanceObservationQueue? = nil,
          deviceContext: @escaping () -> DeviceContextPayload? = { DeviceContextProvider.shared.context() }) {
+        self.gameStorageID = ErnieTRIXSession.storageID(for: credentials)
         self.deviceContext = deviceContext
         let api = ApiClient(credentials: credentials)
         let queue = performanceQueue ?? PerformanceObservationQueue(send: { try await api.performanceObservations($0) })
@@ -240,6 +244,12 @@ final class ConversationStore {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, !attachments.isEmpty { text = "Leggi questo allegato." }
         guard !text.isEmpty else { return }
+        if ErnieTRIXLaunch.matches(text, hasAttachments: !attachments.isEmpty) {
+            if speaker.isSpeaking { muteSpeech() }
+            if activeCorrelationId == nil { currentTrace = nil }
+            gameLaunchID = UUID()
+            return
+        }
         if canRecoverRequest, ["riprova", "riprendi", "riprova."].contains(text.lowercased()) {
             recoverLastRequest()
             return

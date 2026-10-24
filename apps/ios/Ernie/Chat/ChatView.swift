@@ -21,6 +21,7 @@ struct ChatView: View {
     @State private var showUsageAdmin = false
     @State private var showBrain = false
     @State private var showSSH = false
+    @State private var showGame = false
     @State private var listSheet: ListSheet?
     @State private var showRecipes = false
     @State private var showMedia = false
@@ -108,6 +109,14 @@ struct ChatView: View {
         .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
         .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
         .sheet(isPresented: $showBrain, onDismiss: sheetDidDismiss) { SecondBrainView() }
+        .fullScreenCover(isPresented: $showGame, onDismiss: sheetDidDismiss) {
+            if let conversation = model.conversation {
+                ErnieTRIXView(storageID: conversation.gameStorageID, costume: resolvedCostume)
+            }
+        }
+        .onChange(of: model.conversation?.gameLaunchID) { _, request in
+            if request != nil { openGame() }
+        }
         .sheet(isPresented: $showSSH, onDismiss: sheetDidDismiss) { SSHHomeView(store: model.sshStore) }
         .sheet(item: $listSheet, onDismiss: sheetDidDismiss) { destination in
             switch destination {
@@ -154,7 +163,7 @@ struct ChatView: View {
         if hasPresentedSheet {
             dismissingForLink = true
             showSettings = false; showUsage = false; showUsageAdmin = false
-            showBrain = false; showSSH = false; listSheet = nil
+            showBrain = false; showSSH = false; showGame = false; listSheet = nil
             showRecipes = false; showMedia = false; showReminders = false
             showAutomations = false; showSkills = false; showFamily = false
             showProfile = false; whatsNew = nil; debugIcons = false
@@ -181,7 +190,7 @@ struct ChatView: View {
     private var hasPresentedSheet: Bool {
         showSettings || showUsage || showUsageAdmin || showBrain || showSSH || listSheet != nil
         || showRecipes || showMedia || showReminders || showAutomations || showSkills
-        || showFamily || showProfile || whatsNew != nil || debugIcons
+        || showFamily || showProfile || whatsNew != nil || debugIcons || showGame
     }
 
     private func sheetDidDismiss() {
@@ -201,6 +210,7 @@ struct ChatView: View {
         switch destination {
         case .newConversation: model.newConversation()
         case .conversation(let id): model.conversation?.resume(sessionId: id)
+        case .ernietrix: openGame()
         case .ssh: showSSH = true
         case .todo: listSheet = .todo(nil)
         case .todoList(let id): listSheet = .todo(id)
@@ -219,6 +229,14 @@ struct ChatView: View {
             if model.profile?.capabilities?.usageAdmin == true { showUsageAdmin = true }
         case .whatsNew: whatsNew = Array(Changelog.load().prefix(3))
         }
+    }
+
+    private func openGame() {
+        panelOpen = false
+        composing = false
+        model.voice?.cancelListening()
+        model.conversation?.muteSpeech()
+        showGame = true
     }
 
     // MARK: barra in alto

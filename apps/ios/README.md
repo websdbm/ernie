@@ -432,3 +432,16 @@ Le novità automatiche non devono coprire un’apertura richiesta dal widget.
 La schermata Automazioni consulta `/v1/automations` con l’account attivo,
 esclude le chiavi `promemoria_`, distingue stati attivi/in pausa/disattivati
 e non esegue operazioni. Non decodifica o mostra segreti webhook.
+
+## ErnieTRIX (build 101)
+
+«Voglio giocare a ErnieTRIX», scritto o dettato, apre il gioco nativo sopra
+la chat; è disponibile anche nel pannello laterale. Motore Swift locale,
+rendering SpriteKit, texture di pelliccia in pixel art, pad con pressione
+prolungata, pausa automatica e checkpoint per account sul dispositivo.
+Non usa token durante la partita e non richiede modifiche backend.
+Specifiche e verifiche: [ErnieTRIX](../../docs/ui/ernietrix.md).
+Solo in Debug, `SIMCTL_CHILD_ERNIE_DEBUG_TRIX=1` apre una partita sintetica
+per la verifica in simulatore senza autenticazione; con
+`SIMCTL_CHILD_ERNIE_DEBUG_TRIX_COSTUME=borg` si verifica la variante verde.
+Questi hook non sono compilati nella build Release.
