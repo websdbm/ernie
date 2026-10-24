@@ -232,6 +232,71 @@ struct ErnieTRIXRulesTests {
         #expect(purple[center + 3] > 200)
         #expect(purple[3] == 0 && gold[3] == 0)
     }
+    @Test func initiallyPausedBoardStartsGravityAndResumes() async throws {
+        let name = "trix-start-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let session = ErnieTRIXSession(storageID: "start", defaults: defaults, seed: 99)
+        #expect(session.game.status == .paused)
+        let windowScene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = windowScene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView: ErnieTRIXView(session: session, costume: .borg))
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(400))
+        func findSceneView(_ view: UIView) -> SKView? {
+            if let sceneView = view as? SKView { return sceneView }
+            return view.subviews.compactMap(findSceneView).first
+        }
+        let sceneView = try #require(findSceneView(host.view))
+        let scene = try #require(sceneView.scene as? ErnieTRIXScene)
+        #expect(sceneView.isPaused)
+        let y = session.game.active.y
+        session.resume()
+        try await Task.sleep(for: .seconds(2))
+        #expect(!sceneView.isPaused && !scene.isPaused)
+        #expect(session.game.status == .playing)
+        #expect(session.game.active.y > y)
+        #expect(sceneView.texture(from: scene) != nil)
+        // Check the displayed board too: a non-nil offscreen texture alone did
+        // not catch the solid grey SKView seen in build 101.
+        let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        let center = sceneView.convert(CGPoint(x: sceneView.bounds.width * 0.55, y: sceneView.bounds.height * 0.525), to: host.view)
+        let pixel = try #require(image.cgImage?.cropping(to: CGRect(x: center.x * image.scale, y: center.y * image.scale, width: 1, height: 1)))
+        var rgba = [UInt8](repeating: 0, count: 4)
+        rgba.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+                                    bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        #expect(rgba[0] < 60 && rgba[1] < 60 && rgba[2] < 60)
+        try #require(image.pngData()).write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ernietrix-start-resumed.png"))
+        session.pause()
+        try await Task.sleep(for: .milliseconds(100))
+        let paused = session.game
+        try await Task.sleep(for: .seconds(1))
+        #expect(session.game == paused)
+        #expect(sceneView.isPaused)
+        session.resume()
+        try await Task.sleep(for: .seconds(2))
+        #expect(session.game.active.y > paused.active.y)
+        session.pause()
+        let restored = ErnieTRIXSession(storageID: "start", defaults: defaults)
+        #expect(restored.game == session.game)
+        let reopened = UIHostingController(rootView: ErnieTRIXView(session: restored, costume: .base))
+        window.rootViewController = reopened
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(restored.game.status == .paused)
+        let savedY = restored.game.active.y
+        restored.resume()
+        try await Task.sleep(for: .seconds(2))
+        #expect(restored.game.active.y > savedY)
+    }
     @Test func nativeLayoutControlsAndBackgroundPause() async throws {
         #expect(UIImage(named: "ErnieTRIXFur") != nil)
         let name = "trix-ui-\(UUID())"

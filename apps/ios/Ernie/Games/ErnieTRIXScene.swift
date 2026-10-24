@@ -78,6 +78,12 @@ import UIKit
         drawnRevision = session.revision
         render()
     }
+    override func didFinishUpdate() {
+        if session.game.status != .playing {
+            resetClock()
+            view?.isPaused = true
+        }
+    }
     private func render() {
         blocks.removeAllChildren()
         let game = session.game

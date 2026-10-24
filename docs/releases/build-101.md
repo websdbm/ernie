@@ -43,3 +43,11 @@ Specifiche: [ErnieTRIX](../ui/ernietrix.md).
 - Nessuna prova su iPhone fisico; layout e comandi verificati in simulatore.
 
 Il commit finale di documentazione non modifica i sorgenti della build.
+
+## Regressione rilevata dopo la distribuzione
+
+La prova grafica iniziale usava una sessione già attiva e non copriva il
+passaggio reale da pausa a «Gioca». La build 101 può quindi mostrare un campo
+grigio senza gravità: lo stato del gioco cambia ma `SpriteView` resta sospeso.
+La build 102 corregge il ciclo di vita e aggiunge la regressione nativa per
+avvio, rendering, gravità, pausa/ripresa e riapertura del salvataggio.

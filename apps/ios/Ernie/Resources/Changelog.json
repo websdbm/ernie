@@ -1,5 +1,18 @@
 [
   {
+    "build": 102,
+    "date": "2026-10-24",
+    "title": "ErnieTRIX: via libera ai pezzi",
+    "items": [
+      {
+        "icon": "gamecontroller.fill",
+        "title": "Campo visibile e discesa automatica",
+        "detail": "Corretto il campo grigio di ErnieTRIX: dopo Gioca i pezzi vengono disegnati e scendono automaticamente. Sistemata anche la ripresa dopo una pausa o la riapertura della partita.",
+        "test": "Apri ErnieTRIX, tocca Gioca e attendi senza usare le frecce: il pezzo scende da solo. Metti in pausa e riprendi per verificare che il gioco riparta."
+      }
+    ]
+  },
+  {
     "build": 101,
     "date": "2026-10-24",
     "title": "Gioca a ErnieTRIX",

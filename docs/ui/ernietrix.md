@@ -46,6 +46,13 @@ L'orso usa gli atlanti esistenti. Gli accenti seguono il costume selezionato;
 il campo resta scuro e i sette colori dei pezzi rimangono distinguibili.
 Riduci movimento disattiva il lampo decorativo delle righe eliminate.
 
+Dalla build 102 un `SKView` gestito da `UIViewRepresentable` presenta la scena
+e sincronizza esplicitamente avvio, pausa e ripresa. Disegna il primo frame
+anche quando la partita è in pausa, poi sospende il ciclo fino alla ripresa.
+Il clock viene azzerato a ogni transizione, evitando recuperi del tempo sospeso.
+`SpriteView` conservava invece la pausa iniziale e lasciava il campo grigio
+anche dopo «Gioca». La preview Debug parte ora in pausa come il flusso reale.
+
 La scena si ferma in pausa; al passaggio in background o alla perdita di
 attività dell'app la partita viene salvata e non riparte senza un tocco.
 La conversazione continua e la voce vengono fermate all'apertura del gioco.
@@ -70,9 +77,12 @@ e distinzione tra comandi di apertura e altre richieste.
 account, apertura testo/voce offline senza turno inviato.
 `ErnieTRIXViewTests`: layout nativo a 390 e 320 punti, palette classica/Borg,
 comandi touch/pressione prolungata, accessibilità e sospensione dell'app.
+Regressione 102: apertura inizialmente in pausa, avanzamento reale di SpriteKit
+senza comandi, pixel del campo visualizzato, pausa/ripresa e riapertura del
+salvataggio. Il test fallisce sulla build 101 (il pezzo resta alla stessa quota).
 
 Nessun deployment backend richiesto. Stato del rilascio in
-[build-101.md](../releases/build-101.md).
+[build-102.md](../releases/build-102.md).
 
 ## Resa nativa verificata
 

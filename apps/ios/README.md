@@ -45,7 +45,7 @@ cd apps/ios
 xcodebuild build -project Ernie.xcodeproj -scheme Ernie -configuration Release \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$HOME/Library/Caches/ernie-git-build" \
-  CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=101
+  CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=102
 ```
 
 Questo comando verifica la compilazione senza firmare né caricare una build.
@@ -53,8 +53,8 @@ Il repository contiene progetto Xcode, sorgenti condivisi, estensioni, test e
 sprite; non occorre copiare file da un archivio di rilascio. Il client usa il
 backend già distribuito: compilare l'app non richiede avviare il backend locale.
 
-La build di riferimento è la 101 (stato effettivo in [`build-101.md`](../../docs/releases/build-101.md)). Per un nuovo caricamento scegliere un numero
-libero maggiore di 101 e aggiungere prima la relativa voce in
+La build di riferimento è la 102 (stato effettivo in [`build-102.md`](../../docs/releases/build-102.md)). Per un nuovo caricamento scegliere un numero
+libero maggiore di 102 e aggiungere prima la relativa voce in
 `Ernie/Resources/Changelog.json`; passare lo stesso numero tramite
 `CURRENT_PROJECT_VERSION` a `scripts/testflight.sh`. Chiavi App Store Connect,
 certificati e profili di firma restano nella configurazione privata del Mac.
@@ -445,3 +445,8 @@ Solo in Debug, `SIMCTL_CHILD_ERNIE_DEBUG_TRIX=1` apre una partita sintetica
 per la verifica in simulatore senza autenticazione; con
 `SIMCTL_CHILD_ERNIE_DEBUG_TRIX_COSTUME=borg` si verifica la variante verde.
 Questi hook non sono compilati nella build Release.
+
+La build 102 corregge il ciclo di avvio/pausa di ErnieTRIX: un `SKView` gestito
+esplicitamente sostituisce `SpriteView`, che manteneva la pausa iniziale.
+Il test di regressione parte in pausa e verifica rendering, gravità reale,
+pausa/ripresa e riapertura del salvataggio.

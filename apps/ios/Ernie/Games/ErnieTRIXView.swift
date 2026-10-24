@@ -29,8 +29,7 @@ struct ErnieTRIXView: View {
                 statistics
                 Spacer(minLength: 0)
                 ZStack {
-                    SpriteView(scene: scene, isPaused: session.game.status != .playing,
-                               preferredFramesPerSecond: 60, options: [.ignoresSiblingOrder])
+                    TRIXSceneView(scene: scene, status: session.game.status)
                         .accessibilityLabel("Campo ErnieTRIX: 10 colonne e 20 righe")
                     if session.game.status != .playing { pauseOverlay }
                 }
@@ -61,7 +60,6 @@ struct ErnieTRIXView: View {
         .preferredColorScheme(.dark)
         .onAppear { scene.reduceMotion = reduceMotion }
         .onChange(of: reduceMotion) { scene.reduceMotion = reduceMotion }
-        .onChange(of: session.game.status) { scene.resetClock() }
         .onChange(of: scenePhase) { _, phase in if phase != .active { session.pause() } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in session.pause() }
         .onDisappear { session.pause() }
@@ -155,6 +153,44 @@ struct ErnieTRIXView: View {
     }
 }
 
+/// SpriteView can retain its initial paused state after the SwiftUI input changes.
+/// Own the SKView lifecycle explicitly, including its first frame while paused.
+private struct TRIXSceneView: UIViewRepresentable {
+    let scene: ErnieTRIXScene
+    let status: ErnieTRIXEngine.Status
+
+    func makeUIView(context: Context) -> TRIXSceneHost { TRIXSceneHost() }
+    func updateUIView(_ view: TRIXSceneHost, context: Context) {
+        view.configure(scene: scene, status: status)
+    }
+    static func dismantleUIView(_ view: TRIXSceneHost, coordinator: ()) {
+        view.isPaused = true
+        (view.scene as? ErnieTRIXScene)?.resetClock()
+        view.presentScene(nil)
+    }
+}
+
+private final class TRIXSceneHost: SKView {
+    private var playbackStatus: ErnieTRIXEngine.Status?
+
+    func configure(scene: ErnieTRIXScene, status: ErnieTRIXEngine.Status) {
+        if self.scene !== scene {
+            backgroundColor = scene.backgroundColor
+            preferredFramesPerSecond = 60
+            ignoresSiblingOrder = true
+            presentScene(scene)
+            playbackStatus = nil
+        }
+        guard playbackStatus != status else { return }
+        playbackStatus = status
+        scene.resetClock()
+        scene.isPaused = false
+        // Render at least one frame even on the initial paused screen. The scene
+        // stops the display loop after drawing if gameplay is still paused.
+        isPaused = false
+    }
+}
+
 private struct TRIXNextPiece: View {
     let kind: TRIXKind
     var body: some View {
@@ -241,7 +277,7 @@ struct ErnieTRIXDebugPreview: View {
         game.active = TRIXPiece(kind: .t, x: 3, y: 4)
         defaults.set(try? JSONEncoder().encode(TRIXSave(game: game, record: 1200)), forKey: "ernie.ernietrix.v1.preview")
         session = ErnieTRIXSession(storageID: "preview", defaults: defaults)
-        session.resume()
+        // Use the same paused start as the real game; do not bypass its lifecycle.
     }
     var body: some View { ErnieTRIXView(session: session, costume: costume) }
 }
