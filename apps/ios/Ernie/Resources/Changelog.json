@@ -1,5 +1,18 @@
 [
   {
+    "build": 103,
+    "date": "2026-10-24",
+    "title": "Il tuo diario personale",
+    "items": [
+      {
+        "icon": "book.closed.fill",
+        "title": "Uno spazio privato, cifrato",
+        "detail": "Apri Diario personale da Impostazioni → Area privata oppure scrivi «Apri diario». Sblocca con Face ID, conserva l’originale e autorizza separatamente testo riordinato e punti chiave. Copie cifrate con password per il recupero.",
+        "test": "Crea una pagina, poi riordina con AI confermando l’invio. Lascia l’app e riaprila: il diario richiede un nuovo sblocco. Per dettare contenuti riservati usa il microfono dentro il diario."
+      }
+    ]
+  },
+  {
     "build": 102,
     "date": "2026-10-24",
     "title": "ErnieTRIX: via libera ai pezzi",

@@ -19,6 +19,7 @@ final class ConversationStore {
     /// Testo da proporre nel campo di scrittura (es. «Affina la ricetta …»): letto e azzerato dalla barra di input.
     var composerSuggestion: String?
     /// Local game launch shared by typed input and speech transcription; never queued to the server.
+    var diaryLaunch: DiaryLaunch?
     private(set) var gameLaunchID: UUID?
     let gameStorageID: String
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
@@ -244,6 +245,12 @@ final class ConversationStore {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, !attachments.isEmpty { text = "Leggi questo allegato." }
         guard !text.isEmpty else { return }
+        if let launch = DiaryLaunch.parse(text) {
+            if speaker.isSpeaking { muteSpeech() }
+            if activeCorrelationId == nil { currentTrace = nil }
+            diaryLaunch = launch
+            return
+        }
         if ErnieTRIXLaunch.matches(text, hasAttachments: !attachments.isEmpty) {
             if speaker.isSpeaking { muteSpeech() }
             if activeCorrelationId == nil { currentTrace = nil }

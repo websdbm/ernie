@@ -47,7 +47,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Per scansionare documenti e aggiungere foto alla tua raccolta Media o ai messaggi in famiglia.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Conferma delle azioni sensibili: approvazioni e interruttore di emergenza.</string>
+	<string>Sblocca il diario personale e conferma le azioni sensibili.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Per raggiungere il tuo server Ernie quando è sulla stessa rete Wi-Fi.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

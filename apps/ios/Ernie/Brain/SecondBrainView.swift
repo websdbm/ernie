@@ -413,6 +413,7 @@ struct SecondBrainView: View {
     @State private var creating = false
     /// Foglio «Inoltra email al second brain» aperto.
     @State private var showInbox = false
+    @State private var showPrivateDiary = false
     /// Titolo della nota appena creata: si apre quando il foglio «Nuova nota» si chiude.
     @State private var openAfterCreate: String?
 
@@ -515,6 +516,7 @@ struct SecondBrainView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button { showPrivateDiary = true } label: { Label("Area privata · Diario", systemImage: "lock.fill") }
                         Button { showInbox = true } label: { Label("Inoltra email al second brain", systemImage: "envelope") }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -523,6 +525,7 @@ struct SecondBrainView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } }
             }
+            .fullScreenCover(isPresented: $showPrivateDiary) { DiaryEntrance() }
             .sheet(isPresented: $creating, onDismiss: { openCreatedNote() }) {
                 BrainNewNoteSheet { title in
                     openAfterCreate = title

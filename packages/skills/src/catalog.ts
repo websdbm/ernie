@@ -28,6 +28,20 @@ export interface SkillCatalogEntry {
 
 export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
+    id: 'diario_personale',
+    title: 'Diario personale',
+    icon: 'book.closed.fill',
+    tint: 'indigo',
+    summary: 'Diario cifrato sul dispositivo, AI soltanto con il tuo consenso.',
+    description:
+      'Scrivi pagine riservate conservate cifrate sul dispositivo. Dopo lo sblocco, puoi autorizzare una singola rielaborazione o un riepilogo AI: il testo selezionato viene inviato al servizio configurato, senza entrare nelle chat o nella memoria di Ernie. È distinto da «Cosa ho fatto», il riepilogo delle attività.',
+    kind: 'deterministic',
+    tools: [],
+    examples: [],
+    defaultAvailable: true,
+    defaultEnabled: false,
+  },
+  {
     id: 'ssh',
     title: 'Server e siti',
     icon: 'terminal',

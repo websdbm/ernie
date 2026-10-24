@@ -49,6 +49,7 @@ describe('catalogo delle skill', () => {
           documenti: false,
           ricordami: false,
           diario: false,
+          diario_personale: false,
           sentinelle: false,
           second_brain: false,
           salute: false,
@@ -66,6 +67,7 @@ describe('catalogo delle skill', () => {
           documenti: false,
           ricordami: false,
           diario: false,
+          diario_personale: false,
           sentinelle: false,
           second_brain: false,
           salute: false,
@@ -80,6 +82,7 @@ describe('catalogo delle skill', () => {
   it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
       'diario',
+      'diario_personale',
       'documenti',
       'messaggi',
       'portami',
@@ -99,6 +102,7 @@ describe('catalogo delle skill', () => {
           documenti: false,
           ricordami: false,
           diario: false,
+          diario_personale: false,
           sentinelle: false,
           second_brain: false,
           salute: false,
@@ -116,6 +120,7 @@ describe('catalogo delle skill', () => {
           documenti: false,
           ricordami: false,
           diario: false,
+          diario_personale: false,
           sentinelle: false,
           second_brain: false,
           salute: false,
@@ -136,6 +141,7 @@ describe('catalogo delle skill', () => {
             documenti: false,
             ricordami: false,
             diario: false,
+            diario_personale: false,
             sentinelle: false,
             second_brain: false,
             salute: false,
@@ -202,5 +208,29 @@ describe('skill «Documenti»', () => {
     ]);
     expect(s.instructions).toContain('document_summarize');
     for (const e of SKILL_CATALOG) expect(e.icon.length).toBeGreaterThan(0);
+  });
+});
+
+describe('diario personale riservato', () => {
+  it('è distinto dal riepilogo attività, opt-in e senza strumenti dell’agente', () => {
+    const diary = SKILL_CATALOG.find((s) => s.id === 'diario_personale');
+    expect(diary).toMatchObject({
+      title: 'Diario personale',
+      defaultEnabled: false,
+      kind: 'deterministic',
+      tools: [],
+      examples: [],
+    });
+    expect(enabledSkillIds({}).has('diario_personale')).toBe(false);
+    expect(enabledSkillIds({ skills: { diario_personale: true } }).has('diario_personale')).toBe(
+      true,
+    );
+    expect(
+      enabledSkillIds({
+        skills: { diario_personale: true },
+        skillsAvailable: { diario_personale: false },
+      }).has('diario_personale'),
+    ).toBe(false);
+    expect(SKILL_CATALOG.find((s) => s.id === 'diario')?.title).toBe('Cosa ho fatto');
   });
 });

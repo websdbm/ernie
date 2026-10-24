@@ -21,6 +21,7 @@ import {
   operatingPreferenceRoutes,
 } from './routes/operating-preferences.js';
 import { type PerformanceRoutesOptions, performanceRoutes } from './routes/performance.js';
+import { type PrivateDiaryRoutesOptions, privateDiaryRoutes } from './routes/private-diary.js';
 import { type ProfileRoutesOptions, profileRoutes } from './routes/profile.js';
 import { type RecipeRoutesOptions, recipeRoutes } from './routes/recipes.js';
 import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders.js';
@@ -35,6 +36,7 @@ import { type SshRoutesOptions, sshRoutes } from './ssh/routes.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
+  readonly privateDiary?: PrivateDiaryRoutesOptions;
   readonly operatingPreferences?: OperatingPreferenceRoutesOptions;
   readonly config: AppConfig;
   readonly logger: Logger;
@@ -150,6 +152,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.performance) await app.register(performanceRoutes, opts.performance);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);
+  if (opts.privateDiary) await app.register(privateDiaryRoutes, opts.privateDiary);
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
   if (opts.todo) await app.register(todoRoutes, opts.todo);
   if (opts.ssh) await app.register(sshRoutes, opts.ssh);

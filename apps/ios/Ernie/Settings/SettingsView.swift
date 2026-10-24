@@ -285,6 +285,9 @@ struct SettingsView: View {
                 } footer: {
                     Text("Le azioni per cui hai scelto «Consenti sempre». Gli invii verso l'esterno chiedono sempre conferma.")
                 }
+                Section("Area privata") {
+                    NavigationLink { DiaryEntrance() } label: { Label("Diario personale", systemImage: "book.closed.fill") }
+                }
                 Section("Diagnostica") {
                     NavigationLink("Latenza, voce e spike") { DiagnosticsView() }
                 }

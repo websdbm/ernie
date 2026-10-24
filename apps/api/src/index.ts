@@ -150,6 +150,7 @@ import {
 } from './operating-preferences.js';
 import { createPerformanceStore, type PerformanceObservation } from './performance.js';
 import { pickBrainPlace, placeFromNote } from './places.js';
+import { createPrivateDiaryService } from './private-diary.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { createSentinelStore } from './sentinels.js';
@@ -1006,6 +1007,18 @@ async function main(): Promise<void> {
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
+    privateDiary: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      service: createPrivateDiaryService({
+        ...(config.providers.openrouterApiKey ? { apiKey: config.providers.openrouterApiKey } : {}),
+        model: config.llm.models.standard,
+        loadSettings: loadUserSettings,
+        budget: createBudgetGuard(postgres.pool),
+        dailyBudgetUsd: config.llm.dailyBudgetUsd,
+        recorder: createLlmCallRecorder(postgres.pool, logger),
+      }),
+    },
     speech: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,

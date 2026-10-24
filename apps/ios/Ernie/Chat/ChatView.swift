@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var showBrain = false
     @State private var showSSH = false
     @State private var showGame = false
+    @State private var diaryLaunch: DiaryLaunch?
     @State private var listSheet: ListSheet?
     @State private var showRecipes = false
     @State private var showMedia = false
@@ -114,6 +115,18 @@ struct ChatView: View {
                 ErnieTRIXView(storageID: conversation.gameStorageID, costume: resolvedCostume)
             }
         }
+        .fullScreenCover(item: $diaryLaunch, onDismiss: sheetDidDismiss) { request in
+            DiaryEntrance(incoming: request.draft)
+                .onAppear { diaryLaunch?.draft = "" }
+        }
+        .onChange(of: model.conversation?.diaryLaunch) { _, request in
+            guard let request else { return }
+            panelOpen = false; composing = false
+            model.voice?.cancelListening(); model.conversation?.muteSpeech()
+            draft = ""
+            diaryLaunch = request
+            model.conversation?.diaryLaunch = nil
+        }
         .onChange(of: model.conversation?.gameLaunchID) { _, request in
             if request != nil { openGame() }
         }
@@ -138,7 +151,7 @@ struct ChatView: View {
             Changelog.markSeen()
             if !unseen.isEmpty {
                 try? await Task.sleep(for: .milliseconds(600))
-                guard !Task.isCancelled, !handledWidgetLink, model.pendingLink == nil else { return }
+                guard !Task.isCancelled, !handledWidgetLink, model.pendingLink == nil, !hasPresentedSheet else { return }
                 whatsNew = unseen
             }
         }
@@ -163,7 +176,7 @@ struct ChatView: View {
         if hasPresentedSheet {
             dismissingForLink = true
             showSettings = false; showUsage = false; showUsageAdmin = false
-            showBrain = false; showSSH = false; showGame = false; listSheet = nil
+            showBrain = false; showSSH = false; showGame = false; diaryLaunch = nil; listSheet = nil
             showRecipes = false; showMedia = false; showReminders = false
             showAutomations = false; showSkills = false; showFamily = false
             showProfile = false; whatsNew = nil; debugIcons = false
@@ -190,7 +203,7 @@ struct ChatView: View {
     private var hasPresentedSheet: Bool {
         showSettings || showUsage || showUsageAdmin || showBrain || showSSH || listSheet != nil
         || showRecipes || showMedia || showReminders || showAutomations || showSkills
-        || showFamily || showProfile || whatsNew != nil || debugIcons || showGame
+        || showFamily || showProfile || whatsNew != nil || debugIcons || showGame || diaryLaunch != nil
     }
 
     private func sheetDidDismiss() {

@@ -47,7 +47,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSMicrophoneUsageDescription: "Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi."
         NSSpeechRecognitionUsageDescription: "La trascrizione avviene sul dispositivo; al tuo server Ernie arriva solo il testo."
-        NSFaceIDUsageDescription: "Conferma delle azioni sensibili: approvazioni e interruttore di emergenza."
+        NSFaceIDUsageDescription: "Sblocca il diario personale e conferma le azioni sensibili."
         NSCameraUsageDescription: "Per scansionare documenti e aggiungere foto alla tua raccolta Media o ai messaggi in famiglia."
         NSPhotoLibraryAddUsageDescription: "Per salvare nella galleria gli schemi e i riassunti che esporti."
         NSLocationWhenInUseUsageDescription: "Ernie usa la tua posizione approssimata, solo mentre usi l'app, per rispondere su meteo, luoghi vicini e orari senza chiederti dove sei."
@@ -71,7 +71,7 @@ targets:
         # Gruppo app condiviso con il widget dei promemoria (istantanea JSON).
         com.apple.security.application-groups: [group.com.websdbm.ernie]
         # Credenziali nel Keychain condiviso con il foglio «Condividi con Ernie» (vedi Keychain.swift).
-        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie"]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.websdbm.ernie", "$(AppIdentifierPrefix)com.websdbm.ernie.private-diary"]
         # Messaggi in famiglia ben evidenti sul blocco: urgenti (restano in cima, passano i Full immersion) e
         # notifiche di comunicazione (richiesta dell'utente, 15 ott 2026).
         com.apple.developer.usernotifications.time-sensitive: true
@@ -82,7 +82,7 @@ targets:
         PRODUCT_NAME: Ernie
         TARGETED_DEVICE_FAMILY: "1"
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "102"
+        CURRENT_PROJECT_VERSION: "103"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -131,7 +131,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.widgets
         PRODUCT_NAME: ErnieWidgets
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "102"
+        CURRENT_PROJECT_VERSION: "103"
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
@@ -171,7 +171,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.share
         PRODUCT_NAME: ErnieShare
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "102"
+        CURRENT_PROJECT_VERSION: "103"
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
@@ -206,7 +206,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.websdbm.ernie.notifications
         PRODUCT_NAME: ErnieNotifications
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "102"
+        CURRENT_PROJECT_VERSION: "103"
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
