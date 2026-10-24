@@ -1,6 +1,7 @@
 # Build 102 — ErnieTRIX: campo e gravità
 
-24 ottobre 2026. Rilascio in preparazione; distribuzione non ancora confermata.
+24 ottobre 2026. **Disponibile su TestFlight**, verificata alle 04:20 CEST.
+`VALID`, `IN_BETA_TESTING`, gruppo «Interni» e note italiane verificati.
 
 ## Correzione
 
@@ -29,5 +30,22 @@ La preview Debug usa lo stesso avvio in pausa del gioco reale.
 
 ## Tracciabilità
 
-Il commit dei sorgenti, la verifica GitHub, l'archivio Mac Studio, le firme e
-lo stato effettivo di TestFlight vengono registrati dopo i rispettivi controlli.
+- Commit sorgenti: `7d642f02c54b49c3bdd0ff97d94f6e9ab7c9da8c`, pubblicato e
+  verificato su GitHub `main` prima di compilare.
+- Mac Studio: checkout pulito aggiornato in fast-forward; snapshot `git archive`
+  del commit e SHA-256 verificati per tutti i 264 file iOS.
+- Archive Release iPhone ed export completati. Firme Apple Distribution,
+  profili ed entitlement verificati per app e tre estensioni, tutte build 102.
+- Verificati il nuovo renderer `TRIXSceneHost`, lo sprite `ErnieTRIXFur`,
+  changelog 102 e assenza degli hook Debug nel binario Release.
+- Verificati anche i pixel dei 536 fotogrammi logici degli avatar condivisi.
+- SHA-256 IPA esportata:
+  `d49602c5e60ea2ae6582941823200ee1cbca736fd85e67bb5e2341fabb5f2c94`.
+- Evidenze private sul Mac Studio:
+  `/Users/alessandro/Library/Caches/ernie-builds/build-102-20261024-ernietrix-pause`.
+- Upload completato con codice 0. App Store Connect build ID:
+  `7e859320-a87f-41b8-8ff1-9705d9cef536`.
+- TestFlight: `VALID`, `IN_BETA_TESTING`; gruppo «Interni» con accesso
+  alla build, note italiane conformi al changelog (verifica 04:20 CEST).
+
+Il commit finale della documentazione non modifica i sorgenti della build.
