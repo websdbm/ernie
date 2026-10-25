@@ -1,7 +1,9 @@
 # Build 105 — Precisazioni e messaggi riusabili
 
-25 ottobre 2026. **Preparata** sul Mac Studio; caricamento su TestFlight, pacchetto ad hoc per Giorgio e
-pubblicazione del server in attesa del via libera dell'utente (questa nota si aggiorna a cose fatte).
+25 ottobre 2026. **Caricata su TestFlight** dal Mac Studio («Cosa testare» scritto dalle novità) e **installata ad
+hoc sull'iPhone di Giorgio** (verificata: Bundle Version 105). Server: pubblicazione approvata dall'utente ma non
+ancora eseguita (bloccata dal controllo dei permessi, in attesa di conferma esplicita); fino ad allora l'app 105 usa il
+server v1.9 e le precisazioni ripiegano sulla coda.
 
 ## Contenuto
 
@@ -39,5 +41,9 @@ in [HANDOFF](../HANDOFF.md).
 
 ## Tracciabilità
 
-Da completare all'archiviazione: commit dei sorgenti pubblicato su GitHub `main`, `CURRENT_PROJECT_VERSION=105` nei
-quattro target di `project.yml`.
+- Commit dei sorgenti `ab4c1dd`, pubblicato e verificato su GitHub `main` prima dell'archiviazione; archiviato dal
+  checkout pulito del Mac Studio con `CURRENT_PROJECT_VERSION=105` (anche in `project.yml`, quattro target).
+- iPhone di Giorgio: pacchetto ad hoc dallo stesso commit (SHA-256
+  `c5433b48930dced21b09f31d0a7dc217f01a97eb58934da891760cc4968c4481`), installato via devicectl il 25 ott.
+
+Il commit della documentazione finale non modifica i sorgenti della build.

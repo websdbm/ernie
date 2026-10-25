@@ -22,9 +22,9 @@ durante la risposta, messaggi riusabili, chiusura delle voci aperte della revisi
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **104** `VALID` dal 25 ott ([nota](releases/build-104.md)); **105** nel repository, da caricare con il via libera dell'utente |
-| iPhone di Giorgio (ad hoc, account figlio) | build **102** (24 ott). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | commit **4d9aa7d** (build 104); vedi «Server» |
+| App su TestFlight | build **105** caricata il 25 ott ([nota](releases/build-105.md)), commit `ab4c1dd` |
+| iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
+| Server staging3 (`/srv/staging3/projects/ernie`) | commit **4d9aa7d** (build 104). Pubblicazione di `ab4c1dd` approvata dall'utente ma bloccata dal controllo dei permessi: da eseguire (copia in `/srv/staging3/backups/ernie-pre-105-20261025`, immagine `ernie-app:pre-105`); vedi «Server» |
 | Migrazioni | nel repository fino alla **0048**; sul server fino alla **0046** (0047 coda risorse Brain con tentativi, 0048 recupero promemoria Todo: si applicano pubblicando la 105) |
 | Protocollo | v1.**10** nel repository (`user.steer` / `assistant.steer`); il server pubblicato è alla v1.9. L'app 105 usa le precisazioni solo se il server dichiara la v1.10, altrimenti mette il messaggio in coda come prima |
 
