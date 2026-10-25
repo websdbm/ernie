@@ -1,5 +1,36 @@
 [
   {
+    "build": 105,
+    "date": "2026-10-25",
+    "title": "Precisazioni e messaggi riusabili",
+    "items": [
+      {
+        "icon": "text.bubble",
+        "title": "Precisa mentre Ernie risponde",
+        "detail": "Se scrivi o detti qualcosa mentre Ernie sta ancora lavorando, la precisazione entra nella richiesta in corso senza fermarla. Se Ernie ha già finito, parte da sola come nuovo messaggio.",
+        "test": "Chiedi una ricerca sul web e, mentre cerca, scrivi «rispondi in una frase»."
+      },
+      {
+        "icon": "arrow.uturn.up",
+        "title": "Rimanda o modifica i messaggi vecchi",
+        "detail": "Tieni premuto un tuo messaggio: «Rimanda» lo rispedisce così com'è (anche un link), «Modifica e rimanda» lo rimette nel campo di scrittura, «Copia» lo copia.",
+        "test": "Tieni premuto il link di un video già mandato e tocca «Rimanda»."
+      },
+      {
+        "icon": "lock.doc",
+        "title": "Diario più completo",
+        "detail": "Si apre anche senza rete, puoi eliminare una pagina o l'intero diario, la dettatura non cancella più il testo scritto a mano e scrivere è più fluido.",
+        "test": "Elimina una pagina di prova dal diario."
+      },
+      {
+        "icon": "speedometer",
+        "title": "Più fluida",
+        "detail": "Pannello laterale, foto e diario non bloccano più l'interfaccia: il lavoro pesante avviene in secondo piano.",
+        "test": "Apri il pannello laterale con molte conversazioni salvate."
+      }
+    ]
+  },
+  {
     "build": 104,
     "date": "2026-10-25",
     "title": "Più stabile e più riservato",
