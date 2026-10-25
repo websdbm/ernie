@@ -69,11 +69,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// Manda la risposta scritta nella notifica a chi ha scritto, come risposta al suo messaggio. Usa le credenziali
     /// del Keychain: l'app può essere stata avviata in background solo per questo.
-    nonisolated static func sendReply(_ text: String, info: [AnyHashable: Any]) async -> FamilyMessageBlock? {
+    nonisolated static func sendReply(_ text: String, to: String, replyTo id: String) async -> FamilyMessageBlock? {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty, let data = info["ernie"] as? [String: Any],
-              let to = data["from"] as? String, let id = data["id"] as? String,
-              let credentials = Credentials.load() else { return nil }
+        guard !body.isEmpty, let credentials = Credentials.load() else { return nil }
         let api = ApiClient(credentials: credentials)
         let sent = try? await api.sendFamilyMessage(to: to, text: String(body.prefix(2000)), image: nil, replyTo: id)
         _ = try? await api.markFamilyMessagesRead(ids: [id])
@@ -89,26 +87,58 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         Log.push.warning("registrazione APNs fallita: \(error.localizedDescription, privacy: .public)")
     }
 
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        let info = notification.request.content.userInfo
-        let family = Self.isFamilyMessage(info)
-        await MainActor.run { model?.inbox.scheduleRefresh() }
-        if family { await model?.syncFamilyMessages(urgentId: Self.urgentId(info)) }
-        return [.banner, .sound, .list]
+    /// Dati della notifica che servono dopo, estratti subito: oggetti e dizionari di UserNotifications non sono Sendable.
+    private struct PushInfo: Sendable {
+        let family: Bool
+        let urgentId: String?
+        let from: String?
+        let messageId: String?
+
+        init(_ info: [AnyHashable: Any]) {
+            let data = info["ernie"] as? [String: Any]
+            family = AppDelegate.isFamilyMessage(info)
+            urgentId = AppDelegate.urgentId(info)
+            from = data?["from"] as? String
+            messageId = data?["id"] as? String
+        }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let info = response.notification.request.content.userInfo
-        let family = Self.isFamilyMessage(info)
-        if family, response.actionIdentifier == Self.familyReplyAction,
-           let reply = (response as? UNTextInputNotificationResponse)?.userText {
-            if let sent = await Self.sendReply(reply, info: info) { FamilyLatest(block: sent)?.saveAndReload() }
+    // Versioni con il completamento esplicito, chiamato sul thread principale. Con le varianti `async` nonisolated
+    // iOS chiudeva la consegna su un thread di Swift Concurrency e UIKit aggiornava l'istantanea dell'app fuori dal
+    // main: l'app si chiudeva al tocco su «… ha letto» (crash 16 ott 2026, NSAssertion in
+    // `_updateSnapshotAndStateRestorationWithAction`).
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let push = PushInfo(notification.request.content.userInfo)
+        nonisolated(unsafe) let done = completionHandler
+        Task { @MainActor in
+            model?.inbox.scheduleRefresh()
+            done([.banner, .sound, .list])
+            if push.family { await model?.syncFamilyMessages(urgentId: push.urgentId) }
         }
-        await MainActor.run { model?.inbox.scheduleRefresh() }
-        if family { await model?.syncFamilyMessages(urgentId: Self.urgentId(info)) }
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let push = PushInfo(response.notification.request.content.userInfo)
+        let reply = response.actionIdentifier == Self.familyReplyAction
+            ? (response as? UNTextInputNotificationResponse)?.userText : nil
+        nonisolated(unsafe) let done = completionHandler
+        Task { @MainActor in
+            if push.family, let reply, let from = push.from, let id = push.messageId,
+               let sent = await Self.sendReply(reply, to: from, replyTo: id) {
+                FamilyLatest(block: sent)?.saveAndReload()
+            }
+            model?.inbox.scheduleRefresh()
+            if push.family { await model?.syncFamilyMessages(urgentId: push.urgentId) }
+            done()
+        }
     }
 
     /// Notifica di un messaggio in famiglia (dati sotto la chiave `ernie`).

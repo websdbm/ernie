@@ -3,6 +3,7 @@ import { ContentBlock, TodoItem, TodoList, TodoSlot } from '@ernie/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
+  checkModelOffsets,
   createTodoTools,
   type TodoRepository,
   type TodoSaveInput,
@@ -195,6 +196,35 @@ describe('Todo canonical hierarchy and schedule', () => {
       'day_mismatch',
     );
     expect(validateTodoSnapshot(list([], { day: '2020-01-01' })).day).toBe('2020-01-01');
+  });
+  it('orari del modello: rifiuta la confusione del cambio dell’ora, non gli altri casi', () => {
+    const at = (start: string, end: string) =>
+      TodoSlot.parse({ id: randomUUID(), startAt: start, endAt: end });
+    const check = (input: TodoSaveInput) => {
+      try {
+        checkModelOffsets(input);
+        return null;
+      } catch (e) {
+        return e instanceof TodoValidationError ? e.code : String(e);
+      }
+    };
+    const one = (start: string, end: string, theDay = '2026-10-25') =>
+      list([item('Palestra', { slots: [at(start, end)] })], { day: theDay });
+    // 25 ottobre 2026, dopo le 3: Roma è a +01:00; «+02:00» è lo scostamento di ieri.
+    expect(check(one('2026-10-25T18:00:00+02:00', '2026-10-25T19:00:00+02:00'))).toBe(
+      'offset_mismatch',
+    );
+    expect(check(one('2026-10-25T18:00:00+01:00', '2026-10-25T19:00:00+01:00'))).toBeNull();
+    expect(check(one('2026-10-25T01:00:00+02:00', '2026-10-25T01:30:00+02:00'))).toBeNull();
+    // UTC esplicito e «Z» sono istanti certi.
+    expect(check(one('2026-10-25T17:00:00+00:00', '2026-10-25T18:00:00+00:00'))).toBeNull();
+    expect(check(one('2026-10-25T17:00:00Z', '2026-10-25T18:00:00Z'))).toBeNull();
+    // 28 marzo 2027: le 2:30 non esistono, messaggio dedicato invece di un giro senza fine.
+    expect(check(one('2027-03-28T02:30:00+01:00', '2027-03-28T03:30:00+02:00', '2027-03-28'))).toBe(
+      'nonexistent_time',
+    );
+    // La validazione comune (usata anche dall'app) non blocca le liste già salvate.
+    expect(code(one('2026-10-25T18:00:00+02:00', '2026-10-25T19:00:00+02:00'))).toBeNull();
   });
 });
 

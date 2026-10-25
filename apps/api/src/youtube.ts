@@ -25,8 +25,10 @@ export const VideoAnalysis = z.object({
       title: z.string().min(1).max(120),
       ingredients: z.array(z.string().min(1).max(120)).min(1).max(40),
       steps: z.array(z.string().min(1).max(500)).max(20),
-      time: z.string().max(40).nullable(),
-      servings: z.string().max(40).nullable(),
+      // 120: il prompt chiede «Cottura: … » con la nota sul tempo totale, che superava i 40 caratteri e faceva
+      // scartare l'intera analisi (25 ott 2026, riprodotto 3 volte su 3).
+      time: z.string().max(120).nullable(),
+      servings: z.string().max(120).nullable(),
     })
     .nullable(),
   evidence: z
@@ -47,6 +49,40 @@ Riassumi il contenuto osservato. Se contiene una ricetta, estrai ingredienti, do
 Non ricavare una ricetta dal solo titolo o da conoscenze generali. Un video su scienza, viaggi, notizie, manutenzione, sport o qualsiasi altro argomento non culinario è un risultato valido: status=analyzed, recipe=null e un riassunto utile e autonomo, con i punti principali. Distingui le affermazioni dell'autore da fatti verificati. Per gli ingredienti senza dose, ometti la dose: non aggiungere neppure "q.b." se non presente. Non confondere durata del video e tempo di preparazione. Usa null per tempi o porzioni non indicati; evidenzia in missing ciò che manca. Escludi pubblicità e codici sconto dalla ricetta.
 Controlla anche le scritte che compaiono nei passaggi successivi: se un ingrediente ricompare con una nuova dose (es. sale per marinatura e sale per panatura), mantieni entrambe le dosi e specifica a quale preparazione appartengono. Non sommarle e non eliminarle come duplicati. Se è indicato soltanto il tempo di cottura, scrivi "Cottura: ..." in time e segnala che manca il tempo totale.
 Fornisci alcune evidenze con fonte e timestamp (solo quando effettivamente rilevabile). Se il video non è accessibile, status=unavailable, recipe=null, spiegazione concreta: non simulare di averlo visto. Se non è una ricetta, recipe=null. Non chiedere foto/PDF quando hai un URL funzionante.`;
+
+/**
+ * Il modello non rispetta sempre maxLength/maxItems dello schema: si accorcia ciò che sfora invece di scartare tutta
+ * la risposta per un campo secondario. Struttura e tipi restano controllati da VideoAnalysis.
+ */
+export function clampVideoAnalysis(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const cut = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : v);
+  const list = (v: unknown, items: number, max: number) =>
+    Array.isArray(v) ? v.slice(0, items).map((x) => cut(x, max)) : v;
+  const o = { ...(raw as Record<string, unknown>) };
+  o.summary = cut(o.summary, 2000);
+  if (o.recipe && typeof o.recipe === 'object') {
+    const r = { ...(o.recipe as Record<string, unknown>) };
+    r.title = cut(r.title, 120);
+    r.ingredients = list(r.ingredients, 40, 120);
+    r.steps = list(r.steps, 20, 500);
+    r.time = cut(r.time, 120);
+    r.servings = cut(r.servings, 120);
+    o.recipe = r;
+  }
+  if (Array.isArray(o.evidence))
+    o.evidence = o.evidence.slice(0, 15).map((e) =>
+      e && typeof e === 'object'
+        ? {
+            ...(e as Record<string, unknown>),
+            timestamp: cut((e as Record<string, unknown>).timestamp, 12),
+            detail: cut((e as Record<string, unknown>).detail, 500),
+          }
+        : e,
+    );
+  o.missing = list(o.missing, 20, 300);
+  return o;
+}
 
 const num = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : 0);
 
@@ -206,7 +242,9 @@ export function createYouTubeTool(deps: {
           'video_incomplete',
         );
       try {
-        const analysis = VideoAnalysis.parse(JSON.parse(json.choices[0]?.message?.content ?? ''));
+        const analysis = VideoAnalysis.parse(
+          clampVideoAnalysis(JSON.parse(json.choices[0]?.message?.content ?? '')),
+        );
         if (analysis.status === 'unavailable') analysis.recipe = null;
         return analysis;
       } catch {

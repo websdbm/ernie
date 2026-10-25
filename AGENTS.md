@@ -1,5 +1,12 @@
 # Regole operative del progetto Ernie
 
+## Handoff sempre aggiornato
+
+Sul progetto lavorano più agenti (Mac Studio e Mac dell'ufficio). Prima di iniziare: `git fetch`, leggere
+[docs/HANDOFF.md](docs/HANDOFF.md) e l'ultima nota in `docs/releases/`. A fine sessione aggiornare `docs/HANDOFF.md`
+(stato pubblicato, cosa è cambiato, lavori aperti) e pubblicarlo su GitHub insieme alle modifiche: è una richiesta
+dell'utente. Il server si aggiorna da git, non copiando file (vedi HANDOFF, «Server»).
+
 ## Ogni nuova build deve essere riproducibile da GitHub
 
 Questa regola è richiesta dall'utente e vale per ogni aggiornamento di build

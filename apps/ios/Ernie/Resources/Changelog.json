@@ -1,5 +1,36 @@
 [
   {
+    "build": 104,
+    "date": "2026-10-25",
+    "title": "Più stabile e più riservato",
+    "items": [
+      {
+        "icon": "checkmark.shield",
+        "title": "Niente più chiusure inattese",
+        "detail": "Corretti tre crash: al tocco sulla notifica «… ha letto» di un messaggio urgente, alla dettatura nel diario e nella prova vocale della Diagnostica.",
+        "test": "Manda un urgente a un figlio e tocca la notifica di conferma; prova «Detta sul dispositivo» nel diario."
+      },
+      {
+        "icon": "lock.doc",
+        "title": "Diario più riservato",
+        "detail": "Una pagina che nomina il «diario operativo» resta nel diario e non va in chat. Ripristinare una copia a diario bloccato unisce le pagine invece di sostituirle; si sostituisce solo se Face ID è cambiato.",
+        "test": "Scrivi nel diario una frase che contiene «diario operativo»."
+      },
+      {
+        "icon": "play.rectangle",
+        "title": "Ricette dai video YouTube",
+        "detail": "Le ricette con un tempo di cottura descritto a parole non vengono più scartate con «dati non leggibili».",
+        "test": "Manda a Ernie lo stesso Short di cucina di stamattina."
+      },
+      {
+        "icon": "clock.arrow.circlepath",
+        "title": "Orari giusti dopo il cambio dell'ora",
+        "detail": "Le attività programmate da Ernie dopo il 25 ottobre non suonano più un'ora prima.",
+        "test": "Chiedi di programmare un'attività per domani alle 18 e controlla l'orario."
+      }
+    ]
+  },
+  {
     "build": 103,
     "date": "2026-10-24",
     "title": "Il tuo diario personale",

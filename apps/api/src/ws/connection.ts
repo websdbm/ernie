@@ -451,6 +451,8 @@ export class ClientConnection {
       );
     } catch (err) {
       if (err instanceof SessionForbiddenError) {
+        // Dopo un riaggancio `replaying` era rimasto vero: l'errore si salvava senza arrivare al client.
+        this.replaying = false;
         await this.sendError(
           'session_forbidden',
           'Sessione non disponibile',

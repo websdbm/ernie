@@ -191,7 +191,15 @@ export function createBrainResourceSync(opts: {
                 source: job.kind === 'media' ? 'foto' : 'app',
                 body,
                 links: [...links].sort(),
-                ...(location?.capturedAt ? { refersFrom: location.capturedAt.slice(0, 10) } : {}),
+                // Il telefono manda l'ora di scatto in UTC: il giorno si calcola a Roma (una foto all'1:30 del 2 luglio
+                // non deve finire il 1°).
+                ...(location?.capturedAt
+                  ? {
+                      refersFrom: new Intl.DateTimeFormat('en-CA', {
+                        timeZone: 'Europe/Rome',
+                      }).format(new Date(location.capturedAt)),
+                    }
+                  : {}),
                 ...(location ? { coords: [location.lat, location.lon] as const } : {}),
                 ...(geoPlace ? { place: geoPlace.title } : {}),
               });

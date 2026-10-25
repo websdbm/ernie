@@ -66,6 +66,8 @@ private final class DiaryNoRedirect: NSObject, URLSessionTaskDelegate, Sendable 
     @ObservationIgnored private let scope: String
     @ObservationIgnored private let keyAccess: (String) -> any DiaryKeyAccess
     var isUnlocked: Bool { document != nil && key != nil }
+    /// L'ultimo sblocco è fallito perché la chiave non si apre più: l'unico caso in cui il ripristino sostituisce.
+    private(set) var keyInvalidated = false
     var exists: Bool { FileManager.default.fileExists(atPath: file.path) }
 
     init(scope: String, directory: URL? = nil, keyAccess: ((String) -> any DiaryKeyAccess)? = nil) {
@@ -94,8 +96,10 @@ private final class DiaryNoRedirect: NSObject, URLSessionTaskDelegate, Sendable 
             self.key = key; self.keyID = identifier
             try persist(document)
             self.document = document
+            keyInvalidated = false
         } catch {
             key = nil; document = nil
+            keyInvalidated = (error as? DiaryError) == .keyInvalidated
             self.error = (error as? DiaryError)?.errorDescription ?? DiaryError.unavailable.errorDescription
         }
     }
@@ -194,6 +198,13 @@ private final class DiaryNoRedirect: NSObject, URLSessionTaskDelegate, Sendable 
     /// the backup. A missing biometric key never causes silent journal deletion.
     func restoreBackup(_ data: Data, password: String) async throws {
         let restored = try DiaryCrypto.restore(data, password: password)
+        // Diario già presente ma bloccato: prima si prova a sbloccarlo e si UNISCE la copia. Si sostituisce solo se
+        // la sua chiave non si apre più (biometria cambiata); con Face ID annullato non si tocca niente. Prima un
+        // annullamento portava a sostituire un diario integro con la copia, magari più vecchia (revisione 25 ott 2026).
+        if !isUnlocked, exists {
+            await unlock()
+            if !isUnlocked, !keyInvalidated { throw DiaryError.locked }
+        }
         let token = generation
         if isUnlocked, var current = document {
             let ids = Set(current.entries.map(\.id))

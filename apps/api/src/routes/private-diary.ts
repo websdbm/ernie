@@ -16,11 +16,18 @@ export async function privateDiaryRoutes(app: FastifyInstance, opts: PrivateDiar
   if (!app.hasRequestDecorator('auth')) app.decorateRequest('auth', null);
   await app.register(async (api) => {
     // Override the parent's logger/error handler even for JSON parsing, auth and schema failures.
-    api.setErrorHandler((_error, _req, reply) =>
-      reply
-        .code(400)
-        .send({ error: 'invalid_request', message: 'Richiesta del diario non valida.' }),
-    );
+    // Mai il corpo nei log. Gli errori del server (database o autenticazione irraggiungibili) restano 503: con un 400
+    // l'app direbbe «richiesta non valida» e non riproverebbe.
+    api.setErrorHandler((error: { statusCode?: number }, _req, reply) => {
+      const status = error.statusCode;
+      if (status === undefined || status >= 500)
+        return reply
+          .code(503)
+          .send({ error: 'unavailable', message: 'Diario non disponibile, riprova tra poco.' });
+      return reply
+        .code(status === 401 ? 401 : 400)
+        .send({ error: 'invalid_request', message: 'Richiesta del diario non valida.' });
+    });
     api.addHook('onSend', async (_req, reply) => {
       reply.header('Cache-Control', 'no-store');
     });

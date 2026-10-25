@@ -36,7 +36,10 @@ import CommonCrypto
         let result = SecItemCopyMatching(query as CFDictionary, &value)
         if result == errSecSuccess, let data = value as? Data, data.count == 32 { return SymmetricKey(data: data) }
         // Never silently replace a missing/invalidated key for an existing vault.
-        guard result == errSecItemNotFound, !existingVault else { throw DiaryError.unavailable }
+        // Chiave sparita per un diario che esiste: la biometria è cambiata (.biometryCurrentSet). Errore distinto, così
+        // solo questo caso porta al ripristino che sostituisce il diario.
+        if result == errSecItemNotFound, existingVault { throw DiaryError.keyInvalidated }
+        guard result == errSecItemNotFound else { throw DiaryError.unavailable }
         guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, .biometryCurrentSet, nil) else { throw DiaryError.unavailable }
         let key = SymmetricKey(size: .bits256)
         query.removeValue(forKey: kSecReturnData as String)

@@ -44,11 +44,12 @@ struct DiaryDocument: Codable, Sendable, Equatable {
 }
 
 enum DiaryError: LocalizedError {
-    case locked, unavailable, invalidArchive, writeFailed, consentRequired, tooLarge, insecureServer
+    case locked, unavailable, keyInvalidated, invalidArchive, writeFailed, consentRequired, tooLarge, insecureServer
     var errorDescription: String? {
         switch self {
         case .locked: "Sblocca il diario per continuare."
-        case .unavailable: "Sblocco non disponibile. Servono Face ID o Touch ID configurati. Se hai cambiato la biometria, ripristina una copia cifrata."
+        case .unavailable: "Sblocco non riuscito. Servono Face ID o Touch ID configurati."
+        case .keyInvalidated: "La chiave del diario non è più valida (Face ID o Touch ID cambiati). Ripristina una copia cifrata."
         case .invalidArchive: "Copia non valida, password errata o dati alterati. Il diario attuale non è stato sostituito."
         case .writeFailed: "Non riesco a salvare il diario. Controlla lo spazio disponibile prima di continuare."
         case .consentRequired: "L’invio all’AI richiede la tua conferma per questa selezione."
@@ -83,8 +84,13 @@ struct DiaryLaunch: Identifiable, Equatable {
     /// disabled/unconfigured diary opens its locked gate rather than leaking text.
     static func parse(_ input: String) -> DiaryLaunch? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.range(of: #"(?i)diario\s+(?:delle\s+attività|attività|operativo)"#, options: .regularExpression) != nil { return nil }
-        let pattern = #"(?is)^(?:ernie[,\s]+)?(?:(?:apri|mostra|avvia)\s+(?:il\s+|mio\s+|il\s+mio\s+)?diario\b(?:\s+personale)?(?:[,.!\s]+(?:scrivi|scriviamo))?|(?:scrivi|annota|aggiungi)\s+(?:nel|sul|al)\s+(?:mio\s+)?diario\b(?:\s+personale)?|diario\s+personale)\s*[:,.!]?\s*(.*)$"#
+        // «Diario delle attività / operativo» è un'altra funzione: si esclude solo subito dopo la parola diario del
+        // comando. Prima l'esclusione guardava tutto il testo e «scrivi nel diario: … il diario operativo …» finiva
+        // in chat e al server (revisione del 25 ott 2026).
+        let notOperational = #"(?!\s+(?:delle\s+)?attivit[aà]\b|\s+operativo\b)"#
+        let pattern = #"(?is)^(?:ernie[,\s]+)?(?:(?:apri|mostra|avvia)\s+(?:il\s+|mio\s+|il\s+mio\s+)?diario\b"# + notOperational
+            + #"(?:\s+personale)?(?:[,.!\s]+(?:scrivi|scriviamo))?|(?:scrivi|annota|aggiungi)\s+(?:nel|sul|al)\s+(?:mio\s+)?diario\b"#
+            + notOperational + #"(?:\s+personale)?|diario\s+personale)\s*[:,.!]?\s*(.*)$"#
         guard let re = try? NSRegularExpression(pattern: pattern),
               let match = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let range = Range(match.range(at: 1), in: text) else { return nil }

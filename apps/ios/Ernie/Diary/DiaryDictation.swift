@@ -25,7 +25,9 @@ import Speech
         starter = Task { [weak self, weak store] in
             guard let self, let store else { return }
             let permission = await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { status in continuation.resume(returning: status == .authorized) }
+                // Il gestore arriva su una coda di sistema e l'SDK non lo dichiara Sendable: senza @Sendable Swift lo
+                // isolerebbe al MainActor e l'app si chiuderebbe al controllo d'isolamento (revisione 25 ott 2026).
+                SFSpeechRecognizer.requestAuthorization { @Sendable status in continuation.resume(returning: status == .authorized) }
             }
             guard permission, await AVAudioApplication.requestRecordPermission() else {
                 self.error = "Consenti microfono e riconoscimento vocale nelle impostazioni di iOS."; self.stop(); return

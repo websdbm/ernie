@@ -906,7 +906,9 @@ async function main(): Promise<void> {
       .catch((err) => logger.warn({ err }, 'recupero promemoria Todo rinviato'));
   }, 60_000);
   todoTimer.unref();
-  await todoReminders.drain();
+  await todoReminders
+    .drain()
+    .catch((err) => logger.warn({ err }, 'recupero promemoria Todo rinviato'));
 
   const authenticator = createAuthenticator(postgres.pool);
   const usage = createUsageService(postgres.pool);

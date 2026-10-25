@@ -20,6 +20,12 @@ export async function speechRoutes(app: FastifyInstance, opts: SpeechRoutesOptio
   if (!app.hasRequestDecorator('auth')) app.decorateRequest('auth', null);
   await app.register(async (api) => {
     api.addHook('preValidation', createAuthHook(opts.authenticator, opts.allowedOrigins));
+    // Come le altre rotte dell'app: serve lo scope «chat» (revisione 25 ott 2026: una chiave ristretta poteva usare la
+    // sintesi vocale a pagamento o leggere i consumi).
+    api.addHook('preHandler', async (req, reply) => {
+      if (!req.auth?.scopes.includes('chat'))
+        return reply.code(403).send({ error: 'forbidden', message: 'scope chat richiesto' });
+    });
     api.post('/v1/speech', { bodyLimit: 12_000 }, async (req, reply) => {
       const auth = req.auth;
       if (!auth) return reply.code(401).send({ error: 'unauthorized' });

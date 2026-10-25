@@ -149,6 +149,12 @@ export function wordpressCommand(site: SshSite, args: string): string {
       'invalid_wp_command',
       'Indica soltanto gli argomenti WP-CLI, senza pipe, redirezioni o altri comandi shell.',
     );
+  // `wp config get DB_PASSWORD` stampa il valore nudo, che nessun filtro riconosce: non si esegue.
+  if (/\bconfig\s+get\s+['"]?[A-Za-z0-9_]*(?:PASSWORD|PASS|KEY|SALT|TOKEN|SECRET|AUTH)/i.test(args))
+    throw new SshError(
+      'secret_wp_command',
+      'Non leggo valori segreti di wp-config (password, chiavi, salt): controllali direttamente sul server.',
+    );
   const unquote = (v: string) => v.replace(/^(['"])(.*)\1$/, '$2');
   const words = (args.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map(unquote);
   if (
@@ -190,21 +196,44 @@ export function sanitizeSshOutput(value: string, secrets: string[] = []): string
   let text = value;
   for (const secret of secrets)
     if (secret.length >= 4) text = text.replaceAll(secret, '[SEGRETO RIMOSSO]');
-  return text
-    .replace(
-      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
-      '[CHIAVE PRIVATA RIMOSSA]',
-    )
-    .replace(
-      /\b((?:[\w.-]*)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|client[_-]?secret|authorization|secret)(?:[\w.-]*)["']?\s*[:=]\s*)(?:Bearer\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
-      '$1[SEGRETO RIMOSSO]',
-    )
-    .replace(/\bBearer\s+[A-Za-z0-9_.~+/-]+=*/gi, 'Bearer [SEGRETO RIMOSSO]')
-    .replace(
-      /\b((?:postgres(?:ql)?|mysql|redis|https?):\/\/)[^\s/@]+:[^\s/@]+@/gi,
-      '$1[CREDENZIALI RIMOSSE]@',
-    )
-    .slice(0, 20_000);
+  return (
+    text
+      .replace(
+        /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
+        '[CHIAVE PRIVATA RIMOSSA]',
+      )
+      .replace(
+        /\b((?:[\w.-]*)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|client[_-]?secret|authorization|secret)(?:[\w.-]*)["']?\s*[:=]\s*)(?:Bearer\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+        '$1[SEGRETO RIMOSSO]',
+      )
+      .replace(/\bBearer\s+[A-Za-z0-9_.~+/-]+=*/gi, 'Bearer [SEGRETO RIMOSSO]')
+      // Revisione del 25 ott 2026: questi casi arrivavano in chiaro al database e al modello.
+      // wp-config.php: define( 'DB_PASSWORD', '…' ); e chiavi/salt di WordPress.
+      .replace(
+        /(define\(\s*['"][A-Z0-9_]*(?:PASSWORD|PASS|KEY|SALT|TOKEN|SECRET|AUTH)[A-Z0-9_]*['"]\s*,\s*)(['"])(?:\\.|(?!\2)[^\\])*\2/g,
+        "$1'[SEGRETO RIMOSSO]'",
+      )
+      // Variabili d'ambiente come GITHUB_TOKEN=…, DB_PASS=…, AUTH_KEY: …
+      .replace(
+        /\b([A-Z][A-Z0-9_]*(?:TOKEN|PASS|PASSWORD|KEY|SECRET|SALT)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/g,
+        '$1[SEGRETO RIMOSSO]',
+      )
+      // Uscita a tabella (wp config list): «DB_PASSWORD   valore   constant».
+      .replace(
+        /^(\s*\|?\s*[A-Za-z0-9_]*(?:PASSWORD|PASS|_KEY|SALT|TOKEN|SECRET)[A-Za-z0-9_]*\s*(?:\||\t| {2,})\s*)([^\s|]+)/gim,
+        '$1[SEGRETO RIMOSSO]',
+      )
+      // Parametri d'URL: ?token=…, &api_key=…
+      .replace(
+        /([?&](?:token|access_token|api[_-]?key|apikey|key|password|secret|sig|signature)=)[^&\s"']+/gi,
+        '$1[SEGRETO RIMOSSO]',
+      )
+      .replace(
+        /\b((?:postgres(?:ql)?|mysql|redis|https?):\/\/)[^\s/@]+:[^\s/@]+@/gi,
+        '$1[CREDENZIALI RIMOSSE]@',
+      )
+      .slice(0, 20_000)
+  );
 }
 function safePlanText(value: string): void {
   if (

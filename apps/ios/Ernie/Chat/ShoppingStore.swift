@@ -48,11 +48,13 @@ final class ShoppingStore {
         do {
             let result = try await api.shoppingLists()
             guard generation == token, catalogRequest == request, !Task.isCancelled else { return }
-            let current = Dictionary(uniqueKeysWithValues: summaries.map { ($0.id, $0) })
+            // Niente trap con id doppi (uniqueKeysWithValues chiude l'app): vince il primo.
+            let current = Dictionary(summaries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             let remoteIds = Set(result.map(\.id))
             var merged: [ShoppingListSummary] = []
+            var seen = Set<String>()
             for summary in result {
-                guard !deleted.contains(summary.id) else { continue }
+                guard !deleted.contains(summary.id), seen.insert(summary.id).inserted else { continue }
                 if revisions[summary.id, default: 0] != before[summary.id, default: 0] || busy.contains(summary.id) {
                     if let latest = current[summary.id] { merged.append(latest) }
                 } else { merged.append(summary) }

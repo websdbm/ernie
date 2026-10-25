@@ -3,7 +3,7 @@ import type { ToolContext } from '@ernie/tools';
 import { describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 import { guardianSettings } from './guardian.js';
-import { createYouTubeTool, VideoAnalysis, YOUTUBE_MODEL } from './youtube.js';
+import { clampVideoAnalysis, createYouTubeTool, VideoAnalysis, YOUTUBE_MODEL } from './youtube.js';
 import {
   boundedText,
   normalizeYouTubeUrl,
@@ -391,5 +391,31 @@ describe('YouTube: limiti temporanei di OpenRouter', () => {
     });
     await expect(s.tool.execute({ url }, ctx())).rejects.toMatchObject({ code: 'video_credits' });
     expect(s.calls).toHaveLength(1);
+  });
+});
+
+describe('YouTube: risposta del modello oltre i limiti (25 ott 2026)', () => {
+  it('accorcia i campi che sforano invece di scartare la ricetta', () => {
+    const raw = {
+      status: 'analyzed',
+      summary: 'Chips di lenticchie croccanti.',
+      recipe: {
+        title: 'Chips di lenticchie',
+        ingredients: ['200 g di lenticchie rosse', 'x'.repeat(200)],
+        steps: Array.from({ length: 25 }, (_, i) => `Passo ${i + 1}`),
+        time: 'Cottura: 20 minuti in forno a 200 °C; il tempo totale non è indicato nel video',
+        servings: null,
+      },
+      evidence: [
+        { source: 'video', timestamp: '00:00:05.250', detail: 'Le lenticchie vengono frullate.' },
+      ],
+      missing: ['tempo totale'],
+    };
+    expect(VideoAnalysis.safeParse(raw).success).toBe(false);
+    const ok = VideoAnalysis.parse(clampVideoAnalysis(raw));
+    expect(ok.recipe?.time).toContain('Cottura: 20 minuti');
+    expect(ok.recipe?.steps).toHaveLength(20);
+    expect(ok.recipe?.ingredients[1]).toHaveLength(120);
+    expect(ok.evidence[0]?.timestamp).toHaveLength(12);
   });
 });

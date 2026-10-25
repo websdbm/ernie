@@ -65,6 +65,57 @@ function dateInZone(at: string, timezone: string): string {
   const part = (type: string) => parts.find((p) => p.type === type)?.value;
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
+/** Scostamento scritto nell'orario ISO («+02:00»), null per «Z». */
+function declaredOffset(at: string): string | null {
+  const m = /([+-]\d{2}):?(\d{2})$/.exec(at);
+  return m ? `${m[1]}:${m[2]}` : null;
+}
+/** Scostamento reale del fuso in quell'istante («+01:00» a Roma d'inverno). */
+export function zoneOffset(at: string, timezone: string): string {
+  const name =
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' })
+      .formatToParts(new Date(at))
+      .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  const m = /GMT([+-]\d{2}):?(\d{2})/.exec(name);
+  return m ? `${m[1]}:${m[2]}` : '+00:00';
+}
+/**
+ * Cambio dell'ora negli orari scritti dal MODELLO (revisione del 25 ott 2026): dopo il 25 ottobre «18:00+02:00» a Roma
+ * è un'ora prima di quello che l'utente intende, e la sessione e il promemoria slittano. Si rifiuta solo questa
+ * confusione (scostamento che il fuso ha pochi giorni prima o dopo, ma non in quell'istante); UTC esplicito e altri
+ * scostamenti restano validi, e le liste salvate dall'app non passano di qui.
+ */
+export function checkModelOffsets(input: TodoSaveInput): void {
+  const tz = input.timezone;
+  for (const item of input.items)
+    for (const slot of item.slots ?? [])
+      for (const at of [slot.startAt, slot.endAt]) {
+        const declared = declaredOffset(at);
+        if (!declared || declared === '+00:00') continue;
+        const actual = zoneOffset(at, tz);
+        if (declared === actual) continue;
+        const t = Date.parse(at);
+        const nearby = [-10, -5, -2, -1, 1, 2, 5, 10].map((d) =>
+          zoneOffset(new Date(t + d * 86_400_000).toISOString(), tz),
+        );
+        if (!nearby.includes(declared)) continue;
+        const wall = at.slice(0, at.length - (at.endsWith('Z') ? 1 : 6));
+        const retry = `${wall}${actual}`;
+        if (zoneOffset(retry, tz) !== actual)
+          fail(
+            'nonexistent_time',
+            `L'orario ${wall.slice(11, 16)} del ${wall.slice(0, 10)} non esiste nel fuso ${tz} (cambio dell'ora): scegli un altro orario per «${item.title}».`,
+            [item.id],
+            [slot.id],
+          );
+        fail(
+          'offset_mismatch',
+          `L'orario ${at} di «${item.title}» ha lo scostamento ${declared}, ma quel giorno nel fuso ${tz} vale ${actual} (cambio dell'ora): riscrivilo come ${retry}.`,
+          [item.id],
+          [slot.id],
+        );
+      }
+}
 function graphCycles(items: TodoItem[], edges: (item: TodoItem) => string[], code: string): void {
   const byId = new Map(items.map((item) => [item.id, item]));
   const visiting = new Set<string>(),
@@ -492,7 +543,10 @@ export function createTodoTools(repo: TodoRepository, options: TodoToolsOptions 
       inputSchema: TodoSaveInput,
       outputSchema: z.union([z.object({ list: TodoList }), TodoFailure]),
       execute: async (input, ctx) =>
-        call(ctx.userId, async () => ({ list: await repo.save(ctx.userId, input) })),
+        call(ctx.userId, async () => {
+          checkModelOffsets(input);
+          return { list: await repo.save(ctx.userId, input) };
+        }),
       present: (_input, output) =>
         'list' in output ? { kind: 'todo_list', list: output.list } : null,
     }),

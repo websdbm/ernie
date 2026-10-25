@@ -51,7 +51,8 @@ final class TtsMarkerProbe: NSObject, AVSpeechSynthesizerDelegate {
         final class Box: @unchecked Sendable { var marks: [String: Int] = [:]; var frames = 0; var rate = 0.0; var done = false }
         let box = Box()
         return await withCheckedContinuation { (c: CheckedContinuation<([String: Int], Double), Never>) in
-            synthesizer.write(utterance, toBufferCallback: { buffer in
+            // Le due chiamate arrivano sulla coda del sintetizzatore: @Sendable, altrimenti erediterebbero il MainActor.
+            synthesizer.write(utterance, toBufferCallback: { @Sendable buffer in
                 guard let pcm = buffer as? AVAudioPCMBuffer else { return }
                 box.rate = pcm.format.sampleRate
                 box.frames += Int(pcm.frameLength)
@@ -59,7 +60,7 @@ final class TtsMarkerProbe: NSObject, AVSpeechSynthesizerDelegate {
                     box.done = true
                     c.resume(returning: (box.marks, box.rate > 0 ? Double(box.frames) / box.rate : 0))
                 }
-            }, toMarkerCallback: { markers in
+            }, toMarkerCallback: { @Sendable markers in
                 for m in markers { box.marks[Self.markName(m.mark), default: 0] += 1 }
             })
         }

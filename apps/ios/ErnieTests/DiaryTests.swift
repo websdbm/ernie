@@ -49,7 +49,13 @@ struct DiaryCryptoTests {
     }
     @Test(arguments: ["Apri diario", "Ernie, apri il mio diario personale", "Apri diario, scrivi: testo privato", "Scrivi nel mio diario: testo privato", "Diario personale: testo privato"])
     func recognizesPrivateCommands(text: String) { #expect(DiaryLaunch.parse(text) != nil) }
-    @Test(arguments: ["Non aprire il diario", "Come funziona il diario?", "Apri diariologia", "Mostra il diario delle attività di ieri"])
+    /// Il testo privato che nomina il diario operativo resta nel diario, non va in chat (revisione del 25 ott 2026).
+    @Test func keepsPrivateTextThatMentionsTheOperationalDiary() {
+        let text = "Scrivi nel diario: oggi ho riletto il diario operativo del progetto e mi sono sentito inutile"
+        #expect(DiaryLaunch.parse(text)?.draft == "oggi ho riletto il diario operativo del progetto e mi sono sentito inutile")
+        #expect(DiaryLaunch.parse("Apri diario, scrivi: il diario delle attività mi stanca")?.draft == "il diario delle attività mi stanca")
+    }
+    @Test(arguments: ["Non aprire il diario", "Come funziona il diario?", "Apri diariologia", "Mostra il diario delle attività di ieri", "Apri il diario operativo", "Scrivi nel diario delle attività: riunione alle 9"])
     func doesNotTreatUnrelatedRequestsAsJournal(text: String) {
         #expect(DiaryLaunch.parse(text) == nil)
     }
@@ -60,9 +66,13 @@ struct DiaryCryptoTests {
     var allowed = true
     var gate: CheckedContinuation<Void, Never>?
     var suspended = false
+    /// La chiave del diario esistente non si apre più (biometria cambiata); una chiave nuova invece sì.
+    var invalidated = false
     func unlock(existingVault: Bool) async throws -> SymmetricKey {
         if suspended { await withCheckedContinuation { gate = $0 } }
         guard allowed else { throw DiaryError.unavailable }
+        if invalidated, existingVault { throw DiaryError.keyInvalidated }
+        if invalidated { key = SymmetricKey(size: .bits256) }
         return key
     }
 }
@@ -179,7 +189,26 @@ private actor TestDiaryAI: DiaryTransforming {
         store.updateDraft("second"); _ = store.saveEntry()
         try await store.restoreBackup(backup, password: "recovery-password-test")
         #expect(store.document?.entries.count == 2)
+        // Diario bloccato ma con la chiave valida: si sblocca e si UNISCE, niente sostituzione (revisione 25 ott 2026).
         store.lock()
+        try await store.restoreBackup(backup, password: "recovery-password-test")
+        #expect(store.document?.entries.count == 2)
+        #expect(try !FileManager.default.contentsOfDirectory(atPath: directory.path).contains { $0.contains(".previous-") })
+    }
+    @Test func lockedRestoreReplacesOnlyWhenTheKeyIsInvalidated() async throws {
+        let (store, keys, directory) = fixture()
+        defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
+        await store.unlock(); store.updateDraft("original")
+        let id = try #require(store.saveEntry())
+        let backup = try store.exportBackup(password: "recovery-password-test")
+        store.updateDraft("second"); _ = store.saveEntry()
+        store.lock()
+        // Face ID annullato: nessuna sostituzione.
+        keys.allowed = false
+        await #expect(throws: DiaryError.self) { try await store.restoreBackup(backup, password: "recovery-password-test") }
+        #expect(try !FileManager.default.contentsOfDirectory(atPath: directory.path).contains { $0.contains(".previous-") })
+        // Chiave sparita (biometria cambiata): si sostituisce con la copia e si conserva il vecchio cifrato.
+        keys.allowed = true; keys.invalidated = true
         try await store.restoreBackup(backup, password: "recovery-password-test")
         #expect(store.document?.entries.count == 1)
         #expect(store.document?.entries.first?.id == id)

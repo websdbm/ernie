@@ -42,11 +42,14 @@ describe('SSH encrypted secrets and bounded command compilation', () => {
     const command = wordpressCommand(site, 'plugin list --format=json');
     expect(command).toContain(`docker exec 'wp-app' wp --path=${shellQuote(site.path)}`);
     expect(command).toContain("'plugin' 'list' '--format=json'");
+    expect(wordpressCommand(site, 'config get WP_DEBUG')).toContain("'WP_DEBUG'");
     for (const args of [
       'plugin list; rm -rf /',
       "'--ssh=other' core version",
       '--path=/else core version',
       'core version | cat',
+      'config get DB_PASSWORD',
+      'config get AUTH_KEY',
     ])
       expect(() => wordpressCommand(site, args)).toThrow();
     expect(() =>
@@ -68,6 +71,25 @@ describe('SSH encrypted secrets and bounded command compilation', () => {
       /synthetic-password|synthetic-token|private material|exact-secret|db-secret|json-secret|db-pass/,
     );
     expect(output).toContain('RIMOS');
+  });
+  it('redacts wp-config defines, env-style tokens, tabular config and URL tokens (revisione 25 ott 2026)', () => {
+    const output = sanitizeSshOutput(
+      [
+        "define( 'DB_PASSWORD', 'wp-db-secret' );",
+        "define('AUTH_SALT', 'salt-secret-value');",
+        'GITHUB_TOKEN=ghp_synthetic',
+        'DB_PASS: plain-pass',
+        'DB_PASSWORD     table-secret     constant',
+        '| SECURE_AUTH_KEY | key-secret | constant |',
+        'GET /callback?token=url-secret&page=2',
+        "define( 'WP_DEBUG', false );",
+      ].join('\n'),
+    );
+    expect(output).not.toMatch(
+      /wp-db-secret|salt-secret-value|ghp_synthetic|plain-pass|table-secret|key-secret|url-secret/,
+    );
+    expect(output).toContain("define( 'WP_DEBUG', false );");
+    expect(output).toContain('page=2');
   });
   it('canonicalizes source instance namespaces without carrying credentials or query tokens', () => {
     expect(canonicalImportSource('https://HF.EXAMPLE.test/inventory/?token=secret#tab')).toBe(
