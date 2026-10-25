@@ -334,8 +334,10 @@ export function createYouTubeTool(deps: {
           'video_unavailable',
         );
       // Senza durata nota il limite dei 20 minuti non si può applicare e un video lungo costerebbe molto di più:
-      // si rifiuta invece di analizzarlo senza limite (revisione del 25 ott 2026).
-      if (metadata.durationSeconds === null)
+      // si rifiuta invece di analizzarlo senza limite (revisione del 25 ott 2026). Fa eccezione un link Shorts, che
+      // dura al massimo 3 minuti: dal server la pagina è spesso bloccata dal controllo anti-bot e la durata manca.
+      const isShort = new URL(url).pathname.split('/').filter(Boolean)[0] === 'shorts';
+      if (metadata.durationSeconds === null && !isShort)
         throw new ToolError(
           'Non riesco a leggere la durata del video: per contenere i costi analizzo solo video di massimo 20 minuti di cui conosco la durata. Riprova fra poco o inviami un altro link.',
           'video_duration_unknown',

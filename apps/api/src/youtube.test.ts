@@ -52,7 +52,13 @@ const ctx = (userId = 'user-a'): ToolContext => ({
 });
 
 function setup(
-  options: { html?: string; completions?: Response[]; blockedDomains?: string[] } = {},
+  options: {
+    html?: string;
+    completions?: Response[];
+    blockedDomains?: string[];
+    /** false: oEmbed risponde 401 come per un video privato. */
+    oembed?: boolean;
+  } = {},
 ) {
   const calls: Record<string, unknown>[] = [];
   const completions = [...(options.completions ?? [])];
@@ -73,7 +79,9 @@ function setup(
     }
     expect(init?.redirect).toBe('error');
     if (address.includes('/oembed?'))
-      return new Response(JSON.stringify({ title: 'Titolo oEmbed', author_name: 'Canale' }));
+      return options.oembed === false
+        ? new Response('Unauthorized', { status: 401 })
+        : new Response(JSON.stringify({ title: 'Titolo oEmbed', author_name: 'Canale' }));
     expect(address).toBe(url);
     return new Response(options.html ?? player());
   });
@@ -148,9 +156,13 @@ describe('YouTube URLs and metadata', () => {
       title: 'oEmbed',
       description: null,
       durationSeconds: null,
-      availability: 'unknown',
+      // oEmbed risponde solo per video accessibili: la pagina illeggibile non basta a dire che non lo è.
+      availability: 'public',
       missing: ['descrizione completa', 'durata'],
     });
+    expect(parseYouTubeMetadata(url, player({ videoId: 'ABCDEFGHIJK' })).availability).toBe(
+      'unknown',
+    );
   });
 
   it('bounds network response size including responses without content-length', async () => {
@@ -275,13 +287,14 @@ describe('YouTube reader', () => {
       // Pagina leggibile ma non riproducibile (es. accesso richiesto): non si invia il video al modello.
       player().replace('"status":"OK"', '"status":"LOGIN_REQUIRED"'),
     ]) {
-      const s = setup({ html });
+      // oEmbed 401: video privato o non accessibile.
+      const s = setup({ html, oembed: false });
       await expect(s.tool.execute({ url }, ctx())).rejects.toMatchObject({
         code: expect.stringMatching(/^video_(duration_unknown|unavailable)$/),
       });
       expect(s.calls).toHaveLength(0);
     }
-    const blocked = setup({ html: '<html>Sign in</html>' });
+    const blocked = setup({ html: '<html>Sign in</html>', oembed: false });
     await expect(blocked.tool.execute({ url }, ctx())).rejects.toMatchObject({
       code: 'video_unavailable',
     });
@@ -289,6 +302,27 @@ describe('YouTube reader', () => {
     await expect(unknown.tool.execute({ url }, ctx())).rejects.toMatchObject({
       code: 'video_duration_unknown',
     });
+  });
+
+  it('with the anti-bot page and oEmbed available, analyzes a Short but not a video of unknown length', async () => {
+    // 25 ott 2026: dal server YouTube risponde «Melde dich an, damit wir sehen, dass du kein Bot bist».
+    const botPage =
+      '<script>var ytInitialPlayerResponse = {"playabilityStatus":{"status":"LOGIN_REQUIRED"}};</script>';
+    const watch = setup({ html: botPage });
+    await expect(watch.tool.execute({ url }, ctx())).rejects.toMatchObject({
+      code: 'video_duration_unknown',
+    });
+    expect(watch.calls).toHaveLength(0);
+    const shortVideo = setup({ html: botPage });
+    const out = (await shortVideo.tool.execute({ url: short }, ctx())) as {
+      metadata: { availability: string; durationSeconds: number | null; title: string | null };
+    };
+    expect(out.metadata).toMatchObject({
+      availability: 'public',
+      durationSeconds: null,
+      title: 'Titolo oEmbed',
+    });
+    expect(shortVideo.calls).toHaveLength(1);
   });
 
   it('does not send content anywhere on denied domains, exceeded budget or pre-aborted calls', async () => {

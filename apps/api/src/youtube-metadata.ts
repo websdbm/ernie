@@ -131,6 +131,11 @@ export function parseYouTubeMetadata(
   const channel = str(d.author, 160) ?? str(embed.author_name, 160);
   const status = obj(player.playabilityStatus).status;
   const durationSeconds = Number.isFinite(length) && length > 0 ? length : null;
+  // Dal server YouTube risponde spesso col controllo anti-bot (LOGIN_REQUIRED, niente videoDetails), anche per video
+  // pubblici (25 ott 2026, IP di Contabo). oEmbed invece risponde solo per video pubblici o non in elenco: se la pagina
+  // non è leggibile ma oEmbed dà il titolo, il video è accessibile. Privati e inesistenti: oEmbed 401/400/404.
+  const pageBlocked = !correct || status === 'LOGIN_REQUIRED';
+  const embedOk = Boolean(str(embed.title, 200));
   return {
     url: normalized.url,
     videoId: normalized.id,
@@ -147,7 +152,7 @@ export function parseYouTubeMetadata(
     availability:
       d.isPrivate === true || micro.isUnlisted === true
         ? 'unavailable'
-        : correct && status === 'OK'
+        : (correct && status === 'OK') || (pageBlocked && embedOk)
           ? 'public'
           : 'unknown',
     missing: [
@@ -171,6 +176,7 @@ export async function readYouTubeMetadata(
     read(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonical)}&format=json`, 32_000),
   ]);
   let oembed: unknown = {};
+  // boundedText rifiuta le risposte non 2xx: un oEmbed 401/404 (video privato o inesistente) resta vuoto.
   if (embed.status === 'fulfilled') {
     try {
       oembed = JSON.parse(embed.value);
