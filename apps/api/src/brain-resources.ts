@@ -1,7 +1,23 @@
-import { type BrainResource, type BrainService, normalized } from '@ernie/brain';
+import { setTimeout as delay } from 'node:timers/promises';
+import {
+  type BrainResource,
+  type BrainService,
+  isUnnamedPhotoPlace,
+  normalized,
+  PHOTO_PLACE_PREFIX,
+  resourcePath,
+} from '@ernie/brain';
 import { type Pool, withUser } from '@ernie/db';
 import type { Logger } from '@ernie/observability';
 
+/** Testo iniziale dei luoghi creati da una foto: se l'utente non lo cambia, il luogo orfano si può rimuovere. */
+export const PHOTO_PLACE_BODY =
+  'Luogo individuato dalla posizione di scatto delle foto collegate. Puoi aggiungere qui il nome del posto, una descrizione e altre informazioni.';
+/** Lotto letto in una transazione breve; ogni job ha poi transazioni proprie. */
+const BATCH = 50;
+/** Attesa dopo un errore: 30 s, raddoppia a ogni tentativo, al massimo 6 ore. */
+const RETRY_DELAY_S = 30;
+const MAX_RETRY_DELAY_S = 6 * 3600;
 export interface PhotoLocation {
   lat: number;
   lon: number;
@@ -98,121 +114,230 @@ export function createBrainResourceSync(opts: {
           )
         ).rowCount === 1,
     );
+  type Job = { kind: BrainResource['kind']; resource_id: string; generation: string };
+  const candidates = (userId: string) =>
+    withUser(
+      pool,
+      userId,
+      async (c) =>
+        (
+          await c.query<Candidate>(
+            "SELECT path,title,note_type,lat,lon FROM brain_notes WHERE user_id=$1 AND NOT private AND note_type IN ('persona','luogo','argomento','progetto') ORDER BY path",
+            [userId],
+          )
+        ).rows,
+    );
+  /** Titolo neutro e univoco: niente coordinate nel titolo (restano nei metadati della scheda). */
+  const photoPlaceTitle = async (userId: string, day: Date) => {
+    const base = `${PHOTO_PLACE_PREFIX} il ${new Intl.DateTimeFormat('it-IT', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Europe/Rome',
+    }).format(day)}`;
+    for (let n = 1; n < 100; n++) {
+      const title = n === 1 ? base : `${base} (${n})`;
+      // brain.write aggiunge in fondo a una scheda con lo stesso titolo: serve un titolo libero.
+      if (!(await brain.read(userId, title))) return title;
+    }
+    return `${base} (${Date.now()})`;
+  };
+  /** Luoghi creati da una foto, mai rinominati né modificati, rimasti senza foto o note collegate. */
+  const dropOrphanPhotoPlaces = async (userId: string, paths: readonly string[]) => {
+    for (const path of paths) {
+      const place = await brain.read(userId, path);
+      if (
+        place &&
+        isUnnamedPhotoPlace(place.note) &&
+        place.note.body.trim() === PHOTO_PLACE_BODY &&
+        !place.related?.length &&
+        !place.backlinks.length
+      )
+        await brain.remove(userId, place.note.path);
+    }
+  };
+  const projectJob = async (userId: string, job: Job) => {
+    const resource = { kind: job.kind, id: job.resource_id };
+    // Non selezionare mai image_bytes/thumbnail_bytes: la proiezione usa soltanto metadati e OCR.
+    const cols =
+      job.kind === 'recipe'
+        ? 'id,title,created_at,brain_links,category,tags,ingredients,steps,time,servings,source,url,notes'
+        : 'id,title,created_at,brain_links,category,tags,description,ocr_text,location';
+    const row = await withUser(
+      pool,
+      userId,
+      async (c) =>
+        (
+          await c.query<Source>(
+            `SELECT ${cols} FROM ${table(job.kind)} WHERE user_id=$1 AND id=$2 ${job.kind === 'recipe' ? "AND status='active'" : ''}`,
+            [userId, resource.id],
+          )
+        ).rows[0],
+    );
+    // Luoghi a cui la foto era collegata prima di questa passata: se restano senza foto si possono togliere.
+    const before =
+      job.kind === 'media'
+        ? ((await brain.read(userId, resourcePath(resource)))?.note.links ?? [])
+        : [];
+    let after: string[] = [];
+    if (!row) await brain.projectResource(userId, resource, null);
+    else {
+      let nodes = await candidates(userId);
+      const aliases = row.brain_links.some((path) => !nodes.some((n) => n.path === path))
+        ? await brain.identities(userId)
+        : [];
+      const manual = row.brain_links
+        .map(
+          (path) =>
+            nodes.find((n) => n.path === path)?.path ??
+            aliases.find((n) => n.aliases.some((a) => a.path === path))?.path,
+        )
+        .filter((p): p is string => !!p && nodes.some((n) => n.path === p));
+      let body = resourceBody(job.kind, row);
+      const links = new Set([...manual, ...resourceTextLinks(`${row.title}\n${body}`, nodes)]);
+      let geoPlace: Candidate | undefined;
+      const location = row.location;
+      if (job.kind === 'media' && location && (location.accuracy ?? 0) <= 100) {
+        geoPlace = nodes.find((n) => n.note_type === 'luogo' && manual.includes(n.path));
+        if (!geoPlace) {
+          const nearby = nodes.filter(
+            (n) =>
+              n.note_type === 'luogo' &&
+              n.lat !== null &&
+              n.lon !== null &&
+              photoDistance(location, { lat: n.lat, lon: n.lon }) <= 75,
+          );
+          if (nearby.length === 1) geoPlace = nearby[0];
+          else if (!nearby.length) {
+            const shot = location.capturedAt ? new Date(location.capturedAt) : row.created_at;
+            const result = await brain.write(userId, {
+              title: await photoPlaceTitle(
+                userId,
+                Number.isFinite(shot.getTime()) ? shot : row.created_at,
+              ),
+              type: 'luogo',
+              source: 'foto',
+              coords: [location.lat, location.lon],
+              body: PHOTO_PLACE_BODY,
+            });
+            nodes = await candidates(userId);
+            geoPlace = nodes.find((n) => n.path === result.path);
+          } else
+            body +=
+              '\n\n**Luogo da confermare:** più luoghi salvati sono vicini alla posizione di scatto. Scegli quello corretto in Collegamenti.';
+        }
+        if (geoPlace) links.add(geoPlace.path);
+      }
+      after = [...links].sort();
+      await brain.projectResource(userId, resource, {
+        title: row.title,
+        created: row.created_at.toISOString(),
+        private: false,
+        source: job.kind === 'media' ? 'foto' : 'app',
+        body,
+        links: after,
+        // Il telefono manda l'ora di scatto in UTC: il giorno si calcola a Roma (una foto all'1:30 del 2 luglio
+        // non deve finire il 1°).
+        ...(location?.capturedAt
+          ? {
+              refersFrom: new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Europe/Rome',
+              }).format(new Date(location.capturedAt)),
+            }
+          : {}),
+        ...(location ? { coords: [location.lat, location.lon] as const } : {}),
+        ...(geoPlace ? { place: geoPlace.title } : {}),
+      });
+    }
+    const dropped = before.filter((path) => !after.includes(path));
+    if (dropped.length) await dropOrphanPhotoPlaces(userId, dropped);
+    // Una modifica concorrente ha una generazione nuova: rimane in coda.
+    await withUser(pool, userId, (ack) =>
+      ack.query(
+        'DELETE FROM brain_resource_queue WHERE user_id=$1 AND kind=$2 AND resource_id=$3 AND generation=$4',
+        [userId, job.kind, resource.id, job.generation],
+      ),
+    );
+  };
+  /**
+   * Un solo sincronizzatore per utente anche fra processi, senza tenere aperta una transazione durante Git ed
+   * embedding: lock di sessione su una connessione dedicata, rilasciato alla fine (o con la connessione).
+   */
+  const withUserLock = async <T>(userId: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    const client = await pool.connect();
+    let broken = false;
+    const lockQuery = async (sql: string) => {
+      try {
+        return await client.query<{ ok: boolean }>(sql, [userId]);
+      } catch (err) {
+        broken = true;
+        throw err;
+      }
+    };
+    try {
+      let locked = false;
+      for (let i = 0; i < 20 && !locked; i++) {
+        locked =
+          (await lockQuery('SELECT pg_try_advisory_lock(hashtextextended($1,41)) AS ok')).rows[0]
+            ?.ok === true;
+        if (!locked) await delay(250);
+      }
+      // Un altro processo sta già lavorando la coda di questo utente: la riprende lui o il prossimo heartbeat.
+      if (!locked) return undefined;
+      try {
+        return await fn();
+      } finally {
+        await lockQuery('SELECT pg_advisory_unlock(hashtextextended($1,41)) AS ok').catch(() => {});
+      }
+    } finally {
+      // Una connessione con il lock forse ancora attivo non torna nel pool.
+      client.release(broken);
+    }
+  };
+  const processQueue = async (userId: string) => {
+    const jobs = await withUser(
+      pool,
+      userId,
+      async (c) =>
+        (
+          await c.query<Job>(
+            `SELECT kind,resource_id,generation FROM brain_resource_queue
+              WHERE user_id=$1 AND next_attempt_at<=now()
+              ORDER BY next_attempt_at,queued_at,kind,resource_id LIMIT $2`,
+            [userId, BATCH],
+          )
+        ).rows,
+    );
+    if (!jobs.length) return;
+    await brain.ready(userId);
+    let firstError: unknown;
+    for (const job of jobs) {
+      try {
+        await projectJob(userId, job);
+      } catch (err) {
+        firstError ??= err;
+        // Il job va in fondo con un'attesa crescente: gli altri della coda proseguono.
+        await withUser(pool, userId, (c) =>
+          c.query(
+            `UPDATE brain_resource_queue SET attempts=attempts+1,
+               next_attempt_at=now() + make_interval(secs => least($5::double precision, $6::double precision * 2 ^ attempts))
+             WHERE user_id=$1 AND kind=$2 AND resource_id=$3 AND generation=$4`,
+            [userId, job.kind, job.resource_id, job.generation, MAX_RETRY_DELAY_S, RETRY_DELAY_S],
+          ),
+        ).catch((ackErr: unknown) =>
+          opts.logger.warn({ userId, err: ackErr }, 'risorse Brain: tentativo non registrato'),
+        );
+      }
+    }
+    if (firstError) throw firstError;
+  };
   const syncUser = async (userId: string): Promise<void> => {
     // Una seconda richiesta aspetta la passata in corso, poi rilegge la coda: non perde una modifica arrivata durante il commit.
     const previous = active.get(userId) ?? Promise.resolve();
     const run = previous
       .catch(() => {})
       .then(async () => {
-        await withUser(pool, userId, async (c) => {
-          await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,41))', [userId]);
-          const jobs = await c.query<{
-            kind: BrainResource['kind'];
-            resource_id: string;
-            generation: string;
-          }>(
-            'SELECT kind,resource_id,generation FROM brain_resource_queue WHERE user_id=$1 ORDER BY queued_at,kind,resource_id LIMIT 100',
-            [userId],
-          );
-          if (!jobs.rows.length) return;
-          await brain.ready(userId);
-          for (const job of jobs.rows) {
-            const resource = { kind: job.kind, id: job.resource_id };
-            // Non selezionare mai image_bytes/thumbnail_bytes: la proiezione usa soltanto metadati e OCR.
-            const cols =
-              job.kind === 'recipe'
-                ? 'id,title,created_at,brain_links,category,tags,ingredients,steps,time,servings,source,url,notes'
-                : 'id,title,created_at,brain_links,category,tags,description,ocr_text,location';
-            const row = (
-              await c.query<Source>(
-                `SELECT ${cols} FROM ${table(job.kind)} WHERE user_id=$1 AND id=$2 ${job.kind === 'recipe' ? "AND status='active'" : ''}`,
-                [userId, resource.id],
-              )
-            ).rows[0];
-            if (!row) await brain.projectResource(userId, resource, null);
-            else {
-              const candidates = async () =>
-                (
-                  await c.query<Candidate>(
-                    "SELECT path,title,note_type,lat,lon FROM brain_notes WHERE user_id=$1 AND NOT private AND note_type IN ('persona','luogo','argomento','progetto') ORDER BY path",
-                    [userId],
-                  )
-                ).rows;
-              let nodes = await candidates();
-              const aliases = row.brain_links.some((path) => !nodes.some((n) => n.path === path))
-                ? await brain.identities(userId)
-                : [];
-              const manual = row.brain_links
-                .map(
-                  (path) =>
-                    nodes.find((n) => n.path === path)?.path ??
-                    aliases.find((n) => n.aliases.some((a) => a.path === path))?.path,
-                )
-                .filter((p): p is string => !!p && nodes.some((n) => n.path === p));
-              let body = resourceBody(job.kind, row);
-              const links = new Set([
-                ...manual,
-                ...resourceTextLinks(`${row.title}\n${body}`, nodes),
-              ]);
-              let geoPlace: Candidate | undefined;
-              const location = row.location;
-              if (job.kind === 'media' && location && (location.accuracy ?? 0) <= 100) {
-                geoPlace = nodes.find((n) => n.note_type === 'luogo' && manual.includes(n.path));
-                if (!geoPlace) {
-                  const nearby = nodes.filter(
-                    (n) =>
-                      n.note_type === 'luogo' &&
-                      n.lat !== null &&
-                      n.lon !== null &&
-                      photoDistance(location, { lat: n.lat, lon: n.lon }) <= 75,
-                  );
-                  if (nearby.length === 1) geoPlace = nearby[0];
-                  else if (!nearby.length) {
-                    const title = `Luogo fotografato (${location.lat.toFixed(5)}, ${location.lon.toFixed(5)})`;
-                    const result = await brain.write(userId, {
-                      title,
-                      type: 'luogo',
-                      source: 'foto',
-                      coords: [location.lat, location.lon],
-                      body: 'Luogo individuato dalla posizione di scatto delle foto collegate. Puoi aggiungere qui il nome del posto, una descrizione e altre informazioni.',
-                    });
-                    nodes = await candidates();
-                    geoPlace = nodes.find((n) => n.path === result.path);
-                  } else
-                    body +=
-                      '\n\n**Luogo da confermare:** più luoghi salvati sono vicini alla posizione di scatto. Scegli quello corretto in Collegamenti.';
-                }
-                if (geoPlace) links.add(geoPlace.path);
-              }
-              await brain.projectResource(userId, resource, {
-                title: row.title,
-                created: row.created_at.toISOString(),
-                private: false,
-                source: job.kind === 'media' ? 'foto' : 'app',
-                body,
-                links: [...links].sort(),
-                // Il telefono manda l'ora di scatto in UTC: il giorno si calcola a Roma (una foto all'1:30 del 2 luglio
-                // non deve finire il 1°).
-                ...(location?.capturedAt
-                  ? {
-                      refersFrom: new Intl.DateTimeFormat('en-CA', {
-                        timeZone: 'Europe/Rome',
-                      }).format(new Date(location.capturedAt)),
-                    }
-                  : {}),
-                ...(location ? { coords: [location.lat, location.lon] as const } : {}),
-                ...(geoPlace ? { place: geoPlace.title } : {}),
-              });
-            }
-            // Una modifica concorrente ha una generazione nuova: rimane in coda.
-            await withUser(pool, userId, (ack) =>
-              ack.query(
-                'DELETE FROM brain_resource_queue WHERE user_id=$1 AND kind=$2 AND resource_id=$3 AND generation=$4',
-                [userId, job.kind, resource.id, job.generation],
-              ),
-            );
-          }
-        });
+        await withUserLock(userId, () => processQueue(userId));
       });
     active.set(userId, run);
     try {

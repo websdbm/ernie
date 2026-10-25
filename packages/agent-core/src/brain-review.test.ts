@@ -76,4 +76,23 @@ describe('revisore semantico isolato', () => {
     mocks.generate.mockResolvedValue({ object: { connections: 'invalid' }, usage: {} });
     expect(await review([note(0), note(1)], 'u')).toBeNull();
   });
+  it('registra la chiamata anche quando il modello va in errore', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const gateway = {
+      resolve: vi.fn().mockReturnValue({
+        model: 'openai/test',
+        provider: 'openai',
+        profile: { modelId: 'test' },
+      }),
+    } as unknown as ModelGateway;
+    mocks.generate.mockRejectedValue(new Error('provider giù'));
+    const review = createBrainReviewer({
+      gateway,
+      recorder: { record } as unknown as LlmCallRecorder,
+    });
+    await expect(review([note(0), note(1)], 'u')).rejects.toThrow('provider giù');
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u', generationId: null, finishReason: 'error' }),
+    );
+  });
 });

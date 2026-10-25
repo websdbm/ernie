@@ -223,6 +223,17 @@ describe('persistenza delle preferenze operative', () => {
         active: false,
         source: 'settings',
       });
+      // Un PATCH del solo testo lascia la preferenza spenta.
+      const renamed = await app.inject({
+        method: 'PATCH',
+        url: `/v1/operating-preferences/${id}`,
+        headers,
+        payload: { text: 'Mostrami tre alternative' },
+      });
+      expect(renamed.json().preference).toMatchObject({
+        text: 'Mostrami tre alternative',
+        active: false,
+      });
       const enabled = await app.inject({
         method: 'PATCH',
         url: `/v1/operating-preferences/${id}`,

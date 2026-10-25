@@ -366,7 +366,7 @@ export function createSummarizer(deps: SummarizerDeps): Summarizer {
     const t0 = Date.now();
     const result = (await agent.generate(prompt, {
       structuredOutput: { schema, errorStrategy: 'strict' },
-      modelSettings: { maxOutputTokens, temperature: 0.2 },
+      modelSettings: { maxOutputTokens, temperature: 0.2, maxRetries: 0 },
       abortSignal: scope.signal,
     } as never)) as unknown as {
       object?: unknown;

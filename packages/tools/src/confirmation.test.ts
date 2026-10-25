@@ -88,6 +88,16 @@ describe('conferme leggibili', () => {
     expect(args.at).toBe('2026-10-18T08:00:00Z');
   });
 
+  it('mostra la ricorrenza di un promemoria con i giorni in parole', () => {
+    const p = confirmationPresentation('reminder_create', {
+      text: 'Palestra',
+      repeat: { kind: 'weekly', weekdays: [4, 1], hour: 18, minute: 30 },
+    });
+    expect(p.details.find((d) => d.label === 'Ripeti')?.value).toBe(
+      'ogni lunedì e giovedì alle 18:30',
+    );
+  });
+
   it('non taglia una scheda Brain ammessa e segnala esplicitamente anteprime oltre il limite', () => {
     const body = 'a'.repeat(60_000);
     const p = confirmationPresentation('brain_write', { title: 'Diario', mode: 'replace', body });

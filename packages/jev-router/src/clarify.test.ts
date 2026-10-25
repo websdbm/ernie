@@ -105,6 +105,21 @@ describe('chiarimento interno', () => {
     await expect(
       createClarifier({ jev: slow, questioner, minConfidence: 0.7, timeoutMs: 30 }).clarify(input),
     ).rejects.toThrow();
+    // Alla scadenza anche la chiamata al modello che formula le domande viene annullata.
+    let signal: AbortSignal | undefined;
+    const hanging: Questioner = (_input, options) => {
+      signal = options?.signal;
+      return new Promise(() => {});
+    };
+    await expect(
+      createClarifier({
+        jev: createMockJevClient(),
+        questioner: hanging,
+        minConfidence: 0.7,
+        timeoutMs: 30,
+      }).clarify(input),
+    ).rejects.toThrow('tempo scaduto');
+    expect(signal?.aborted).toBe(true);
   });
 
   it('controllo dei comandi rapidi: Jev dice quanto il piano è fedele alla frase', async () => {

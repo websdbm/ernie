@@ -311,4 +311,22 @@ describe.skipIf(!ownerUrl || !appUrl)('consumi: Postgres reale, RLS e REST', () 
       'budget giornaliero',
     );
   });
+
+  it('il limite giornaliero si azzera alla mezzanotte di Roma, come il pannello consumi', async () => {
+    const id = randomUUID();
+    fixtureIds.push(id);
+    await owner.query("INSERT INTO users(id,display_name,role) VALUES($1,'Budget Roma','member')", [
+      id,
+    ]);
+    const start = (
+      await owner.query<{ start: Date }>(
+        "SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'Europe/Rome' AS start",
+      )
+    ).rows[0]?.start as Date;
+    // Ieri a Roma (anche se nello stesso giorno UTC) non conta; dopo la mezzanotte italiana sì.
+    await call(id, new Date(start.getTime() - 1000).toISOString(), 5, true);
+    await call(id, new Date(start.getTime() + 1000).toISOString(), 0.2, true);
+    const { spentUsd } = await createBudgetGuard(pool).assertWithinBudget(id, 1);
+    expect(spentUsd).toBeCloseTo(0.2, 6);
+  });
 });

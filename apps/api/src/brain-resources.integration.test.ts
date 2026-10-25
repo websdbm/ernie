@@ -119,7 +119,7 @@ describe.skipIf(!OWNER || !APP)('risorse Brain: SQL reale, Git e API', () => {
     await owner.end();
     await rm(dir, { recursive: true, force: true });
   });
-  const photo = (title: string, location?: { lat: number; lon: number }) => ({
+  const photo = (title: string, location?: { lat: number; lon: number; capturedAt?: string }) => ({
     clientId: randomUUID(),
     image: Buffer.from(randomUUID()),
     thumbnail: Buffer.from('thumb'),
@@ -230,9 +230,15 @@ describe.skipIf(!OWNER || !APP)('risorse Brain: SQL reale, Git e API', () => {
     const newPlace = places.find((n) => n.path !== home.path);
     if (!newPlace) throw new Error('Luogo mancante');
     expect(newPlace?.coords).toEqual([46, 14]);
+    // Titolo neutro: le coordinate restano solo nei metadati della scheda.
+    expect(newPlace.title).toMatch(/^Luogo fotografato il \d{1,2} \p{L}+ \d{4}$/u);
+    expect(newPlace.title).not.toContain('46');
     expect(
       (await brain.read(user, newPlace.path))?.related?.some((n) => n.resource?.id === b.id),
     ).toBe(true);
+    expect((await brain.reviewSnapshot(user)).notes.map((n) => n.path)).not.toContain(
+      newPlace.path,
+    );
     await brain.write(user, {
       title: 'Casa vicina',
       type: 'luogo',
@@ -249,6 +255,111 @@ describe.skipIf(!OWNER || !APP)('risorse Brain: SQL reale, Git e API', () => {
     expect((await brain.read(user, resourcePath({ kind: 'media', id: a.id })))?.note.place).toBe(
       'Casa Anna',
     );
+    // Cancellata l'unica foto, il luogo creato dalla sua posizione sparisce; quelli dell'utente restano.
+    await media.remove(user, b.id);
+    await media.remove(user, a.id);
+    await drain();
+    expect(await brain.read(user, newPlace.path)).toBeNull();
+    expect(await brain.read(user, home.path)).not.toBeNull();
+  });
+  it('dà titoli distinti ai luoghi fotografati lo stesso giorno e conserva quelli completati dall’utente', async () => {
+    const shot = '2026-07-02T08:00:00Z';
+    const a = (await media.create(user, photo('Mare', { lat: 40, lon: 15, capturedAt: shot })))
+      .item;
+    const b = (await media.create(user, photo('Monte', { lat: 41, lon: 16, capturedAt: shot })))
+      .item;
+    await drain();
+    const titles = (await brain.list(user, { type: 'luogo' })).map((n) => n.title).sort();
+    expect(titles).toEqual([
+      'Luogo fotografato il 2 luglio 2026',
+      'Luogo fotografato il 2 luglio 2026 (2)',
+    ]);
+    const places = await brain.list(user, { type: 'luogo' });
+    // L'utente completa una scheda: resta anche senza foto.
+    for (const p of places)
+      await brain.write(user, {
+        title: p.title,
+        type: 'luogo',
+        mode: 'append',
+        body: 'Ci torniamo ogni estate.',
+      });
+    await media.remove(user, a.id);
+    await media.remove(user, b.id);
+    await drain();
+    expect(await brain.list(user, { type: 'luogo' })).toHaveLength(2);
+  });
+  it('una nuova scheda rimette in coda solo le risorse che la citano o le foto vicine', async () => {
+    await recipes.save(user, {
+      title: 'Torta',
+      ingredients: ['farina'],
+      notes: 'Per la nonna Pina',
+    });
+    await media.create(user, photo('Paesaggio', { lat: 44, lon: 11 }));
+    await media.create(user, photo('Cena da Pina'));
+    await drain();
+    await brain.write(user, { title: 'Argomento estraneo', type: 'argomento', body: 'Altro.' });
+    expect(await queued()).toBe(0);
+    await brain.write(user, { title: 'Nonna Pina', type: 'persona', body: 'Nonna.' });
+    // Solo la ricetta la cita per intero; «Pina» da sola non basta.
+    expect(await queued()).toBe(1);
+    await drain();
+    await brain.write(user, {
+      title: 'Rifugio',
+      type: 'luogo',
+      body: 'Baita.',
+      coords: [44.0005, 11],
+    });
+    expect(await queued()).toBe(1);
+    await drain();
+  });
+  it('un job che fallisce sempre va in fondo con attesa crescente senza bloccare gli altri', async () => {
+    const bad = (await recipes.save(user, { title: 'Rotta', ingredients: ['sale'] })).recipe;
+    const good = (await recipes.save(user, { title: 'Buona', ingredients: ['olio'] })).recipe;
+    const original = brain.projectResource.bind(brain);
+    const spy = vi
+      .spyOn(brain, 'projectResource')
+      .mockImplementation(async (u, resource, input) => {
+        if (resource.id === bad.id) throw new Error('Git indisponibile');
+        return original(u, resource, input);
+      });
+    try {
+      await expect(sync.syncUser(user)).rejects.toThrow('Git indisponibile');
+      expect(
+        (await brain.read(user, resourcePath({ kind: 'recipe', id: good.id })))?.note.title,
+      ).toBe('Buona');
+      const retry = async () =>
+        (
+          await owner.query<{ attempts: number; waiting: boolean }>(
+            'SELECT attempts, next_attempt_at > now() AS waiting FROM brain_resource_queue WHERE user_id=$1',
+            [user],
+          )
+        ).rows;
+      expect(await retry()).toEqual([{ attempts: 1, waiting: true }]);
+      // In attesa: una nuova passata non lo riprova e non fallisce.
+      await sync.syncUser(user);
+      expect(await retry()).toEqual([{ attempts: 1, waiting: true }]);
+      expect(
+        (await owner.query('SELECT 1 FROM brain_resource_pending_users() WHERE user_id=$1', [user]))
+          .rowCount,
+      ).toBe(0);
+      await owner.query('UPDATE brain_resource_queue SET next_attempt_at=now() WHERE user_id=$1', [
+        user,
+      ]);
+      await expect(sync.syncUser(user)).rejects.toThrow('Git indisponibile');
+      const delays = await owner.query<{ s: number }>(
+        'SELECT extract(epoch FROM next_attempt_at - now())::int AS s FROM brain_resource_queue WHERE user_id=$1',
+        [user],
+      );
+      expect(delays.rows[0]?.s).toBeGreaterThan(45);
+    } finally {
+      spy.mockRestore();
+    }
+    // Una modifica dell'utente lo rende subito ritentabile.
+    await recipes.save(user, { title: 'Rotta', ingredients: ['sale', 'pepe'] });
+    await drain();
+    expect(
+      (await brain.read(user, resourcePath({ kind: 'recipe', id: bad.id })))?.note.body,
+    ).toContain('pepe');
   });
   it('recupera GPS da un nuovo invio identico, conserva immagini distinte e collega concetti aggiunti dopo', async () => {
     const input = photo('Vacanza a Trento');
@@ -281,6 +392,10 @@ describe.skipIf(!OWNER || !APP)('risorse Brain: SQL reale, Git e API', () => {
       .mockRejectedValueOnce(new Error('Git indisponibile'));
     await expect(sync.syncUser(user)).rejects.toThrow('Git indisponibile');
     expect(await queued()).toBe(1);
+    // Il job fallito aspetta il prossimo tentativo: qui lo si rende subito dovuto.
+    await owner.query('UPDATE brain_resource_queue SET next_attempt_at=now() WHERE user_id=$1', [
+      user,
+    ]);
     spy.mockImplementationOnce(async (...args) => {
       await recipes.save(user, { title: 'Pasta', ingredients: ['zucchine'] });
       return original(...args);

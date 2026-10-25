@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ClientPerformanceBatch,
   type PerformanceObservation,
+  parseClientPerformanceBatch,
   ServerTurnTrace,
   summarizePerformance,
   timingSummary,
@@ -41,6 +42,19 @@ describe('misure performance', () => {
         ],
       }).success,
     ).toBe(true);
+  });
+  it('scarta la singola misura non valida e conserva le altre del lotto', () => {
+    const valid = sample();
+    expect(
+      parseClientPerformanceBatch({
+        observations: [valid, sample({ source: 'server' }), { ...sample(), text: 'privato' }],
+      }),
+    ).toEqual({ observations: [valid], rejected: 2 });
+    expect(parseClientPerformanceBatch({ observations: [] })).toBeNull();
+    expect(parseClientPerformanceBatch({ observations: [valid], extra: 1 })).toBeNull();
+    expect(
+      parseClientPerformanceBatch({ observations: Array.from({ length: 21 }, () => valid) }),
+    ).toBeNull();
   });
   it('non converte campioni mancanti in zero e separa dispositivi, build ed errori', () => {
     expect(timingSummary([])).toEqual({ samples: 0, p50Ms: null, p95Ms: null });

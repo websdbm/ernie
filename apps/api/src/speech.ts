@@ -44,6 +44,22 @@ export function speechBudget(auth: AuthContext, serverLimit: number): number {
 }
 
 /** Un servizio per processo, una richiesta in corso per utente; nessun testo/audio persistito. */
+const NOT_SENT = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+/** Errori di fetch in cui il server del fornitore non ha mai ricevuto la richiesta. */
+export function connectionNeverOpened(err: unknown): boolean {
+  for (let e = err as { code?: unknown; cause?: unknown } | undefined, i = 0; e && i < 4; i++) {
+    if (typeof e.code === 'string' && NOT_SENT.has(e.code)) return true;
+    e = e.cause as typeof e;
+  }
+  return false;
+}
 export function createSpeechService(opts: SpeechOptions) {
   const active = new Set<string>();
   const windows = new Map<string, { at: number; requests: number }>();
@@ -89,10 +105,9 @@ export function createSpeechService(opts: SpeechOptions) {
           let retry = false;
           let sent = false;
           try {
-            sent = true;
-            const response = await (opts.fetch ?? fetch)(
-              'https://openrouter.ai/api/v1/audio/speech',
-              {
+            let response: Response;
+            try {
+              response = await (opts.fetch ?? fetch)('https://openrouter.ai/api/v1/audio/speech', {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${opts.apiKey}`,
@@ -106,8 +121,14 @@ export function createSpeechService(opts: SpeechOptions) {
                   ...(opts.voiceId ? { voice: opts.voiceId } : {}),
                 }),
                 signal: abort,
-              },
-            );
+              });
+            } catch (err) {
+              // Connessione mai stabilita (DNS, rifiuto, timeout di connessione): la richiesta non è partita e non
+              // costa nulla. Un errore a metà (reset, timeout dopo l'invio) resta registrato: potrebbe essere pagato.
+              sent = !connectionNeverOpened(err);
+              throw err;
+            }
+            sent = true;
             generationId = response.headers.get('x-generation-id');
             if (!response.ok) {
               retry = response.status === 429 || response.status >= 500;

@@ -49,16 +49,32 @@ export const PerformanceObservation = z
 export type PerformanceObservation = z.infer<typeof PerformanceObservation>;
 export type PerformanceMetrics = z.infer<typeof PerformanceMetrics>;
 
+export const ClientPerformanceObservation = PerformanceObservation.refine(
+  (o) => o.source !== 'server',
+  'origine riservata al server',
+);
 export const ClientPerformanceBatch = z
-  .object({
-    observations: z
-      .array(
-        PerformanceObservation.refine((o) => o.source !== 'server', 'origine riservata al server'),
-      )
-      .min(1)
-      .max(20),
-  })
+  .object({ observations: z.array(ClientPerformanceObservation).min(1).max(20) })
   .strict();
+/**
+ * Lotto dal telefono: una misura non valida (versione dell'app con un campo nuovo, tempi incoerenti) viene scartata da
+ * sola, senza perdere le altre del lotto. Il lotto vuoto, troppo lungo o non riconoscibile resta rifiutato.
+ */
+export function parseClientPerformanceBatch(
+  body: unknown,
+): { observations: PerformanceObservation[]; rejected: number } | null {
+  const shape = z
+    .object({ observations: z.array(z.unknown()).min(1).max(20) })
+    .strict()
+    .safeParse(body);
+  if (!shape.success) return null;
+  const observations: PerformanceObservation[] = [];
+  for (const raw of shape.data.observations) {
+    const parsed = ClientPerformanceObservation.safeParse(raw);
+    if (parsed.success) observations.push(parsed.data);
+  }
+  return { observations, rejected: shape.data.observations.length - observations.length };
+}
 
 /** Rank nearest: coerente con i report del corpus; il numero di campioni è sempre esplicito. */
 export function timingSummary(values: readonly number[]) {
@@ -105,20 +121,27 @@ export function summarizePerformance(observations: readonly PerformanceObservati
 
 export function createPerformanceStore(pool: Pool) {
   return {
-    async record(userId: string, observations: readonly PerformanceObservation[]) {
-      const validated = observations.map((o) => PerformanceObservation.parse(o));
+    /** Registra le misure valide; quelle di sessioni inesistenti o altrui vengono scartate una per una. */
+    async record(
+      userId: string,
+      observations: readonly PerformanceObservation[],
+    ): Promise<{ accepted: number; rejected: number }> {
+      const validated = observations.flatMap((o) => {
+        const parsed = PerformanceObservation.safeParse(o);
+        return parsed.success ? [parsed.data] : [];
+      });
       return withUser(pool, userId, async (c) => {
         let accepted = 0;
+        let rejected = observations.length - validated.length;
         for (const o of validated) {
           const session = await c.query('SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2', [
             o.sessionId,
             userId,
           ]);
-          if (!session.rowCount)
-            throw Object.assign(new Error('Sessione inesistente'), {
-              statusCode: 404,
-              code: 'not_found',
-            });
+          if (!session.rowCount) {
+            rejected++;
+            continue;
+          }
           const result = await c.query(
             `INSERT INTO performance_observations
               (user_id,session_id,request_id,source,app_version,input_mode,outcome,reconnected,metrics)
@@ -142,7 +165,7 @@ export function createPerformanceStore(pool: Pool) {
           "DELETE FROM performance_observations WHERE user_id=$1 AND created_at<now()-interval '90 days'",
           [userId],
         );
-        return accepted;
+        return { accepted, rejected };
       });
     },
     async report(userId: string, days: number) {

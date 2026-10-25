@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Authenticator } from '../auth.js';
-import { ClientPerformanceBatch, type PerformanceStore } from '../performance.js';
+import { type PerformanceStore, parseClientPerformanceBatch } from '../performance.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface PerformanceRoutesOptions {
@@ -21,11 +21,14 @@ export async function performanceRoutes(app: FastifyInstance, opts: PerformanceR
     });
     api.post('/v1/performance/observations', { bodyLimit: 24_000 }, async (req, reply) => {
       if (!req.auth) return reply.code(401).send({ error: 'unauthorized' });
-      const parsed = ClientPerformanceBatch.safeParse(req.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'invalid_observations' });
+      // Si scarta la singola misura non valida, non il lotto; se nessuna è valida il lotto è rifiutato.
+      const parsed = parseClientPerformanceBatch(req.body);
+      if (!parsed?.observations.length)
+        return reply.code(400).send({ error: 'invalid_observations' });
+      const result = await opts.store.record(req.auth.userId, parsed.observations);
       return reply
         .code(202)
-        .send({ accepted: await opts.store.record(req.auth.userId, parsed.data.observations) });
+        .send({ accepted: result.accepted, rejected: result.rejected + parsed.rejected });
     });
     api.get('/v1/performance', async (req, reply) => {
       if (!req.auth) return reply.code(401).send({ error: 'unauthorized' });

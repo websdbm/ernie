@@ -1,5 +1,10 @@
 import type { PolicyVerdict } from '@ernie/agent-core';
-import { type ConfirmationPresentation, toolDisplayName } from '@ernie/protocol';
+import {
+  type ConfirmationPresentation,
+  ReminderRepeatInput,
+  repeatLabel,
+  toolDisplayName,
+} from '@ernie/protocol';
 
 /** Motivi interni conservati nell'audit; al cliente arriva una spiegazione comprensibile. */
 export function confirmationReason(verdict: Extract<PolicyVerdict, { kind: 'ask' }>): string {
@@ -207,6 +212,18 @@ export function confirmationPresentation(
     }
     if (typeof value === 'object') {
       const object = value as Record<string, unknown>;
+      // Ricorrenza dei promemoria: «ogni lunedì e giovedì alle 18:30», non «Dettaglio: 1 • 4».
+      if (key === 'repeat') {
+        const repeat = ReminderRepeatInput.safeParse(object);
+        if (repeat.success) {
+          const { weekdays, day, ...rest } = repeat.data;
+          return repeatLabel({
+            ...rest,
+            ...(weekdays ? { weekdays } : {}),
+            ...(day !== undefined ? { day } : {}),
+          });
+        }
+      }
       if (
         typeof object.name === 'string' &&
         Object.keys(object).every((k) => k === 'name' || k === 'quantity')

@@ -67,6 +67,30 @@ describe('Drama 3 speech', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(recorder.record).toHaveBeenCalledTimes(2);
   });
+  it('does not record spend when the request never reaches the provider', async () => {
+    const refused = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+    });
+    const { service, fetcher, recorder } = setup(
+      vi.fn<typeof fetch>().mockRejectedValueOnce(refused).mockResolvedValueOnce(ok()),
+    );
+    expect(await service.synthesize(auth, 'Ciao', 'calm')).toEqual(mp3);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(recorder.record).toHaveBeenCalledOnce();
+    expect(recorder.record).toHaveBeenCalledWith(expect.objectContaining({ finishReason: 'stop' }));
+    const reset = setup(
+      vi
+        .fn<typeof fetch>()
+        .mockRejectedValue(
+          Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } }),
+        ),
+    );
+    await expect(reset.service.synthesize(auth, 'Ciao', 'calm')).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    // Interrotta dopo l'invio: potrebbe essere stata pagata, resta nel registro.
+    expect(reset.recorder.record).toHaveBeenCalledTimes(2);
+  });
   it('processes provider audio and never regenerates paid speech after a processing failure', async () => {
     const { service, options, fetcher, recorder } = setup();
     const louder = Buffer.concat([mp3, Buffer.from('processed')]);

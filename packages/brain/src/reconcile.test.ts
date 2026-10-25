@@ -120,6 +120,21 @@ describe('consolidamento del Second Brain', () => {
     expect(out.connections).toBe(1);
     expect(out.files[0]?.content).not.toContain('Milano');
   });
+  it('esclude dal revisore i luoghi delle foto finché l’utente non li rinomina', () => {
+    const photo: BrainNote = {
+      ...place,
+      path: 'Luoghi/Luogo fotografato il 25 ottobre 2026.md',
+      title: 'Luogo fotografato il 25 ottobre 2026',
+      source: 'foto',
+      coords: [45, 13],
+    };
+    expect(reviewNotes([photo])).toEqual([]);
+    expect(reviewNotes([{ ...photo, title: 'Casa al mare' }]).map((n) => n.title)).toEqual([
+      'Casa al mare',
+    ]);
+    // Una nota dell'utente con lo stesso inizio del titolo resta revisionabile.
+    expect(reviewNotes([{ ...photo, source: 'chat' }])).toHaveLength(1);
+  });
   it('non legge né travasa note riservate, salute o Chi sono, anche se il modello le cita', () => {
     for (const blocked of [
       { ...place, private: true },

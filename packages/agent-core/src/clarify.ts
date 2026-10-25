@@ -73,7 +73,7 @@ export function createClarifyQuestioner(
     instructions: CLARIFY_INSTRUCTIONS,
     model: resolved.model,
   });
-  return async (input) => {
+  return async (input, options) => {
     const t0 = Date.now();
     const result = await agent.generate(questionerPrompt(input), {
       structuredOutput: {
@@ -82,7 +82,9 @@ export function createClarifyQuestioner(
         fallbackValue: { questions: [] },
       },
       // Niente ragionamento: domande brevi, servono in fretta (misurato il 15 ott 2026: 2,4–6 s con ~250 token).
-      modelSettings: { maxOutputTokens: 450 },
+      // Un solo livello di tentativi (retryModelCall del gateway); il segnale ferma la chiamata alla scadenza.
+      modelSettings: { maxOutputTokens: 450, maxRetries: 0 },
+      abortSignal: options?.signal ?? AbortSignal.timeout(15_000),
       providerOptions: {
         anthropic: { thinking: { type: 'disabled' } },
         openrouter: { reasoning: { enabled: false } },

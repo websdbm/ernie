@@ -64,7 +64,7 @@ export function createReminderTitler(
     try {
       const result = (await agent.generate(`Richiesta: «${text.slice(0, 300)}»${who}${style}`, {
         // Il limite comprende il ragionamento del modello: con 60 token la risposta restava vuota.
-        modelSettings: { maxOutputTokens: 400 },
+        modelSettings: { maxOutputTokens: 400, maxRetries: 0 },
         abortSignal: ac.signal,
       } as never)) as unknown as {
         text?: string;

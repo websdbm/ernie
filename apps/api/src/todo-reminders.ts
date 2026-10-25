@@ -52,6 +52,7 @@ interface Options {
   queue: AutomationQueue;
   onChanged?: (userId: string, list: TodoList) => Promise<void>;
   onError?: (error: unknown) => void;
+  now?: () => number;
 }
 
 /**
@@ -156,19 +157,32 @@ export function createTodoReminderSync(options: Options) {
     await options.onChanged?.(userId, result.list);
   };
   let draining = false;
+  // Liste che falliscono nel recupero: attesa crescente (1 min … 1 h), così non occupano sempre i primi 100 posti.
+  const failing = new Map<string, { failures: number; until: number }>();
+  const now = options.now ?? Date.now;
   return {
     sync,
     async drain(): Promise<void> {
       if (draining) return;
       draining = true;
       try {
+        const t = now();
+        const waiting = [...failing].filter(([, f]) => f.until > t).map(([id]) => id);
         const pending = await options.pool.query<{ user_id: string; id: string }>(
-          'SELECT * FROM todo_pending_reminders()',
+          'SELECT * FROM todo_pending_reminders($1::uuid[])',
+          [waiting.slice(0, 1000)],
         );
         for (const row of pending.rows) {
           try {
             await sync(row.user_id, row.id);
+            failing.delete(row.id);
           } catch (error) {
+            const failures = (failing.get(row.id)?.failures ?? 0) + 1;
+            if (failing.size < 10_000 || failing.has(row.id))
+              failing.set(row.id, {
+                failures,
+                until: now() + Math.min(3_600_000, 60_000 * 2 ** (failures - 1)),
+              });
             options.onError?.(error);
           }
         }

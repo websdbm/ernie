@@ -77,7 +77,7 @@ describe.skipIf(!process.env.MIGRATIONS_DATABASE_URL || !process.env.DATABASE_UR
         payload,
       });
       expect(first.statusCode).toBe(202);
-      expect(first.json()).toEqual({ accepted: 1 });
+      expect(first.json()).toEqual({ accepted: 1, rejected: 0 });
       expect(first.headers['cache-control']).toBe('no-store');
       expect(
         (
@@ -88,29 +88,37 @@ describe.skipIf(!process.env.MIGRATIONS_DATABASE_URL || !process.env.DATABASE_UR
             payload,
           })
         ).json(),
-      ).toEqual({ accepted: 0 });
+      ).toEqual({ accepted: 0, rejected: 0 });
       const rows = await owner.query(
         'SELECT metrics FROM performance_observations WHERE request_id=$1',
         [o.requestId],
       );
       expect(rows.rows).toEqual([{ metrics: o.metrics }]);
     });
-    it('isola account, sessioni e rollback del batch misto', async () => {
+    it('isola account e sessioni, scartando solo le misure non valide del lotto', async () => {
       const a = observation();
       const response = await server.inject({
         method: 'POST',
         url: '/v1/performance/observations',
         headers: headers(),
-        payload: { observations: [a, observation({ sessionId: sessions[1] })] },
+        payload: {
+          observations: [
+            a,
+            observation({ sessionId: sessions[1] }),
+            { ...observation(), prompt: 'privato' },
+            observation({ metrics: { completedMs: 10, firstContentMs: 20 } }),
+          ],
+        },
       });
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(202);
+      expect(response.json()).toEqual({ accepted: 1, rejected: 3 });
       expect(
         (
           await owner.query('SELECT 1 FROM performance_observations WHERE request_id=$1', [
             a.requestId,
           ])
         ).rowCount,
-      ).toBe(0);
+      ).toBe(1);
       expect(
         (await server.inject({ method: 'GET', url: '/v1/performance', headers: headers(1) })).json()
           .groups,

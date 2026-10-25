@@ -83,6 +83,9 @@ export interface TurnMemoryJobData {
   readonly consolidationDelayMs: number;
 }
 
+export const TURN_MEMORY_COMPLETED_TTL_S = 3_600;
+export const TURN_MEMORY_FAILED_TTL_S = 3 * 86_400;
+
 /** L'API attende solo l'accettazione Redis; i fallimenti del worker restano ritentabili e visibili. */
 export async function enqueueTurnMemory(
   queue: MemoryQueue,
@@ -102,7 +105,9 @@ export async function enqueueTurnMemory(
     jobId: `turn_${key}`,
     attempts: 8,
     backoff: { type: 'exponential', delay: 3_000 },
-    removeOnComplete: { age: 7 * 86400, count: 10_000 },
-    removeOnFail: false,
+    // Il job contiene l'inizio del messaggio: un completato serve solo come deduplica dei ritentativi del turno
+    // (pochi minuti), un fallito resta tre giorni per la diagnosi e poi sparisce da Redis.
+    removeOnComplete: { age: TURN_MEMORY_COMPLETED_TTL_S, count: 1_000 },
+    removeOnFail: { age: TURN_MEMORY_FAILED_TTL_S, count: 1_000 },
   });
 }

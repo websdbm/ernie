@@ -14,8 +14,10 @@ function userId(req: FastifyRequest): string {
   if (!req.auth) throw Object.assign(new Error('Non autenticato'), { statusCode: 401 });
   return req.auth.userId;
 }
+// Niente default su `active`: un PATCH che cambia solo il testo non deve riaccendere una preferenza spenta
+// (la creazione resta attiva per default nel repository).
 const body = z
-  .object({ text: z.string().min(3).max(400), active: z.boolean().default(true) })
+  .object({ text: z.string().min(3).max(400), active: z.boolean().optional() })
   .strict();
 export async function operatingPreferenceRoutes(
   app: FastifyInstance,
@@ -47,7 +49,8 @@ export async function operatingPreferenceRoutes(
             });
           try {
             const preference = await opts.preferences.save(userId(req), {
-              ...parsed.data,
+              text: parsed.data.text,
+              ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {}),
               ...(method === 'PATCH' ? { id: (req.params as { id: string }).id } : {}),
               kind: 'explicit',
               source: 'settings',

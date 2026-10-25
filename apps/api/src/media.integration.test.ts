@@ -43,6 +43,24 @@ describe('immagini Media', () => {
     fake.writeUInt16BE(65000, index + 5);
     await expect(mediaThumbnail(fake)).rejects.toMatchObject({ code: 'image_dimensions' });
   });
+  it('rifiuta un secondo SOF con dimensioni diverse da quelle controllate', async () => {
+    const index = picture.indexOf(Buffer.from([0xff, 0xc0]));
+    const length = picture.readUInt16BE(index + 2);
+    const sof = Buffer.from(picture.subarray(index, index + 2 + length));
+    sof.writeUInt16BE(9000, 5);
+    sof.writeUInt16BE(9000, 7);
+    const doubled = Buffer.concat([
+      picture.subarray(0, index + 2 + length),
+      sof,
+      picture.subarray(index + 2 + length),
+    ]);
+    expect(() => jpegSize(doubled)).toThrow(/leggere/);
+    await expect(mediaThumbnail(doubled)).rejects.toMatchObject({ code: 'invalid_image' });
+    // Un SOF senza tipo supportato (lossless, aritmetico) non passa per l'unico controllato.
+    const lossless = Buffer.from(picture);
+    lossless[index + 1] = 0xc3;
+    expect(() => jpegSize(lossless)).toThrow();
+  });
 });
 const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL;
 const APP_PASSWORD = process.env.APP_DB_PASSWORD;

@@ -356,7 +356,7 @@ export function createLlmSummarizer(
     const t0 = Date.now();
     const result = await agent.generate(prompt, {
       structuredOutput: { schema: SummarySections },
-      modelSettings: { maxOutputTokens: 1_500 },
+      modelSettings: { maxOutputTokens: 1_500, maxRetries: 0 },
     } as never);
     const r = result as unknown as {
       object?: SummarySections;

@@ -307,7 +307,7 @@ export function createLlmJudge(
         errorStrategy: 'fallback',
         fallbackValue: { decisions: [] },
       },
-      modelSettings: { maxOutputTokens: 1_500 },
+      modelSettings: { maxOutputTokens: 1_500, maxRetries: 0 },
     } as never);
     const r = result as unknown as {
       object?: JudgeOutput;

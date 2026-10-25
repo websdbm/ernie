@@ -248,7 +248,7 @@ export function createLlmExtractor(
         errorStrategy: 'fallback',
         fallbackValue: { facts: [], profile: null, expressions: [] },
       },
-      modelSettings: { maxOutputTokens: 1_536 },
+      modelSettings: { maxOutputTokens: 1_536, maxRetries: 0 },
     } as never);
     const r = result as unknown as {
       object?: Extraction;

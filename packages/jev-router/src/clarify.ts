@@ -31,6 +31,8 @@ export interface ClarifyInput {
 
 export type Questioner = (
   input: ClarifyInput,
+  /** Annulla la chiamata al modello quando il chiarimento scade: niente lavoro a vuoto dopo la risposta. */
+  options?: { readonly signal?: AbortSignal },
 ) => Promise<{ questions: readonly ClarifyQuestion[]; costUsd: number }>;
 
 export interface ClarifyAnswer {
@@ -127,7 +129,7 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
         );
         // Se scade mentre risponde Jev, l'errore arriva dalla sua richiesta: questa non deve restare non gestita.
         deadline.catch(() => {});
-        const asked = await Promise.race([opts.questioner(input), deadline]);
+        const asked = await Promise.race([opts.questioner(input, { signal: ac.signal }), deadline]);
         const questions = asked.questions.filter(sane).slice(0, MAX_QUESTIONS);
         if (!questions.length) return null;
         const res = await opts.jev.decide(

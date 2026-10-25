@@ -72,7 +72,7 @@ export function createHealthExtractor(
           errorStrategy: 'fallback',
           fallbackValue: null,
         },
-        modelSettings: { maxOutputTokens: 12_000 },
+        modelSettings: { maxOutputTokens: 12_000, maxRetries: 0 },
         abortSignal: ac.signal,
       } as never)) as unknown as {
         object?: unknown;

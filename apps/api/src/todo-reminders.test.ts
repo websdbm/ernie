@@ -147,4 +147,40 @@ describe.skipIf(!ownerURL || !appURL)('Todo persisted reminder reconciliation', 
     expect((await active(saved.id)).rows).toEqual([]);
     expect((await repo.get(user, saved.id))?.day).toBe('2000-10-19');
   });
+  it('a list that always fails waits with backoff and does not hold the recovery scan', async () => {
+    const repo = createTodoRepository(app);
+    const broken = await repo.save(user, input(makeList(), true));
+    // Dati non più leggibili dal modello attuale: la riconciliazione fallisce a ogni passata.
+    await owner.query(
+      `UPDATE todo_lists SET items='[{"bad":true}]'::jsonb, revision=revision+1 WHERE user_id=$1 AND id=$2`,
+      [user, broken.id],
+    );
+    let clock = Date.now();
+    const failures: string[] = [];
+    const sync = createTodoReminderSync({
+      pool: app,
+      queue,
+      now: () => clock,
+      onError: () => failures.push('x'),
+    });
+    const pending = async () =>
+      (
+        await app.query<{ id: string }>('SELECT id FROM todo_pending_reminders($1::uuid[])', [
+          [broken.id],
+        ])
+      ).rows.map((r) => r.id);
+    await sync.drain();
+    expect(failures).toHaveLength(1);
+    await sync.drain();
+    expect(failures).toHaveLength(1);
+    expect(await pending()).not.toContain(broken.id);
+    clock += 61_000;
+    await sync.drain();
+    expect(failures).toHaveLength(2);
+    // Seconda attesa più lunga: due minuti.
+    clock += 61_000;
+    await sync.drain();
+    expect(failures).toHaveLength(2);
+    await owner.query('DELETE FROM todo_lists WHERE user_id=$1 AND id=$2', [user, broken.id]);
+  });
 });

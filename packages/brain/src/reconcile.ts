@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mergedIdentities } from './identities.js';
 import { type BrainNote, bodyLinks, serializeNote } from './note.js';
-import { isResourceType, resourceFromPath } from './resources.js';
+import { isResourceType, isUnnamedPhotoPlace, resourceFromPath } from './resources.js';
 
 /** Il modello può scegliere fonti e destinazioni, mai inventare o riscrivere un fatto. */
 export interface BrainConnection {
@@ -53,6 +53,8 @@ export function reviewable(n: BrainNote): boolean {
     n.type !== 'chi-sono' &&
     n.type !== 'salute' &&
     !n.path.startsWith('Salute/') &&
+    // Luoghi creati da una foto e non ancora rinominati: solo una posizione, niente da riordinare.
+    !isUnnamedPhotoPlace(n) &&
     !managedContent(n.body).edited
   );
 }

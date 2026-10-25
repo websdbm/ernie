@@ -268,17 +268,26 @@ describe('YouTube reader', () => {
     expect(s.calls).toHaveLength(2);
   });
 
-  it('keeps working when webpage metadata is blocked, with explicit missing fields', async () => {
-    const s = setup({ html: '<html>Sign in</html>' });
-    const output = (await s.tool.execute({ url }, ctx())) as {
-      metadata: YouTubeMetadata;
-      analysis: z.infer<typeof VideoAnalysis>;
-    };
-    expect(output.analysis.recipe?.title).toBe('MC Strips Fit');
-    expect(output.metadata).toMatchObject({
-      title: 'Titolo oEmbed',
-      description: null,
-      missing: ['descrizione completa', 'durata'],
+  it('refuses instead of analyzing without limits when the page is blocked or the duration is unknown', async () => {
+    for (const html of [
+      '<html>Sign in</html>',
+      player({ lengthSeconds: '0' }),
+      // Pagina leggibile ma non riproducibile (es. accesso richiesto): non si invia il video al modello.
+      player().replace('"status":"OK"', '"status":"LOGIN_REQUIRED"'),
+    ]) {
+      const s = setup({ html });
+      await expect(s.tool.execute({ url }, ctx())).rejects.toMatchObject({
+        code: expect.stringMatching(/^video_(duration_unknown|unavailable)$/),
+      });
+      expect(s.calls).toHaveLength(0);
+    }
+    const blocked = setup({ html: '<html>Sign in</html>' });
+    await expect(blocked.tool.execute({ url }, ctx())).rejects.toMatchObject({
+      code: 'video_unavailable',
+    });
+    const unknown = setup({ html: player({ lengthSeconds: '0' }) });
+    await expect(unknown.tool.execute({ url }, ctx())).rejects.toMatchObject({
+      code: 'video_duration_unknown',
     });
   });
 

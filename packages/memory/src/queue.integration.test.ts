@@ -40,7 +40,8 @@ describe.skipIf(!url)('coda memoria, Redis isolato', () => {
     await Promise.all([enqueueTurnMemory(queue, data), enqueueTurnMemory(queue, data)]);
     expect(await queue.getWaitingCount()).toBe(1);
     const jobs = await queue.getWaiting();
-    expect(jobs[0]?.opts.removeOnFail).toBe(false);
+    expect(jobs[0]?.opts.removeOnFail).toEqual({ age: 3 * 86_400, count: 1_000 });
+    expect(jobs[0]?.opts.removeOnComplete).toEqual({ age: 3_600, count: 1_000 });
     const queuedText = jobs[0]?.data.episode.userText;
     expect(queuedText).toBe(episode.userText.replace(/\s+/g, ' ').trim().slice(0, 140));
     expect(queuedText).toHaveLength(140);

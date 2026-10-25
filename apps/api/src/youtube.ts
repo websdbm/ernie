@@ -326,8 +326,20 @@ export function createYouTubeTool(deps: {
           'Per contenere i costi posso leggere video conclusi di massimo 20 minuti. Inviami una clip più breve.',
           'video_too_long',
         );
-      if (metadata.availability === 'unavailable')
-        throw new ToolError('Serve un video YouTube pubblico e accessibile.', 'video_unavailable');
+      if (metadata.availability !== 'public')
+        throw new ToolError(
+          metadata.availability === 'unavailable'
+            ? 'Serve un video YouTube pubblico e accessibile.'
+            : 'Non riesco a verificare che il video sia pubblico e accessibile. Riprova fra poco o inviami un altro link.',
+          'video_unavailable',
+        );
+      // Senza durata nota il limite dei 20 minuti non si può applicare e un video lungo costerebbe molto di più:
+      // si rifiuta invece di analizzarlo senza limite (revisione del 25 ott 2026).
+      if (metadata.durationSeconds === null)
+        throw new ToolError(
+          'Non riesco a leggere la durata del video: per contenere i costi analizzo solo video di massimo 20 minuti di cui conosco la durata. Riprova fra poco o inviami un altro link.',
+          'video_duration_unknown',
+        );
       const analysis = await analyze(metadata, ctx, signal);
       const result = {
         metadata,

@@ -17,7 +17,10 @@ export interface BudgetGuard {
   assertWithinBudget(userId: string, budgetUsd: number): Promise<{ spentUsd: number }>;
 }
 
-/** Spesa odierna UTC dal registro persistente, inclusi Jev e chiamate poi eliminate. */
+/**
+ * Spesa odierna dal registro persistente, inclusi Jev e chiamate poi eliminate. Il giorno è quello di Roma, come nel
+ * pannello consumi (default Europe/Rome): il tetto si azzera alla mezzanotte italiana, non all'1 o alle 2.
+ */
 export function createBudgetGuard(pool: Pool): BudgetGuard {
   return {
     async assertWithinBudget(userId, budgetUsd) {
@@ -25,7 +28,7 @@ export function createBudgetGuard(pool: Pool): BudgetGuard {
         client.query<{ spent: string | null }>(
           `SELECT COALESCE(SUM(COALESCE(reported_usd, estimated_usd)), 0)::text AS spent
              FROM usage_ledger
-            WHERE user_id = $1 AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`,
+            WHERE user_id = $1 AND created_at >= date_trunc('day', now() AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'Europe/Rome'`,
           [userId],
         ),
       );

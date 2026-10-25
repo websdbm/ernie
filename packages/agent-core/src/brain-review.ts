@@ -89,13 +89,20 @@ export function createBrainReviewer(deps: {
     const started = Date.now();
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 45_000);
+    let result: Awaited<ReturnType<typeof agent.generate>> | undefined;
     try {
-      const result = await agent.generate(JSON.stringify(batch), {
+      result = await agent.generate(JSON.stringify(batch), {
         structuredOutput: { schema: BrainReviewOutput },
         modelSettings: { maxOutputTokens: 3500, maxRetries: 0 },
         maxSteps: 1,
         abortSignal: abort.signal,
       });
+      const parsed = BrainReviewOutput.safeParse(result.object);
+      return parsed.success ? parsed.data : null;
+    } finally {
+      clearTimeout(timer);
+      // Anche un errore o un timeout possono essere già stati pagati: la chiamata resta nel registro dei consumi
+      // (come media-labels), con l'uso noto solo se il modello ha risposto.
       await deps.recorder.record({
         userId,
         sessionId: null,
@@ -105,16 +112,12 @@ export function createBrainReviewer(deps: {
         provider: resolved.provider,
         model: resolved.profile.modelId,
         modelClass: 'light',
-        generationId: result.response?.id ?? null,
-        usage: normalizeUsage(result.usage, result.providerMetadata),
+        generationId: result?.response?.id ?? null,
+        usage: normalizeUsage(result?.usage, result?.providerMetadata),
         ttftMs: null,
         latencyMs: Date.now() - started,
-        finishReason: result.finishReason ?? null,
+        finishReason: result ? (result.finishReason ?? null) : 'error',
       });
-      const parsed = BrainReviewOutput.safeParse(result.object);
-      return parsed.success ? parsed.data : null;
-    } finally {
-      clearTimeout(timer);
     }
   };
 }

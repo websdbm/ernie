@@ -25,3 +25,16 @@ export function managedResourceError(): Error {
     },
   );
 }
+/** Titolo dei luoghi creati dalla posizione di una foto, finché l'utente non dà loro un nome. */
+export const PHOTO_PLACE_PREFIX = 'Luogo fotografato';
+/**
+ * Luogo nato da una foto e non ancora rinominato: contiene solo la posizione di scatto, quindi non va al revisore e
+ * si può rimuovere quando non resta nessuna foto collegata. Vale anche per i vecchi titoli con le coordinate.
+ */
+export function isUnnamedPhotoPlace(n: {
+  readonly type: string;
+  readonly title: string;
+  readonly source?: string | undefined;
+}): boolean {
+  return n.type === 'luogo' && n.source === 'foto' && n.title.startsWith(PHOTO_PLACE_PREFIX);
+}
