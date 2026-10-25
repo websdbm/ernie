@@ -11,8 +11,8 @@ import { TodoListBlock } from './todo.js';
  * per direzione (permette riordino, deduplica e ripresa dopo riconnessione).
  */
 export const PROTOCOL_VERSION = 1 as const;
-/** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`); … 9 = «Consenti sempre» (`allowAlways`, `always`). */
-export const PROTOCOL_MINOR = 9 as const;
+/** Revisione minore compatibile: 1 = persist, cancel con spokenThroughIndex, conferme tool, avatar.*, pong; 2 = blocchi strutturati (`assistant.block`); … 9 = «Consenti sempre» (`allowAlways`, `always`); 10 = precisazioni durante il turno (`user.steer`, `assistant.steer`). */
+export const PROTOCOL_MINOR = 10 as const;
 
 export const EnvelopeBase = z.object({
   v: z.literal(PROTOCOL_VERSION),
@@ -123,6 +123,20 @@ export const ToolConfirmationRespond = event(
   }),
 );
 
+/**
+ * v1.10 (richiesta dell'utente, 25 ott 2026): precisazione scritta mentre Ernie sta ancora rispondendo. Entra nel
+ * turno in corso al passo successivo del modello (fra una chiamata di strumento e l'altra) senza fermarlo; se il turno
+ * non ha più passi, il server risponde `late` e il client la manda come messaggio nuovo a turno finito.
+ */
+export const UserSteer = event(
+  'user.steer',
+  z.object({
+    targetCorrelationId: z.uuid(),
+    text: z.string().min(1).max(4000),
+    inputMode: z.enum(['text', 'voice']).default('text'),
+  }),
+);
+
 export const SessionPing = event('session.ping', z.object({}));
 
 // ---------- server → client ----------
@@ -182,6 +196,16 @@ export const AssistantCompleted = event(
   z.object({
     usage: Usage.optional(),
     finishReason: z.enum(['stop', 'length', 'tool', 'cancelled', 'error']).optional(),
+  }),
+);
+
+/** Esito di una precisazione (`correlationId` = turno bersaglio): entrata nel turno o arrivata tardi. */
+export const AssistantSteer = event(
+  'assistant.steer',
+  z.object({
+    /** `id` dell'evento `user.steer`. */
+    steerId: z.uuid(),
+    status: z.enum(['applied', 'late']),
   }),
 );
 
@@ -675,6 +699,7 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   SessionStart,
   UserMessage,
   UserCancel,
+  UserSteer,
   SessionPing,
   ToolConfirmationRespond,
 ]);
@@ -688,6 +713,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   ToolCompleted,
   AssistantCompleted,
   AssistantCancelled,
+  AssistantSteer,
   SessionPong,
   ToolConfirmationRequested,
   ToolConfirmationResolved,
@@ -722,6 +748,7 @@ export const EVENT_DIRECTION = {
   'session.start': 'client→server',
   'user.message': 'client→server',
   'user.cancel': 'client→server',
+  'user.steer': 'client→server',
   'session.ping': 'client→server',
   'tool.confirmation.respond': 'client→server',
   'session.started': 'server→client',
@@ -732,6 +759,7 @@ export const EVENT_DIRECTION = {
   'tool.completed': 'server→client',
   'assistant.completed': 'server→client',
   'assistant.cancelled': 'server→client',
+  'assistant.steer': 'server→client',
   'session.pong': 'server→client',
   'tool.confirmation.requested': 'server→client',
   'tool.confirmation.resolved': 'server→client',
@@ -753,6 +781,7 @@ export const EVENT_AUDIENCE = {
   'session.start': 'runtime',
   'user.message': 'user',
   'user.cancel': 'runtime',
+  'user.steer': 'user',
   'session.ping': 'runtime',
   'tool.confirmation.respond': 'runtime',
   'session.started': 'runtime',
@@ -763,6 +792,7 @@ export const EVENT_AUDIENCE = {
   'tool.completed': 'runtime',
   'assistant.completed': 'runtime',
   'assistant.cancelled': 'user',
+  'assistant.steer': 'runtime',
   'session.pong': 'runtime',
   'tool.confirmation.requested': 'user',
   'tool.confirmation.resolved': 'runtime',

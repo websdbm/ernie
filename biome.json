@@ -11,6 +11,7 @@
       "!**/dist",
       "!**/node_modules",
       "!apps/ios",
+      "!.claude",
       "!**/*.tsbuildinfo",
       "!pnpm-lock.yaml"
     ]

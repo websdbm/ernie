@@ -229,10 +229,11 @@ final class ConversationStore {
     private var outbox: [Outgoing] = []
     var queuedCount: Int { outbox.count }
 
-    /// Coda ricostruita dai fumetti segnati «in attesa» (gli allegati non si salvano: partono senza).
+    /// Coda ricostruita dai fumetti segnati «in attesa» (gli allegati non si salvano: partono senza). Anche le
+    /// precisazioni rimaste senza esito (app chiusa nel frattempo) ripartono come messaggi.
     private static func pendingOutbox(_ items: [ChatItem]) -> [Outgoing] {
         items.compactMap { item in
-            guard case .message(let m) = item, m.role == .user, m.queued == true else { return nil }
+            guard case .message(let m) = item, m.role == .user, m.queued == true || m.steer == "pending" else { return nil }
             return Outgoing(messageId: m.id, text: m.text, inputMode: m.inputMode ?? "text", attachments: [], payload: m.requestPayload)
         }
     }
@@ -264,6 +265,12 @@ final class ConversationStore {
         // Risposta a voce in corso: si zittisce la voce ma il turno continua (la risposta scritta arriva intera);
         // il nuovo messaggio si mette in coda e parte a turno finito.
         if speaker.isSpeaking { muteSpeech() }
+        // Turno in corso e server con le precisazioni (v1.10): il testo entra nella richiesta senza fermarla
+        // (scelta dell'utente, 25 ott 2026). Con allegati o server vecchi resta la coda di sempre.
+        if let target = activeCorrelationId, attachments.isEmpty, serverProtocolMinor >= 10, connection == .connected {
+            sendSteer(text, inputMode: inputMode, target: target)
+            return
+        }
         let payload = UserMessagePayload(text: text, inputMode: inputMode, locale: "it-IT",
             attachments: attachments.isEmpty ? nil : attachments.map { DocumentAttachment(id: $0.id) },
             device: deviceContext())
@@ -446,6 +453,7 @@ final class ConversationStore {
         closeTrace()
         recomputeState()
         persist()
+        settleSteers(after: correlationId)
         drainOutbox()
     }
 
@@ -455,6 +463,69 @@ final class ConversationStore {
         if activeCorrelationId != nil { recoverActiveRequest() }
         else { drainOutbox() }
     }
+
+    // MARK: - precisazioni durante il turno (v1.10)
+
+    /// Revisione minore del protocollo del server (da `session.started`): dalla 10 accetta le precisazioni.
+    private(set) var serverProtocolMinor = 0
+    private struct PendingSteer { let target: String; let messageId: String; let outgoing: Outgoing }
+    private var pendingSteers: [String: PendingSteer] = [:]
+
+    private func sendSteer(_ text: String, inputMode: String, target: String) {
+        let messageId = Ids.new(), steerId = Ids.new()
+        let payload = UserMessagePayload(text: text, inputMode: inputMode, locale: "it-IT", attachments: nil, device: deviceContext())
+        items.append(.message(ChatMessage(id: messageId, correlationId: target, role: .user, text: text, inputMode: inputMode, createdAt: .now, requestPayload: payload, steer: "pending")))
+        pendingSteers[steerId] = PendingSteer(target: target, messageId: messageId,
+            outgoing: Outgoing(messageId: messageId, text: text, inputMode: inputMode, attachments: [], payload: payload))
+        lastError = nil
+        persist()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.client.send(.userSteer(UserSteerPayload(targetCorrelationId: target, text: text, inputMode: inputMode)),
+                                               correlationId: target, id: steerId)
+            } catch { self.resolveSteer(steerId, status: "late") }
+        }
+    }
+
+    /// `applied`: resta com'è, segnata «aggiunta». `late`: diventa un messaggio in coda che parte a turno finito.
+    private func resolveSteer(_ steerId: String, status: String) {
+        guard let pending = pendingSteers.removeValue(forKey: steerId),
+              let i = items.firstIndex(where: { $0.id == "m:\(pending.messageId)" }), case .message(var m) = items[i] else { return }
+        if status == "applied" {
+            m.steer = "applied"
+            items[i] = .message(m)
+        } else {
+            m.steer = "late"; m.queued = true; m.correlationId = ""
+            items[i] = .message(m)
+            outbox.append(pending.outgoing)
+        }
+        persist()
+        drainOutbox()
+    }
+
+    /// Turno finito: l'esito delle precisazioni arriva subito dopo; senza notizie entro pochi secondi partono come
+    /// messaggi nuovi.
+    private func settleSteers(after correlationId: String) {
+        let waiting = pendingSteers.filter { $0.value.target == correlationId }.map(\.key)
+        guard !waiting.isEmpty else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            for id in waiting { self?.resolveSteer(id, status: "late") }
+        }
+    }
+
+    // MARK: - messaggi vecchi: rimanda, modifica e rimanda
+
+    /// Richiesta di modifica di un proprio messaggio: la chat mette il testo nel campo di scrittura.
+    struct EditRequest: Equatable { let id = UUID(); let text: String }
+    private(set) var editRequest: EditRequest?
+
+    /// «Rimanda»: lo stesso testo di nuovo, come un messaggio scritto adesso (anche il link di un video).
+    func resend(_ message: ChatMessage) { send(message.text, inputMode: "text") }
+
+    /// «Modifica e rimanda»: il testo torna nel campo, si corregge e si manda come messaggio nuovo.
+    func edit(_ message: ChatMessage) { editRequest = EditRequest(text: message.text) }
 
     /// A turno chiuso, parte il primo messaggio in coda (se c'è).
     private func drainOutbox() {
@@ -604,7 +675,10 @@ final class ConversationStore {
             if e.type != "session.pong" { recoveryStatus = nil }
         }
         switch e.payload {
+        case .assistantSteer(let p):
+            resolveSteer(p.steerId, status: p.status)
         case .sessionStarted(let p):
+            serverProtocolMinor = p.protocolMinor ?? 0
             safeRequestReplay = p.safeRequestReplay == true
             onReconnected()
             if let replayed = p.replayed, replayed > 0 { Log.net.info("ripresa: \(replayed) eventi rinviati") }
@@ -726,7 +800,7 @@ final class ConversationStore {
             performance.complete(request: e.correlationId, outcome: .error, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
             fail(p.message)
             if activeCorrelationId == e.correlationId { finishTurn(e.correlationId) }
-        case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .sessionPing, .toolConfirmationRespond:
+        case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .userSteer, .sessionPing, .toolConfirmationRespond:
             break
         }
     }

@@ -1225,6 +1225,79 @@ describe('ClientConnection: routing', () => {
   });
 });
 
+describe('ClientConnection: precisazioni durante il turno (v1.10)', () => {
+  const steer = (sessionId: string, target: string, text: string) =>
+    JSON.stringify(
+      createEvent(
+        'user.steer',
+        { targetCorrelationId: target, text },
+        { sessionId, correlationId: randomUUID(), seq: 99 },
+      ),
+    );
+  const steerEvents = (s: ReturnType<typeof fakeSocket>) =>
+    s.sent
+      .filter((e) => e.type === 'assistant.steer')
+      .map((e) => (e.payload as { status: string }).status);
+
+  it('entra nel turno in corso al passo successivo e torna «applied»', async () => {
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const seen: string[][] = [];
+    const d = deps({
+      runTurn: async (input: TurnInput) => {
+        await gate; // come un passo con una chiamata di strumento
+        const notes = input.takeSteers?.() ?? [];
+        seen.push(notes.map((n) => n.text));
+        input.onSteerApplied?.(notes.map((n) => n.id));
+        await input.emit('assistant.completed', {});
+      },
+    });
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    const target = randomUUID();
+    await conn.handleRaw(c.message('cerca ricette di zucchine', target));
+    await tick();
+    await conn.handleRaw(steer(sessionId, target, 'solo vegetariane'));
+    release();
+    await tick();
+    expect(seen).toEqual([['solo vegetariane']]);
+    expect(steerEvents(s)).toEqual(['applied']);
+  });
+
+  it('senza turno in corso risponde subito «late»; non presa prima della fine diventa «late»', async () => {
+    const s = fakeSocket();
+    const sessionId = randomUUID();
+    const c = client(sessionId);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const d = deps({
+      runTurn: async (input: TurnInput) => {
+        await gate; // turno che finisce senza altri passi: non chiede le precisazioni
+        await input.emit('assistant.completed', {});
+      },
+    });
+    const conn = new ClientConnection(s.socket, auth, d);
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(steer(sessionId, randomUUID(), 'nessun turno'));
+    await tick();
+    expect(steerEvents(s)).toEqual(['late']);
+    const target = randomUUID();
+    await conn.handleRaw(c.message('ciao', target));
+    await tick();
+    await conn.handleRaw(steer(sessionId, target, 'arrivo tardi'));
+    release();
+    await tick();
+    expect(steerEvents(s)).toEqual(['late', 'late']);
+  });
+});
+
 describe('ClientConnection: discesa della classe', () => {
   const HEAVY: Partial<RouteDecision> = {
     modelClass: 'heavy',

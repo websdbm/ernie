@@ -34,6 +34,9 @@ struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     var requestPayload: UserMessagePayload? = nil
     var awaitingResponse: Bool? = nil
     var recoveryNeeded: Bool? = nil
+    /// Precisazione scritta mentre Ernie rispondeva (v1.10): «pending», «applied» (entrata nel turno) o «late»
+    /// (arrivata a risposta finita: parte come messaggio nuovo).
+    var steer: String? = nil
 
     /// I tool inviano snapshot completi: creazione, aggiunta e rilettura della stessa lista aggiornano
     /// una sola scheda nel turno. Conserva la posizione iniziale e l'ultimo contenuto, anche se vuoto.

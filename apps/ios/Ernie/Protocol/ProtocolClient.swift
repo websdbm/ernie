@@ -84,9 +84,9 @@ actor ProtocolClient {
 
     /// Invia un evento client; restituisce il correlationId usato.
     @discardableResult
-    func send(_ payload: EventPayload, correlationId: String = Ids.new(), persist: Bool? = nil) async throws -> String {
+    func send(_ payload: EventPayload, correlationId: String = Ids.new(), id: String = Ids.new(), persist: Bool? = nil) async throws -> String {
         guard sessionReady else { throw URLError(.notConnectedToInternet) }
-        let event = AgentEvent(payload: payload, sessionId: sessionId, correlationId: correlationId, seq: outSeq.next(), persist: persist)
+        let event = AgentEvent(payload: payload, sessionId: sessionId, correlationId: correlationId, seq: outSeq.next(), id: id, persist: persist)
         try await sendRaw(event)
         return correlationId
     }

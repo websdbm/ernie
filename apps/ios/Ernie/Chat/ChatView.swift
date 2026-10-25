@@ -81,6 +81,11 @@ struct ChatView: View {
                             .buttonStyle(.bordered).padding(.horizontal)
                     }
                     InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents)
+                        .onChange(of: conversation.editRequest) { _, request in
+                            guard let request else { return }
+                            draft = request.text
+                            composing = true
+                        }
                 }
                 if Self.showsListening(voice.phase) {
                     ListeningOverlay(voice: voice, conversation: conversation)
@@ -479,7 +484,12 @@ struct MessageRow: View {
                     Text(message.text)
                         .font(palette.terminal ? .system(.body, design: .monospaced) : .body)
                     if message.queued == true {
-                        Label("in attesa che Ernie finisca", systemImage: "clock")
+                        Label(message.steer == "late" ? "arrivata a risposta finita: parte come nuovo messaggio" : "in attesa che Ernie finisca", systemImage: "clock")
+                            .font(.caption2)
+                            .foregroundStyle(palette.bubbleText.opacity(0.8))
+                    } else if let steer = message.steer {
+                        Label(steer == "applied" ? "aggiunta alla richiesta in corso" : "si aggiunge alla richiesta in corso…",
+                              systemImage: steer == "applied" ? "arrow.turn.down.right" : "ellipsis")
                             .font(.caption2)
                             .foregroundStyle(palette.bubbleText.opacity(0.8))
                     }
@@ -493,6 +503,14 @@ struct MessageRow: View {
                     in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 20, bottomTrailingRadius: 6, topTrailingRadius: 20, style: .continuous)
                 )
                 .shadow(color: palette.accent.opacity(0.18), radius: 8, y: 4)
+                // Messaggi vecchi (richiesta dell'utente, 25 ott 2026): rimandarli com'erano o correggerli.
+                .contextMenu {
+                    if let conversation, message.queued != true {
+                        Button { conversation.resend(message) } label: { Label("Rimanda", systemImage: "arrow.uturn.up") }
+                        Button { conversation.edit(message) } label: { Label("Modifica e rimanda", systemImage: "pencil") }
+                    }
+                    Button { UIPasteboard.general.string = message.text } label: { Label("Copia", systemImage: "doc.on.doc") }
+                }
             }
         case .assistant:
             VStack(alignment: .leading, spacing: 6) {

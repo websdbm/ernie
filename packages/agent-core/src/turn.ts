@@ -37,6 +37,23 @@ export interface TurnInput {
   readonly logger: Logger;
   /** Emette un evento del protocollo verso il client (ordinamento e persistenza a carico del chiamante). */
   readonly emit: <T extends EventType>(type: T, payload: PayloadInputOf<T>) => Promise<void> | void;
+  /**
+   * Precisazioni scritte dall'utente mentre il turno è in corso (protocollo v1.10): prese prima di ogni passo del
+   * modello ed entrate come messaggio dell'utente, senza fermare il turno. `onSteerApplied` riceve gli id entrati.
+   */
+  readonly takeSteers?: () => readonly SteerNote[];
+  readonly onSteerApplied?: (ids: readonly string[]) => void;
+}
+
+export interface SteerNote {
+  readonly id: string;
+  readonly text: string;
+  readonly inputMode: 'text' | 'voice';
+}
+
+/** Come arriva al modello una precisazione: è dell'utente, aggiunta mentre la risposta era in corso. */
+export function formatSteer(note: SteerNote): string {
+  return `[Precisazione aggiunta dall'utente mentre rispondevi: tienine conto per il resto della risposta] ${formatUserTurn(note.text, note.inputMode)}`;
 }
 
 export interface TurnResult {
@@ -47,6 +64,11 @@ export interface TurnResult {
   readonly cancelled: boolean;
   readonly costUsd: number;
   readonly loopDetected: boolean;
+}
+
+/** Sottoinsieme della MessageList di Mastra usato per le precisazioni. */
+interface SteerMessageList {
+  add(message: { role: 'user'; content: string }, source: 'input'): unknown;
 }
 
 /** Il turno utente porta la modalità (voce o testo); il contesto del turno viaggia a parte (`turnContext`). */
@@ -135,7 +157,21 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
         timeout: { totalMs: 480_000, stepMs: 360_000 },
       },
       abortSignal: internal.signal,
-    });
+      // Prima di ogni passo: le precisazioni arrivate nel frattempo entrano come messaggi dell'utente (salvati nella
+      // cronologia come tali). Al passo 0 non ce ne sono ancora; dopo una chiamata di strumento sì.
+      ...(input.takeSteers
+        ? {
+            prepareStep: ({ messageList }: { messageList: SteerMessageList }) => {
+              const notes = input.takeSteers?.() ?? [];
+              if (!notes.length) return undefined;
+              for (const note of notes)
+                messageList.add({ role: 'user', content: formatSteer(note) }, 'input');
+              input.onSteerApplied?.(notes.map((n) => n.id));
+              return { messageList };
+            },
+          }
+        : {}),
+    } as never);
 
     for await (const chunk of stream.fullStream) {
       if (internal.signal.aborted) break;

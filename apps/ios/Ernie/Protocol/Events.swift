@@ -48,6 +48,19 @@ struct DeviceContextPayload: Codable, Sendable, Equatable {
     var location: Location?
 }
 
+/// v1.10: precisazione scritta mentre Ernie risponde; entra nel turno in corso al passo successivo.
+struct UserSteerPayload: Codable, Sendable, Equatable {
+    var targetCorrelationId: String
+    var text: String
+    var inputMode: String
+}
+
+/// Esito della precisazione: `applied` (entrata nel turno) o `late` (turno senza altri passi: va come messaggio nuovo).
+struct AssistantSteerPayload: Codable, Sendable, Equatable {
+    var steerId: String
+    var status: String
+}
+
 struct UserCancelPayload: Codable, Sendable, Equatable {
     var targetCorrelationId: String
     var spokenThroughIndex: Int?
@@ -746,6 +759,7 @@ enum EventPayload: Sendable, Equatable {
     case sessionStart(SessionStartPayload)
     case userMessage(UserMessagePayload)
     case userCancel(UserCancelPayload)
+    case userSteer(UserSteerPayload)
     case sessionPing
     case toolConfirmationRespond(ToolConfirmationRespondPayload)
 
@@ -758,6 +772,7 @@ enum EventPayload: Sendable, Equatable {
     case toolCompleted(ToolCompletedPayload)
     case assistantCompleted(AssistantCompletedPayload)
     case assistantCancelled(AssistantCancelledPayload)
+    case assistantSteer(AssistantSteerPayload)
     case toolConfirmationRequested(ToolConfirmationRequestedPayload)
     case toolConfirmationResolved(ToolConfirmationResolvedPayload)
     case avatarEmotion(AvatarEmotionPayload)
@@ -775,6 +790,7 @@ enum EventPayload: Sendable, Equatable {
         case .sessionStart: "session.start"
         case .userMessage: "user.message"
         case .userCancel: "user.cancel"
+        case .userSteer: "user.steer"
         case .sessionPing: "session.ping"
         case .toolConfirmationRespond: "tool.confirmation.respond"
         case .sessionStarted: "session.started"
@@ -786,6 +802,7 @@ enum EventPayload: Sendable, Equatable {
         case .toolCompleted: "tool.completed"
         case .assistantCompleted: "assistant.completed"
         case .assistantCancelled: "assistant.cancelled"
+        case .assistantSteer: "assistant.steer"
         case .toolConfirmationRequested: "tool.confirmation.requested"
         case .toolConfirmationResolved: "tool.confirmation.resolved"
         case .avatarEmotion: "avatar.emotion"
@@ -848,6 +865,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case "session.start": payload = .sessionStart(try c.decode(SessionStartPayload.self, forKey: .payload))
         case "user.message": payload = .userMessage(try c.decode(UserMessagePayload.self, forKey: .payload))
         case "user.cancel": payload = .userCancel(try c.decode(UserCancelPayload.self, forKey: .payload))
+        case "user.steer": payload = .userSteer(try c.decode(UserSteerPayload.self, forKey: .payload))
         case "session.ping": payload = .sessionPing
         case "tool.confirmation.respond": payload = .toolConfirmationRespond(try c.decode(ToolConfirmationRespondPayload.self, forKey: .payload))
         case "session.started": payload = .sessionStarted(try c.decode(SessionStartedPayload.self, forKey: .payload))
@@ -859,6 +877,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case "tool.completed": payload = .toolCompleted(try c.decode(ToolCompletedPayload.self, forKey: .payload))
         case "assistant.completed": payload = .assistantCompleted(try c.decode(AssistantCompletedPayload.self, forKey: .payload))
         case "assistant.cancelled": payload = .assistantCancelled(try c.decode(AssistantCancelledPayload.self, forKey: .payload))
+        case "assistant.steer": payload = .assistantSteer(try c.decode(AssistantSteerPayload.self, forKey: .payload))
         case "tool.confirmation.requested": payload = .toolConfirmationRequested(try c.decode(ToolConfirmationRequestedPayload.self, forKey: .payload))
         case "tool.confirmation.resolved": payload = .toolConfirmationResolved(try c.decode(ToolConfirmationResolvedPayload.self, forKey: .payload))
         case "avatar.emotion": payload = .avatarEmotion(try c.decode(AvatarEmotionPayload.self, forKey: .payload))
@@ -886,6 +905,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case .sessionStart(let p): try c.encode(p, forKey: .payload)
         case .userMessage(let p): try c.encode(p, forKey: .payload)
         case .userCancel(let p): try c.encode(p, forKey: .payload)
+        case .userSteer(let p): try c.encode(p, forKey: .payload)
         case .sessionPing, .unknown: try c.encode(EmptyPayload(), forKey: .payload)
         case .toolConfirmationRespond(let p): try c.encode(p, forKey: .payload)
         case .sessionStarted(let p): try c.encode(p, forKey: .payload)
@@ -897,6 +917,7 @@ struct AgentEvent: Codable, Sendable, Equatable {
         case .toolCompleted(let p): try c.encode(p, forKey: .payload)
         case .assistantCompleted(let p): try c.encode(p, forKey: .payload)
         case .assistantCancelled(let p): try c.encode(p, forKey: .payload)
+        case .assistantSteer(let p): try c.encode(p, forKey: .payload)
         case .toolConfirmationRequested(let p): try c.encode(p, forKey: .payload)
         case .toolConfirmationResolved(let p): try c.encode(p, forKey: .payload)
         case .avatarEmotion(let p): try c.encode(p, forKey: .payload)

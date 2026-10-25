@@ -8,6 +8,7 @@ import {
   type PendingApprovals,
   RunContext,
   routeCommand,
+  type SteerNote,
   type TurnInput,
 } from '@ernie/agent-core';
 import {
@@ -254,6 +255,8 @@ export class ClientConnection {
   private readonly dedupe = new EventDeduper(2048);
   private readonly activeTurns = new Map<string, AbortController>();
   private readonly preparingTurns = new Map<string, AbortController>();
+  /** Precisazioni in attesa del prossimo passo del modello, per turno (protocollo v1.10). */
+  private readonly steers = new Map<string, SteerNote[]>();
   /** Note del second brain già accennate in questa conversazione (una volta per nota). */
   private readonly brainSuggested = new Set<string>();
   /** La proposta di travaso si valuta una volta per conversazione. */
@@ -364,6 +367,8 @@ export class ClientConnection {
         }
         return;
       }
+      case 'user.steer':
+        return this.onUserSteer(event);
       case 'session.ping':
         await this.send(
           'session.pong',
@@ -621,8 +626,43 @@ export class ClientConnection {
       );
     } finally {
       this.preparingTurns.delete(event.correlationId);
-      if (!this.activeTurns.has(event.correlationId)) this.requestInFlight = undefined;
+      if (!this.activeTurns.has(event.correlationId)) {
+        this.requestInFlight = undefined;
+        // Turno chiuso senza modello (comando, skill, errore): le precisazioni diventano messaggi nuovi.
+        await this.flushLateSteers(event.correlationId);
+      }
     }
+  }
+
+  /**
+   * Precisazione durante una risposta (richiesta dell'utente, 25 ott 2026: «entra senza fermare»). Si conserva per il
+   * turno bersaglio e il modello la riceve al passo successivo; se il turno non è più in corso, `late` subito.
+   */
+  private async onUserSteer(event: Extract<ClientEvent, { type: 'user.steer' }>): Promise<void> {
+    const target = event.payload.targetCorrelationId;
+    if (!this.sessionId || event.sessionId !== this.sessionId) {
+      await this.sendError(
+        'session_mismatch',
+        'sessionId diverso da quello della connessione',
+        false,
+        event.correlationId,
+      );
+      return;
+    }
+    if (!this.activeTurns.has(target) && !this.preparingTurns.has(target)) {
+      await this.send('assistant.steer', { steerId: event.id, status: 'late' }, target);
+      return;
+    }
+    const list = this.steers.get(target) ?? [];
+    list.push({ id: event.id, text: event.payload.text, inputMode: event.payload.inputMode });
+    this.steers.set(target, list.slice(-5));
+  }
+
+  private async flushLateSteers(correlationId: string): Promise<void> {
+    const left = this.steers.get(correlationId) ?? [];
+    this.steers.delete(correlationId);
+    for (const note of left)
+      await this.send('assistant.steer', { steerId: note.id, status: 'late' }, correlationId);
   }
 
   private async executeUserMessage(
@@ -1202,6 +1242,18 @@ export class ClientConnection {
           this.remember('assistente', String((payload as { text: string }).text));
         return this.send(type, payload, correlationId);
       },
+      takeSteers: () => {
+        const notes = this.steers.get(correlationId) ?? [];
+        this.steers.delete(correlationId);
+        for (const note of notes) this.remember('utente', note.text);
+        return notes;
+      },
+      onSteerApplied: (ids) => {
+        for (const steerId of ids)
+          void this.send('assistant.steer', { steerId, status: 'applied' }, correlationId).catch(
+            () => {},
+          );
+      },
     })
       .then(async (res) => {
         if (this.activeTurns.get(correlationId) === ac) clearToolContext();
@@ -1254,8 +1306,9 @@ export class ClientConnection {
         await this.sendError('turn_failed', 'Il turno non è stato completato', true, correlationId);
         await this.sendEmotion(correlationId, { userText: text, replyText: '', outcome: 'error' });
       })
-      .finally(() => {
+      .finally(async () => {
         this.activeTurns.delete(correlationId);
+        await this.flushLateSteers(correlationId);
         if (this.requestInFlight === correlationId) this.requestInFlight = undefined;
         void this.deps.store.touch(this.auth.userId, sessionId).catch(() => {});
       })
