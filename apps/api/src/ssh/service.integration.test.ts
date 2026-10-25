@@ -4,7 +4,7 @@ import type { SshPlanInput, SshServer } from '@ernie/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 import { createSshService } from './service.js';
-import type { SshProviderAdapter, SshTransport } from './types.js';
+import { SshError, type SshProviderAdapter, type SshTransport } from './types.js';
 
 const OWNER = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL,
   PASSWORD = process.env.APP_DB_PASSWORD;
@@ -25,7 +25,7 @@ describe.skipIf(!OWNER || !PASSWORD)(
       await app?.end();
       await owner?.end();
     });
-    async function setup() {
+    async function setup(options: { probeLimit?: { max: number; windowMs: number } } = {}) {
       const a = randomUUID(),
         b = randomUUID();
       users.push(a, b);
@@ -37,6 +37,7 @@ describe.skipIf(!OWNER || !PASSWORD)(
         [a, true],
         [b, true],
       ]);
+      const owners = new Set<string>();
       let generation = 0,
         clock = new Date();
       const transport: SshTransport = {
@@ -58,6 +59,8 @@ describe.skipIf(!OWNER || !PASSWORD)(
         pool: app,
         masterKey: Buffer.alloc(32, 7).toString('base64'),
         canUse: async (u) => allowed.get(u) === true,
+        isOwner: async (u) => owners.has(u),
+        ...(options.probeLimit ? { probeLimit: options.probeLimit } : {}),
         transport,
         providers: { vultr: provider, contabo: provider },
         now: () => clock,
@@ -83,6 +86,7 @@ describe.skipIf(!OWNER || !PASSWORD)(
         a,
         b,
         allowed,
+        owners,
         service,
         transport,
         provider,
@@ -92,6 +96,7 @@ describe.skipIf(!OWNER || !PASSWORD)(
         setClock: (date: Date) => {
           clock = date;
         },
+        now: () => clock,
       };
     }
     it('does not expose secrets and enforces owner RLS and composite site references', async () => {
@@ -318,6 +323,255 @@ describe.skipIf(!OWNER || !PASSWORD)(
       expect(result.output).not.toContain('synthetic-private');
       expect(result.output).not.toContain('SYNTHETIC_PRIVATE_1');
       expect(vi.mocked(transport.run).mock.calls[0]?.[2]).toBe('df -hP; df -iP');
+    });
+    it('opens the Tailscale network only to the owner role and limits probes per account', async () => {
+      const { a, owners, service, transport, server, setClock, now } = await setup({
+        probeLimit: { max: 3, windowMs: 60_000 },
+      });
+      // setup ha già fatto una sonda (1/3).
+      expect(vi.mocked(transport.probe).mock.calls[0]?.[1]).toEqual({ tailnet: false });
+      owners.add(a);
+      await service.hostProbe(a, server.id);
+      expect(vi.mocked(transport.probe).mock.calls[1]?.[1]).toEqual({ tailnet: true });
+      await service.diagnose(a, { serverId: server.id, check: 'disk' });
+      expect(vi.mocked(transport.run).mock.calls[0]?.[4]).toEqual({ tailnet: true });
+      // Sonde e diagnosi condividono il limite: la quarta nello stesso minuto è rifiutata senza connettersi.
+      await expect(service.hostProbe(a, server.id)).rejects.toMatchObject({
+        code: 'rate_limited',
+        statusCode: 429,
+      });
+      await expect(
+        service.diagnose(a, { serverId: server.id, check: 'disk' }),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(transport.probe).toHaveBeenCalledTimes(2);
+      expect(transport.run).toHaveBeenCalledTimes(1);
+      setClock(new Date(now().getTime() + 61_000));
+      owners.delete(a);
+      await service.hostProbe(a, server.id);
+      expect(vi.mocked(transport.probe).mock.calls[2]?.[1]).toEqual({ tailnet: false });
+      // Porte privilegiate diverse dalla 22: rifiutate già al salvataggio.
+      await expect(
+        service.serverSave(a, { name: 'Web', host: '192.0.2.40', port: 80 }),
+      ).rejects.toMatchObject({ code: 'port_not_allowed' });
+      await service.serverSave(a, { name: 'Custom', host: '192.0.2.41', port: 2222 });
+    });
+    it('reports a network refusal before connecting as a failed, not uncertain, intervention', async () => {
+      const { a, service, transport, plan } = await setup();
+      vi.mocked(transport.run).mockRejectedValueOnce(
+        new SshError('address_not_allowed', 'Indirizzo della rete interna non consentito.', 403),
+      );
+      const pending = await plan(),
+        result = await service.approve(a, pending.id);
+      expect(result.status).toBe('failed');
+      expect(result.output).toContain('rete interna');
+      expect(transport.run).toHaveBeenCalledTimes(1);
+    });
+    it('revokes, disconnects, rejects and deletes with the skill disabled or the kill switch on', async () => {
+      const { a, b, allowed, service, transport, server, plan } = await setup();
+      await service.providerSave(a, 'vultr', {
+        provider: 'vultr',
+        apiKey: 'synthetic-api-key-222222',
+      });
+      const snapshot = await service.siteSave(a, {
+        serverId: server.id,
+        name: 'Sito',
+        url: 'https://example.test',
+        path: '/var/www/html',
+      });
+      const web = snapshot.sites[0];
+      if (!web) throw new Error('site');
+      const pending = await plan({
+        siteId: web.id,
+        kind: 'wp_cli',
+        command: 'core version',
+        verificationCommand: 'core version',
+      });
+      allowed.set(a, false);
+      await expect(service.snapshot(a)).rejects.toMatchObject({ code: 'skill_disabled' });
+      await expect(plan()).rejects.toMatchObject({ code: 'skill_disabled' });
+      expect((await service.reject(a, pending.id)).status).toBe('rejected');
+      let after = await service.providerDisconnect(a, 'vultr');
+      expect(after.providers).toEqual([]);
+      const stored = await owner.query(
+        'SELECT count(*)::int AS n FROM ssh_provider_credentials WHERE user_id=$1',
+        [a],
+      );
+      expect(stored.rows[0]?.n).toBe(0);
+      after = await service.keyRevoke(a);
+      expect(after.key).toBeNull();
+      // Un altro account non vede né cancella l'inventario di a (RLS).
+      allowed.set(b, false);
+      await expect(service.siteDelete(b, web.id)).rejects.toMatchObject({ code: 'not_found' });
+      await expect(service.serverDelete(b, server.id)).rejects.toMatchObject({
+        code: 'not_found',
+      });
+      after = await service.siteDelete(a, web.id);
+      expect(after.sites).toEqual([]);
+      after = await service.serverDelete(a, server.id);
+      expect(after.servers).toEqual([]);
+      expect(after.operations).toEqual([]);
+      const actions = (
+        await owner.query<{ action: string }>(
+          'SELECT action FROM ssh_audit_events WHERE user_id=$1',
+          [a],
+        )
+      ).rows.map((r) => r.action);
+      expect(actions).toEqual(
+        expect.arrayContaining([
+          'reject',
+          'provider_disconnect',
+          'key_revoke',
+          'site_delete',
+          'server_delete',
+        ]),
+      );
+      expect(transport.run).not.toHaveBeenCalled();
+    });
+    it('refuses to delete a server while an intervention is running on it', async () => {
+      const { a, service, transport, plan, server } = await setup();
+      const pending = await plan();
+      let refused: unknown;
+      vi.mocked(transport.run).mockImplementationOnce(async () => {
+        refused = await service.serverDelete(a, server.id).catch((error: unknown) => error);
+        return { stdout: 'ok', stderr: '', exitCode: 0, truncated: false };
+      });
+      expect((await service.approve(a, pending.id)).status).toBe('succeeded');
+      expect(refused).toMatchObject({ code: 'operation_running', statusCode: 409 });
+    });
+    it('keeps an intervention approved just before expiry running past the plan deadline', async () => {
+      const { a, service, transport, plan, setClock, now } = await setup();
+      const created = now();
+      const pending = await plan();
+      setClock(new Date(created.getTime() + 29 * 60_000));
+      let during: string | undefined;
+      vi.mocked(transport.run).mockImplementationOnce(async () => {
+        // Oltre la scadenza del piano (30 minuti) ma dentro la durata massima dall'avvio.
+        setClock(new Date(created.getTime() + 34 * 60_000));
+        during = (await service.operation(a, pending.id)).status;
+        return { stdout: 'ok', stderr: '', exitCode: 0, truncated: false };
+      });
+      const result = await service.approve(a, pending.id);
+      expect(during).toBe('running');
+      expect(result.status).toBe('succeeded');
+      expect(transport.run).toHaveBeenCalledTimes(2);
+    });
+    it('writes a late real outcome over an uncertain mark and audits what was stored', async () => {
+      const { a, service, transport, plan, setClock, now } = await setup();
+      const pending = await plan();
+      let during: string | undefined;
+      vi.mocked(transport.run)
+        .mockImplementationOnce(async () => ({
+          stdout: 'ok',
+          stderr: '',
+          exitCode: 0,
+          truncated: false,
+        }))
+        .mockImplementationOnce(async () => {
+          // La verifica si allunga oltre la durata massima: il recupero la segna incerta.
+          setClock(new Date(now().getTime() + 11 * 60_000));
+          during = (await service.operation(a, pending.id)).status;
+          return { stdout: 'verified', stderr: '', exitCode: 0, truncated: false };
+        });
+      const result = await service.approve(a, pending.id);
+      expect(during).toBe('uncertain');
+      expect(result.status).toBe('succeeded');
+      expect(result.output).toContain('segnato incerto');
+      expect(result.output).toContain('verified');
+      const finish = (
+        await owner.query<{ metadata: Record<string, unknown> }>(
+          "SELECT metadata FROM ssh_audit_events WHERE user_id=$1 AND action='operation_finish'",
+          [a],
+        )
+      ).rows;
+      expect(finish).toEqual([
+        {
+          metadata: {
+            operationId: pending.id,
+            status: 'succeeded',
+            previousStatus: 'uncertain',
+          },
+        },
+      ]);
+    });
+    it('adds --allow-root to WordPress diagnosis and plans for root or docker exec only', async () => {
+      const { a, service, transport, server, plan } = await setup();
+      let snapshot = await service.siteSave(a, {
+        serverId: server.id,
+        name: 'Sito',
+        url: 'https://example.test',
+        path: '/var/www/html',
+      });
+      const web = snapshot.sites[0];
+      if (!web) throw new Error('site');
+      await service.diagnose(a, { serverId: server.id, siteId: web.id, check: 'wordpress' });
+      expect(vi.mocked(transport.run).mock.calls[0]?.[2]).toBe(
+        "wp --path='/var/www/html' --allow-root 'core' 'version'",
+      );
+      const pending = await plan({
+        siteId: web.id,
+        kind: 'wp_cli',
+        command: 'plugin list',
+        verificationCommand: 'core version',
+      });
+      await service.approve(a, pending.id);
+      expect(vi.mocked(transport.run).mock.calls[1]?.[2]).toBe(
+        "wp --path='/var/www/html' --allow-root 'plugin' 'list'",
+      );
+      snapshot = await service.serverSave(a, {
+        id: server.id,
+        name: server.name,
+        host: server.host,
+        username: 'deploy',
+      });
+      await service.hostProbe(a, server.id);
+      await service.hostTrust(a, server.id, 'SHA256:synthetic-host');
+      await service.diagnose(a, { serverId: server.id, siteId: web.id, check: 'wordpress' });
+      expect(vi.mocked(transport.run).mock.calls.at(-1)?.[2]).toBe(
+        "wp --path='/var/www/html' 'core' 'version'",
+      );
+      await service.siteSave(a, { ...web, container: 'wp-app' });
+      await service.diagnose(a, { serverId: server.id, siteId: web.id, check: 'wordpress' });
+      expect(vi.mocked(transport.run).mock.calls.at(-1)?.[2]).toBe(
+        "docker exec 'wp-app' wp --path='/var/www/html' --allow-root 'core' 'version'",
+      );
+    });
+    it('lists provider instances outside the account lock and rechecks the target before reboot', async () => {
+      const { a, service, provider, server, plan } = await setup();
+      await service.providerSave(a, 'vultr', {
+        provider: 'vultr',
+        apiKey: 'synthetic-api-key-333333',
+      });
+      await service.serverSave(a, {
+        id: server.id,
+        name: server.name,
+        host: server.host,
+        provider: 'vultr',
+        providerInstanceId: 'instance-a',
+      });
+      const reboot = () => plan({ kind: 'provider_reboot', command: '', verificationCommand: '' });
+      const other = await plan({ title: 'Altro intervento' });
+      const first = await reboot();
+      // Durante la lettura delle istanze il lock dell'account è libero: un'altra operazione non attende.
+      vi.mocked(provider.list).mockImplementationOnce(async () => {
+        expect((await service.reject(a, other.id)).status).toBe('rejected');
+        return [{ id: 'instance-a', name: 'Synthetic', ip: '192.0.2.12', status: 'running' }];
+      });
+      expect((await service.approve(a, first.id)).status).toBe('succeeded');
+      expect(provider.reboot).toHaveBeenCalledTimes(1);
+      // Bersaglio cambiato mentre si leggevano le istanze: nessun riavvio.
+      const second = await reboot();
+      vi.mocked(provider.list).mockImplementationOnce(async () => {
+        await service.serverSave(a, {
+          id: server.id,
+          name: 'Rinominato',
+          host: server.host,
+          provider: 'vultr',
+          providerInstanceId: 'instance-a',
+        });
+        return [{ id: 'instance-a', name: 'Synthetic', ip: '192.0.2.12', status: 'running' }];
+      });
+      expect((await service.approve(a, second.id)).status).toBe('failed');
+      expect(provider.reboot).toHaveBeenCalledTimes(1);
     });
   },
 );

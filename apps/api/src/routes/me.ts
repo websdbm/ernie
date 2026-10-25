@@ -13,6 +13,7 @@ export interface MeRoutesOptions {
   readonly allowedOrigins: readonly string[];
   readonly pool: Pool;
   readonly version: string;
+  /** L'interruttore di emergenza ha cambiato valore (non chiamato se il PATCH lo ripete uguale). */
   readonly onSettingsChanged?: (userId: string) => Promise<void>;
   /** L'email vive nella scheda anagrafica: cambiata dalle impostazioni, si aggiorna anche lì. */
   readonly onEmailChanged?: (userId: string, email: string) => Promise<void>;
@@ -114,18 +115,24 @@ export async function meRoutes(app: FastifyInstance, opts: MeRoutesOptions): Pro
           reply,
           'chiavi ammesse: killSwitch, dailyBudgetUsd, speakReplies, email, extraEmails, emailNotifications, proactive, quietHours, proactiveDailyCap, conversationStyle, learnLexicon',
         );
-      const row = await withUser(
-        opts.pool,
-        auth.userId,
-        async (c) =>
-          (
-            await c.query<{ settings: Record<string, unknown> }>(
-              `UPDATE users SET settings = settings || $2::jsonb WHERE id = $1 RETURNING settings`,
-              [auth.userId, JSON.stringify(b.data)],
-            )
-          ).rows[0],
-      );
-      if (b.data.killSwitch !== undefined) await opts.onSettingsChanged?.(auth.userId);
+      const { row, killSwitchBefore } = await withUser(opts.pool, auth.userId, async (c) => {
+        const before = (
+          await c.query<{ settings: Record<string, unknown> }>(
+            `SELECT settings FROM users WHERE id = $1 FOR UPDATE`,
+            [auth.userId],
+          )
+        ).rows[0]?.settings;
+        const updated = (
+          await c.query<{ settings: Record<string, unknown> }>(
+            `UPDATE users SET settings = settings || $2::jsonb WHERE id = $1 RETURNING settings`,
+            [auth.userId, JSON.stringify(b.data)],
+          )
+        ).rows[0];
+        return { row: updated, killSwitchBefore: before?.killSwitch === true };
+      });
+      // Solo un cambio reale dell'interruttore di emergenza invalida agenti e piani SSH.
+      if (b.data.killSwitch !== undefined && b.data.killSwitch !== killSwitchBefore)
+        await opts.onSettingsChanged?.(auth.userId);
       if (b.data.email !== undefined) await opts.onEmailChanged?.(auth.userId, b.data.email);
       if (b.data.conversationStyle !== undefined || b.data.learnLexicon !== undefined)
         opts.onStyleChanged?.(auth.userId);

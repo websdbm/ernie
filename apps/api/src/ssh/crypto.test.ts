@@ -62,6 +62,27 @@ describe('SSH encrypted secrets and bounded command compilation', () => {
       'df -hP; df -iP',
     );
   });
+  it('runs WP-CLI with --allow-root only as root or through docker exec, never twice', () => {
+    const site = {
+      id: randomUUID(),
+      serverId: randomUUID(),
+      name: 'Sito',
+      url: 'https://example.test',
+      path: '/var/www/html',
+      container: '',
+    };
+    const check = { serverId: site.serverId, check: 'wordpress' } as const;
+    expect(diagnosticCommand(check, site, { root: true })).toBe(
+      "wp --path='/var/www/html' --allow-root 'core' 'version'",
+    );
+    expect(diagnosticCommand(check, site)).toBe("wp --path='/var/www/html' 'core' 'version'");
+    expect(diagnosticCommand(check, { ...site, container: 'wp' })).toBe(
+      "docker exec 'wp' wp --path='/var/www/html' --allow-root 'core' 'version'",
+    );
+    expect(wordpressCommand(site, 'core version --allow-root', { root: true })).toBe(
+      "wp --path='/var/www/html' 'core' 'version' '--allow-root'",
+    );
+  });
   it('redacts private keys, known secrets, credential assignments and bearer tokens', () => {
     const output = sanitizeSshOutput(
       'password=synthetic-password\nDB_PASSWORD=db-secret\n{"client_secret":"json-secret"}\npostgres://user:db-pass@example.test/db\nAuthorization: Bearer synthetic-token\n-----BEGIN OPENSSH PRIVATE KEY-----\nprivate material\n-----END OPENSSH PRIVATE KEY-----\nexact-secret',

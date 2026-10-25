@@ -70,6 +70,9 @@ export async function sshRoutes(app: FastifyInstance, opts: SshRoutesOptions): P
       opts.service.serverSave(user(req), req.body as never),
     );
     api.post('/v1/ssh/sites', async (req) => opts.service.siteSave(user(req), req.body as never));
+    // Cancellazioni dell'inventario dell'account (RLS): valgono anche a skill spenta.
+    api.delete('/v1/ssh/servers/:id', async (req) => opts.service.serverDelete(user(req), id(req)));
+    api.delete('/v1/ssh/sites/:id', async (req) => opts.service.siteDelete(user(req), id(req)));
     api.post('/v1/ssh/servers/:id/probe', async (req) => {
       empty(req.body);
       return opts.service.hostProbe(user(req), id(req));

@@ -157,7 +157,7 @@ import { createSentinelStore } from './sentinels.js';
 import { buildServer } from './server.js';
 import { createSessionStore } from './sessions/store.js';
 import { createSpeechService } from './speech.js';
-import { createSshService } from './ssh/service.js';
+import { createSshService, sshAllowedBySettings } from './ssh/service.js';
 import { createSshTools } from './ssh/tools.js';
 import { createSshProviderAdapters } from './ssh-providers.js';
 import { createSshTransport } from './ssh-transport.js';
@@ -465,10 +465,16 @@ async function main(): Promise<void> {
   const ssh = createSshService({
     pool: postgres.pool,
     masterKey: config.ssh.masterKey,
-    canUse: async (userId) => {
-      const settings = await loadUserSettings(userId);
-      return settings.killSwitch !== true && enabledSkillIds(settings).has('ssh');
-    },
+    canUse: async (userId) => sshAllowedBySettings(await loadUserSettings(userId)),
+    // Skill SSH per tutti gli account (decisione dell'utente), ma la rete Tailscale solo al titolare.
+    isOwner: async (userId) =>
+      withUser(
+        postgres.pool,
+        userId,
+        async (c) =>
+          (await c.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [userId]))
+            .rows[0]?.role === 'owner',
+      ),
     transport: createSshTransport(),
     providers: createSshProviderAdapters(),
   });
@@ -959,6 +965,8 @@ async function main(): Promise<void> {
       onEmailChanged: async (userId, email) => {
         await setProfileEmail(userId, email);
       },
+      // Chiamato solo quando l'interruttore di emergenza cambia davvero valore: i piani SSH in attesa
+      // decadono soltanto allora, non a ogni modifica delle impostazioni.
       onSettingsChanged: async (userId) => {
         companions.invalidateUser(userId);
         await ssh.invalidate(userId);
@@ -982,9 +990,15 @@ async function main(): Promise<void> {
       allowedOrigins: config.ws.allowedOrigins,
       pool: postgres.pool,
       applyGuardian,
-      onChanged: async (userId, skillId) => {
+      onChanged: async (userId, skillId, before) => {
         companions.invalidateUser(userId);
-        if (skillId === 'ssh') await ssh.invalidate(userId);
+        // Solo se il permesso SSH effettivo cambia (senza lo stato precedente si invalida comunque).
+        if (
+          skillId === 'ssh' &&
+          (!before ||
+            sshAllowedBySettings(before) !== sshAllowedBySettings(await loadUserSettings(userId)))
+        )
+          await ssh.invalidate(userId);
       },
     },
     documents: {
@@ -1052,6 +1066,8 @@ async function main(): Promise<void> {
       pool: postgres.pool,
       store: guardian,
       onChanged: (userId) => companions.invalidateUser(userId),
+      // Permessi del genitore cambiati o controllo tolto: i piani SSH del figlio decadono.
+      onSkillsChanged: (userId) => ssh.invalidate(userId),
       lexicon,
     },
     profile: {

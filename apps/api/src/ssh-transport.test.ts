@@ -1,7 +1,8 @@
 import { once } from 'node:events';
 import { SshServer } from '@ernie/protocol';
 import ssh2, { type Server as SshTestServer } from 'ssh2';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { allowedSshPort } from './ssh/types.js';
 import {
   allowedSshAddress,
   createSshTransport,
@@ -104,7 +105,7 @@ describe('SSH transport with real handshake', () => {
     expect(executions).toBeLessThanOrEqual(n + 1);
   });
 });
-it('blocks loopback, private networks, metadata and mapped addresses, allows public and tailnet', async () => {
+it('blocks loopback, private networks, metadata and mapped addresses, allows public addresses', async () => {
   for (const address of [
     '127.0.0.1',
     '169.254.169.254',
@@ -118,11 +119,80 @@ it('blocks loopback, private networks, metadata and mapped addresses, allows pub
     'fc00::1',
     '0.0.0.0',
     '224.0.0.1',
+    '192.0.0.8',
+    '198.18.0.1',
+    '198.19.255.254',
   ])
     expect(allowedSshAddress(address), address).toBe(false);
-  expect(allowedSshAddress('100.91.204.102')).toBe(true);
   expect(allowedSshAddress('8.8.8.8')).toBe(true);
+  expect(allowedSshAddress('198.20.0.1')).toBe(true);
   await expect(resolveSshHost('localhost')).rejects.toThrow('riservato');
+});
+it('admits the Tailscale range only with owner network access, also after DNS resolution', async () => {
+  expect(allowedSshAddress('100.91.204.102')).toBe(false);
+  expect(allowedSshAddress('100.91.204.102', { tailnet: false })).toBe(false);
+  expect(allowedSshAddress('100.91.204.102', { tailnet: true })).toBe(true);
+  // Anche il titolare resta fuori dalle reti private vere e proprie.
+  expect(allowedSshAddress('10.0.0.1', { tailnet: true })).toBe(false);
+  const lookup = async () => [{ address: '100.101.102.103' }];
+  await expect(
+    resolveSshHost('box.tailnet.example', { tailnet: false }, { lookup }),
+  ).rejects.toMatchObject({ code: 'address_not_allowed' });
+  await expect(resolveSshHost('box.tailnet.example', { tailnet: true }, { lookup })).resolves.toBe(
+    '100.101.102.103',
+  );
+  await expect(resolveSshHost('100.101.102.103')).rejects.toMatchObject({
+    code: 'address_not_allowed',
+  });
+});
+it('stops waiting for a stalled DNS lookup', async () => {
+  const started = Date.now();
+  await expect(
+    resolveSshHost(
+      'slow.example',
+      { tailnet: false },
+      {
+        lookup: () => new Promise(() => {}),
+        timeoutMs: 30,
+      },
+    ),
+  ).rejects.toMatchObject({ code: 'dns_failed' });
+  expect(Date.now() - started).toBeLessThan(1000);
+  await expect(
+    resolveSshHost(
+      'missing.example',
+      { tailnet: false },
+      {
+        lookup: async () => {
+          throw new Error('ENOTFOUND');
+        },
+      },
+    ),
+  ).rejects.toMatchObject({ code: 'dns_failed' });
+});
+it('refuses privileged non-SSH ports before resolving or connecting', async () => {
+  const resolveHost = vi.fn(async () => '203.0.113.5');
+  const transport = createSshTransport({ resolveHost });
+  const server = SshServer.parse({
+    id: '77349c82-55e5-4c6c-befb-ce0dc0744d68',
+    name: 'Web',
+    host: 'web.example',
+    port: 80,
+    username: 'root',
+    provider: null,
+    providerInstanceId: null,
+    fingerprint: 'SHA256:fixed',
+    revision: 1,
+    lastCheckedAt: null,
+    lastStatus: null,
+  });
+  await expect(transport.probe(server)).rejects.toMatchObject({ code: 'port_not_allowed' });
+  await expect(transport.run(server, 'key', 'uptime')).rejects.toMatchObject({
+    code: 'port_not_allowed',
+  });
+  expect(resolveHost).not.toHaveBeenCalled();
+  for (const port of [22, 1024, 2222, 65535]) expect(allowedSshPort(port), String(port)).toBe(true);
+  for (const port of [0, 21, 23, 80, 443, 1023, 65536]) expect(allowedSshPort(port)).toBe(false);
 });
 it('redacts secrets from output before persistence', () => {
   const text = redactSshOutput(

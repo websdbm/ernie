@@ -3,22 +3,27 @@ import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 import type { SshServer } from '@ernie/protocol';
 import ssh2 from 'ssh2';
-import type { SshTransport } from './ssh/types.js';
+import { allowedSshPort, SshError, type SshNetworkAccess, type SshTransport } from './ssh/types.js';
 
 const { Client, utils } = ssh2;
 const denied4 = new BlockList(),
-  denied6 = new BlockList();
+  denied6 = new BlockList(),
+  tailnet4 = new BlockList();
 for (const [ip, bits] of [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
   ['127.0.0.0', 8],
   ['169.254.0.0', 16],
   ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
   ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
 ] as const)
   denied4.addSubnet(ip, bits, 'ipv4');
+// Spazio CGNAT usato da Tailscale: rete interna, ammessa solo al titolare.
+tailnet4.addSubnet('100.64.0.0', 10, 'ipv4');
 for (const [ip, bits] of [
   ['::', 96],
   ['::ffff:0:0', 96],
@@ -29,23 +34,67 @@ for (const [ip, bits] of [
   ['2001:db8::', 32],
 ] as const)
   denied6.addSubnet(ip, bits, 'ipv6');
-export function allowedSshAddress(address: string): boolean {
+const strict: SshNetworkAccess = { tailnet: false };
+export function allowedSshAddress(address: string, access: SshNetworkAccess = strict): boolean {
   const family = isIP(address);
-  return (
-    family !== 0 &&
-    !(family === 4 ? denied4 : denied6).check(address, family === 4 ? 'ipv4' : 'ipv6')
-  );
+  if (family === 0) return false;
+  if (family === 6) return !denied6.check(address, 'ipv6');
+  return !denied4.check(address, 'ipv4') && (access.tailnet || !tailnet4.check(address, 'ipv4'));
 }
-export async function resolveSshHost(host: string): Promise<string> {
-  if (!/^[a-zA-Z0-9:.-]+$/.test(host)) throw new Error('Indirizzo SSH non valido.');
-  const addresses = isIP(host)
-    ? [{ address: host }]
-    : await lookup(host, { all: true, verbatim: true });
-  if (!addresses[0] || addresses.some((a) => !allowedSshAddress(a.address)))
-    throw new Error(
-      'Indirizzo SSH locale o riservato non consentito. Usa un indirizzo pubblico o Tailscale.',
+const DNS_TIMEOUT_MS = 5_000;
+export async function resolveSshHost(
+  host: string,
+  access: SshNetworkAccess = strict,
+  deps: {
+    lookup?: (host: string) => Promise<{ address: string }[]>;
+    timeoutMs?: number;
+  } = {},
+): Promise<string> {
+  if (!/^[a-zA-Z0-9:.-]+$/.test(host))
+    throw new SshError('address_not_allowed', 'Indirizzo SSH non valido.');
+  const resolve = deps.lookup ?? ((h: string) => lookup(h, { all: true, verbatim: true }));
+  let timer: NodeJS.Timeout | undefined;
+  let addresses: { address: string }[];
+  try {
+    // getaddrinfo non si interrompe: si smette di aspettarlo dopo il tempo massimo.
+    addresses = isIP(host)
+      ? [{ address: host }]
+      : await Promise.race([
+          resolve(host),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error('dns timeout')),
+              deps.timeoutMs ?? DNS_TIMEOUT_MS,
+            );
+          }),
+        ]);
+  } catch {
+    throw new SshError(
+      'dns_failed',
+      'Nome del server non risolto o DNS troppo lento. Controlla l’indirizzo.',
+      502,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!addresses[0] || addresses.some((a) => !allowedSshAddress(a.address, access)))
+    throw new SshError(
+      'address_not_allowed',
+      access.tailnet
+        ? 'Indirizzo SSH locale o riservato non consentito. Usa un indirizzo pubblico o Tailscale.'
+        : 'Indirizzo SSH locale, riservato o della rete interna non consentito. Usa un indirizzo pubblico.',
+      403,
     );
   return addresses[0].address;
+}
+function checkedPort(port: number): number {
+  if (!allowedSshPort(port))
+    throw new SshError(
+      'port_not_allowed',
+      'Porta SSH non ammessa: usa la 22 o una porta da 1024 a 65535.',
+      403,
+    );
+  return port;
 }
 export function sshFingerprint(key: Buffer): string {
   return `SHA256:${createHash('sha256').update(key).digest('base64').replace(/=+$/, '')}`;
@@ -72,7 +121,7 @@ const equal = (a: string, b: string) =>
 /** No shell, forwarding, agent or password fallback. DNS is pinned before connecting. */
 export function createSshTransport(
   options: {
-    resolveHost?: (host: string) => Promise<string>;
+    resolveHost?: (host: string, access: SshNetworkAccess) => Promise<string>;
     timeoutMs?: number;
     maxOutputBytes?: number;
   } = {},
@@ -86,8 +135,9 @@ export function createSshTransport(
       const blob = Buffer.from(key.public.split(' ')[1] ?? '', 'base64');
       return { privateKey: key.private, publicKey: key.public, fingerprint: sshFingerprint(blob) };
     },
-    async probe(server: SshServer) {
-      const host = await resolveHost(server.host);
+    async probe(server: SshServer, access = strict) {
+      const port = checkedPort(server.port);
+      const host = await resolveHost(server.host, access);
       return new Promise((resolve, reject) => {
         const client = new Client();
         let fingerprint: string | undefined;
@@ -109,7 +159,7 @@ export function createSshTransport(
         client.on('error', finish).on('close', finish);
         client.connect({
           host,
-          port: server.port,
+          port,
           username: server.username,
           readyTimeout: timeoutMs,
           hostVerifier(key: Buffer) {
@@ -120,9 +170,10 @@ export function createSshTransport(
         });
       });
     },
-    async run(server, privateKey, command, signal) {
+    async run(server, privateKey, command, signal, access = strict) {
       if (!server.fingerprint) throw new Error('Verifica prima l’impronta del server.');
-      const host = await resolveHost(server.host);
+      const port = checkedPort(server.port);
+      const host = await resolveHost(server.host, access);
       if (signal?.aborted) throw new Error('Operazione annullata.');
       return new Promise((resolve, reject) => {
         const client = new Client();
@@ -200,7 +251,7 @@ export function createSshTransport(
         });
         client.connect({
           host,
-          port: server.port,
+          port,
           username: server.username,
           privateKey,
           readyTimeout: timeoutMs,

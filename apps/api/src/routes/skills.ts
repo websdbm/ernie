@@ -10,7 +10,12 @@ export interface SkillsRoutesOptions {
   readonly allowedOrigins: readonly string[];
   readonly pool: Pool;
   /** Invalida le cache per utente (registry delle skill, agenti di sessione) dopo un cambio. */
-  readonly onChanged?: (userId: string, skillId?: string) => void | Promise<void>;
+  /** `before`: impostazioni effettive (con i limiti del genitore) prima del cambio. */
+  readonly onChanged?: (
+    userId: string,
+    skillId?: string,
+    before?: Readonly<Record<string, unknown>>,
+  ) => void | Promise<void>;
   /** Controllo genitori: impostazioni effettive con le skill concesse dal genitore (null se non seguito). */
   readonly applyGuardian?: (
     userId: string,
@@ -119,7 +124,7 @@ export async function skillsRoutes(app: FastifyInstance, opts: SkillsRoutesOptio
             )
           ).rows[0]?.settings ?? {},
       );
-      await opts.onChanged?.(auth.userId, id);
+      await opts.onChanged?.(auth.userId, id, current);
       return { skills: present(await withLimits(auth.userId, settings)) };
     });
   });

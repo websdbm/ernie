@@ -67,6 +67,17 @@ dell'app verdi dopo le correzioni.
   messaggio dedicato).
 - **SSH**: output ripulito anche da `define('DB_PASSWORD', …)`, `*_TOKEN=`, tabelle di `wp config list`, token negli
   URL; `wp config get <segreto>` non si esegue.
+- **SSH, dopo la build 104** (solo backend, da pubblicare sul server): decisione dell'utente, la skill resta
+  disponibile a ogni account con i propri accessi (RLS). Rete Tailscale `100.64.0.0/10` solo al ruolo `owner`
+  (connessioni, sonde e diagnosi; ruolo riletto a ogni connessione); bloccati anche `192.0.0.0/24` e `198.18.0.0/15`;
+  DNS con tempo massimo di 5 s; 10 sonde/diagnosi al minuto per account; porte ammesse 22 e 1024–65535 (un server
+  già salvato su un'altra porta va spostato). Revoca della chiave, scollegamento del provider (ora cancella la riga
+  delle credenziali) e rifiuto di un piano funzionano anche a skill spenta o con l'interruttore di emergenza; nuove
+  rotte `DELETE /v1/ssh/servers/:id` e `DELETE /v1/ssh/sites/:id` (rifiutate con un intervento in corso; l'app non le
+  usa ancora). Recupero dei `running` da `started_at` + 10 minuti (non più dalla scadenza del piano) ed esito scritto
+  anche sopra un `uncertain`, con `previousStatus` nell'audit. `--allow-root` per WP-CLI come root o in `docker exec`.
+  Riavvio via provider: istanze lette fuori dal lock, generazione e bersaglio ricontrollati dentro. I piani SSH
+  decadono solo se cambia il permesso SSH effettivo (skill, interruttore di emergenza, permessi del genitore).
 - **API**: scope `chat` richiesto anche da sintesi vocale, consumi e prestazioni; diario: errori del server 503 invece
   di 400; WebSocket: lo stato di replay non resta bloccato dopo `session_forbidden`; avvio dell'API che non cade se il
   primo recupero dei Todo fallisce; data delle foto nel fuso di Roma.
@@ -82,28 +93,21 @@ Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui n
    `DiaryStore.persist`/`exportBackup`/`restore` cifrano l'intero diario e fanno PBKDF2 sul main a ogni pausa di
    digitazione. Spostare fuori dal main (funzioni `nonisolated`, `CGImageSourceCreateThumbnailAtIndex`, bozza del
    diario in un file separato).
-2. *SSH disponibile a ogni account* (`packages/skills/src/catalog.ts` `ssh` `defaultAvailable: true`) e sonda verso
-   `100.64.0.0/10` su qualunque porta senza limite di frequenza (`ssh-transport.ts`, `ssh/service.ts` hostProbe):
-   decidere se solo per il titolare; limitare porte e frequenza; timeout sul DNS. **Decisione dell'utente.**
-3. *SSH: revoca della chiave e scollegamento del provider bloccati* con skill spenta o interruttore di emergenza
-   (`ssh/service.ts` `lock` con `check=true`); manca la cancellazione di server, siti e credenziali.
-4. *SSH: esito perso* se l'intervento viene approvato vicino alla scadenza (`recoverExpired` usa `expires_at` della
-   creazione anche per le righe `running`).
-5. *Second Brain: OCR dei documenti scansionati* in note non riservate, proposte in chat da `index.suggest` e spinte sul
+2. *Second Brain: OCR dei documenti scansionati* in note non riservate, proposte in chat da `index.suggest` e spinte sul
    remoto Git (`brain-resources.ts` `private: false`). Proposta: scansioni riservate o fuori da `suggest`.
    **Decisione dell'utente.**
-6. *Foto geolocalizzate*: nota «Luogo fotografato (lat, lon)» con 5 decimali, non riservata, mandata al revisore; resta
+3. *Foto geolocalizzate*: nota «Luogo fotografato (lat, lon)» con 5 decimali, non riservata, mandata al revisore; resta
    anche dopo aver cancellato la foto. Proposta: titolo neutro, coordinate solo nei metadati, pulizia dei luoghi orfani.
-7. *Second Brain: transazione lunga* in `brain-resources.ts` `syncUser` (git, embedding e 100 job dentro una
+4. *Second Brain: transazione lunga* in `brain-resources.ts` `syncUser` (git, embedding e 100 job dentro una
    transazione con advisory lock) e un job che fallisce blocca la coda dell'utente; trigger `brain_resource_relink`
    (0041) che rimette in coda tutte le risorse a ogni nuova nota.
-8. *Tentativi annidati verso i modelli*: `retryModelCall` (3) dentro i retry di Mastra (2 di default) → fino a 9
+5. *Tentativi annidati verso i modelli*: `retryModelCall` (3) dentro i retry di Mastra (2 di default) → fino a 9
    chiamate con un 429; impostare `maxRetries: 0` nei `modelSettings` di consolidamento, giudice, riassunto,
    health-extract, clarify, titolo dei promemoria; a clarify passare anche `abortSignal`.
-9. *YouTube*: con durata sconosciuta (pagina non letta) il limite dei 20 minuti non vale (`youtube.ts`).
-10. *Diario offline*: senza profilo (avvio senza rete) il diario locale non si apre e il testo dettato si perde
+6. *YouTube*: con durata sconosciuta (pagina non letta) il limite dei 20 minuti non vale (`youtube.ts`).
+7. *Diario offline*: senza profilo (avvio senza rete) il diario locale non si apre e il testo dettato si perde
     (`DiaryViews.swift` `DiaryEntrance` richiede `model.profile?.userId`): salvare lo scope in locale.
-11. *Todo*: con Redis giù il salvataggio risponde errore anche se la lista è salvata (`todo.ts` `save` → `onChanged`).
+8. *Todo*: con Redis giù il salvataggio risponde errore anche se la lista è salvata (`todo.ts` `save` → `onChanged`).
     Comportamento voluto e coperto da test (il nuovo salvataggio identico riprova); valutare se all'utente va detto
     «salvata, promemoria in sospeso».
 
@@ -123,8 +127,7 @@ Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui n
 - Sintesi vocale registrata come spesa anche se la richiesta non parte (`speech.ts`).
 - Preferenze operative: un PATCH riattiva una preferenza spenta (`active` con default).
 - Prestazioni: un'osservazione non valida annulla tutto il lotto.
-- SSH: diagnosi WordPress come root senza `--allow-root`; paginazione Vultr; lettura delle istanze dentro il lock;
-  ogni cambio d'impostazione invalida i piani in attesa; costo della revisione Brain non registrato se va in errore.
+- SSH: paginazione Vultr. Brain: costo della revisione non registrato se va in errore.
 - Immagini: possibile JPEG con doppio SOF oltre i limiti di pixel (`media-image.ts`).
 - Test iOS: `TerminalChatTests.focusProgrammaticoECambioSkinNellaBarraCompleta` fallisce a volte nella suite completa
   (focus non ancora assegnato), da solo passa; `avvioRealeMicrofonoRiceveBufferEFermaSenzaCrash` resta in attesa del
@@ -143,11 +146,12 @@ Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui n
 
 - DNS di riserva sul server (Cloudflare/Quad9 accanto a quelli di Contabo): il 16 ott un guasto DNS di pochi secondi ha
   fatto fallire un turno.
-- SSH solo per il titolare o anche per i familiari (voce 2).
-- Documenti scansionati riservati nel Second Brain (voce 5).
+- Documenti scansionati riservati nel Second Brain (voce 2).
 
 ## Registro delle sessioni
 
+- **25 ott 2026 — agente in worktree (Claude Code)**: correzioni SSH della voce «SSH, dopo la build 104»; solo
+  commit locale sul ramo dell'agente, niente push né deploy.
 - **25 ott 2026 — Mac Studio (Claude Code)**: revisione generale delle build 64–103, correzioni sopra, build 104,
   server riallineato a git, questo file.
 - **16–24 ott 2026 — Mac dell'ufficio**: build 64–103 (widget con scorciatoie, Automazioni, ErnieTRIX, indice del

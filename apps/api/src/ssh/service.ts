@@ -15,9 +15,17 @@ import {
   SshSiteInput,
   SshSnapshot,
 } from '@ernie/protocol';
+import { enabledSkillIds } from '@ernie/skills';
 import { z } from 'zod';
 import { decryptSecret, type EncryptedSecret, encryptSecret, parseMasterKey } from './crypto.js';
-import { SshError, type SshServiceOptions, type SshTransportResult } from './types.js';
+import {
+  allowedSshPort,
+  SSH_NOT_STARTED,
+  SshError,
+  type SshNetworkAccess,
+  type SshServiceOptions,
+  type SshTransportResult,
+} from './types.js';
 
 type ServerRow = {
   id: string;
@@ -136,8 +144,16 @@ function checkedSiteUrl(value: string): void {
   )
     throw new SshError('secret_in_url', 'Il sito deve avere un URL senza credenziali o token.');
 }
-/** WP plan commands are argument strings, not a second shell script. */
-export function wordpressCommand(site: SshSite, args: string): string {
+/**
+ * WP plan commands are argument strings, not a second shell script.
+ * Come root (utente SSH root o `docker exec`, che entra come root) WP-CLI si rifiuta di partire senza
+ * `--allow-root`: lo aggiunge il backend, non il modello.
+ */
+export function wordpressCommand(
+  site: SshSite,
+  args: string,
+  options: { root?: boolean } = {},
+): string {
   checkedPath(site.path);
   if (site.container && !/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(site.container))
     throw new SshError(
@@ -169,12 +185,14 @@ export function wordpressCommand(site: SshSite, args: string): string {
     )
   )
     throw new SshError('invalid_wp_command', 'Il bersaglio WP-CLI è fissato dal sito selezionato.');
-  const command = `wp --path=${shellQuote(site.path)} ${words.map(shellQuote).join(' ')}`;
+  const root = (options.root === true || site.container !== '') && !words.includes('--allow-root');
+  const command = `wp --path=${shellQuote(site.path)}${root ? ' --allow-root' : ''} ${words.map(shellQuote).join(' ')}`;
   return site.container ? `docker exec ${shellQuote(site.container)} ${command}` : command;
 }
 export function diagnosticCommand(
   input: z.infer<typeof SshDiagnosticInput>,
   site: SshSite | null,
+  options: { root?: boolean } = {},
 ): string {
   switch (input.check) {
     case 'overview':
@@ -189,7 +207,7 @@ export function diagnosticCommand(
       return "docker ps --format '{{.ID}} {{.Names}} {{.Status}}'; docker system df";
     case 'wordpress':
       if (!site) throw new SshError('site_required', 'Seleziona il sito WordPress da controllare.');
-      return wordpressCommand(site, 'core version');
+      return wordpressCommand(site, 'core version', options);
   }
 }
 export function sanitizeSshOutput(value: string, secrets: string[] = []): string {
@@ -259,10 +277,54 @@ export function canonicalImportSource(source: string): string {
   return url.toString();
 }
 
+/**
+ * Durata massima di un intervento approvato (due fasi SSH con il loro timeout, oppure il riavvio provider)
+ * più un margine. Il recupero dei `running` orfani parte da `started_at`, non dalla scadenza del piano:
+ * un piano approvato a un minuto dalla scadenza non viene segnato incerto mentre è ancora in corso.
+ */
+export const SSH_MAX_RUN_MS = 10 * 60_000;
+
+/**
+ * Permesso SSH effettivo: skill disponibile e accesa (impostazioni già filtrate dai limiti del genitore) e
+ * interruttore di emergenza spento. I piani in attesa decadono solo quando questo valore cambia.
+ */
+export const sshAllowedBySettings = (settings: Readonly<Record<string, unknown>>): boolean =>
+  settings.killSwitch !== true && enabledSkillIds(settings).has('ssh');
+
 export function createSshService(opts: SshServiceOptions) {
   const master = parseMasterKey(opts.masterKey),
     now = opts.now ?? (() => new Date());
   const active = new Map<string, { userId: string; controller: AbortController }>();
+  // Tailnet solo al titolare: il ruolo si rilegge a ogni connessione e in caso di errore vale la rete pubblica.
+  const network = async (u: string): Promise<SshNetworkAccess> => {
+    let tailnet = false;
+    try {
+      tailnet = (await opts.isOwner?.(u)) === true;
+    } catch {
+      /* rete pubblica */
+    }
+    return { tailnet };
+  };
+  // Sonde e diagnosi aprono connessioni verso indirizzi scelti dall'utente: limite per account, in memoria.
+  const probeLimit = opts.probeLimit ?? { max: 10, windowMs: 60_000 };
+  const attempts = new Map<string, number[]>();
+  const throttle = (u: string) => {
+    const t = now().getTime(),
+      from = t - probeLimit.windowMs;
+    if (attempts.size > 1000)
+      for (const [k, v] of attempts) if (!v.some((x) => x > from)) attempts.delete(k);
+    const recent = (attempts.get(u) ?? []).filter((x) => x > from);
+    if (recent.length >= probeLimit.max) {
+      attempts.set(u, recent);
+      throw new SshError(
+        'rate_limited',
+        'Troppe verifiche SSH in poco tempo: riprova tra un minuto.',
+        429,
+      );
+    }
+    recent.push(t);
+    attempts.set(u, recent);
+  };
   const guard = async (userId: string) => {
     let yes = false;
     try {
@@ -362,10 +424,27 @@ export function createSshService(opts: SshServiceOptions) {
     return a;
   };
   const recoverExpired = async (c: PoolClient, u: string) => {
+    // `started_at` è fissato all'approvazione; le righe senza (precedenti a questa regola) usano la scadenza.
     await c.query(
-      "UPDATE ssh_operations SET status='uncertain',finished_at=now(),output='Esecuzione precedente interrotta o scaduta: verifica lo stato remoto. Non verrà ripetuta.' WHERE user_id=$1 AND status='running' AND expires_at<=$2",
-      [u, now()],
+      "UPDATE ssh_operations SET status='uncertain',finished_at=now(),output='Esecuzione precedente interrotta o scaduta: verifica lo stato remoto. Non verrà ripetuta.' WHERE user_id=$1 AND status='running' AND COALESCE(started_at + make_interval(secs => $3::double precision / 1000), expires_at)<=$2",
+      [u, now(), SSH_MAX_RUN_MS],
     );
+  };
+  const runningOn = async (c: PoolClient, u: string, serverId: string) => {
+    await recoverExpired(c, u);
+    if (
+      (
+        await c.query(
+          "SELECT 1 FROM ssh_operations WHERE user_id=$1 AND server_id=$2 AND status='running' LIMIT 1",
+          [u, serverId],
+        )
+      ).rowCount
+    )
+      throw new SshError(
+        'operation_running',
+        'Un intervento è in corso su questo server: attendi l’esito prima di eliminarlo.',
+        409,
+      );
   };
   const publicOperation = (r: OperationRow): SshOperation =>
     SshOperation.parse({
@@ -491,56 +570,59 @@ export function createSshService(opts: SshServiceOptions) {
     return output.length > 9000 ? `${output.slice(0, 9000)}\n[Output della fase troncato]` : output;
   };
 
+  // Dati dell'account senza il controllo della skill: lo usano solo le operazioni che riducono i privilegi
+  // (revoca, scollegamento, rifiuto, cancellazione), che devono funzionare anche a skill spenta.
+  const readSnapshot = (u: string): Promise<SshSnapshot> =>
+    withUser(opts.pool, u, async (c) => {
+      await recoverExpired(c, u);
+      const k = (
+        await c.query<Pick<KeyRow, 'public_key' | 'fingerprint' | 'created_at'>>(
+          'SELECT public_key,fingerprint,created_at FROM ssh_keys WHERE user_id=$1 AND revoked_at IS NULL',
+          [u],
+        )
+      ).rows[0];
+      const servers = (
+        await c.query<ServerRow>('SELECT * FROM ssh_servers WHERE user_id=$1 ORDER BY name,id', [u])
+      ).rows.map(serverOf);
+      const sites = (
+        await c.query<SiteRow>('SELECT * FROM ssh_sites WHERE user_id=$1 ORDER BY name,id', [u])
+      ).rows.map(siteOf);
+      const providers = (
+        await c.query<Pick<ProviderRow, 'provider' | 'connected' | 'last_checked_at'>>(
+          'SELECT provider,connected,last_checked_at FROM ssh_provider_credentials WHERE user_id=$1 ORDER BY provider',
+          [u],
+        )
+      ).rows.map((p) => ({
+        provider: p.provider,
+        connected: p.connected,
+        lastCheckedAt: p.last_checked_at?.toISOString() ?? null,
+      }));
+      const operations = (
+        await c.query<OperationRow>(
+          'SELECT * FROM ssh_operations WHERE user_id=$1 ORDER BY created_at DESC,id LIMIT 100',
+          [u],
+        )
+      ).rows.map(publicOperation);
+      return SshSnapshot.parse({
+        configured: master !== null,
+        key: k
+          ? {
+              publicKey: k.public_key,
+              fingerprint: k.fingerprint,
+              createdAt: k.created_at.toISOString(),
+            }
+          : null,
+        servers,
+        sites,
+        providers,
+        operations,
+      });
+    });
+
   const service = {
     async snapshot(u: string): Promise<SshSnapshot> {
       await guard(u);
-      const data = await withUser(opts.pool, u, async (c) => {
-        await recoverExpired(c, u);
-        const k = (
-          await c.query<Pick<KeyRow, 'public_key' | 'fingerprint' | 'created_at'>>(
-            'SELECT public_key,fingerprint,created_at FROM ssh_keys WHERE user_id=$1 AND revoked_at IS NULL',
-            [u],
-          )
-        ).rows[0];
-        const servers = (
-          await c.query<ServerRow>('SELECT * FROM ssh_servers WHERE user_id=$1 ORDER BY name,id', [
-            u,
-          ])
-        ).rows.map(serverOf);
-        const sites = (
-          await c.query<SiteRow>('SELECT * FROM ssh_sites WHERE user_id=$1 ORDER BY name,id', [u])
-        ).rows.map(siteOf);
-        const providers = (
-          await c.query<Pick<ProviderRow, 'provider' | 'connected' | 'last_checked_at'>>(
-            'SELECT provider,connected,last_checked_at FROM ssh_provider_credentials WHERE user_id=$1 ORDER BY provider',
-            [u],
-          )
-        ).rows.map((p) => ({
-          provider: p.provider,
-          connected: p.connected,
-          lastCheckedAt: p.last_checked_at?.toISOString() ?? null,
-        }));
-        const operations = (
-          await c.query<OperationRow>(
-            'SELECT * FROM ssh_operations WHERE user_id=$1 ORDER BY created_at DESC,id LIMIT 100',
-            [u],
-          )
-        ).rows.map(publicOperation);
-        return SshSnapshot.parse({
-          configured: master !== null,
-          key: k
-            ? {
-                publicKey: k.public_key,
-                fingerprint: k.fingerprint,
-                createdAt: k.created_at.toISOString(),
-              }
-            : null,
-          servers,
-          sites,
-          providers,
-          operations,
-        });
-      });
+      const data = await readSnapshot(u);
       await guard(u);
       return data;
     },
@@ -603,26 +685,38 @@ export function createSshService(opts: SshServiceOptions) {
       if (changed) abortUser(u);
       return service.snapshot(u);
     },
+    // Riduce i privilegi: funziona anche con la skill spenta o con l'interruttore di emergenza attivo.
     async keyRevoke(u: string): Promise<SshSnapshot> {
-      await lock(u, async (c) => {
-        await c.query(
-          'UPDATE ssh_keys SET private_secret=NULL,revoked_at=now(),version=version+1 WHERE user_id=$1',
-          [u],
-        );
-        await c.query('UPDATE ssh_account_state SET generation=generation+1 WHERE user_id=$1', [u]);
-        await c.query(
-          "UPDATE ssh_servers SET last_status='key_revoked',last_checked_at=NULL WHERE user_id=$1",
-          [u],
-        );
-        await invalidateRows(c, u, 'Chiave revocata: nessun comando successivo è autorizzato.');
-        await audit(c, u, 'key_revoke');
-      });
+      await lock(
+        u,
+        async (c) => {
+          await c.query(
+            'UPDATE ssh_keys SET private_secret=NULL,revoked_at=now(),version=version+1 WHERE user_id=$1',
+            [u],
+          );
+          await c.query('UPDATE ssh_account_state SET generation=generation+1 WHERE user_id=$1', [
+            u,
+          ]);
+          await c.query(
+            "UPDATE ssh_servers SET last_status='key_revoked',last_checked_at=NULL WHERE user_id=$1",
+            [u],
+          );
+          await invalidateRows(c, u, 'Chiave revocata: nessun comando successivo è autorizzato.');
+          await audit(c, u, 'key_revoke');
+        },
+        false,
+      );
       abortUser(u);
-      return service.snapshot(u);
+      return readSnapshot(u);
     },
     async serverSave(u: string, input: z.input<typeof SshServerInput>): Promise<SshSnapshot> {
       const value = parse(SshServerInput, input),
         id = value.id ? idOf(value.id) : randomUUID();
+      if (!allowedSshPort(value.port))
+        throw new SshError(
+          'port_not_allowed',
+          'Porta SSH non ammessa: usa la 22 o una porta da 1024 a 65535.',
+        );
       await lock(u, async (c) => {
         const old = value.id ? await server(c, u, id) : null;
         await c.query(
@@ -676,13 +770,51 @@ export function createSshService(opts: SshServiceOptions) {
       });
       return service.snapshot(u);
     },
+    // Cancellazioni: tolgono accessi, quindi valgono anche a skill spenta. Con un intervento in corso
+    // sul server si aspetta l'esito, per non perderlo insieme alla riga.
+    async serverDelete(u: string, id: string): Promise<SshSnapshot> {
+      await lock(
+        u,
+        async (c) => {
+          const target = await server(c, u, id);
+          await runningOn(c, u, target.id);
+          // Siti e piani del server se ne vanno in cascata (chiavi esterne della migrazione 0043).
+          await c.query('DELETE FROM ssh_servers WHERE user_id=$1 AND id=$2', [u, target.id]);
+          await audit(c, u, 'server_delete', { serverId: target.id });
+        },
+        false,
+      );
+      return readSnapshot(u);
+    },
+    async siteDelete(u: string, id: string): Promise<SshSnapshot> {
+      await lock(
+        u,
+        async (c) => {
+          const target = await site(c, u, id);
+          await runningOn(c, u, target.server_id);
+          await c.query('DELETE FROM ssh_sites WHERE user_id=$1 AND id=$2', [u, target.id]);
+          await invalidateRows(
+            c,
+            u,
+            'Sito eliminato: il piano precedente non è più autorizzato.',
+            target.server_id,
+          );
+          await audit(c, u, 'site_delete', { siteId: target.id, serverId: target.server_id });
+        },
+        false,
+      );
+      return readSnapshot(u);
+    },
     async hostProbe(u: string, id: string): Promise<{ fingerprint: string }> {
       await guard(u);
       const target = await withUser(opts.pool, u, async (c) => serverOf(await server(c, u, id)));
+      throttle(u);
       let fingerprint: string;
       try {
-        fingerprint = (await opts.transport.probe(target)).fingerprint;
-      } catch {
+        fingerprint = (await opts.transport.probe(target, await network(u))).fingerprint;
+      } catch (error) {
+        // Porta, indirizzo o DNS rifiutati prima di connettersi: il motivo è utile e non contiene segreti.
+        if (error instanceof SshError && SSH_NOT_STARTED.has(error.code)) throw error;
         throw new SshError(
           'probe_failed',
           'Impossibile leggere l’impronta host. Controlla host, porta e rete.',
@@ -738,6 +870,8 @@ export function createSshService(opts: SshServiceOptions) {
         controller = new AbortController();
       await guard(u);
       signal?.throwIfAborted();
+      throttle(u);
+      const access = await network(u);
       const abort = () => controller.abort();
       signal?.addEventListener('abort', abort, { once: true });
       active.set(runId, { userId: u, controller });
@@ -758,11 +892,11 @@ export function createSshService(opts: SshServiceOptions) {
               'ssh-private',
               k.private_secret as EncryptedSecret,
             );
-          const command = diagnosticCommand(value, si);
+          const command = diagnosticCommand(value, si, { root: s.username === 'root' });
           await audit(c, u, 'diagnose', { serverId: s.id, check: value.check });
           controller.signal.throwIfAborted();
           return {
-            pending: started(opts.transport.run(s, privateKey, command, controller.signal)),
+            pending: started(opts.transport.run(s, privateKey, command, controller.signal, access)),
             privateKey,
           };
         });
@@ -825,21 +959,26 @@ export function createSshService(opts: SshServiceOptions) {
       });
       return service.snapshot(u);
     },
+    // Scollegare cancella le credenziali cifrate (la riga intera) e vale anche a skill spenta.
     async providerDisconnect(u: string, provider: SshProvider): Promise<SshSnapshot> {
       const p = parse(SshProvider, provider);
-      await lock(u, async (c) => {
-        await c.query(
-          'UPDATE ssh_provider_credentials SET secret=NULL,connected=false,version=version+1 WHERE user_id=$1 AND provider=$2',
-          [u, p],
-        );
-        await c.query(
-          "UPDATE ssh_operations SET status=CASE WHEN status='running' THEN 'uncertain' ELSE 'rejected' END,output='Provider scollegato: operazione non più autorizzata.' WHERE user_id=$1 AND status IN ('pending','running') AND target_snapshot->>'provider'=$2",
-          [u, p],
-        );
-        await audit(c, u, 'provider_disconnect', { provider: p });
-      });
+      await lock(
+        u,
+        async (c) => {
+          await c.query('DELETE FROM ssh_provider_credentials WHERE user_id=$1 AND provider=$2', [
+            u,
+            p,
+          ]);
+          await c.query(
+            "UPDATE ssh_operations SET status=CASE WHEN status='running' THEN 'uncertain' ELSE 'rejected' END,output='Provider scollegato: operazione non più autorizzata.',finished_at=now() WHERE user_id=$1 AND status IN ('pending','running') AND target_snapshot->>'provider'=$2",
+            [u, p],
+          );
+          await audit(c, u, 'provider_disconnect', { provider: p });
+        },
+        false,
+      );
       abortUser(u);
-      return service.snapshot(u);
+      return readSnapshot(u);
     },
     async providerInstances(
       u: string,
@@ -905,8 +1044,9 @@ export function createSshService(opts: SshServiceOptions) {
       const result = await lock(u, async (c) => {
         const target = await currentTarget(c, u, value);
         if (value.kind === 'wp_cli') {
-          wordpressCommand(target.site as SshSite, value.command);
-          wordpressCommand(target.site as SshSite, value.verificationCommand);
+          const root = { root: target.server.username === 'root' };
+          wordpressCommand(target.site as SshSite, value.command, root);
+          wordpressCommand(target.site as SshSite, value.verificationCommand, root);
         }
         const generation = (
           await c.query<{ generation: number }>(
@@ -955,17 +1095,22 @@ export function createSshService(opts: SshServiceOptions) {
         return publicOperation(await operationRow(c, u, id));
       });
     },
+    // Rifiutare un piano non autorizza nulla: vale anche a skill spenta.
     async reject(u: string, id: string): Promise<SshOperation> {
-      return lock(u, async (c) => {
-        const r = await operationRow(c, u, id);
-        if (r.status === 'pending')
-          await c.query(
-            "UPDATE ssh_operations SET status='rejected',finished_at=now(),output='Piano rifiutato dall’utente.' WHERE user_id=$1 AND id=$2 AND status='pending'",
-            [u, r.id],
-          );
-        await audit(c, u, 'reject', { operationId: r.id });
-        return publicOperation(await operationRow(c, u, id));
-      });
+      return lock(
+        u,
+        async (c) => {
+          const r = await operationRow(c, u, id);
+          if (r.status === 'pending')
+            await c.query(
+              "UPDATE ssh_operations SET status='rejected',finished_at=now(),output='Piano rifiutato dall’utente.' WHERE user_id=$1 AND id=$2 AND status='pending'",
+              [u, r.id],
+            );
+          await audit(c, u, 'reject', { operationId: r.id });
+          return publicOperation(await operationRow(c, u, id));
+        },
+        false,
+      );
     },
     async approve(u: string, id: string): Promise<SshOperation> {
       const claimed = await lock(u, async (c) => {
@@ -986,23 +1131,29 @@ export function createSshService(opts: SshServiceOptions) {
           );
           return { row: await operationRow(c, u, id), execute: false };
         }
+        // `started_at` con lo stesso orologio del recupero: da qui parte la durata massima dell'esecuzione.
         await c.query(
-          "UPDATE ssh_operations SET status='running',started_at=now() WHERE user_id=$1 AND id=$2 AND status='pending'",
-          [u, r.id],
+          "UPDATE ssh_operations SET status='running',started_at=$3 WHERE user_id=$1 AND id=$2 AND status='pending'",
+          [u, r.id, now()],
         );
         await audit(c, u, 'approve', { operationId: r.id });
         return { row: { ...r, status: 'running' as const }, execute: true };
       });
       if (!claimed.execute) return publicOperation(claimed.row);
       const r = claimed.row,
-        controller = new AbortController();
+        controller = new AbortController(),
+        root = r.target_snapshot.server.username === 'root';
       active.set(r.id, { userId: u, controller });
       let status: SshOperation['status'] = 'uncertain',
         output =
           'Esecuzione interrotta: verifica lo stato remoto prima di proporre un nuovo intervento.',
-        effectStarted = false;
+        effectStarted = false,
+        notStarted: SshError | null = null;
+      const authorizationChanged = () =>
+        new SshError('authorization_changed', 'Autorizzazione cambiata durante l’intervento.', 409);
       try {
-        const dispatch = async (command: string) => {
+        const dispatch = async (command: string, first: boolean) => {
+          const access = await network(u);
           const dispatchResult = await lock(u, async (c) => {
             const current = await operationRow(c, u, r.id);
             if (
@@ -1010,11 +1161,7 @@ export function createSshService(opts: SshServiceOptions) {
               !(await targetStillCurrent(c, u, current)) ||
               controller.signal.aborted
             )
-              throw new SshError(
-                'authorization_changed',
-                'Autorizzazione cambiata durante l’intervento.',
-                409,
-              );
+              throw authorizationChanged();
             const k = await key(c, u),
               privateKey = decryptSecret(
                 needMaster(),
@@ -1030,40 +1177,61 @@ export function createSshService(opts: SshServiceOptions) {
                   privateKey,
                   command,
                   controller.signal,
+                  access,
                 ),
               ),
               privateKey,
             };
           });
-          const result = await dispatchResult.pending;
+          let result: SshTransportResult;
+          try {
+            result = await dispatchResult.pending;
+          } catch (error) {
+            // Rifiuto prima della connessione (porta, rete, DNS): sul server non è partito nulla.
+            if (first && error instanceof SshError && SSH_NOT_STARTED.has(error.code)) {
+              effectStarted = false;
+              notStarted = error;
+            }
+            throw error;
+          }
           await guard(u);
           return { result, text: resultText(result, [dispatchResult.privateKey]) };
         };
         if (r.plan.kind === 'provider_reboot') {
-          const dispatchResult = await lock(u, async (c) => {
+          const authorized = async (c: PoolClient) => {
             const current = await operationRow(c, u, r.id);
             if (
               current.status !== 'running' ||
               !(await targetStillCurrent(c, u, current)) ||
               controller.signal.aborted
             )
-              throw new SshError('authorization_changed', 'Autorizzazione cambiata.', 409);
-            const p = current.target_snapshot.provider as SshProvider,
-              credentials = decodeCredential(u, await credential(c, u, p)),
-              api = adapter(p),
-              instance = current.target_snapshot.server.providerInstanceId as string;
-            const instances = parse(z.array(SshProviderInstance), await api.list(credentials));
-            await guard(u);
-            if (!instances.some((i) => i.id === instance))
-              throw new SshError(
-                'provider_mapping_changed',
-                'L’istanza associata non è più disponibile in questo account provider.',
-                409,
-              );
-            if (controller.signal.aborted)
-              throw new SshError('authorization_changed', 'Autorizzazione cambiata.', 409);
+              throw authorizationChanged();
+            const p = current.target_snapshot.provider as SshProvider;
+            return {
+              credentials: decodeCredential(u, await credential(c, u, p)),
+              api: adapter(p),
+              instance: current.target_snapshot.server.providerInstanceId as string,
+            };
+          };
+          // Le istanze si leggono fuori dal lock e dalla transazione: un'API lenta non tiene ferme le altre
+          // operazioni SSH dell'account. Generazione e bersaglio si ricontrollano poi dentro il lock.
+          const listed = await lock(u, authorized);
+          const instances = parse(
+            z.array(SshProviderInstance),
+            await listed.api.list(listed.credentials),
+          );
+          await guard(u);
+          if (!instances.some((i) => i.id === listed.instance))
+            throw new SshError(
+              'provider_mapping_changed',
+              'L’istanza associata non è più disponibile in questo account provider.',
+              409,
+            );
+          const dispatchResult = await lock(u, async (c) => {
+            const current = await authorized(c);
+            if (current.instance !== listed.instance) throw authorizationChanged();
             effectStarted = true;
-            return { pending: started(api.reboot(credentials, instance)) };
+            return { pending: started(current.api.reboot(current.credentials, current.instance)) };
           });
           await dispatchResult.pending;
           await guard(u);
@@ -1073,16 +1241,20 @@ export function createSshService(opts: SshServiceOptions) {
         } else {
           const main = await dispatch(
             r.plan.kind === 'wp_cli'
-              ? wordpressCommand(r.target_snapshot.site as SshSite, r.plan.command)
+              ? wordpressCommand(r.target_snapshot.site as SshSite, r.plan.command, { root })
               : r.plan.command,
+            true,
           );
           output = `Esecuzione\n${main.text}`;
           if (main.result.exitCode !== 0) status = 'failed';
           else {
             const verification = await dispatch(
               r.plan.kind === 'wp_cli'
-                ? wordpressCommand(r.target_snapshot.site as SshSite, r.plan.verificationCommand)
+                ? wordpressCommand(r.target_snapshot.site as SshSite, r.plan.verificationCommand, {
+                    root,
+                  })
                 : r.plan.verificationCommand,
+              false,
             );
             output += `\nVerifica\n${verification.text}`;
             status = verification.result.exitCode === 0 ? 'succeeded' : 'failed';
@@ -1091,19 +1263,48 @@ export function createSshService(opts: SshServiceOptions) {
       } catch {
         if (!effectStarted) {
           status = 'failed';
-          output =
-            'Intervento non avviato: autorizzazioni, bersaglio o collegamento provider non più validi. Prepara un nuovo piano.';
+          output = notStarted
+            ? `Intervento non avviato: ${(notStarted as SshError).message} Prepara un nuovo piano.`
+            : 'Intervento non avviato: autorizzazioni, bersaglio o collegamento provider non più validi. Prepara un nuovo piano.';
         } /* Never persist adapter exceptions: they may include credentials. Uncertain is never retried. */
       } finally {
         active.delete(r.id);
       }
-      await withUser(opts.pool, u, async (c) => {
-        await c.query(
-          "UPDATE ssh_operations SET status=$3,output=$4,finished_at=now() WHERE user_id=$1 AND id=$2 AND status='running'",
-          [u, r.id, status, sanitizeSshOutput(output)],
-        );
-        await audit(c, u, 'operation_finish', { operationId: r.id, status });
-      });
+      // L'esito si scrive anche se nel frattempo la riga è stata segnata incerta (recupero, revoca, cambio
+      // di bersaglio): un esito reale vale più del dubbio. Un esito a sua volta incerto non sovrascrive il
+      // motivo già registrato. L'audit riporta ciò che resta scritto e lo stato precedente.
+      await lock(
+        u,
+        async (c) => {
+          const previous = (
+            await c.query<{ status: SshOperation['status'] }>(
+              'SELECT status FROM ssh_operations WHERE user_id=$1 AND id=$2 FOR UPDATE',
+              [u, r.id],
+            )
+          ).rows[0]?.status;
+          if (previous !== 'running' && previous !== 'uncertain') return;
+          if (previous === 'running' || status !== 'uncertain')
+            await c.query(
+              'UPDATE ssh_operations SET status=$3,output=$4,finished_at=now() WHERE user_id=$1 AND id=$2',
+              [
+                u,
+                r.id,
+                status,
+                sanitizeSshOutput(
+                  previous === 'uncertain'
+                    ? `Esito arrivato dopo che l’intervento era stato segnato incerto.\n${output}`
+                    : output,
+                ),
+              ],
+            );
+          await audit(c, u, 'operation_finish', {
+            operationId: r.id,
+            status,
+            ...(previous === 'uncertain' ? { previousStatus: 'uncertain' } : {}),
+          });
+        },
+        false,
+      );
       return withUser(opts.pool, u, async (c) => publicOperation(await operationRow(c, u, r.id)));
     },
   };

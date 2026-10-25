@@ -20,6 +20,8 @@ export interface GuardianRoutesOptions {
   readonly store: GuardianStore;
   /** Skill del figlio cambiate o controllo tolto: il suo agente va ricostruito. */
   readonly onChanged?: (userId: string) => void;
+  /** Skill concesse al figlio cambiate o controllo tolto: permessi da ricontrollare (piani SSH). */
+  readonly onSkillsChanged?: (userId: string) => Promise<void>;
   /** Parole imparate dal figlio (lettura del genitore). */
   readonly lexicon?: Pick<LexiconStore, 'listForGuardian'>;
 }
@@ -109,6 +111,7 @@ export async function guardianRoutes(
           .code(404)
           .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
       opts.onChanged?.(g.childId);
+      await opts.onSkillsChanged?.(g.childId);
       return { skills: guardianCatalog(allowed) };
     });
 
@@ -158,6 +161,7 @@ export async function guardianRoutes(
           .send({ error: 'not_found', message: 'nessun figlio seguito con questo id' });
       await opts.store.release(g.guardianId, g.childId);
       opts.onChanged?.(g.childId);
+      await opts.onSkillsChanged?.(g.childId);
       return reply.code(204).send();
     });
 

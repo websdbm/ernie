@@ -25,6 +25,8 @@ async function setup(scopes = ['chat']) {
     approve: vi.fn(),
     reject: vi.fn(),
     providerSave: vi.fn(async () => empty),
+    serverDelete: vi.fn(async () => empty),
+    siteDelete: vi.fn(async () => empty),
   } as unknown as SshService;
   await sshRoutes(app, {
     service,
@@ -92,6 +94,43 @@ describe('SSH REST and model-only planning boundary', () => {
     });
     expect(result.statusCode).toBe(400);
     expect(service.approve).not.toHaveBeenCalled();
+  });
+  it('deletes servers and sites of the authenticated account only, with chat scope', async () => {
+    const { app, service } = await setup();
+    const serverId = randomUUID(),
+      siteId = randomUUID();
+    for (const [url, fn, target] of [
+      [`/v1/ssh/servers/${serverId}`, service.serverDelete, serverId],
+      [`/v1/ssh/sites/${siteId}`, service.siteDelete, siteId],
+    ] as const) {
+      const result = await app.inject({
+        method: 'DELETE',
+        url,
+        headers: { authorization: 'Bearer valid' },
+      });
+      expect(result.statusCode).toBe(200);
+      expect(fn).toHaveBeenCalledWith(userId, target);
+    }
+    expect(
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: '/v1/ssh/servers/not-a-uuid',
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    const noScope = await setup([]);
+    expect(
+      (
+        await noScope.app.inject({
+          method: 'DELETE',
+          url: `/v1/ssh/sites/${siteId}`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(noScope.service.siteDelete).not.toHaveBeenCalled();
   });
   it('exports no execute/approve tool and fails closed for a cheaper model or missing chat scope', async () => {
     const { service } = await setup();
