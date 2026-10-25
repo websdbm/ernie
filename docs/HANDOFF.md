@@ -20,16 +20,16 @@ Ultimo aggiornamento: **25 ottobre 2026**, Claude Code sul Mac Studio (revisione
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **103** (diario personale), verificata il 24 ott; la 104 è in uscita con le correzioni di questa revisione (vedi [build-104](releases/build-104.md)) |
-| iPhone di Giorgio (ad hoc, account figlio) | build **102** installata il 24 ott dal Mac Studio. UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato |
+| App su TestFlight | build **104** (correzioni di questa revisione), `VALID` il 25 ott — [nota](releases/build-104.md) |
+| iPhone di Giorgio (ad hoc, account figlio) | build **102** installata il 24 ott; pacchetto **104** pronto sul Mac Studio (`~/Library/Caches/ernie-adhoc/export/Ernie.ipa`), da installare quando il telefono è raggiungibile. UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato |
 | Server staging3 (`/srv/staging3/projects/ernie`) | vedi «Server» sotto |
 | Migrazioni applicate | fino alla **0046** |
 
 ### Server
 
-Fino al 24 ottobre il server era aggiornato **copiando i singoli file** (git fermo al 16 ottobre, ~150 file modificati,
+In esecuzione: commit **4d9aa7d** (25 ott), allineato a git. Fino al 24 ottobre il server era aggiornato **copiando i singoli file** (git fermo al 16 ottobre, ~150 file modificati,
 233 non tracciati, 25 file `._*` creati da macOS). Il 25 ottobre il codice in esecuzione coincideva con `main` (103):
-il server è stato riallineato a git con una copia di sicurezza in `/srv/staging3/backups/`. **Da qui in poi si pubblica
+il server è stato riallineato a git con una copia di sicurezza in `/srv/staging3/backups/ernie-pre-git-sync-20261025/` e immagine precedente `ernie-app:pre-104`. **Da qui in poi si pubblica
 da git**: `git fetch` + checkout del commit pubblicato, poi `docker compose build` e `up -d` dei soli servizi toccati
 (migrate se ci sono migrazioni). Niente copie a mano: lasciano il repository del server incoerente e i file `._*`.
 `docker-compose.override.yml` e `.env` sono solo sul server e non vanno toccati.
