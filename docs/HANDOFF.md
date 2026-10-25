@@ -24,9 +24,9 @@ durante la risposta, messaggi riusabili, chiusura delle voci aperte della revisi
 |---|---|
 | App su TestFlight | build **105** caricata il 25 ott ([nota](releases/build-105.md)), commit `ab4c1dd` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | commit **4d9aa7d** (build 104). Pubblicazione di `ab4c1dd` approvata dall'utente ma bloccata dal controllo dei permessi: da eseguire (copia in `/srv/staging3/backups/ernie-pre-105-20261025`, immagine `ernie-app:pre-105`); vedi «Server» |
-| Migrazioni | nel repository fino alla **0048**; sul server fino alla **0046** (0047 coda risorse Brain con tentativi, 0048 recupero promemoria Todo: si applicano pubblicando la 105) |
-| Protocollo | v1.**10** nel repository (`user.steer` / `assistant.steer`); il server pubblicato è alla v1.9. L'app 105 usa le precisazioni solo se il server dichiara la v1.10, altrimenti mette il messaggio in coda come prima |
+| Server staging3 (`/srv/staging3/projects/ernie`) | commit **f37a5e6** (25 ott: build 105 + correzione YouTube); copia in `/srv/staging3/backups/ernie-pre-105-20261025`, immagine `ernie-app:pre-105`; vedi «Server» |
+| Migrazioni | fino alla **0048**, applicate anche sul server |
+| Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
 
@@ -114,8 +114,14 @@ Revisione generale delle build 64–103 da sei revisori in parallelo, poi correz
    fallisce nella suite completa e da solo passa. Sul Mac Studio usare il simulatore «Ernie prova»: «iPhone 17» è
    usato da un'altra sessione.
 
+10. *YouTube dal server*: la pagina del video arriva spesso col controllo anti-bot (IP di Contabo), senza durata.
+   Gli Short si analizzano comunque (massimo 3 minuti), i video normali solo quando la pagina è leggibile; altrimenti
+   rifiuto «non riesco a leggere la durata». Soluzione stabile: YouTube Data API v3 (`videos.list`
+   `contentDetails,status`) con una chiave dedicata, da decidere con l'utente.
+
 ## Decisioni in sospeso per l'utente
 
+- YouTube Data API per la durata dei video normali (voce 10 di «Aperto»).
 - DNS di riserva sul server (Cloudflare/Quad9 accanto a quelli di Contabo): il 16 ott un guasto DNS di pochi secondi ha
   fatto fallire un turno.
 

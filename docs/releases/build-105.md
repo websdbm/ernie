@@ -1,9 +1,7 @@
 # Build 105 — Precisazioni e messaggi riusabili
 
 25 ottobre 2026. **Caricata su TestFlight** dal Mac Studio («Cosa testare» scritto dalle novità) e **installata ad
-hoc sull'iPhone di Giorgio** (verificata: Bundle Version 105). Server: pubblicazione approvata dall'utente ma non
-ancora eseguita (bloccata dal controllo dei permessi, in attesa di conferma esplicita); fino ad allora l'app 105 usa il
-server v1.9 e le precisazioni ripiegano sulla coda.
+hoc sull'iPhone di Giorgio** (verificata: Bundle Version 105). Server pubblicato lo stesso giorno (vedi «Tracciabilità»).
 
 ## Contenuto
 
@@ -45,5 +43,17 @@ in [HANDOFF](../HANDOFF.md).
   checkout pulito del Mac Studio con `CURRENT_PROJECT_VERSION=105` (anche in `project.yml`, quattro target).
 - iPhone di Giorgio: pacchetto ad hoc dallo stesso commit (SHA-256
   `c5433b48930dced21b09f31d0a7dc217f01a97eb58934da891760cc4968c4481`), installato via devicectl il 25 ott.
+
+- Server staging3: copia di sicurezza in `/srv/staging3/backups/ernie-pre-105-20261025/`, immagine precedente
+  `ernie-app:pre-105`; `git reset --hard ab4c1dd`, migrazioni 0047 e 0048 applicate, API e worker ricostruiti;
+  `/health` 200, chiave errata 401. Prova dal vivo con un utente temporaneo (poi cancellato): precisazione inviata
+  durante `web_search`, `applied`, risposta in una frase in inglese come chiesto.
+- **YouTube dopo la pubblicazione**: ogni Short veniva rifiutato («non riesco a verificare che il video sia
+  pubblico»). Dal server YouTube risponde col controllo anti-bot (`LOGIN_REQUIRED`, «Melde dich an, damit wir sehen,
+  dass du kein Bot bist»), senza stato né durata, mentre dal Mac lo stesso Short è `OK`, 44 s; un video molto
+  popolare passava. Correzione `f37a5e6` (solo server): pagina bloccata + oEmbed con titolo → video pubblico; link
+  Shorts analizzato anche senza durata (massimo 3 minuti); video normali di durata sconosciuta ancora rifiutati.
+  945 test verdi, pubblicata (API e worker), Short estratto dal container del server.
+  Ritorno indietro: `docker tag ernie-app:pre-105 ernie-app:local` e `docker compose up -d api worker`.
 
 Il commit della documentazione finale non modifica i sorgenti della build.
