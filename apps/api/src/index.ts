@@ -686,6 +686,9 @@ async function main(): Promise<void> {
     registry.register(
       createYouTubeTool({
         apiKey: config.providers.openrouterApiKey,
+        ...(config.providers.youtubeApiKey
+          ? { youtubeApiKey: config.providers.youtubeApiKey }
+          : {}),
         recorder: createLlmCallRecorder(postgres.pool, logger),
         checkBudget: checkUserBudget,
         allowedDomains: config.tools.webAllowedDomains,

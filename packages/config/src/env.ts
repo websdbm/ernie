@@ -43,6 +43,8 @@ export const envSchema = z.object({
   FIRECRAWL_API_KEY: z.string().min(1).optional(),
   /** Google Places (skill «Portami lì»): ricerca dei posti. Senza, si usa OpenStreetMap (Nominatim). */
   GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+  /** YouTube Data API v3: durata e stato dei video quando la pagina di YouTube è bloccata dal controllo anti-bot. */
+  YOUTUBE_API_KEY: z.string().min(1).optional(),
   /** Origin ammessi sull'upgrade WebSocket (CSV). I client nativi non inviano Origin. */
   WS_ALLOWED_ORIGINS: z.string().default(''),
   /** Tetto di spesa LLM giornaliero per utente, in USD, se non impostato in users.settings. */
@@ -219,6 +221,7 @@ export interface AppConfig {
     readonly anthropicApiKey: string | undefined;
     readonly firecrawlApiKey: string | undefined;
     readonly googleMapsApiKey: string | undefined;
+    readonly youtubeApiKey: string | undefined;
   };
 }
 
@@ -378,6 +381,7 @@ export function toAppConfig(env: Env): AppConfig {
           : (env.ANTHROPIC_API_KEY ?? env.CLAUDE_API_KEY),
       firecrawlApiKey: env.FIRECRAWL_API_KEY,
       googleMapsApiKey: env.GOOGLE_MAPS_API_KEY,
+      youtubeApiKey: env.YOUTUBE_API_KEY,
     },
   };
 }
@@ -444,6 +448,7 @@ export function redactConfig(config: AppConfig): Record<string, unknown> {
       anthropicApiKey: present(config.providers.anthropicApiKey),
       firecrawlApiKey: present(config.providers.firecrawlApiKey),
       googleMapsApiKey: present(config.providers.googleMapsApiKey),
+      youtubeApiKey: present(config.providers.youtubeApiKey),
     },
   };
 }

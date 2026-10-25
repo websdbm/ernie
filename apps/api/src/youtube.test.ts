@@ -7,6 +7,8 @@ import { clampVideoAnalysis, createYouTubeTool, VideoAnalysis, YOUTUBE_MODEL } f
 import {
   boundedText,
   normalizeYouTubeUrl,
+  parseIsoDuration,
+  parseYouTubeApiVideo,
   parseYouTubeMetadata,
   type YouTubeMetadata,
   youtubeLinksIn,
@@ -58,6 +60,8 @@ function setup(
     blockedDomains?: string[];
     /** false: oEmbed risponde 401 come per un video privato. */
     oembed?: boolean;
+    /** Con la chiave della YouTube Data API: risposta di videos.list (null = 403, quota finita). */
+    dataApi?: unknown;
   } = {},
 ) {
   const calls: Record<string, unknown>[] = [];
@@ -78,6 +82,13 @@ function setup(
       );
     }
     expect(init?.redirect).toBe('error');
+    if (address.startsWith('https://www.googleapis.com/youtube/v3/videos?')) {
+      expect(address).toContain(`id=${id}`);
+      expect(address).toContain('key=yt-key');
+      return options.dataApi === null
+        ? new Response('quotaExceeded', { status: 403 })
+        : new Response(JSON.stringify(options.dataApi));
+    }
     if (address.includes('/oembed?'))
       return options.oembed === false
         ? new Response('Unauthorized', { status: 401 })
@@ -93,6 +104,7 @@ function setup(
     checkBudget,
     recorder,
     ...(options.blockedDomains ? { blockedDomains: options.blockedDomains } : {}),
+    ...(options.dataApi !== undefined ? { youtubeApiKey: 'yt-key' } : {}),
   });
   return { tool, calls, fetchMock, checkBudget, recorder };
 }
@@ -323,6 +335,74 @@ describe('YouTube reader', () => {
       title: 'Titolo oEmbed',
     });
     expect(shortVideo.calls).toHaveLength(1);
+  });
+
+  it('with the YouTube Data API uses the official duration and status even when the page is blocked', async () => {
+    const botPage =
+      '<script>var ytInitialPlayerResponse = {"playabilityStatus":{"status":"LOGIN_REQUIRED"}};</script>';
+    const item = (over: Record<string, unknown> = {}) => ({
+      items: [
+        {
+          id,
+          snippet: {
+            title: 'Ricetta dal canale',
+            channelTitle: 'Canale',
+            description: 'Ingredienti: lenticchie.\n00:10 Cottura',
+            publishedAt: '2026-10-19T10:00:00Z',
+            liveBroadcastContent: 'none',
+          },
+          contentDetails: { duration: 'PT9M5S' },
+          status: { privacyStatus: 'public', uploadStatus: 'processed' },
+          ...over,
+        },
+      ],
+    });
+    const ok = setup({ html: botPage, dataApi: item() });
+    const out = (await ok.tool.execute({ url }, ctx())) as {
+      metadata: {
+        durationSeconds: number;
+        availability: string;
+        title: string;
+        chapters: string[];
+      };
+    };
+    expect(out.metadata).toMatchObject({
+      durationSeconds: 545,
+      availability: 'public',
+      title: 'Ricetta dal canale',
+      chapters: ['00:10 Cottura'],
+    });
+    expect(ok.calls).toHaveLength(1);
+
+    const long = setup({
+      html: botPage,
+      dataApi: item({ contentDetails: { duration: 'PT1H2M' } }),
+    });
+    await expect(long.tool.execute({ url }, ctx())).rejects.toMatchObject({
+      code: 'video_too_long',
+    });
+    // Privato o inesistente: videos.list non restituisce elementi, anche se oEmbed rispondesse.
+    for (const dataApi of [{ items: [] }, item({ status: { privacyStatus: 'unlisted' } })]) {
+      const hidden = setup({ html: player(), dataApi });
+      await expect(hidden.tool.execute({ url }, ctx())).rejects.toMatchObject({
+        code: 'video_unavailable',
+      });
+      expect(hidden.calls).toHaveLength(0);
+    }
+    // Quota finita: si torna alla pagina, qui leggibile.
+    const quota = setup({ dataApi: null });
+    await expect(quota.tool.execute({ url }, ctx())).resolves.toMatchObject({
+      metadata: { durationSeconds: 48 },
+    });
+  });
+
+  it('parses ISO 8601 durations of the Data API', () => {
+    expect(parseIsoDuration('PT44S')).toBe(44);
+    expect(parseIsoDuration('PT1H2M3S')).toBe(3723);
+    expect(parseIsoDuration('P1DT1M')).toBe(86_460);
+    expect(parseIsoDuration('P0D')).toBeNull();
+    expect(parseIsoDuration('44')).toBeNull();
+    expect(parseYouTubeApiVideo({ error: {} }, id)).toBeNull();
   });
 
   it('does not send content anywhere on denied domains, exceeded budget or pre-aborted calls', async () => {

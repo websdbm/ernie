@@ -88,6 +88,8 @@ const num = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n)
 
 export function createYouTubeTool(deps: {
   apiKey: string;
+  /** YouTube Data API v3, facoltativa: durata e stato ufficiali anche quando la pagina è bloccata. */
+  youtubeApiKey?: string;
   recorder: LlmCallRecorder;
   checkBudget: (userId: string) => Promise<void>;
   fetch?: typeof fetch;
@@ -319,6 +321,7 @@ export function createYouTubeTool(deps: {
         canonical.url,
         doFetch,
         AbortSignal.any([signal, AbortSignal.timeout(8_000)]),
+        deps.youtubeApiKey,
       );
       signal.throwIfAborted();
       if (metadata.isLive || (metadata.durationSeconds !== null && metadata.durationSeconds > 1200))
