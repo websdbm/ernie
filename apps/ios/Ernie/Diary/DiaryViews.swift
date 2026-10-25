@@ -6,9 +6,10 @@ struct DiaryEntrance: View {
     @Environment(AppModel.self) private var model
     var incoming: String = ""
     var body: some View {
-        if let credentials = model.credentials, let userID = model.profile?.userId {
-            PrivateDiaryView(scope: DiaryIdentity.scope(server: credentials.serverURL, userID: userID), api: ApiClient(credentials: credentials), incoming: incoming)
-                .id(DiaryIdentity.scope(server: credentials.serverURL, userID: userID))
+        // Senza profilo (avvio senza rete) vale lo scope ricordato per queste credenziali: il diario è locale.
+        if let credentials = model.credentials, let scope = DiaryIdentity.scope(for: credentials, userID: model.profile?.userId) {
+            PrivateDiaryView(scope: scope, api: ApiClient(credentials: credentials), incoming: incoming)
+                .id(scope)
                 .onAppear { model.voice?.cancelListening(); model.conversation?.muteSpeech() }
         } else {
             ContentUnavailableView("Account non disponibile", systemImage: "lock.fill", description: Text("Accedi al tuo account prima di aprire il diario."))
@@ -25,16 +26,20 @@ struct PrivateDiaryView: View {
     @State private var backup = false
     @State private var capabilities: DiaryCapabilities?
     @State private var unlockTask: Task<Void, Never>?
+    @State private var confirmDelete = false
     private let api: ApiClient
     init(scope: String, api: ApiClient, incoming: String = "") {
         self.api = api
         _store = State(initialValue: DiaryStore(scope: scope))
         _incoming = State(initialValue: incoming)
     }
+    /// L'avviso di permesso della dettatura rende l'app inattiva: le pagine restano aperte (e il foglio della bozza
+    /// pure), il passaggio in background blocca comunque.
+    private var showsPages: Bool { store.isUnlocked && (scenePhase == .active || store.permissionPrompt) && !isCaptured }
     var body: some View {
         NavigationStack {
             Group {
-                if store.isUnlocked && scenePhase == .active && !isCaptured {
+                if showsPages {
                     DiaryLibrary(store: store, api: api, capabilities: $capabilities, pending: $incoming)
                         .id(store.generation)
                 } else {
@@ -49,12 +54,30 @@ struct PrivateDiaryView: View {
                     Menu {
                         if store.isUnlocked { Button("Blocca diario", systemImage: "lock.fill") { store.lock() } }
                         Button("Copia cifrata e ripristino", systemImage: "externaldrive.badge.person.crop") { backup = true }
+                        // Solo a diario sbloccato (o con la chiave ormai invalidata): nessuno elimina il diario altrui.
+                        if store.isUnlocked || store.keyInvalidated {
+                            Button("Elimina diario…", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                        }
                     } label: { Image(systemName: "ellipsis.circle") }
+                    .disabled(store.deleting)
                 }
             }
         }
         .privacySensitive()
+        .writingToolsBehavior(.disabled)
         .sheet(isPresented: $backup) { DiaryBackupView(store: store) }
+        .alert("Eliminare il diario?", isPresented: $confirmDelete) {
+            Button("Elimina diario", role: .destructive) {
+                incoming = ""
+                Task {
+                    do { try await store.deleteDiary() }
+                    catch { store.error = "Eliminazione non completata. Riprova; le pagine rimaste restano cifrate." }
+                }
+            }
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text("Pagine, bozza, riepiloghi e la chiave di questo diario saranno cancellati dal telefono. Non si può annullare. Le copie cifrate che hai esportato restano dove le hai salvate.")
+        }
         .onChange(of: store.isUnlocked) { _, unlocked in
             if unlocked {
                 if store.appendIncoming(incoming) { incoming = "" }
@@ -62,13 +85,17 @@ struct PrivateDiaryView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background || (phase == .inactive && store.isUnlocked) {
+            if phase == .active { store.sceneBecameActive() }
+            if phase == .background || (phase == .inactive && store.isUnlocked && !store.permissionPrompt) {
                 unlockTask?.cancel(); store.lock(); incoming = ""; backup = false
             }
         }
         .onChange(of: isCaptured) { _, captured in if captured { unlockTask?.cancel(); store.lock(); incoming = ""; backup = false } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            if store.isUnlocked { store.lock(); incoming = "" }
+            if store.isUnlocked && !store.permissionPrompt { store.lock(); incoming = "" }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            if store.isUnlocked { unlockTask?.cancel(); store.lock(); incoming = ""; backup = false }
         }
         .onDisappear { unlockTask?.cancel(); store.lock(); incoming = "" }
     }
@@ -94,7 +121,7 @@ struct PrivateDiaryView: View {
                 } label: {
                     Label(store.unlocking ? "Sblocco…" : store.exists ? "Sblocca diario" : "Attiva e crea diario", systemImage: "faceid")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
-                }.buttonStyle(.borderedProminent).disabled(store.unlocking || isCaptured || scenePhase != .active)
+                }.buttonStyle(.borderedProminent).disabled(store.unlocking || store.deleting || isCaptured || scenePhase != .active)
                 if let error = store.error { Text(error).foregroundStyle(.red).font(.callout) }
                 if store.lostUnsavedChanges { Text("Non è stato possibile salvare le ultime modifiche prima del blocco: la bozza potrebbe essere incompleta.").foregroundStyle(.red) }
                 Text("Accesso con Face ID o Touch ID attualmente registrati. Se cambi telefono o biometria, occorre una copia cifrata con la sua password: Ernie non può recuperarla al posto tuo.")
@@ -126,7 +153,7 @@ private struct DiaryLibrary: View {
         List {
             if !pending.isEmpty {
                 Section("Testo in attesa, non ancora salvato") {
-                    TextEditor(text: $pending).frame(minHeight: 160).autocorrectionDisabled()
+                    TextEditor(text: $pending).frame(minHeight: 160).autocorrectionDisabled().writingToolsBehavior(.disabled)
                     Button("Salva nel diario") { if store.appendIncoming(pending) { pending = "" } }
                     Text("Riduci il testo a 50.000 caratteri e riprova. Se chiudi o lasci l’app, questo testo non salvato sarà scartato.").font(.footnote)
                 }
@@ -199,8 +226,13 @@ private struct DiaryComposer: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text((store.document?.draft.createdAt ?? .now).formatted(date: .complete, time: .shortened))
                     .font(.subheadline).foregroundStyle(.secondary)
+                // Durante la dettatura il testo non si modifica a mano: la trascrizione riscrive la parte dettata e
+                // cancellava quanto scritto nel frattempo.
                 TextEditor(text: Binding(get: { store.document?.draft.text ?? "" }, set: { store.updateDraft($0) }))
-                    .autocorrectionDisabled().accessibilityLabel("Testo originale del diario")
+                    .autocorrectionDisabled().writingToolsBehavior(.disabled).accessibilityLabel("Testo originale del diario")
+                    .disabled(dictation.recording)
+                    .opacity(dictation.recording ? 0.75 : 1)
+                if dictation.recording { Text("Dettatura in corso: per modificare il testo, termina la dettatura.").font(.footnote).foregroundStyle(.secondary) }
                 if let error = store.error ?? dictation.error { Text(error).font(.footnote).foregroundStyle(.red) }
                 Button {
                     if dictation.recording { dictation.stop() }
@@ -214,15 +246,19 @@ private struct DiaryComposer: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Chiudi bozza") { dictation.stop(); store.flush(); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Conserva originale") { dictation.stop(); if store.saveEntry() != nil { dismiss() } }.disabled(store.document?.draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) }
             }
-        }.onDisappear { dictation.stop(); store.flush() }
+        }
+        .writingToolsBehavior(.disabled)
+        .onDisappear { dictation.stop(); store.flush() }
     }
 }
 
 struct DiaryEntryView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var store: DiaryStore
     let entryID: UUID
     let api: ApiClient
     @State private var tab = 0
+    @State private var confirmDelete = false
     var body: some View {
         if let entry = store.document?.entries.first(where: { $0.id == entryID }) {
             ScrollView {
@@ -247,6 +283,19 @@ struct DiaryEntryView: View {
                     }
                 }.padding().lineSpacing(5)
             }.navigationTitle("Pagina privata").navigationBarTitleDisplayMode(.inline)
+                .writingToolsBehavior(.disabled)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Elimina pagina", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                            .disabled(store.busy)
+                    }
+                }
+                .confirmationDialog("Eliminare questa pagina?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                    Button("Elimina pagina", role: .destructive) { store.deleteEntry(entryID); dismiss() }
+                    Button("Annulla", role: .cancel) {}
+                } message: {
+                    Text("L’originale, le sue elaborazioni AI e i riepiloghi che la includono saranno cancellati da questo telefono. Non si può annullare.")
+                }
                 .modifier(DiaryConsentPrompt(store: store, api: api))
         }
     }
@@ -291,6 +340,7 @@ private struct DiaryPeriodView: View {
                 .modifier(DiaryConsentPrompt(store: store, api: api, authorized: { dismiss() }))
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } } }
         }
+        .writingToolsBehavior(.disabled)
     }
 }
 
@@ -310,7 +360,7 @@ private struct DiaryBackupView: View {
     @State private var exporting = false
     @State private var importing = false
     @State private var error: String?
-    @State private var busy = false
+    @State private var busy: String?
     var body: some View {
         NavigationStack {
             Form {
@@ -320,18 +370,26 @@ private struct DiaryBackupView: View {
                 } header: { Text("Password della copia") } footer: { Text("Scegli una password lunga e diversa da quelle abituali. Ernie non la memorizza e non può recuperarla. Il file contiene solo dati cifrati.") }
                 if store.isUnlocked {
                     Button("Esporta copia cifrata") {
-                        do { file = DiaryBackupFile(data: try store.exportBackup(password: password)); exporting = true; password = ""; confirmation = "" }
-                        catch { self.error = DiaryError.invalidArchive.errorDescription }
-                    }.disabled(password.count < 12 || password != confirmation)
+                        // PBKDF2 e cifratura nello store, fuori dal main.
+                        let pass = password; error = nil; busy = "Cifro la copia…"
+                        Task {
+                            do {
+                                file = DiaryBackupFile(data: try await store.exportBackup(password: pass))
+                                exporting = true; password = ""; confirmation = ""
+                            } catch { self.error = (error as? DiaryError)?.errorDescription ?? "Esportazione non riuscita. Riprova." }
+                            busy = nil
+                        }
+                    }.disabled(password.count < 12 || password != confirmation || busy != nil)
                 }
-                Button("Importa copia cifrata") { importing = true }.disabled(password.isEmpty || busy)
+                Button("Importa copia cifrata") { importing = true }.disabled(password.isEmpty || busy != nil)
                 Text(store.isUnlocked ? "L’importazione aggiunge le pagine mancanti e conserva quelle già presenti." : "Ripristino di recupero: dopo la password servirà Face ID. La copia sostituirà il diario locale non accessibile; le pagine successive alla copia non saranno recuperate.")
                     .font(.footnote).foregroundStyle(.secondary)
-                if busy { ProgressView("Ripristino…") }
+                if let busy { ProgressView(busy) }
                 if let error { Text(error).foregroundStyle(.red) }
             }.navigationTitle("Copia cifrata")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { password = ""; confirmation = ""; dismiss() } } }
         }
+        .writingToolsBehavior(.disabled)
         .fileExporter(isPresented: $exporting, document: file, contentType: .data, defaultFilename: "diario-personale.erniediary") { _ in file = nil }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
             guard case .success(let url) = result else { return }
@@ -340,10 +398,14 @@ private struct DiaryBackupView: View {
             do {
                 guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 23_000_000 else { throw DiaryError.invalidArchive }
                 let data = try Data(contentsOf: url)
-                let pass = password; password = ""; confirmation = ""; busy = true
+                let pass = password; password = ""; confirmation = ""; busy = "Ripristino…"; error = nil
                 Task {
-                    do { try await store.restoreBackup(data, password: pass); busy = false; dismiss() }
-                    catch { self.error = DiaryError.invalidArchive.errorDescription; busy = false }
+                    do { try await store.restoreBackup(data, password: pass); busy = nil; dismiss() }
+                    catch {
+                        // Il messaggio dice cosa è successo: password o file, Face ID annullato, limiti superati, disco.
+                        self.error = (error as? DiaryError)?.errorDescription ?? DiaryError.invalidArchive.errorDescription
+                        busy = nil
+                    }
                 }
             } catch { self.error = DiaryError.invalidArchive.errorDescription }
         }

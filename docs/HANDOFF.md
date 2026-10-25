@@ -71,42 +71,16 @@ dell'app verdi dopo le correzioni.
   di 400; WebSocket: lo stato di replay non resta bloccato dopo `session_forbidden`; avvio dell'API che non cade se il
   primo recupero dei Todo fallisce; data delle foto nel fuso di Roma.
 
-### Corretto dopo la build 104 (solo server, da pubblicare con le migrazioni 0047 e 0048)
-
-- **Foto geolocalizzate**: il luogo nuovo si chiama «Luogo fotografato il 2 luglio 2026» (con «(2)», «(3)» se il
-  titolo c'è già), coordinate solo nei metadati; un luogo nato da una foto, mai rinominato né modificato, sparisce
-  quando non resta nessuna foto o nota collegata; questi luoghi non vanno al revisore del Second Brain.
-- **Coda delle risorse Brain** (`brain-resources.ts`): lotto letto in una transazione breve, poi un job alla volta con
-  transazioni proprie (niente Git ed embedding dentro una transazione); lock di sessione per utente su una
-  connessione dedicata. Un job che fallisce va in fondo con attesa crescente (30 s × 2ⁿ, massimo 6 h, colonne
-  `attempts`/`next_attempt_at`) e non blocca gli altri; una modifica della risorsa lo rende subito ritentabile.
-  Migrazione 0047: il trigger `brain_resource_relink` rimette in coda solo le risorse che citano il titolo (vecchio o
-  nuovo), quelle collegate a mano e, per i luoghi, le foto entro ~200 m.
-- **Un solo livello di tentativi verso i modelli**: `maxRetries: 0` in consolidamento, giudice, riassunto,
-  health-extract, clarify (con `abortSignal` legato alla scadenza del chiarimento), titolo dei promemoria e
-  documenti; un test controlla che ogni `modelSettings` dei pacchetti lo abbia.
-- **YouTube**: con durata sconosciuta o video non verificato come pubblico si rifiuta con un messaggio chiaro
-  (`video_duration_unknown` / `video_unavailable`) invece di analizzare senza limite. Se YouTube blocca la lettura
-  della pagina dal server, i video non vengono più analizzati.
-- **Minori**: coda `turn-memory` con completati rimossi dopo 1 h e falliti dopo 3 giorni; budget giornaliero nel
-  giorno di Roma; sintesi vocale non registrata come spesa se la connessione al fornitore non si apre; PATCH delle
-  preferenze operative che non riaccende `active`; prestazioni che scartano solo la misura non valida (risposta
-  `{accepted, rejected}`); recupero dei promemoria Todo con attesa crescente per le liste che falliscono (migrazione
-  0048, `todo_pending_reminders(uuid[])`); scheda di conferma di `reminder_create` con la ricorrenza in parole; JPEG
-  con più di un SOF (o SOF non supportato) rifiutati e `-max_pixels` a ffmpeg; costo della revisione Brain registrato
-  anche in caso di errore.
-
 ### Aperto, in ordine di gravità
 
 Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui nel suo commit.
 
 **Media**
-1. *Blocchi da watchdog (0x8BADF00D) in background, build 97–98*: lavoro pesante sul main durante l'aggiornamento della
-   scena. Candidati: `SidePanel` → `TranscriptStore.list` decodifica fino a 80 conversazioni sul main;
-   `MediaPresentation.prepare` decodifica e ricodifica foto intere sul main (anche rischio di memoria);
-   `DiaryStore.persist`/`exportBackup`/`restore` cifrano l'intero diario e fanno PBKDF2 sul main a ogni pausa di
-   digitazione. Spostare fuori dal main (funzioni `nonisolated`, `CGImageSourceCreateThumbnailAtIndex`, bozza del
-   diario in un file separato).
+1. *Blocchi da watchdog (0x8BADF00D)*: i candidati elencati (storico del pannello, foto, diario, MetricKit) sono
+   fuori dal main dal ramo del 25 ott (vedi sotto). Resta `ConversationStore.persist` → `TranscriptStore.save`, che
+   codifica e scrive l'intera conversazione sul main a ogni aggiornamento: spostarlo in una coda di scrittura
+   serializzata (file non toccato perché in modifica da un altro agente). Verificare sui rapporti MetricKit delle
+   prossime build se i blocchi spariscono.
 2. *SSH disponibile a ogni account* (`packages/skills/src/catalog.ts` `ssh` `defaultAvailable: true`) e sonda verso
    `100.64.0.0/10` su qualunque porta senza limite di frequenza (`ssh-transport.ts`, `ssh/service.ts` hostProbe):
    decidere se solo per il titolare; limitare porte e frequenza; timeout sul DNS. **Decisione dell'utente.**
@@ -117,31 +91,34 @@ Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui n
 5. *Second Brain: OCR dei documenti scansionati* in note non riservate, proposte in chat da `index.suggest` e spinte sul
    remoto Git (`brain-resources.ts` `private: false`). Proposta: scansioni riservate o fuori da `suggest`.
    **Decisione dell'utente.**
-6. *Foto geolocalizzate, schede già esistenti*: i luoghi creati prima della correzione hanno ancora il titolo
-   «Luogo fotografato (lat, lon)» (esclusi comunque dal revisore e rimossi quando restano senza foto); per rinominarli
-   servirebbe una migrazione del vault. Valutare se farla.
-10. *Diario offline*: senza profilo (avvio senza rete) il diario locale non si apre e il testo dettato si perde
-    (`DiaryViews.swift` `DiaryEntrance` richiede `model.profile?.userId`): salvare lo scope in locale.
+6. *Foto geolocalizzate*: nota «Luogo fotografato (lat, lon)» con 5 decimali, non riservata, mandata al revisore; resta
+   anche dopo aver cancellato la foto. Proposta: titolo neutro, coordinate solo nei metadati, pulizia dei luoghi orfani.
+7. *Second Brain: transazione lunga* in `brain-resources.ts` `syncUser` (git, embedding e 100 job dentro una
+   transazione con advisory lock) e un job che fallisce blocca la coda dell'utente; trigger `brain_resource_relink`
+   (0041) che rimette in coda tutte le risorse a ogni nuova nota.
+8. *Tentativi annidati verso i modelli*: `retryModelCall` (3) dentro i retry di Mastra (2 di default) → fino a 9
+   chiamate con un 429; impostare `maxRetries: 0` nei `modelSettings` di consolidamento, giudice, riassunto,
+   health-extract, clarify, titolo dei promemoria; a clarify passare anche `abortSignal`.
+9. *YouTube*: con durata sconosciuta (pagina non letta) il limite dei 20 minuti non vale (`youtube.ts`).
 11. *Todo*: con Redis giù il salvataggio risponde errore anche se la lista è salvata (`todo.ts` `save` → `onChanged`).
     Comportamento voluto e coperto da test (il nuovo salvataggio identico riprova); valutare se all'utente va detto
     «salvata, promemoria in sospeso».
 
 **Bassa**
-- Diario: la prima dettatura può bloccare il diario (avviso di permesso → `scenePhase .inactive` → `lock`); la
-  dettatura sovrascrive il testo scritto a mano nel frattempo; limiti superati con messaggi d'errore sbagliati; nessuna
-  cancellazione di pagine o del diario e chiave che resta dopo l'uscita dall'account; `DiaryEntrance` con
-  `NavigationStack` annidato da Impostazioni; Writing Tools e tastiere di terze parti sui campi del diario.
-- Widget con i dati dell'account precedente se l'uscita avviene durante un aggiornamento (`ErnieSummary.fetch`).
-- `LegacyTranscriber` (`SpeechInput.swift`): `task`/`publish` senza lock.
-- `DiagnosticsReporter.start`: `jsonRepresentation()` dei rapporti passati sul main all'avvio.
+- Diario: file e chiave restano dopo l'uscita dall'account (ora si eliminano a mano da «Elimina diario…»; decidere
+  se l'uscita debba chiederlo); tastiere di terze parti sui campi del diario (si possono escludere solo per tutta
+  l'app, `application(_:shouldAllowExtensionPointIdentifier:)`). Writing Tools già disattivati.
 - WebSocket: le connessioni sospese per utente non hanno un tetto (`ws/plugin.ts`).
-- Todo: doppio blocco `todo_list` per salvataggio dalla chat (scheda del tool nel turno + evento utente di
-  `todo-reminders` `onChanged` a tutte le connessioni, che serve agli altri dispositivi). Sul telefono non si vede
-  doppio (il secondo aggiorna la scheda), ma `TodoStore.apply` e `reminders.refresh` girano due volte. Correzione
-  pulita: escludere la connessione d'origine in `ConnectionRegistry.push`/`ws/connection.ts` o deduplicare per
-  `blockId` sull'app; non fatta per non toccare `connection.ts`.
+- Todo: doppio blocco `todo_list` per salvataggio dalla chat; `todo_pending_reminders` può fermarsi su liste che
+  falliscono sempre; scheda di conferma di `reminder_create` con i giorni in numero.
+- Coda `turn-memory`: testo del messaggio in Redis 7 giorni, per sempre se il job fallisce (`memory/queue.ts`).
+- Budget giornaliero in UTC mentre il pannello consumi usa Europe/Rome (`model-gateway/budget.ts`).
+- Sintesi vocale registrata come spesa anche se la richiesta non parte (`speech.ts`).
+- Preferenze operative: un PATCH riattiva una preferenza spenta (`active` con default).
+- Prestazioni: un'osservazione non valida annulla tutto il lotto.
 - SSH: diagnosi WordPress come root senza `--allow-root`; paginazione Vultr; lettura delle istanze dentro il lock;
-  ogni cambio d'impostazione invalida i piani in attesa.
+  ogni cambio d'impostazione invalida i piani in attesa; costo della revisione Brain non registrato se va in errore.
+- Immagini: possibile JPEG con doppio SOF oltre i limiti di pixel (`media-image.ts`).
 - Test iOS: `TerminalChatTests.focusProgrammaticoECambioSkinNellaBarraCompleta` fallisce a volte nella suite completa
   (focus non ancora assegnato), da solo passa; `avvioRealeMicrofonoRiceveBufferEFermaSenzaCrash` resta in attesa del
   permesso del microfono su un simulatore nuovo (escluderlo con `-skip-testing` o concedere il permesso).
@@ -163,6 +140,15 @@ Ogni voce: file, problema, correzione proposta. Chi la prende la toglie da qui n
 - Documenti scansionati riservati nel Second Brain (voce 5).
 
 ## Registro delle sessioni
+
+- **25 ott 2026 — Mac Studio (agente, ramo separato, non ancora in una build)**: fuori dal main lo storico del
+  pannello (indice `<sessione>.summary` accanto a ogni conversazione, letto in background), la riduzione delle foto
+  (`CGImageSourceCreateThumbnailAtIndex`, 2400 px; il composer non tiene più le originali, l'OCR legge il JPEG ridotto),
+  il diario (lettura, decifratura, PBKDF2 e scritture serializzate fuori dal main; bozza in `<scope>.draft.sealed`) e
+  i rapporti MetricKit passati. Diario: apertura senza rete (scope ricordato per credenziali), avviso di permesso della
+  dettatura tollerato, editor bloccato durante la dettatura, messaggi propri per i limiti, eliminazione di pagina e
+  dell'intero diario (file e chiave) con conferma, `fullScreenCover` da Impostazioni, Writing Tools disattivati.
+  Widget: copia del riepilogo legata all'account (`Shared/WidgetSummaryCache.swift`). `LegacyTranscriber` sotto lock.
 
 - **25 ott 2026 — Mac Studio (Claude Code)**: revisione generale delle build 64–103, correzioni sopra, build 104,
   server riallineato a git, questo file.

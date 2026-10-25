@@ -1,7 +1,9 @@
 import CryptoKit
 import Foundation
+import ImageIO
 import Observation
 import UIKit
+import UniformTypeIdentifiers
 
 struct SavedMedia: Codable, Sendable, Identifiable, Equatable {
     var id: String
@@ -131,8 +133,56 @@ enum MediaPresentation {
         }
         return result
     }
-    /// JPEG ridotto, orientamento applicato e metadati EXIF rimossi prima del caricamento.
-    @MainActor static func prepare(_ image: UIImage) throws -> Data {
+    /// Lato massimo del JPEG caricato.
+    static let maxPixelSize = 2400
+
+    /// JPEG ridotto, orientamento applicato e metadati EXIF rimossi prima del caricamento, sempre fuori dal main:
+    /// decodificare e ricodificare una foto intera durante l'aggiornamento della scena faceva intervenire il
+    /// watchdog (0x8BADF00D, build 97–98).
+    static func prepare(_ photo: MediaImportPhoto) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            switch photo.content {
+            case .encoded(let data): try MediaPresentation.prepare(data: data)
+            case .image(let image): try MediaPresentation.prepare(image)
+            }
+        }.value
+    }
+
+    /// Dal file compresso: ImageIO legge solo i pixel della miniatura (lato massimo 2400) e applica l'orientamento,
+    /// senza decodificare l'originale intero. Da chiamare fuori dal main.
+    static func prepare(data: Data) throws -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0 else { throw DocumentReader.ReadError.unreadable }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+              thumbnail.width > 0, thumbnail.height > 0 else { throw DocumentReader.ReadError.unreadable }
+        // Sfondo bianco per le immagini trasparenti (PNG, HEIC con alfa), come la versione con UIImage.
+        let width = thumbnail.width, height = thumbnail.height
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { throw DocumentReader.ReadError.unreadable }
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1)); context.fill(rect)
+        context.interpolationQuality = .high
+        context.draw(thumbnail, in: rect)
+        guard let flattened = context.makeImage() else { throw DocumentReader.ReadError.unreadable }
+        for quality in [0.82, 0.65, 0.45] {
+            let output = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { break }
+            // Nessun dizionario EXIF/GPS: solo la qualità di compressione.
+            CGImageDestinationAddImage(destination, flattened, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+            if CGImageDestinationFinalize(destination), output.length <= 3_000_000 { return output as Data }
+        }
+        throw ApiError(status: 413, code: "image_too_large", message: "Questa foto è troppo grande. Scegline una più piccola.")
+    }
+
+    /// Da un'immagine già in memoria (fotocamera, scansione). Sicura fuori dal main.
+    static func prepare(_ image: UIImage) throws -> Data {
         let size = image.size
         guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { throw DocumentReader.ReadError.unreadable }
         let scale = min(1, 2400 / max(size.width, size.height))

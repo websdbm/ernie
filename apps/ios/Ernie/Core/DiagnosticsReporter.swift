@@ -17,11 +17,15 @@ final class DiagnosticsReporter: NSObject, MXMetricManagerSubscriber, Sendable {
     }
 
     /// All'avvio: iscrizione per i prossimi rapporti e invio di quelli già conservati da iOS.
+    /// I rapporti passati si leggono e si serializzano fuori dal main: `jsonRepresentation()` di molti rapporti con
+    /// gli stack durante l'avvio contribuiva ai blocchi da watchdog (build 97–98).
     @MainActor func start() {
         MXMetricManager.shared.add(self)
-        let past = MXMetricManager.shared.pastDiagnosticPayloads.map(Self.entry)
         let os = "iOS \(UIDevice.current.systemVersion)"
-        Task.detached(priority: .utility) { await Self.upload(past, os: os) }
+        Task.detached(priority: .utility) {
+            let past = MXMetricManager.shared.pastDiagnosticPayloads.map(Self.entry)
+            await Self.upload(past, os: os)
+        }
     }
 
     func didReceive(_ payloads: [MXDiagnosticPayload]) {

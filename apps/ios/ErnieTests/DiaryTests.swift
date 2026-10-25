@@ -68,6 +68,8 @@ struct DiaryCryptoTests {
     var suspended = false
     /// La chiave del diario esistente non si apre più (biometria cambiata); una chiave nuova invece sì.
     var invalidated = false
+    var removals = 0
+    func remove() throws { removals += 1 }
     func unlock(existingVault: Bool) async throws -> SymmetricKey {
         if suspended { await withCheckedContinuation { gate = $0 } }
         guard allowed else { throw DiaryError.unavailable }
@@ -111,9 +113,13 @@ private actor TestDiaryAI: DiaryTransforming {
         store.updateDraft("CANARY draft")
         store.lock()
         #expect(store.document == nil && !store.isUnlocked && store.consent == nil)
+        // Le scritture proseguono fuori dal main anche dopo il blocco: si attende che siano sul disco.
+        await store.saved()
         let path = directory.appendingPathComponent("alice.sealed")
         let data = try Data(contentsOf: path)
         #expect(!data.contains(Data("CANARY".utf8)))
+        let draftPath = directory.appendingPathComponent("alice.draft.sealed")
+        #expect(!(try Data(contentsOf: draftPath)).contains(Data("CANARY".utf8)))
         #expect(try directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
         #if !targetEnvironment(simulator)
         #expect(try FileManager.default.attributesOfItem(atPath: path.path)[.protectionKey] as? String == FileProtectionType.complete.rawValue)
@@ -146,6 +152,7 @@ private actor TestDiaryAI: DiaryTransforming {
         try store.authorize(consent.id, client: client)
         #expect(throws: DiaryError.self) { try store.authorize(consent.id, client: client) }
         try await settled { !store.busy }
+        await store.saved()
         #expect(await client.calls == 1)
         #expect(await client.inputs.map(\.id) == [id])
         let entry = try #require(store.document?.entries.first { $0.id == id })
@@ -185,7 +192,7 @@ private actor TestDiaryAI: DiaryTransforming {
         defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
         await store.unlock(); store.updateDraft("original")
         let id = try #require(store.saveEntry())
-        let backup = try store.exportBackup(password: "recovery-password-test")
+        let backup = try await store.exportBackup(password: "recovery-password-test")
         store.updateDraft("second"); _ = store.saveEntry()
         try await store.restoreBackup(backup, password: "recovery-password-test")
         #expect(store.document?.entries.count == 2)
@@ -200,7 +207,7 @@ private actor TestDiaryAI: DiaryTransforming {
         defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
         await store.unlock(); store.updateDraft("original")
         let id = try #require(store.saveEntry())
-        let backup = try store.exportBackup(password: "recovery-password-test")
+        let backup = try await store.exportBackup(password: "recovery-password-test")
         store.updateDraft("second"); _ = store.saveEntry()
         store.lock()
         // Face ID annullato: nessuna sostituzione.
@@ -225,13 +232,121 @@ private actor TestDiaryAI: DiaryTransforming {
         #expect(store.document?.entries.first?.original == "new private text")
         #expect(!store.appendIncoming(String(repeating: "b", count: 50_001)))
         #expect(store.document?.entries.count == 1)
+        await store.saved()
         try FileManager.default.removeItem(at: directory)
         try Data("block-directory".utf8).write(to: directory)
         store.updateDraft("cannot save")
         store.flush()
-        #expect(store.hasUnsavedChanges && store.error != nil)
+        await store.saved()
+        #expect(store.hasUnsavedChanges && store.error == DiaryError.writeFailed.errorDescription)
         store.lock()
-        #expect(store.document == nil && store.lostUnsavedChanges)
+        #expect(store.document == nil)
+        await store.saved()
+        #expect(store.lostUnsavedChanges)
+    }
+    /// La bozza sta in un file cifrato a parte: scrivere non ricifra l'intero diario; si riapre con il diario.
+    @Test func draftLivesInASmallSeparateSealedFile() async throws {
+        let (store, _, directory) = fixture()
+        defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
+        await store.unlock()
+        store.updateDraft("CANARY pagina"); _ = try #require(store.saveEntry())
+        await store.saved()
+        let main = directory.appendingPathComponent("alice.sealed"), draft = directory.appendingPathComponent("alice.draft.sealed")
+        let before = try Data(contentsOf: main)
+        store.updateDraft("CANARY bozza in corso")
+        store.flush(); await store.saved()
+        #expect(!store.hasUnsavedChanges)
+        #expect(try Data(contentsOf: main) == before)
+        let sealedDraft = try Data(contentsOf: draft)
+        #expect(sealedDraft.count < 2_000 && !sealedDraft.contains(Data("CANARY".utf8)))
+        // Svuotare la bozza vale anche dopo la riapertura: la bozza del diario intero non torna.
+        store.lock(); await store.saved()
+        await store.unlock()
+        #expect(store.document?.draft.text == "CANARY bozza in corso")
+        store.updateDraft("")
+        store.lock(); await store.saved()
+        await store.unlock()
+        #expect(store.document?.draft.text == "")
+        #expect(store.document?.entries.map(\.original) == ["CANARY pagina"])
+        // Una bozza cifrata con un'altra chiave o alterata non si apre e non blocca il diario.
+        store.lock(); await store.saved()
+        var tampered = try Data(contentsOf: draft); tampered[tampered.count - 10] ^= 1
+        try tampered.write(to: draft)
+        await store.unlock()
+        #expect(store.isUnlocked && store.document?.entries.count == 1)
+    }
+    @Test func deletesAPageWithItsSummariesAndTheWholeDiaryWithItsKeys() async throws {
+        let (store, keys, directory) = fixture()
+        defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
+        await store.unlock()
+        store.updateDraft("prima"); let first = try #require(store.saveEntry())
+        store.updateDraft("seconda"); let second = try #require(store.saveEntry())
+        let client = TestDiaryAI()
+        try store.prepareAI(ids: [first, second], operation: "period")
+        try store.authorize(try #require(store.consent?.id), client: client)
+        try await settled { !store.busy }
+        #expect(store.document?.summaries.count == 1)
+        store.deleteEntry(first)
+        #expect(store.document?.entries.map(\.id) == [second])
+        #expect(store.document?.summaries.isEmpty == true)
+        await store.saved()
+        store.lock(); await store.saved()
+        await store.unlock()
+        #expect(store.document?.entries.map(\.id) == [second])
+        try await store.deleteDiary()
+        #expect(!store.isUnlocked && !store.exists)
+        #expect(keys.removals == 1)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasPrefix("alice.") }.isEmpty)
+        // Dopo l'eliminazione si crea un diario nuovo e vuoto.
+        await store.unlock()
+        #expect(store.isUnlocked && store.document?.entries.isEmpty == true)
+    }
+    @Test func limitsHaveTheirOwnMessages() async throws {
+        let (store, _, directory) = fixture()
+        defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
+        await store.unlock()
+        #expect(!store.updateDraft(String(repeating: "x", count: 50_001)))
+        #expect(store.error == DiaryError.textTooLong.errorDescription)
+        #expect(store.updateDraft("breve"))
+        #expect(store.error == nil)
+        var full = DiaryDocument()
+        full.entries = (0...DiaryDocument.maxEntries).map { _ in DiaryEntry(createdAt: .now, timeZone: "Europe/Rome", original: "p") }
+        #expect(throws: DiaryError.tooManyEntries) { try DiaryCrypto.seal(full, key: SymmetricKey(size: .bits256), scope: "alice") }
+        #expect(throws: DiaryError.weakPassword) { try DiaryCrypto.backup(DiaryDocument(), password: "short") }
+    }
+    /// L'avviso di permesso della prima dettatura non blocca il diario; il passaggio in background sì.
+    @Test func permissionPromptIsToleratedUntilTheAppIsActiveAgain() async throws {
+        let (store, _, directory) = fixture()
+        defer { store.lock(); try? FileManager.default.removeItem(at: directory) }
+        store.beginPermissionRequest()
+        #expect(!store.permissionPrompt)
+        await store.unlock()
+        store.beginPermissionRequest()
+        #expect(store.permissionPrompt)
+        store.sceneBecameActive()
+        #expect(store.permissionPrompt) // l'avviso è ancora aperto
+        store.endPermissionRequest(appActive: false)
+        #expect(store.permissionPrompt)
+        store.sceneBecameActive()
+        #expect(!store.permissionPrompt)
+        store.beginPermissionRequest(); store.endPermissionRequest(appActive: true)
+        #expect(!store.permissionPrompt)
+        store.beginPermissionRequest(); store.lock()
+        #expect(!store.permissionPrompt)
+    }
+    @Test func offlineScopeIsRememberedPerCredentials() throws {
+        let name = "diary-scope-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let alice = Credentials(serverURL: URL(string: "https://example.invalid")!, apiKey: "alice-test-only")
+        let other = Credentials(serverURL: URL(string: "https://example.invalid")!, apiKey: "other-test-only")
+        #expect(DiaryIdentity.scope(for: alice, userID: nil, defaults: defaults) == nil)
+        let online = try #require(DiaryIdentity.scope(for: alice, userID: "alice", defaults: defaults))
+        #expect(online == DiaryIdentity.scope(server: alice.serverURL, userID: "alice"))
+        #expect(DiaryIdentity.scope(for: alice, userID: nil, defaults: defaults) == online)
+        #expect(DiaryIdentity.scope(for: other, userID: nil, defaults: defaults) == nil)
+        let stored = try #require(defaults.dictionary(forKey: "diary.scopeByAccount") as? [String: String])
+        #expect(!stored.keys.contains { $0.contains("alice") } && !stored.values.contains { $0.contains("alice") })
     }
     @Test func privateCommandNeverCreatesTranscriptOrOutgoingChatTurn() throws {
         let name = "diary-chat-" + UUID().uuidString

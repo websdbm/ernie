@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import PDFKit
 import UIKit
 import Vision
@@ -66,6 +67,23 @@ enum DocumentReader {
             progress(i + 1, images.count)
             guard let cg = image.cgImage else { pages.append(""); continue }
             pages.append(try await recognize(cg, orientation: cgOrientation(image.imageOrientation)))
+        }
+        guard pages.contains(where: { !$0.isEmpty }) else { throw ReadError.empty }
+        return ImportedDocument(title: nil, source: source, pages: pages)
+    }
+
+    /// Foto già ridotte da `MediaPresentation.prepare` (JPEG, orientamento applicato): una pagina per immagine,
+    /// decodificate una alla volta, così non restano in memoria tutte le foto originali della selezione.
+    static func read(jpegs: [Data], source: String, progress: @escaping @Sendable (Int, Int) -> Void) async throws -> ImportedDocument {
+        guard !jpegs.isEmpty else { throw ReadError.empty }
+        guard jpegs.count <= maxPages else { throw ReadError.tooManyPages(jpegs.count) }
+        var pages: [String] = []
+        for (i, data) in jpegs.enumerated() {
+            try Task.checkCancellation()
+            progress(i + 1, jpegs.count)
+            guard let image = CGImageSourceCreateWithData(data as CFData, nil).flatMap({ CGImageSourceCreateImageAtIndex($0, 0, nil) })
+            else { pages.append(""); continue }
+            pages.append(try await recognize(image, orientation: .up))
         }
         guard pages.contains(where: { !$0.isEmpty }) else { throw ReadError.empty }
         return ImportedDocument(title: nil, source: source, pages: pages)

@@ -58,11 +58,9 @@ struct ErnieSummary: Codable, Sendable, Equatable {
     var counts: Counts
     var family: Family?
 
-    private static let fileName = "widget-summary.json"
-
     private static var fileURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ReminderSnapshot.appGroup)?
-            .appendingPathComponent(fileName)
+            .appendingPathComponent(WidgetSummaryCache.fileName)
     }
 
     /// Date ISO 8601 del server, con o senza millisecondi.
@@ -78,13 +76,16 @@ struct ErnieSummary: Codable, Sendable, Equatable {
         return d
     }
 
-    /// Ultima copia salvata (nil se il widget non ha mai parlato con il server).
+    /// Ultima copia salvata dell'account collegato (nil senza credenziali, con un altro account o se il widget non ha
+    /// mai parlato con il server).
     static func cached() -> ErnieSummary? {
-        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
-        return try? decoder().decode(ErnieSummary.self, from: data)
+        guard let url = fileURL, let data = try? Data(contentsOf: url),
+              let summary = WidgetSummaryCache.unwrap(data, for: Credentials.load()) else { return nil }
+        return try? decoder().decode(ErnieSummary.self, from: summary)
     }
 
-    /// Chiede il riepilogo al server; in caso di successo aggiorna la copia. Nil senza credenziali o senza rete.
+    /// Chiede il riepilogo al server; in caso di successo aggiorna la copia. Nil senza credenziali, senza rete o se
+    /// nel frattempo l'utente è uscito dall'account (la risposta dell'account precedente non si scrive).
     static func fetch() async -> ErnieSummary? {
         guard let credentials = Credentials.load(),
               let url = URL(string: "/v1/widget", relativeTo: credentials.serverURL) else { return nil }
@@ -94,8 +95,8 @@ struct ErnieSummary: Codable, Sendable, Equatable {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let summary = try? decoder().decode(ErnieSummary.self, from: data) else { return nil }
-        if let file = fileURL { try? data.write(to: file, options: .atomic) }
-        return summary
+        if let file = fileURL { WidgetSummaryCache.store(data, fetchedWith: credentials, current: Credentials.load, to: file) }
+        return Credentials.load() == credentials ? summary : nil
     }
 
     static var signedIn: Bool { Credentials.load() != nil }

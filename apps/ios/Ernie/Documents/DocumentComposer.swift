@@ -102,7 +102,19 @@ final class DocumentComposer {
     }
 
     func importImages(_ images: [UIImage], source: String) {
-        importImages(count: images.count, source: source) { images[$0] }
+        // Ogni pagina si rilascia appena ridotta: il composer non tiene in memoria tutte le originali della scansione.
+        let pending = PendingImages(images)
+        importImages(count: images.count, source: source) { try pending.take($0) }
+    }
+
+    @MainActor private final class PendingImages {
+        private var images: [UIImage?]
+        init(_ images: [UIImage]) { self.images = images }
+        func take(_ index: Int) throws -> UIImage {
+            guard images.indices.contains(index), let image = images[index] else { throw DocumentReader.ReadError.unreadable }
+            images[index] = nil
+            return image
+        }
     }
 
     /// Il caricamento dal selettore Foto appartiene al composer, non alla task della vista.
@@ -120,7 +132,6 @@ final class DocumentComposer {
             let time = MediaPreparationTime(expired: {})
             defer { time.end() }
             var uploads: [MediaUpload] = []
-            var images: [UIImage] = []
             var failures = 0
             do {
                 // Copia tutte le foto prima di attendere OCR o rete. Un JPEG non leggibile
@@ -132,17 +143,21 @@ final class DocumentComposer {
                         try Task.checkCancellation()
                         guard generation == token else { return }
                         let automatic = source != "scan" && (UserDefaults.standard.object(forKey: "media.autoOrganize") as? Bool ?? true)
-                        let upload = MediaUpload(data: try MediaPresentation.prepare(photo.image), source: source == "scan" ? "scan" : "photo", autoOrganize: automatic, location: photo.location)
+                        // Riduzione fuori dal main; l'originale non resta in memoria (l'OCR legge il JPEG ridotto).
+                        let jpeg = try await MediaPresentation.prepare(photo)
+                        try Task.checkCancellation()
+                        guard generation == token else { return }
+                        let upload = MediaUpload(data: jpeg, source: source == "scan" ? "scan" : "photo", autoOrganize: automatic, location: photo.location)
                         if api.usesBackgroundMedia {
                             let id = try MediaUploadQueue.shared.stage(upload.data, id: upload.clientId, source: upload.source, autoOrganize: automatic, credentials: api.credentials, location: upload.location)
                             mediaTransfers.append(MediaUploadQueue.shared.handle(id))
                         }
-                        uploads.append(upload); images.append(photo.image)
+                        uploads.append(upload)
                     } catch { failures += 1 }
                 }
                 var doc: ImportedDocument?
                 do {
-                    doc = try await DocumentReader.read(images: images, source: source) { page, total in
+                    doc = try await DocumentReader.read(jpegs: uploads.map(\.data), source: source) { page, total in
                         Task { @MainActor in if self.generation == token { self.advance(page: page, of: total) } }
                     }
                 } catch DocumentReader.ReadError.empty { /* Anche una foto senza testo appartiene alla raccolta. */ }

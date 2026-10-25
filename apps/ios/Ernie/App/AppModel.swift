@@ -130,7 +130,7 @@ final class AppModel {
         MediaImageCache.clear()
         FamilyMessageSync.pendingRead = []
         if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ReminderSnapshot.appGroup) {
-            try? FileManager.default.removeItem(at: group.appendingPathComponent("widget-summary.json"))
+            try? FileManager.default.removeItem(at: group.appendingPathComponent(WidgetSummaryCache.fileName))
         }
         UserDefaults.standard.removeObject(forKey: "family.messages.lastSeen")
         WidgetCenter.shared.reloadAllTimelines()
@@ -313,6 +313,8 @@ final class AppModel {
             guard token == lifecycle, !Task.isCancelled else { return }
             profile = fetched
         }
+        // Lo scope del diario si ricorda per queste credenziali: senza rete il diario locale si apre lo stesso.
+        if let userID = profile?.userId { _ = DiaryIdentity.scope(for: creds, userID: userID) }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
         store.onFamilyMessage = { [urgent] m in urgent.note(m) }

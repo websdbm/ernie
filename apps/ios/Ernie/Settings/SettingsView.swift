@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var emailNotifications = false
     @State private var emailError: String?
     @State private var showChangeServer = false
+    @State private var showDiary = false
     @State private var alarmReminders = ReminderAlarms.enabled
     @State private var useLocation = DeviceContextProvider.locationEnabled
     @State private var previewingVoice = false
@@ -286,7 +287,8 @@ struct SettingsView: View {
                     Text("Le azioni per cui hai scelto «Consenti sempre». Gli invii verso l'esterno chiedono sempre conferma.")
                 }
                 Section("Area privata") {
-                    NavigationLink { DiaryEntrance() } label: { Label("Diario personale", systemImage: "book.closed.fill") }
+                    // A schermo intero: il diario ha il suo NavigationStack, che non va annidato in quello delle Impostazioni.
+                    Button { showDiary = true } label: { Label("Diario personale", systemImage: "book.closed.fill") }
                 }
                 Section("Diagnostica") {
                     NavigationLink("Latenza, voce e spike") { DiagnosticsView() }
@@ -315,6 +317,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fine") { dismiss() } } }
             .sheet(isPresented: $showChangeServer) { ChangeServerView() }
+            .fullScreenCover(isPresented: $showDiary) { DiaryEntrance() }
             .onChange(of: model.speaker.isSpeaking) { _, speaking in
                 if !speaking { previewingVoice = false }
             }

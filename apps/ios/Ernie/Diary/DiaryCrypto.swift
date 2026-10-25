@@ -7,12 +7,25 @@ import CommonCrypto
 /// App-only access group: intentionally absent from share, notification and widget extensions.
 @MainActor protocol DiaryKeyAccess {
     func unlock(existingVault: Bool) async throws -> SymmetricKey
+    /// Cancella la chiave dal Keychain (eliminazione del diario). Nessuna autenticazione: senza file la chiave non
+    /// apre più niente.
+    func remove() throws
 }
 
 @MainActor final class BiometricDiaryKey: DiaryKeyAccess {
     private let scope: String
     private var context: LAContext?
     init(scope: String) { self.scope = scope }
+    func remove() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.websdbm.ernie.private-diary",
+            kSecAttrAccount as String: scope,
+            kSecAttrAccessGroup as String: "76X78MBPR3.com.websdbm.ernie.private-diary",
+        ]
+        let result = SecItemDelete(query as CFDictionary)
+        guard result == errSecSuccess || result == errSecItemNotFound else { throw DiaryError.unavailable }
+    }
     func unlock(existingVault: Bool) async throws -> SymmetricKey {
         let context = LAContext()
         self.context = context
@@ -55,8 +68,24 @@ import CommonCrypto
 enum DiaryCrypto {
     static func seal(_ document: DiaryDocument, key: SymmetricKey, scope: String) throws -> Data {
         let data = try JSONEncoder().encode(document.validated())
-        guard data.count <= 16_000_000 else { throw DiaryError.tooLarge }
+        guard data.count <= 16_000_000 else { throw DiaryError.vaultFull }
         return try AES.GCM.seal(data, using: key, authenticating: Data(("ernie-private-diary-v1:" + scope).utf8)).combined!
+    }
+    /// Bozza in un file a parte, piccolo: la digitazione non ricifra l'intero diario. Contesto autenticato distinto,
+    /// così una bozza non si può scambiare per il diario (né viceversa).
+    static func sealDraft(_ draft: DiaryDraft, key: SymmetricKey, scope: String) throws -> Data {
+        guard draft.text.count <= DiaryDocument.maxText else { throw DiaryError.textTooLong }
+        let data = try JSONEncoder().encode(draft)
+        return try AES.GCM.seal(data, using: key, authenticating: Data(("ernie-private-diary-draft-v1:" + scope).utf8)).combined!
+    }
+    static func openDraft(_ data: Data, key: SymmetricKey, scope: String) throws -> DiaryDraft {
+        guard data.count <= 1_000_000 else { throw DiaryError.invalidArchive }
+        do {
+            let plain = try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key, authenticating: Data(("ernie-private-diary-draft-v1:" + scope).utf8))
+            let draft = try JSONDecoder().decode(DiaryDraft.self, from: plain)
+            guard draft.text.count <= DiaryDocument.maxText else { throw DiaryError.invalidArchive }
+            return draft
+        } catch { throw DiaryError.invalidArchive }
     }
     static func open(_ data: Data, key: SymmetricKey, scope: String) throws -> DiaryDocument {
         guard data.count <= 16_000_100 else { throw DiaryError.invalidArchive }
@@ -72,7 +101,7 @@ enum DiaryCrypto {
         var sealed: Data
     }
     static func backup(_ document: DiaryDocument, password: String) throws -> Data {
-        guard password.count >= 12 && password.utf8.count <= 4096 else { throw DiaryError.invalidArchive }
+        guard password.count >= 12 && password.utf8.count <= 4096 else { throw DiaryError.weakPassword }
         var salt = Data(count: 16)
         let result = salt.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
         guard result == errSecSuccess else { throw DiaryError.unavailable }

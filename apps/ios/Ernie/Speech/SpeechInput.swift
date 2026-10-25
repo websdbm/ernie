@@ -222,6 +222,8 @@ final class ModernTranscriber: SpeechInput, @unchecked Sendable {
 final class LegacyTranscriber: NSObject, SpeechInput, @unchecked Sendable {
     let engineName = "SFSpeechRecognizer (ripiego)"
     private let recognizer = SFSpeechRecognizer(locale: SpeechInputFactory.locale)
+    // Stato condiviso fra chi chiama, il gestore del riconoscitore (coda di sistema) e le task di rotazione: tutto
+    // sotto `lock`. Le chiamate al framework (yield, cancel, endAudio, append) avvengono fuori dal lock.
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var feeder: Task<Void, Never>?
@@ -237,29 +239,38 @@ final class LegacyTranscriber: NSObject, SpeechInput, @unchecked Sendable {
             throw NSError(domain: "Ernie.Speech", code: 2, userInfo: [NSLocalizedDescriptionKey: "riconoscimento vocale non disponibile"])
         }
         let status = await withCheckedContinuation { (c: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
-            SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in c.resume(returning: status) }
         }
         guard status == .authorized else {
             throw NSError(domain: "Ernie.Speech", code: 3, userInfo: [NSLocalizedDescriptionKey: "permesso di riconoscimento vocale negato"])
         }
         let (updates, continuation) = AsyncStream.makeStream(of: TranscriptUpdate.self, bufferingPolicy: .unbounded)
-        publish = continuation
+        lock.withLock {
+            publish = continuation
+            committed = ""; current = ""; stopping = false
+        }
         startRequest(recognizer)
-        feeder = Task.detached { [weak self] in
+        let feeder = Task.detached { [weak self] in
             for await chunk in audio { self?.append(chunk.buffer) }
         }
-        rotation = Task.detached { [weak self] in
+        let rotation = Task.detached { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(55))
                 guard !Task.isCancelled, let self else { return }
                 self.rotate(recognizer)
             }
         }
+        lock.withLock { self.feeder = feeder; self.rotation = rotation }
         return updates
     }
 
     func stop() async {
-        let req = markStopping()
+        let (req, feeder, rotation) = lock.withLock { () -> (SFSpeechAudioBufferRecognitionRequest?, Task<Void, Never>?, Task<Void, Never>?) in
+            stopping = true
+            let running = (request, self.feeder, self.rotation)
+            self.feeder = nil; self.rotation = nil
+            return running
+        }
         feeder?.cancel()
         rotation?.cancel()
         req?.endAudio()
@@ -268,65 +279,70 @@ final class LegacyTranscriber: NSObject, SpeechInput, @unchecked Sendable {
         finish()
     }
 
-    private func markStopping() -> SFSpeechAudioBufferRecognitionRequest? {
-        lock.lock()
-        defer { lock.unlock() }
-        stopping = true
-        return request
-    }
-
     private func startRequest(_ recognizer: SFSpeechRecognizer) {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
         if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }
-        lock.lock()
-        request = req
-        current = ""
-        lock.unlock()
-        task = recognizer.recognitionTask(with: req) { [weak self] result, error in
+        lock.withLock {
+            request = req
+            current = ""
+        }
+        let started = recognizer.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
             if let result {
-                self.lock.lock()
-                self.current = result.bestTranscription.formattedString
-                let text = [self.committed, self.current].filter { !$0.isEmpty }.joined(separator: " ")
-                let done = result.isFinal && self.stopping
-                self.lock.unlock()
-                self.publish?.yield(TranscriptUpdate(text: text, isFinal: false))
+                let (text, done, publish) = self.lock.withLock { () -> (String, Bool, AsyncStream<TranscriptUpdate>.Continuation?) in
+                    // Un risultato tardivo della richiesta già ruotata non riscrive il parziale di quella nuova.
+                    guard self.request === req else { return ("", false, nil) }
+                    self.current = result.bestTranscription.formattedString
+                    let text = [self.committed, self.current].filter { !$0.isEmpty }.joined(separator: " ")
+                    return (text, result.isFinal && self.stopping, self.publish)
+                }
+                publish?.yield(TranscriptUpdate(text: text, isFinal: false))
                 if done { self.finish() }
             } else if let error {
                 Log.speech.info("riconoscitore: \(error.localizedDescription, privacy: .public)")
-                self.lock.lock()
-                let shouldFinish = self.stopping
-                self.lock.unlock()
+                let shouldFinish = self.lock.withLock { self.stopping && self.request === req }
                 if shouldFinish { self.finish() }
             }
         }
+        // Sessione chiusa o richiesta già sostituita nel frattempo: la task appena creata non deve restare viva.
+        let orphan = lock.withLock { () -> Bool in
+            guard publish != nil, request === req else { return true }
+            task = started
+            return false
+        }
+        if orphan { started.cancel() }
     }
 
     private func rotate(_ recognizer: SFSpeechRecognizer) {
-        lock.lock()
-        committed = [committed, current].filter { !$0.isEmpty }.joined(separator: " ")
-        let old = request
-        lock.unlock()
-        old?.endAudio()
+        let previous = lock.withLock { () -> SFSpeechAudioBufferRecognitionRequest?? in
+            guard publish != nil, !stopping else { return .none }
+            committed = [committed, current].filter { !$0.isEmpty }.joined(separator: " ")
+            current = ""
+            return .some(request)
+        }
+        guard let previous else { return }
+        previous?.endAudio()
         startRequest(recognizer)
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
-        lock.lock()
-        let req = request
-        lock.unlock()
+        let req = lock.withLock { request }
         req?.append(buffer)
     }
 
     private func finish() {
-        lock.lock()
-        guard let p = publish else { lock.unlock(); return }
-        publish = nil
-        let text = [committed, current].filter { !$0.isEmpty }.joined(separator: " ")
-        lock.unlock()
-        task?.cancel()
+        let ended = lock.withLock { () -> (AsyncStream<TranscriptUpdate>.Continuation, String, SFSpeechRecognitionTask?)? in
+            guard let p = publish else { return nil }
+            publish = nil
+            let text = [committed, current].filter { !$0.isEmpty }.joined(separator: " ")
+            let running = task
+            task = nil; request = nil
+            return (p, text, running)
+        }
+        guard let (p, text, running) = ended else { return }
+        running?.cancel()
         p.yield(TranscriptUpdate(text: text, isFinal: true))
         p.finish()
     }

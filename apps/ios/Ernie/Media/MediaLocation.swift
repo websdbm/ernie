@@ -60,13 +60,23 @@ struct MediaLocation: Codable, Sendable, Equatable {
 }
 
 /// Il JPEG pronto perde EXIF; la posizione esplicita viene conservata separatamente.
-struct MediaImportPhoto {
-    var image: UIImage
+/// Una foto della libreria o di un file resta compressa (`encoded`): la riduzione legge dal file solo i pixel che
+/// servono, fuori dal main (`MediaPresentation.prepare`), senza decodificare l'originale intero.
+struct MediaImportPhoto: Sendable {
+    enum Content: Sendable {
+        case encoded(Data)
+        case image(UIImage)
+    }
+    var content: Content
     var location: MediaLocation? = nil
-    init(image: UIImage, location: MediaLocation? = nil) { self.image = image; self.location = location?.isValid == true ? location : nil }
+    init(image: UIImage, location: MediaLocation? = nil) { self.content = .image(image); self.location = location?.isValid == true ? location : nil }
     init(data: Data) throws {
-        guard let image = UIImage(data: data) else { throw DocumentReader.ReadError.unreadable }
-        self.image = image
-        location = MediaLocation.read(data)
+        // Solo l'intestazione: un file che non è un'immagine si scarta subito, come prima con UIImage(data:).
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0, CGImageSourceGetType(source) != nil,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.intValue ?? 0 > 0 else { throw DocumentReader.ReadError.unreadable }
+        content = .encoded(data)
+        location = MediaLocation.read(properties: properties)
     }
 }

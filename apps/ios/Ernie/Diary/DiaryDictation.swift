@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import Observation
 import Speech
+import UIKit
 
 /// Dedicated on-device-only path: never falls back to a network recognizer,
 /// never joins VoiceController's chat, transcript history or diagnostics.
@@ -22,6 +23,8 @@ import Speech
         let generation = store.generation
         let prefix = store.document?.draft.text ?? ""
         recording = true
+        // Gli avvisi di permesso di iOS rendono l'app inattiva: il diario non deve bloccarsi per questo.
+        store.beginPermissionRequest()
         starter = Task { [weak self, weak store] in
             guard let self, let store else { return }
             let permission = await withCheckedContinuation { continuation in
@@ -29,7 +32,9 @@ import Speech
                 // isolerebbe al MainActor e l'app si chiuderebbe al controllo d'isolamento (revisione 25 ott 2026).
                 SFSpeechRecognizer.requestAuthorization { @Sendable status in continuation.resume(returning: status == .authorized) }
             }
-            guard permission, await AVAudioApplication.requestRecordPermission() else {
+            let microphone = permission ? await AVAudioApplication.requestRecordPermission() : false
+            if store.generation == generation { store.endPermissionRequest(appActive: UIApplication.shared.applicationState == .active) }
+            guard permission, microphone else {
                 self.error = "Consenti microfono e riconoscimento vocale nelle impostazioni di iOS."; self.stop(); return
             }
             guard self.token == token, store.isUnlocked, store.generation == generation, !Task.isCancelled else { return }
@@ -52,7 +57,14 @@ import Speech
                     let finished = result?.isFinal == true || failure != nil
                     Task { @MainActor [weak self, weak store] in
                         guard let self, let store, self.token == token, store.isUnlocked, store.generation == generation else { return }
-                        if let text { store.updateDraft([prefix, text].filter { !$0.isEmpty }.joined(separator: "\n")) }
+                        if let text {
+                            // Si riscrive solo la parte dettata dopo il testo di partenza: se il testo è cambiato da
+                            // un'altra parte, o supera il limite di una pagina, la dettatura si ferma senza cancellare.
+                            guard store.document?.draft.text.hasPrefix(prefix) == true,
+                                  store.updateDraft([prefix, text].filter { !$0.isEmpty }.joined(separator: "\n")) else {
+                                self.stop(); store.flush(); return
+                            }
+                        }
                         if finished { self.stop(); store.flush() }
                     }
                 }

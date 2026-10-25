@@ -33,10 +33,20 @@ struct DiaryDocument: Codable, Sendable, Equatable {
     var summaries: [DiaryRevision] = []
     var draft: DiaryDraft = DiaryDraft()
 
+    static let maxEntries = 2000
+    static let maxSummaries = 500
+    static let maxRevisions = 100
+    static let maxText = 50_000
+
+    /// Limiti del formato. Un limite superato ha il suo messaggio (prima diventava «copia non valida» o «spazio
+    /// esaurito»); identificativi doppi o versione sconosciuta restano un archivio non valido.
     func validated() throws -> Self {
-        guard version == 1, entries.count <= 2000, summaries.count <= 500,
-              Set(entries.map(\.id)).count == entries.count, draft.text.count <= 50_000,
-              entries.allSatisfy({ !$0.original.isEmpty && $0.original.count <= 50_000 && $0.revisions.count <= 100 }),
+        guard version == 1, Set(entries.map(\.id)).count == entries.count else { throw DiaryError.invalidArchive }
+        guard entries.count <= Self.maxEntries else { throw DiaryError.tooManyEntries }
+        guard summaries.count <= Self.maxSummaries else { throw DiaryError.tooManySummaries }
+        guard entries.allSatisfy({ $0.revisions.count <= Self.maxRevisions }) else { throw DiaryError.tooManyRevisions }
+        guard draft.text.count <= Self.maxText, entries.allSatisfy({ $0.original.count <= Self.maxText }) else { throw DiaryError.textTooLong }
+        guard entries.allSatisfy({ !$0.original.isEmpty }),
               (summaries + entries.flatMap(\.revisions)).allSatisfy({ $0.normalized.count <= 80_000 && $0.bullets.count <= 100 && $0.bullets.allSatisfy { $0.count <= 10_000 } })
         else { throw DiaryError.invalidArchive }
         return self
@@ -45,6 +55,7 @@ struct DiaryDocument: Codable, Sendable, Equatable {
 
 enum DiaryError: LocalizedError {
     case locked, unavailable, keyInvalidated, invalidArchive, writeFailed, consentRequired, tooLarge, insecureServer
+    case tooManyEntries, tooManySummaries, tooManyRevisions, textTooLong, vaultFull, weakPassword
     var errorDescription: String? {
         switch self {
         case .locked: "Sblocca il diario per continuare."
@@ -55,20 +66,49 @@ enum DiaryError: LocalizedError {
         case .consentRequired: "L’invio all’AI richiede la tua conferma per questa selezione."
         case .tooLarge: "Seleziona al massimo 31 pagine e 60.000 caratteri."
         case .insecureServer: "Il diario richiede una connessione HTTPS al server."
+        case .tooManyEntries: "Il diario ha raggiunto il massimo di 2.000 pagine. Esporta una copia cifrata ed elimina le pagine che non ti servono più."
+        case .tooManySummaries: "Hai raggiunto il massimo di 500 riepiloghi salvati."
+        case .tooManyRevisions: "Questa pagina ha già 100 elaborazioni AI: non se ne possono aggiungere altre."
+        case .textTooLong: "Una pagina può contenere al massimo 50.000 caratteri. Conserva questa pagina e continua in una nuova."
+        case .vaultFull: "Il diario ha raggiunto la dimensione massima (16 MB). Esporta una copia cifrata ed elimina qualche pagina."
+        case .weakPassword: "La password della copia deve avere almeno 12 caratteri."
         }
     }
 }
 
 enum DiaryIdentity {
     static func scope(server: URL, userID: String) -> String {
+        hex(SHA256.hash(data: Data((endpoint(server) + "\n" + userID).utf8)))
+    }
+
+    private static let rememberedKey = "diary.scopeByAccount"
+
+    /// Scope del diario per le credenziali collegate. Con il profilo lo calcola e lo ricorda sul telefono; senza
+    /// profilo (avvio senza rete) usa quello ricordato per le stesse credenziali, così il diario locale si apre anche
+    /// offline. Nel registro ci sono solo impronte: né la chiave API né l'identificativo dell'utente.
+    static func scope(for credentials: Credentials, userID: String?, defaults: UserDefaults = .standard) -> String? {
+        var remembered = defaults.dictionary(forKey: rememberedKey) as? [String: String] ?? [:]
+        let account = hex(SHA256.hash(data: Data(("ernie-diary-account-v1\n" + endpoint(credentials.serverURL) + "\n" + credentials.apiKey).utf8)))
+        guard let userID, !userID.isEmpty else { return remembered[account] }
+        let scope = scope(server: credentials.serverURL, userID: userID)
+        if remembered[account] != scope {
+            remembered[account] = scope
+            defaults.set(remembered, forKey: rememberedKey)
+        }
+        return scope
+    }
+
+    private static func endpoint(_ server: URL) -> String {
         var endpoint = URLComponents(url: server, resolvingAgainstBaseURL: false) ?? URLComponents()
         endpoint.scheme = endpoint.scheme?.lowercased()
         endpoint.host = endpoint.host?.lowercased()
         endpoint.path = ""; endpoint.query = nil; endpoint.fragment = nil
         endpoint.user = nil; endpoint.password = nil
         if (endpoint.scheme == "https" && endpoint.port == 443) || (endpoint.scheme == "http" && endpoint.port == 80) { endpoint.port = nil }
-        return SHA256.hash(data: Data(((endpoint.string ?? server.absoluteString) + "\n" + userID).utf8)).map { String(format: "%02x", $0) }.joined()
+        return endpoint.string ?? server.absoluteString
     }
+
+    private static func hex(_ digest: SHA256.Digest) -> String { digest.map { String(format: "%02x", $0) }.joined() }
     static func digest(_ entries: [DiaryEntry]) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys

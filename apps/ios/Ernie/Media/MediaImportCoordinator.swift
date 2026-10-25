@@ -37,7 +37,9 @@ import UIKit
                     let photo = try await photo(index)
                     try Task.checkCancellation()
                     guard generation == token else { break }
-                    let jpeg = try MediaPresentation.prepare(photo.image)
+                    let jpeg = try await MediaPresentation.prepare(photo)
+                    try Task.checkCancellation()
+                    guard generation == token else { break }
                     try queue.stage(jpeg, source: "library", autoOrganize: autoOrganize, credentials: credentials, location: photo.location)
                     saved += 1
                 } catch {

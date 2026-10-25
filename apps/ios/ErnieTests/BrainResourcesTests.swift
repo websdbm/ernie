@@ -106,7 +106,7 @@ import UniformTypeIdentifiers
         #expect(note.visiblePlaces.first?.title == "Pranzo")
     }
 
-    @Test func EXIFImprecisoScartaSoloLaPosizione() throws {
+    @Test func EXIFImprecisoScartaSoloLaPosizione() async throws {
         let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
             UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
         }
@@ -117,12 +117,12 @@ import UniformTypeIdentifiers
         #expect(CGImageDestinationFinalize(destination))
         let imported = try MediaImportPhoto(data: data as Data)
         #expect(imported.location == nil)
-        #expect(!(try MediaPresentation.prepare(imported.image)).isEmpty)
+        #expect(!(try await MediaPresentation.prepare(imported)).isEmpty)
         #expect(MediaLocation(lat: 45.5, lon: 12.25, accuracy: 100).isValid)
         #expect(!MediaLocation(lat: 45.5, lon: 12.25, accuracy: 100.01).isValid)
     }
 
-    @Test func EXIFOriginaleLettoPrimaDelJPEGESenzaPosizioneInventata() throws {
+    @Test func EXIFOriginaleLettoPrimaDelJPEGESenzaPosizioneInventata() async throws {
         let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
             UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
         }
@@ -134,7 +134,7 @@ import UniformTypeIdentifiers
         let imported = try MediaImportPhoto(data: data as Data)
         #expect(imported.location?.lat == -45.5 && imported.location?.lon == -12.25)
         #expect(imported.location?.capturedAt == "2020-03-02T10:15:30Z")
-        let jpeg = try MediaPresentation.prepare(imported.image)
+        let jpeg = try await MediaPresentation.prepare(imported)
         #expect(MediaLocation.read(jpeg) == nil)
         #expect(imported.location?.lat == -45.5)
         #expect(MediaLocation.read(properties: [:]) == nil)

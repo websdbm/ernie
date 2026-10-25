@@ -59,7 +59,13 @@ struct SidePanel: View {
         .task(id: isOpen) {
             guard isOpen else { return }
             dragOffset = 0
-            sessions = model.conversation?.pastSessions() ?? []
+            // Storico letto fuori dal main (stessa cartella di ConversationStore): niente decodifica durante
+            // l'aggiornamento della scena (blocchi da watchdog delle build 97–98).
+            if model.conversation != nil {
+                let past = await TranscriptStore().listInBackground()
+                guard !Task.isCancelled, isOpen else { return }
+                sessions = model.conversation == nil ? [] : past
+            } else { sessions = [] }
             let updatedSkills = try? await model.api?.skills()
             guard !Task.isCancelled else { return }
             skills = updatedSkills ?? skills
@@ -354,7 +360,7 @@ struct SidePanel: View {
             if !isCurrent {
                 Button("Elimina dal telefono", role: .destructive) {
                     model.conversation?.deleteSession(session.id)
-                    sessions = model.conversation?.pastSessions() ?? []
+                    sessions.removeAll { $0.id == session.id }
                 }
             }
         }

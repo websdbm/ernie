@@ -27,7 +27,7 @@ struct FamilyProvider: TimelineProvider {
         nonisolated(unsafe) let completion = completion
         Task {
             // Il server sa anche dei messaggi mandati da un altro telefono o letti altrove.
-            if let f = await ErnieSummary.fetch()?.family {
+            if let f = await ErnieSummary.fetch()?.family, ErnieSummary.signedIn {
                 FamilyLatest(id: f.id, direction: f.direction, label: f.label, text: f.text, image: f.image, at: f.at, urgent: f.urgent).saveIfNewer()
             }
             let entry = FamilyEntry(date: .now, message: FamilyLatest.load(), signedIn: ErnieSummary.signedIn)
