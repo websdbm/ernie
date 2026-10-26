@@ -402,9 +402,27 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     var repeatInfo: ReminderRepeatInfo? = nil
     /// v1.13: preavviso di un appuntamento: `at` è l'avviso, `eventAt` l'ora dell'appuntamento.
     var eventAt: String? = nil
+    /// Sede dell'impegno, distinta dal trigger geolocalizzato.
+    var location: String? = nil
+    var locationAddress: String? = nil
+    var url: String? = nil
+    var notes: String? = nil
+
+    var meetingURL: URL? {
+        guard let url, let parsed = URL(string: url),
+              ["http", "https"].contains(parsed.scheme?.lowercased() ?? "") else { return nil }
+        return parsed
+    }
+
+    var locationURL: URL? {
+        guard let query = locationAddress ?? location, !query.isEmpty else { return nil }
+        var parts = URLComponents(string: "https://maps.apple.com/")
+        parts?.queryItems = [URLQueryItem(name: "q", value: query)]
+        return parts?.url
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, text, at, status, channels, eventAt, place
+        case id, text, at, status, channels, eventAt, place, location, locationAddress, url, notes
         case forLabel = "for"
         case fromLabel = "from"
         case repeatInfo = "repeat"

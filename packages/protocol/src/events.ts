@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ConfirmationPresentation } from './confirmation.js';
+import { ReminderDetails } from './reminder-details.js';
 import { TodoListBlock } from './todo.js';
 
 /**
@@ -522,6 +523,8 @@ export const RemindersBlock = z.object({
           .optional(),
         /** v1.13: preavviso di un appuntamento: `at` è l'ora dell'avviso, `eventAt` quella dell'appuntamento. */
         eventAt: z.iso.datetime().optional(),
+        ...ReminderDetails.shape,
+        locationAddress: z.string().max(300).optional(),
         /** v1.7 (Famiglia): messo da me a «Giorgio» / messo a me da «papà». */
         for: z.string().min(1).max(60).optional(),
         from: z.string().min(1).max(60).optional(),

@@ -1,9 +1,11 @@
+import type { ReminderDetails } from '@ernie/protocol';
+
 /**
  * Email HTML del promemoria (richiesta dell'utente, 13 ott 2026): tutti i riferimenti (cosa, quando, la frase
  * detta, chi l'ha messo e quando, la ricorrenza) e l'orso di Ernie. HTML a tabelle con stili in linea, come
  * vogliono i client di posta; accanto c'è sempre la versione in testo semplice.
  */
-export interface ReminderEmailInput {
+export interface ReminderEmailInput extends ReminderDetails {
   /** Titolo breve del promemoria («Fatturare alla pizzeria romana 900 euro»). */
   readonly title: string;
   /** Quando suona, già scritto per esteso («lunedì 2 novembre 2026 alle 09:00»). */
@@ -37,6 +39,9 @@ export function reminderEmailText(i: ReminderEmailInput): string {
     `${i.from ? `Promemoria da ${i.from}` : 'Promemoria'}: ${i.title}`,
     '',
     `Quando: ${i.when}`,
+    ...(i.location ? [`Luogo: ${i.location}`] : []),
+    ...(i.url ? [`Link: ${i.url}`] : []),
+    ...(i.notes ? [`Note: ${i.notes}`] : []),
     ...(i.repeat ? [`Ripetizione: ${i.repeat}`] : []),
     ...(i.spoken ? [`Detto così: «${i.spoken}»`] : []),
     ...(i.from ? [`Messo da: ${i.from}`] : []),
@@ -51,6 +56,16 @@ export function reminderEmailHtml(i: ReminderEmailInput): string {
     `<tr><td style="padding:6px 0;color:#6b6480;font-size:14px;width:120px;vertical-align:top">${esc(label)}</td><td style="padding:6px 0;color:#1d1830;font-size:15px">${value}</td></tr>`;
   const rows = [
     row('Quando', `<strong>${esc(i.when)}</strong>`),
+    ...(i.location ? [row('Luogo', esc(i.location))] : []),
+    ...(i.url
+      ? [
+          row(
+            'Link',
+            /^https?:\/\//iu.test(i.url) ? `<a href="${esc(i.url)}">${esc(i.url)}</a>` : esc(i.url),
+          ),
+        ]
+      : []),
+    ...(i.notes ? [row('Note', esc(i.notes).replace(/\n/gu, '<br>'))] : []),
     ...(i.repeat ? [row('Ripetizione', esc(i.repeat))] : []),
     ...(i.spoken ? [row('Detto così', `«${esc(i.spoken)}»`)] : []),
     ...(i.from ? [row('Messo da', esc(i.from))] : []),

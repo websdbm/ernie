@@ -83,3 +83,37 @@ struct EventsCodingTests {
         #expect(u.block == .unknown(kind: "grafico"))
     }
 }
+
+extension EventsCodingTests {
+    @Test func dettagliPromemoriaCompatibiliEURLSicuri() throws {
+        let old = #"{"id":"a","text":"Workshop","at":"2099-01-01T10:00:00Z","status":"scheduled"}"#
+        let oldItem = try JSONDecoder().decode(ReminderItem.self, from: Data(old.utf8))
+        #expect(oldItem.url == nil && oldItem.notes == nil && oldItem.location == nil)
+        let json = #"{"id":"a","text":"Workshop","at":"2099-01-01T10:00:00Z","status":"scheduled","location":"ufficio","locationAddress":"Via Roma 3, Treviso","url":"https://meet.example.test/a?token=x&lang=it","notes":"Portare il portatile"}"#
+        var item = try JSONDecoder().decode(ReminderItem.self, from: Data(json.utf8))
+        #expect(item.meetingURL?.absoluteString == "https://meet.example.test/a?token=x&lang=it")
+        let components = try #require(item.locationURL.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) })
+        #expect(components.queryItems?.first?.value == "Via Roma 3, Treviso")
+        #expect(try JSONDecoder().decode(ReminderItem.self, from: JSONEncoder().encode(item)) == item)
+        item.url = "javascript:alert(1)"
+        #expect(item.meetingURL == nil)
+    }
+
+    @Test func modificaDettagliOmetteCampiInvariatiECancellaConNull() async throws {
+        let api = ApiClient(credentials: .init(serverURL: URL(string: "https://example.test")!, apiKey: "test"), transport: { request in
+            #expect(request.httpMethod == "PATCH")
+            let body = try #require(request.httpBody)
+            let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            #expect(object["url"] is NSNull)
+            #expect(object["notes"] as? String == "Nuova nota")
+            #expect(object["location"] == nil)
+            #expect(object["text"] == nil)
+            let json = #"{"reminder":{"id":"a","text":"Workshop","at":"2099-01-01T10:00:00Z","status":"scheduled","notes":"Nuova nota"}}"#
+            return (Data(json.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        var details: [String: String?] = ["notes": "Nuova nota"]
+        details.updateValue(nil, forKey: "url")
+        let item = try await api.updateReminder(id: "a", text: nil, at: nil, details: details)
+        #expect(item.notes == "Nuova nota" && item.url == nil)
+    }
+}

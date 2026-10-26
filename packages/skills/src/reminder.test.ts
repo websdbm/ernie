@@ -1117,3 +1117,14 @@ describe('frasi ambigue fra skill (revisione del 16 ott 2026)', () => {
     ).toHaveProperty('eventAt');
   });
 });
+
+describe('richieste con dettagli strutturati', () => {
+  it.each([
+    'Ricordami domani alle 10 il workshop https://meet.example.test/a?code=123',
+    'Ricordami domani alle 10 la visita in via Roma 3, Treviso',
+    'Ricordami domani alle 10 il workshop, note: porta il portatile',
+    'Ricordami domani alle 10 il workshop presso la biblioteca',
+  ])('delega al modello senza perdere link o sede: %s', (input) => {
+    expect(parseReminderCommand(input, new Date('2026-10-26T08:00:00Z'))).toBeNull();
+  });
+});

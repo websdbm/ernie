@@ -135,6 +135,11 @@ export function confirmationPresentation(
       summary = text('text') || summary;
       confirmLabel = 'Crea promemoria';
       break;
+    case 'reminder_update':
+      title = 'Aggiornare questo promemoria?';
+      summary = 'Aggiorna i campi indicati del promemoria selezionato.';
+      confirmLabel = 'Aggiorna promemoria';
+      break;
     case 'reminder_cancel':
       title = 'Annullare questo promemoria?';
       confirmLabel = 'Annulla promemoria';

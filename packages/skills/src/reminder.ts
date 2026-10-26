@@ -1,4 +1,9 @@
-import type { ContentBlock } from '@ernie/protocol';
+import {
+  type ContentBlock,
+  type ReminderDetails,
+  type ReminderDetailsPatch,
+  reminderDetailsOf,
+} from '@ernie/protocol';
 import {
   firstOccurrence,
   parseRepeat,
@@ -16,7 +21,9 @@ import { addDays, localParts, zonedToUtc } from './zoned.js';
  * (scheda nell'app, push se configurato, email se l'utente l'ha chiesta). «Che promemoria ho?» e
  * «annulla il promemoria …» per gestirli.
  */
-export interface Reminder {
+export interface Reminder extends ReminderDetails {
+  /** Indirizzo risolto da un’etichetta della scheda, senza modificare il luogo. */
+  readonly locationAddress?: string;
   readonly id: string;
   readonly text: string;
   /** Quando suona; assente nei promemoria legati a un luogo. */
@@ -71,7 +78,7 @@ export interface ReminderStore {
   /** Con `forLabel` il promemoria va a una persona collegata (Famiglia); se non esiste: UnknownPersonError. */
   create(
     userId: string,
-    input: {
+    input: ReminderDetails & {
       text: string;
       /** Ora del promemoria; assente se è legato a un luogo (`place`). */
       at?: Date;
@@ -96,7 +103,7 @@ export interface ReminderStore {
   update(
     userId: string,
     id: string,
-    patch: { text?: string; at?: Date; channels?: ReminderChannels },
+    patch: ReminderDetailsPatch & { text?: string; at?: Date; channels?: ReminderChannels },
   ): Promise<Reminder | null>;
   /** Email della scheda anagrafica (per i promemoria via email); null se non c'è. */
   emailAddress?(userId: string): Promise<string | null>;
@@ -856,6 +863,9 @@ export function parseReminderCommand(
     /\b(?:salva|memorizza|registra|aggiorna)\b[^.!?]*\bsecond\s+brain\b/iu.test(input)
   )
     return null;
+  // I dettagli di un impegno richiedono estrazione strutturata, non una riduzione al titolo.
+  if (/https?:\/\/|\b(?:link|url|note|indirizzo|posizione|presso|via|viale|piazza)\b/iu.test(input))
+    return null;
   const body = plan.text;
   // Il parser rapido può rappresentare un solo impegno. Una seconda richiesta o un vincolo
   // ancora nel titolo deve arrivare al modello, anche se Jev non è disponibile.
@@ -1303,6 +1313,8 @@ export function toRemindersBlock(
     reminders: reminders.slice(0, 50).map((r) => ({
       id: r.id,
       text: r.text.slice(0, 300),
+      ...reminderDetailsOf(r),
+      ...(r.locationAddress ? { locationAddress: r.locationAddress } : {}),
       ...(r.at ? { at: r.at.toISOString() } : {}),
       status: r.status,
       ...(r.place

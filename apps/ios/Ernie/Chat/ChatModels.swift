@@ -262,6 +262,7 @@ enum ToolLabels {
         "shopping_list_rename": "Rinomina della lista della spesa",
         "shopping_list_delete": "Eliminazione della lista della spesa",
         "reminder_create": "Creazione del promemoria",
+        "reminder_update": "Aggiornamento del promemoria",
         "reminder_list": "Elenco dei promemoria",
         "reminder_cancel": "Annullamento del promemoria",
         "place_set": "Salvataggio del luogo",

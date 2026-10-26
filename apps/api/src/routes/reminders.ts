@@ -1,3 +1,4 @@
+import { ReminderDetailsPatch, reminderDetailsOf } from '@ernie/protocol';
 import { type Reminder, type ReminderStore, repeatLabel } from '@ernie/skills';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -20,6 +21,8 @@ function requireAuth(req: FastifyRequest): AuthContext {
 const json = (r: Reminder) => ({
   id: r.id,
   text: r.text,
+  ...reminderDetailsOf(r),
+  ...(r.locationAddress ? { locationAddress: r.locationAddress } : {}),
   ...(r.at ? { at: r.at.toISOString() } : {}),
   status: r.status,
   ...(r.place ? { place: r.place } : {}),
@@ -54,6 +57,7 @@ export async function remindersRoutes(
         return reply.code(400).send({ error: 'invalid_id', message: 'id non valido' });
       const b = z
         .object({
+          ...ReminderDetailsPatch.shape,
           text: z.string().min(1).max(300).optional(),
           at: z.iso.datetime().optional(),
           /** v1.11: canali del promemoria (email, sveglia); si cambiano senza cambiare l'id. */
@@ -62,15 +66,20 @@ export async function remindersRoutes(
             .strict()
             .optional(),
         })
-        .refine((x) => x.text !== undefined || x.at !== undefined || x.channels !== undefined, {
-          message: 'atteso text, at o channels',
+        .strict()
+        .refine((x) => Object.values(x).some((v) => v !== undefined), {
+          message: 'atteso almeno un campo da aggiornare',
         })
         .safeParse(req.body);
       if (!b.success)
         return reply
           .code(400)
-          .send({ error: 'invalid_body', message: 'atteso { text?, at?, channels? }' });
+          .send({
+            error: 'invalid_body',
+            message: 'Dati non validi: verifica testo, orario, luogo, link e note',
+          });
       const r = await opts.store.update(auth.userId, id, {
+        ...ReminderDetailsPatch.parse(b.data),
         ...(b.data.text !== undefined ? { text: b.data.text } : {}),
         ...(b.data.at !== undefined ? { at: new Date(b.data.at) } : {}),
         ...(b.data.channels !== undefined

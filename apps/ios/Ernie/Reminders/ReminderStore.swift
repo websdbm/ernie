@@ -168,12 +168,12 @@ final class ReminderStore {
     func isScheduled(_ id: String) -> Bool { item(id) != nil }
 
     /// Modifica dalla scheda: testo e/o ora; il server sostituisce il promemoria (id nuovo).
-    func update(_ r: ReminderItem, text: String?, at: Date?) async -> Bool {
+    func update(_ r: ReminderItem, text: String?, at: Date?, details: [String: String?] = [:]) async -> Bool {
         guard let api else { return false }
         let token = generation
         do {
             revision += 1
-            let updated = try await api.updateReminder(id: r.id, text: text, at: at)
+            let updated = try await api.updateReminder(id: resolve(r.id), text: text, at: at, details: details)
             guard generation == token, !Task.isCancelled else { return false }
             revision += 1
             items.removeAll { $0.id == r.id }

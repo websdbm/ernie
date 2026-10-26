@@ -83,8 +83,10 @@ struct RemindersView: View {
             .task { await model.reminders.refresh() }
             .sheet(item: $editing) { r in
                 NavigationStack {
-                    ReminderEditForm(item: r) { editing = nil }
-                        .padding()
+                    ScrollView {
+                        ReminderEditForm(item: r) { editing = nil }
+                            .padding()
+                    }
                         .navigationTitle("Modifica")
                         .navigationBarTitleDisplayMode(.inline)
                 }
@@ -120,6 +122,7 @@ struct RemindersView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Tocca per modificare")
+            ReminderDetailsView(item: r)
             if r.place == nil { ReminderChannelChips(item: r) }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {

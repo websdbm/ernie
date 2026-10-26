@@ -514,3 +514,116 @@ it('ricorrenza dal tool: un solo cron feriale, prossima data locale dopo weekend
     vi.useRealTimers();
   }
 });
+
+describe('dettagli degli appuntamenti', () => {
+  const details = {
+    location: 'lavoro',
+    url: 'https://meet.example.test/workshop?token=abc&lang=it',
+    notes: 'Portare il portatile.\nMateriale già scaricato.',
+  };
+  it('conserva i dettagli oltre il titolo, risolve una sede nota e modifica senza riprogrammare', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+      title: async () => 'Workshop',
+      places: {
+        list: async () => [{ id: 'l1', label: 'lavoro', address: 'Via Roma 3, Treviso' }],
+        set: async () => null,
+      },
+    });
+    const r = await store.create(PAPA, {
+      text: 'Workshop di formazione',
+      at: future,
+      timezone: 'Europe/Rome',
+      ...details,
+    });
+    expect(r).toMatchObject({
+      ...details,
+      text: 'Workshop',
+      locationAddress: 'Via Roma 3, Treviso',
+    });
+    expect((await store.list(PAPA))[0]).toMatchObject(details);
+    const creates = vi.mocked(fa.repo.create).mock.calls.length;
+    const updated = await store.update(PAPA, r.id, { notes: 'Documento aggiornato', url: null });
+    expect(updated).toMatchObject({
+      id: r.id,
+      location: 'lavoro',
+      notes: 'Documento aggiornato',
+      at: r.at,
+    });
+    expect(updated?.url).toBeUndefined();
+    expect(vi.mocked(fa.repo.create).mock.calls.length).toBe(creates);
+    expect(fa.repo.remove).not.toHaveBeenCalled();
+    // Cambiare titolo/ora passa dal normale percorso: i dettagli sopravvivono.
+    const moved = await store.update(PAPA, r.id, {
+      text: 'Workshop avanzato',
+      at: new Date(future.getTime() + 3600000),
+    });
+    expect(moved).toMatchObject({ location: 'lavoro', notes: 'Documento aggiornato' });
+    expect(moved?.url).toBeUndefined();
+  });
+  it('aggiunge i dettagli dopo e consente di cancellarli, senza inventare una sede', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    const r = await store.create(PAPA, { text: 'Visita', at: future, timezone: 'Europe/Rome' });
+    expect(r.location).toBeUndefined();
+    expect(await store.update(PAPA, r.id, details)).toMatchObject({ id: r.id, ...details });
+    const clear = await store.update(PAPA, r.id, { location: null, notes: null, url: null });
+    expect(clear?.location).toBeUndefined();
+    expect(clear?.notes).toBeUndefined();
+    expect(clear?.url).toBeUndefined();
+    expect(await store.update(GIORGIO, r.id, { notes: 'non autorizzato' })).toBeNull();
+  });
+  it('preserva dettagli in ricorrenze, trigger per luogo e assegnazioni familiari', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+      family: fakeFamily(),
+    });
+    for (const trigger of [
+      { at: future, forLabel: 'Giorgio' },
+      { repeat: { kind: 'daily' as const, hour: 9, minute: 0 } },
+      { place: { label: 'casa', on: 'arrive' as const } },
+    ]) {
+      const r = await store.create(PAPA, {
+        text: 'Workshop',
+        timezone: 'Europe/Rome',
+        ...trigger,
+        ...details,
+      });
+      expect((await store.list(PAPA)).find((x) => x.id === r.id)).toMatchObject(details);
+      expect(await store.update(PAPA, r.id, { text: 'Workshop aggiornato' })).toMatchObject(
+        details,
+      );
+    }
+  });
+  it('rifiuta link eseguibili anche da chiamate dirette allo store', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    await expect(
+      store.create(PAPA, {
+        text: 'X',
+        at: future,
+        timezone: 'Europe/Rome',
+        url: 'javascript:alert(1)',
+      }),
+    ).rejects.toThrow();
+    expect(fa.repo.create).not.toHaveBeenCalled();
+  });
+});

@@ -1,7 +1,12 @@
 import {
   type ContentBlock,
+  type ReminderDetails,
+  type ReminderDetailsPatch,
+  ReminderDetailsPatch as ReminderDetailsPatchSchema,
+  ReminderDetails as ReminderDetailsSchema,
   type ReminderRepeat,
   ReminderRepeatInput,
+  reminderDetailsOf,
   repeatLabel,
 } from '@ernie/protocol';
 import { z } from 'zod';
@@ -24,7 +29,8 @@ export interface ReminderToolPlace {
   readonly radius?: number;
 }
 
-export interface ReminderToolInfo {
+export interface ReminderToolInfo extends ReminderDetails {
+  readonly locationAddress?: string;
   readonly id: string;
   readonly text: string;
   /** Assente nei promemoria legati a un luogo. */
@@ -41,7 +47,7 @@ export interface ReminderToolInfo {
 export interface ReminderToolStore {
   create(
     userId: string,
-    input: {
+    input: ReminderDetails & {
       text: string;
       at?: Date;
       place?: { label: string; on: 'arrive' | 'leave'; repeat?: boolean };
@@ -54,6 +60,11 @@ export interface ReminderToolStore {
     },
   ): Promise<ReminderToolInfo>;
   list(userId: string): Promise<ReminderToolInfo[]>;
+  update?(
+    userId: string,
+    id: string,
+    patch: ReminderDetailsPatch & { text?: string; at?: Date },
+  ): Promise<ReminderToolInfo | null>;
   remove(userId: string, id: string): Promise<boolean>;
   /** Salva l'indirizzo di un luogo nella scheda anagrafica («casa», «lavoro»). */
   setPlace?(
@@ -78,6 +89,8 @@ export interface ReminderToolStore {
 const Info = z.object({
   id: z.string(),
   text: z.string(),
+  ...ReminderDetailsSchema.shape,
+  locationAddress: z.string().optional(),
   at: z.string().optional(),
   place: z
     .object({
@@ -97,6 +110,8 @@ type InfoOut = z.infer<typeof Info>;
 const toInfo = (r: ReminderToolInfo): InfoOut => ({
   id: r.id,
   text: r.text,
+  ...reminderDetailsOf(r),
+  ...(r.locationAddress ? { locationAddress: r.locationAddress } : {}),
   ...(r.at ? { at: r.at.toISOString() } : {}),
   ...(r.place
     ? {
@@ -129,6 +144,8 @@ function block(items: readonly ReminderToolInfo[], title: string): ContentBlock 
     reminders: items.slice(0, 50).map((r) => ({
       id: r.id,
       text: r.text.slice(0, 300),
+      ...reminderDetailsOf(r),
+      ...(r.locationAddress ? { locationAddress: r.locationAddress } : {}),
       ...(r.at ? { at: r.at.toISOString() } : {}),
       status: 'scheduled' as const,
       ...(r.place
@@ -188,13 +205,14 @@ export function createReminderTools(
   return [
     defineTool({
       id: 'reminder_create',
-      version: '2',
+      version: '3',
       category: 'reminders',
       description:
-        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa (`at`) oppure quando arriva in un luogo o lo lascia (`place`, es. «quando arrivo a casa»: label «casa», on «arrive»; «ogni volta che» = repeat true). I luoghi sono quelli della scheda (casa, lavoro…): se l'utente ha appena detto l'indirizzo, salvalo prima con place_set. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Per ricorrenze giornaliere, settimanali o mensili usa `repeat`: ora/minuto locali, weekdays 0=domenica…6=sabato; ogni mattina tranne weekend = weekly, weekdays [1,2,3,4,5]. Non creare tanti avvisi singoli e non dire che la ripetizione non esiste. La prossima occorrenza viene calcolata dal server: ometti `at`, `eventAt` e `place` quando usi `repeat`. Nessuna data iniziale/finale o esclusione di festività è supportata da repeat: se richiesta, chiarisci questo limite prima di salvare. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
+        "Crea un promemoria che suona sul telefono dell'utente a un'ora precisa (`at`) oppure quando arriva in un luogo o lo lascia (`place`, es. «quando arrivo a casa»: label «casa», on «arrive»; «ogni volta che» = repeat true). I luoghi sono quelli della scheda (casa, lavoro…): se l'utente ha appena detto l'indirizzo, salvalo prima con place_set. Usalo quando la persona chiede di essere avvisata o di ricordarsi qualcosa e la skill Ricordami non l'ha già fatto; non spiegare come dovrebbe formulare la frase. `at` è l'istante dell'avviso in formato ISO 8601 con fuso (es. 2026-10-15T18:00:00+02:00), calcolato dall'ora locale dell'utente. Appuntamento con preavviso («ho il dentista alle 19, avvisami alle 18» o «un'ora prima»): metti in `eventAt` l'ora dell'appuntamento e in `at` quella dell'avviso. Sveglia: `alarm` true. Per ricorrenze giornaliere, settimanali o mensili usa `repeat`: ora/minuto locali, weekdays 0=domenica…6=sabato; ogni mattina tranne weekend = weekly, weekdays [1,2,3,4,5]. Non creare tanti avvisi singoli e non dire che la ripetizione non esiste. La prossima occorrenza viene calcolata dal server: ometti `at`, `eventAt` e `place` quando usi `repeat`. Nessuna data iniziale/finale o esclusione di festività è supportata da repeat: se richiesta, chiarisci questo limite prima di salvare. Conserva sempre i dettagli forniti: location = indirizzo o etichetta del luogo dell’appuntamento (NON è il trigger place); url = link meeting/workshop completo, anche con parametri; notes = istruzioni e dettagli aggiuntivi. Non accorciare il link nel titolo. Questi campi sono facoltativi e si possono aggiungere dopo con reminder_update: non inventarli e chiedi solo se ambiguo. Se manca il giorno o l'ora e non si ricavano dal contesto, chiedi prima (una domanda chiusa con present_choices se le alternative sono poche).",
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 8_000,
       inputSchema: z.object({
+        ...ReminderDetailsSchema.shape,
         text: z
           .string()
           .min(1)
@@ -246,6 +264,7 @@ export function createReminderTools(
             );
           try {
             const r = await store.create(ctx.userId, {
+              ...reminderDetailsOf(input),
               text: input.text,
               timezone,
               repeat: {
@@ -281,6 +300,7 @@ export function createReminderTools(
             );
           const label = input.place.label.trim().toLowerCase();
           const r = await store.create(ctx.userId, {
+            ...reminderDetailsOf(input),
             text: input.text,
             timezone,
             place: { label, on: input.place.on, ...(input.place.repeat ? { repeat: true } : {}) },
@@ -304,6 +324,7 @@ export function createReminderTools(
           );
         try {
           const r = await store.create(ctx.userId, {
+            ...reminderDetailsOf(input),
             text: input.text,
             at,
             timezone,
@@ -468,6 +489,53 @@ export function createReminderTools(
             'invalid_input',
           );
         return { from: res.from, to: res.to, reminders: res.reminders };
+      },
+    }),
+    defineTool({
+      id: 'reminder_update',
+      version: '1',
+      category: 'reminders',
+      description:
+        'Modifica un promemoria esistente senza duplicarlo. Prima usa reminder_list per identificarlo: se più impegni corrispondono chiedi quale con present_choices. Aggiunge, cambia o rimuove luogo (location: indirizzo o etichetta), URL meeting (url) e note (notes), anche in un secondo momento. Campi omessi invariati; null cancella. Può cambiare testo e ora dell’avviso (at ISO con fuso). Non trasformare una sede in un avviso geolocalizzato. Chiedi un dettaglio mirato solo se necessario; non inventare dati.',
+      risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
+      timeoutMs: 8_000,
+      inputSchema: z
+        .object({
+          id: z.uuid(),
+          text: z.string().trim().min(1).max(300).optional(),
+          at: z.iso.datetime({ offset: true }).optional(),
+          ...ReminderDetailsPatchSchema.shape,
+        })
+        .refine(
+          ({ id: _id, ...patch }) => Object.values(patch).some((v) => v !== undefined),
+          'Indica almeno un campo da modificare',
+        ),
+      outputSchema: Info,
+      execute: async (input, ctx) => {
+        if (!store.update)
+          throw new ToolError('La modifica dei promemoria non è disponibile.', 'unavailable');
+        const at = input.at ? new Date(input.at) : undefined;
+        if (at && at.getTime() <= Date.now() + 30_000)
+          throw new ToolError(
+            'L’ora dell’avviso è già passata: chiedi un’altra ora.',
+            'invalid_input',
+          );
+        const r = await store.update(ctx.userId, input.id, {
+          ...ReminderDetailsPatchSchema.parse(input),
+          ...(input.text !== undefined ? { text: input.text } : {}),
+          ...(at ? { at } : {}),
+        });
+        if (!r)
+          throw new ToolError(
+            'Promemoria non trovato o non modificabile: rileggi la lista.',
+            'invalid_input',
+          );
+        lastCreated.set(ctx.userId, r);
+        return toInfo(r);
+      },
+      present: (_input, out) => {
+        const r = [...lastCreated.values()].find((x) => x.id === out.id);
+        return r ? block([r], 'Promemoria aggiornato') : null;
       },
     }),
   ];

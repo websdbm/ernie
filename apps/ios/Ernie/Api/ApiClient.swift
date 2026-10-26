@@ -457,11 +457,13 @@ struct ApiClient: Sendable {
         return out.reminders
     }
 
-    func updateReminder(id: String, text: String?, at: Date?) async throws -> ReminderItem {
-        struct Body: Encodable { var text: String?; var at: String? }
+    func updateReminder(id: String, text: String?, at: Date?, details: [String: String?] = [:]) async throws -> ReminderItem {
         struct Out: Decodable { var reminder: ReminderItem }
-        let iso = at.map { ISO8601DateFormatter().string(from: $0) }
-        let out: Out = try await request("PATCH", "/v1/reminders/\(id)", body: Body(text: text, at: iso))
+        // Chiavi omesse conservate; un valore null cancella il campo sul server.
+        var body = details
+        if let text { body["text"] = text }
+        if let at { body["at"] = ISO8601DateFormatter().string(from: at) }
+        let out: Out = try await request("PATCH", "/v1/reminders/\(id)", body: body)
         return out.reminder
     }
 

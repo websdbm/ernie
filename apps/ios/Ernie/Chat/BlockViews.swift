@@ -324,6 +324,7 @@ struct RemindersCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            ReminderDetailsView(item: r)
             if scheduled {
                 // Con i testi grandi la riga non ci sta: i chip vanno sopra e i comandi sotto, senza spezzare le parole.
                 if r.place != nil {
@@ -501,6 +502,47 @@ private struct ReminderDateTile: View {
     }
 }
 
+/// Dettagli disponibili anche senza permessi di posizione; il link apre solo http/https.
+struct ReminderDetailsView: View {
+    let item: ReminderItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let location = item.location {
+                if let destination = item.locationURL {
+                    Link(destination: destination) {
+                        Label(location, systemImage: "mappin.and.ellipse")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityHint("Apri il luogo in Mappe")
+                } else {
+                    Label(location, systemImage: "mappin.and.ellipse")
+                }
+                if let address = item.locationAddress, address != location {
+                    Text(address).foregroundStyle(Theme.inkSecondary)
+                }
+            }
+            if let url = item.meetingURL {
+                Link(destination: url) {
+                    Label("Apri link · \(url.host ?? "meeting")", systemImage: "video")
+                        .lineLimit(2)
+                }
+                .accessibilityLabel("Apri il link dell’appuntamento")
+            }
+            if let notes = item.notes {
+                DisclosureGroup("Note") {
+                    Text(notes)
+                        .foregroundStyle(Theme.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .font(.subheadline)
+        .tint(Theme.accentText)
+    }
+}
+
 /// Modifica di un promemoria (testo, giorno e ora): usata dalla scheda in chat e dalla schermata Promemoria.
 struct ReminderEditForm: View {
     let item: ReminderItem
@@ -508,11 +550,17 @@ struct ReminderEditForm: View {
     @Environment(AppModel.self) private var model
     @State private var draftText: String
     @State private var draftDate: Date
+    @State private var draftLocation: String
+    @State private var draftURL: String
+    @State private var draftNotes: String
     @State private var saving = false
 
     init(item: ReminderItem, onDone: @escaping () -> Void) {
         self.item = item
         self.onDone = onDone
+        _draftLocation = State(initialValue: item.location ?? "")
+        _draftURL = State(initialValue: item.url ?? "")
+        _draftNotes = State(initialValue: item.notes ?? "")
         _draftText = State(initialValue: item.text)
         _draftDate = State(initialValue: ReminderStore.date(item.at) ?? .now.addingTimeInterval(3600))
     }
@@ -531,13 +579,40 @@ struct ReminderEditForm: View {
                     .datePickerStyle(.compact)
                     .environment(\.locale, Locale(identifier: "it_IT"))
             }
+            TextField("Luogo o indirizzo (facoltativo)", text: $draftLocation, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+            TextField("Link del meeting o workshop (facoltativo)", text: $draftURL)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !validURL {
+                Text("Inserisci un link completo che inizi con https:// o http://")
+                    .font(.caption).foregroundStyle(.red)
+            }
+            TextField("Note (facoltative)", text: $draftNotes, axis: .vertical)
+                .lineLimit(3...8)
+                .textFieldStyle(.roundedBorder)
+            Text("Puoi completare o cancellare questi dettagli anche in seguito.")
+                .font(.caption).foregroundStyle(Theme.inkSecondary)
             HStack {
                 Button("Salva") { Task { await save() } }
                     .buttonStyle(.borderedProminent).controlSize(.small)
-                    .disabled(saving || draftText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(saving || !validDetails || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button("Lascia così") { onDone() }.controlSize(.small)
             }
         }
+    }
+
+    private var validURL: Bool {
+        let raw = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return true }
+        guard let url = URL(string: raw), let host = url.host, !host.isEmpty else { return false }
+        return ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+    }
+
+    private var validDetails: Bool {
+        validURL && draftURL.count <= 2000 && draftLocation.count <= 300 && draftNotes.count <= 4000 && draftText.count <= 300
     }
 
     private func save() async {
@@ -546,8 +621,13 @@ struct ReminderEditForm: View {
         let text = draftText.trimmingCharacters(in: .whitespaces)
         let changedText = text != item.text ? text : nil
         let changedDate = item.place == nil && abs((ReminderStore.date(item.at) ?? .distantPast).timeIntervalSince(draftDate)) > 30 ? draftDate : nil
-        if changedText == nil && changedDate == nil { onDone(); return }
-        if await model.reminders.update(item, text: changedText, at: changedDate) { onDone() }
+        var details: [String: String?] = [:]
+        for (key, draft, original) in [("location", draftLocation, item.location), ("url", draftURL, item.url), ("notes", draftNotes, item.notes)] {
+            let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            if value != (original ?? "") { details.updateValue(value.isEmpty ? nil : value, forKey: key) }
+        }
+        if changedText == nil && changedDate == nil && details.isEmpty { onDone(); return }
+        if await model.reminders.update(item, text: changedText, at: changedDate, details: details) { onDone() }
     }
 }
 

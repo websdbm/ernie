@@ -18,7 +18,7 @@ import {
   type ModelGateway,
 } from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
-import type { EventType, PayloadInputOf } from '@ernie/protocol';
+import { type EventType, type PayloadInputOf, reminderDetailsOf } from '@ernie/protocol';
 import type { SkillRegistry } from '@ernie/skills';
 import { assembleSoul, type SoulRepository, styleNote } from '@ernie/soul';
 import {
@@ -892,6 +892,7 @@ export function reminderEmailInput(a: Automation, scheduledAt: Date | string, be
   const when = longDate(new Date(scheduledAt), a.timezone);
   return {
     title,
+    ...reminderDetailsOf(meta),
     when: when.replace(/ (\d{1,2}:\d{2})$/u, ' alle $1'),
     ...(spoken ? { spoken } : {}),
     ...(fromLabel ? { from: fromLabel } : {}),

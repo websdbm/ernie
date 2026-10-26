@@ -185,7 +185,14 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     description:
       'Dimmi «ricordami di … alle 17», «domani alle 9», «tra 20 minuti» o «lunedì alle 8»: all’ora stabilita Ernie si sveglia e ti manda una notifica (e un’email, se la attivi nelle impostazioni). Per un appuntamento con preavviso: «ho il dentista alle 19, avvisami alle 18» o «un’ora prima». Legato a un luogo: «ricordami di comprare il pane quando arrivo a casa» (i luoghi sono nella tua scheda: «casa mia è in via …», «salva questo posto come palestra», «rinomina dentista in studio Rossi»). Se lo dici in modo diverso ci pensa Ernie, senza chiederti di ripetere. Giorno omesso = oggi. «Che promemoria ho?» e «annulla il promemoria …» per gestirli.',
     kind: 'deterministic',
-    tools: ['reminder_create', 'reminder_list', 'reminder_cancel', 'place_set', 'place_rename'],
+    tools: [
+      'reminder_create',
+      'reminder_list',
+      'reminder_cancel',
+      'reminder_update',
+      'place_set',
+      'place_rename',
+    ],
     examples: [
       'ricordami di uscire alle 17',
       'ho il dentista alle 19, avvisami alle 18',

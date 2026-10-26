@@ -195,3 +195,40 @@ describe('ricorrenze accessibili al modello', () => {
     expect(f.created).toHaveLength(0);
   });
 });
+
+describe('dettagli e modifica dei promemoria via modello', () => {
+  it('inoltra i dettagli in creazione e li restituisce nella scheda', async () => {
+    const details = {
+      location: 'Sala conferenze',
+      url: 'https://meet.example.test/a?token=abc&lang=it',
+      notes: 'Porta il portatile',
+    };
+    const { store, created } = fakeStore();
+    const original = store.create;
+    store.create = async (user, input) => ({ ...(await original(user, input)), ...details });
+    const tool = createReminderTools(store).find((t) => t.id === 'reminder_create');
+    if (!tool) throw new Error('tool mancante');
+    const input = { text: 'Workshop', at: future(2), ...details };
+    const out = await tool.execute(input, ctx());
+    expect(created[0]).toMatchObject(details);
+    expect(out).toMatchObject(details);
+    expect(remindersBlock(tool.present?.(input, out))?.reminders[0]).toMatchObject(details);
+  });
+  it('modifica con id e null esplicito, senza creare un altro promemoria', async () => {
+    const { store, created } = fakeStore();
+    const id = '67fb5105-c5d2-4cbb-80cc-313b162677f9';
+    const patches: unknown[] = [];
+    store.update = async (user, item, patch) => {
+      patches.push({ user, item, patch });
+      return { id: item, text: 'Workshop', at: new Date(future(2)), notes: 'Nuova nota' };
+    };
+    const tool = createReminderTools(store).find((t) => t.id === 'reminder_update');
+    if (!tool) throw new Error('tool mancante');
+    const out = await tool.execute({ id, notes: 'Nuova nota', url: null }, ctx());
+    expect(patches).toEqual([{ user: 'u1', item: id, patch: { notes: 'Nuova nota', url: null } }]);
+    expect(out).toMatchObject({ id, notes: 'Nuova nota' });
+    expect(created).toHaveLength(0);
+    expect(tool.inputSchema.safeParse({ id }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ id, url: 'javascript:alert(1)' }).success).toBe(false);
+  });
+});

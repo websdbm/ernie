@@ -41,3 +41,20 @@ describe('email del promemoria', () => {
     expect(reminderEmailChoice({})).toBeUndefined();
   });
 });
+
+it('mostra luogo, link completo e note con escaping HTML', () => {
+  const details = {
+    title: 'Workshop',
+    when: 'domani',
+    location: 'Sala <A>',
+    url: 'https://meet.example.test/a?token=x&lang=it',
+    notes: 'Portare <script>\nSeconda riga',
+  };
+  const html = reminderEmailHtml(details),
+    text = reminderEmailText(details);
+  expect(text).toContain(details.url);
+  expect(html).toContain('href="https://meet.example.test/a?token=x&amp;lang=it"');
+  expect(html).toContain('Sala &lt;A&gt;');
+  expect(html).toContain('Portare &lt;script&gt;<br>Seconda riga');
+  expect(html).not.toContain('<script>');
+});

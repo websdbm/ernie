@@ -7,7 +7,13 @@ import {
   nextOccurrences,
   type ProactiveCandidate,
 } from '@ernie/automations';
-import { type ContentBlock, ReminderRepeatInput } from '@ernie/protocol';
+import {
+  type ContentBlock,
+  ReminderDetails,
+  ReminderDetailsPatch,
+  ReminderRepeatInput,
+  reminderDetailsOf,
+} from '@ernie/protocol';
 import {
   formatWhen,
   leadQuantity,
@@ -111,7 +117,7 @@ function placeFor(places: readonly ProfilePlace[], label: string): ProfilePlace 
 
 const KEY_PREFIX = 'promemoria_';
 
-interface Meta {
+interface Meta extends ReminderDetails {
   readonly from?: string;
   readonly fromLabel?: string;
   readonly toLabel?: string;
@@ -157,6 +163,7 @@ const metaOf = (a: Automation): Meta => {
   const m = a.meta as Record<string, unknown>;
   const channels = channelsOf(m.channels);
   return {
+    ...reminderDetailsOf(m),
     ...(typeof m.from === 'string' ? { from: m.from } : {}),
     ...(typeof m.fromLabel === 'string' ? { fromLabel: m.fromLabel } : {}),
     ...(typeof m.toLabel === 'string' ? { toLabel: m.toLabel } : {}),
@@ -200,6 +207,14 @@ function toReminder(
 ): Reminder | null {
   if (!isReminder(a)) return null;
   const meta = metaOf(a);
+  const details = reminderDetailsOf(meta);
+  const knownLocation = meta.location
+    ? placeFor(places, meta.location.trim().toLowerCase())
+    : undefined;
+  const locationDetails = {
+    ...details,
+    ...(knownLocation?.address ? { locationAddress: knownLocation.address } : {}),
+  };
   if (a.trigger.type === 'place') {
     // Legato a un luogo: niente ora; indirizzo e zona dalla scheda (assenti finché il luogo non ha una posizione).
     if (a.userId !== viewer) return null;
@@ -208,6 +223,7 @@ function toReminder(
       id: a.id,
       text: textOf(a),
       status: 'scheduled',
+      ...locationDetails,
       place: {
         label: a.trigger.label,
         on: a.trigger.on,
@@ -227,6 +243,7 @@ function toReminder(
     text: textOf(a),
     at,
     status: 'scheduled' as const,
+    ...locationDetails,
     ...(meta.channels ? { channels: meta.channels } : {}),
     ...(meta.repeat ? { repeat: meta.repeat } : {}),
     ...(meta.eventAt ? { eventAt: new Date(meta.eventAt) } : {}),
@@ -422,6 +439,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
 
   return {
     async create(userId, input) {
+      const details = ReminderDetails.parse(input);
       const spoken = clean(input.text);
       if (input.place) {
         // Per ora solo per sé: è il proprio telefono a sapere dove si è.
@@ -431,6 +449,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
           clean(deps.title ? await deps.title(spoken, { userId }) : tidyReminderText(spoken)) ||
           spoken;
         const a = await insertPlace(userId, text, input.place, input.timezone, {
+          ...details,
           ...(!sameText(spoken, text) ? { spoken } : {}),
           ...(input.channels ? { channels: input.channels } : {}),
         });
@@ -471,26 +490,32 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
       if (!input.forLabel) {
         const text = withEvent(input.literalTitle ? spoken : await titled());
         const a = await insert(userId, text, at, input.timezone, {
+          ...details,
           ...(!sameText(spoken, text) ? { spoken } : {}),
           ...(input.repeat ? { repeat: input.repeat } : {}),
           ...(input.channels ? { channels: input.channels } : {}),
           ...eventMeta,
         });
-        return {
-          id: a.id,
-          text,
-          at: nextAt(a) ?? at,
-          status: 'scheduled',
-          ...(input.repeat ? { repeat: input.repeat } : {}),
-          ...(input.channels ? { channels: input.channels } : {}),
-          ...(eventAt ? { eventAt } : {}),
-        };
+        return (
+          toReminder(a, userId, undefined, await placesOf(userId)) ?? {
+            id: a.id,
+            text,
+            at: nextAt(a) ?? at,
+            status: 'scheduled',
+            ...details,
+            ...(input.repeat ? { repeat: input.repeat } : {}),
+            ...(input.channels ? { channels: input.channels } : {}),
+            ...(eventAt ? { eventAt } : {}),
+          }
+        );
       }
       const link = deps.family ? await deps.family.find(userId, input.forLabel) : null;
       if (!link) throw new UnknownPersonError(input.forLabel);
       const fromLabel = (await deps.family?.labelFor(link.otherUserId, userId)) ?? 'un familiare';
       const text = withEvent(input.literalTitle ? spoken : await titled(fromLabel));
       const meta: Meta = {
+        ...details,
+        ...(input.channels ? { channels: input.channels } : {}),
         from: userId,
         fromLabel,
         toLabel: link.label,
@@ -501,7 +526,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
       const a = await insert(link.otherUserId, text, at, input.timezone, meta);
       await announce(
         link.otherUserId,
-        { id: a.id, text, at, status: 'scheduled', from: fromLabel },
+        { id: a.id, text, at, status: 'scheduled', from: fromLabel, ...details },
         fromLabel,
         input.timezone,
       );
@@ -511,6 +536,7 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
         at,
         status: 'scheduled',
         for: link.label,
+        ...details,
         ...(input.repeat ? { repeat: input.repeat } : {}),
         ...(eventAt ? { eventAt } : {}),
       };
@@ -588,10 +614,15 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
     async update(userId, id, patch) {
       const found = await locate(userId, id);
       if (!found) return null;
-      // Solo i canali: si aggiornano i metadati sul posto (stesso id, il job ritardato resta quello).
-      if (patch.channels && patch.text === undefined && patch.at === undefined) {
+      const detailsPatch = ReminderDetailsPatch.parse(patch);
+      const patchedDetails = { ...reminderDetailsOf(metaOf(found.automation)), ...detailsPatch };
+      // Dettagli e canali mantengono id, orario e job: nessun nuovo avviso assegnato.
+      if (patch.text === undefined && patch.at === undefined) {
         const merged = { ...(metaOf(found.automation).channels ?? {}), ...patch.channels };
-        const a = await deps.automations.mergeMeta(found.owner, id, { channels: merged });
+        const a = await deps.automations.mergeMeta(found.owner, id, {
+          ...detailsPatch,
+          ...(patch.channels ? { channels: merged } : {}),
+        });
         if (!a) return null;
         return toReminder(a, userId, found.forLabel, await placesOf(userId));
       }
@@ -600,12 +631,14 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
       if (trig.type === 'place' && !patch.at) {
         const text = clean(patch.text ?? textOf(found.automation));
         if (!text) return null;
-        const old = metaOf(found.automation);
+        const { location: _location, url: _url, notes: _notes, ...old } = metaOf(found.automation);
         const channels = patch.channels
           ? { ...(old.channels ?? {}), ...patch.channels }
           : old.channels;
         await deps.automations.remove(found.owner, id);
         const a = await insertPlace(found.owner, text, trig, found.automation.timezone, {
+          ...old,
+          ...reminderDetailsOf(patchedDetails),
           ...(channels ? { channels } : {}),
         });
         return toReminder(a, userId, undefined, await placesOf(userId));
@@ -626,20 +659,28 @@ export function createReminderStore(deps: ReminderStoreDeps): ReminderStore & {
       const channels = patch.channels
         ? { ...(old.channels ?? {}), ...patch.channels }
         : old.channels;
-      const { eventAt: oldEvent, ...rest } = old;
+      const { eventAt: oldEvent, location: _location, url: _url, notes: _notes, ...rest } = old;
       const meta: Meta = {
         ...rest,
+        ...reminderDetailsOf(patchedDetails),
         ...(channels ? { channels } : {}),
         ...(repeat ? { repeat } : {}),
         ...(oldEvent && Date.parse(oldEvent) > at.getTime() ? { eventAt: oldEvent } : {}),
       };
       await deps.automations.remove(found.owner, id);
       const a = await insert(found.owner, text, at, found.automation.timezone, meta);
-      const r = toReminder(a, userId, found.forLabel);
+      const r = toReminder(a, userId, found.forLabel, await placesOf(userId));
       if (found.forLabel && meta.fromLabel)
         await announce(
           found.owner,
-          { id: a.id, text, at, status: 'scheduled', from: meta.fromLabel },
+          {
+            id: a.id,
+            text,
+            at,
+            status: 'scheduled',
+            from: meta.fromLabel,
+            ...reminderDetailsOf(meta),
+          },
           meta.fromLabel,
           found.automation.timezone,
         );
