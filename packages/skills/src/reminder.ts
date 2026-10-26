@@ -867,6 +867,13 @@ export function parseReminderCommand(
   if (/https?:\/\/|\b(?:link|url|note|indirizzo|posizione|presso|via|viale|piazza)\b/iu.test(input))
     return null;
   const body = plan.text;
+  // Negli appuntamenti una sede può essere un nome libero («al Centro Aurora»).
+  // Le commissioni brevi conservano il percorso rapido; la sede di un evento va strutturata.
+  if (
+    /\b(?:workshop|meeting|webinar|convegno|evento|corso|riunione|visita)\b/iu.test(body) &&
+    /\b(?:a|al|alla|allo|ai|in|nel|nella|presso)\s+\p{L}/iu.test(body)
+  )
+    return null;
   // Il parser rapido può rappresentare un solo impegno. Una seconda richiesta o un vincolo
   // ancora nel titolo deve arrivare al modello, anche se Jev non è disponibile.
   if (

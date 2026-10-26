@@ -1124,6 +1124,8 @@ describe('richieste con dettagli strutturati', () => {
     'Ricordami domani alle 10 la visita in via Roma 3, Treviso',
     'Ricordami domani alle 10 il workshop, note: porta il portatile',
     'Ricordami domani alle 10 il workshop presso la biblioteca',
+    'Ricordami domani alle 10 il workshop in ufficio',
+    'Ricordami domani alle 10 la visita al Centro Aurora',
   ])('delega al modello senza perdere link o sede: %s', (input) => {
     expect(parseReminderCommand(input, new Date('2026-10-26T08:00:00Z'))).toBeNull();
   });
