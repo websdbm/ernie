@@ -332,3 +332,21 @@ struct BrainOverviewTests {
         print("BRAIN_OVERVIEW_SNAPSHOT: \(url.path)")
     }
 }
+
+struct ReminderDetailsReadabilityTests {
+    @Test @MainActor func dettagliChiariEScuri() throws {
+        let item = ReminderItem(id: "preview", text: "Workshop", at: "2099-01-01T20:00:00Z", status: "scheduled", location: "Sala conferenze", locationAddress: "Via Roma 3, Treviso", url: "https://meet.example.test/workshop?code=abc", notes: "Porta il portatile e il materiale del corso.")
+        for scheme in [ColorScheme.light, .dark] {
+            let name = scheme == .light ? "light" : "dark"
+            let view = ReminderDetailsView(item: item).padding(20).frame(width: 320)
+                .background(Theme.surface).environment(\.colorScheme, scheme)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            let image = try #require(renderer.uiImage)
+            #expect(image.size.width == 320)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-details-\(name).png")
+            try #require(image.pngData()).write(to: url)
+            print("REMINDER_SNAPSHOT: \(url.path)")
+        }
+    }
+}

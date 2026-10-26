@@ -2,7 +2,15 @@ import { z } from 'zod';
 
 /** Dettagli dell'impegno: distinti dal trigger geolocalizzato `place`. */
 export const ReminderDetails = z.object({
-  location: z.string().trim().min(1).max(300).optional(),
+  location: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .optional()
+    .describe(
+      'Sede: indirizzo o etichetta di un luogo salvato. Non è il trigger geolocalizzato place.',
+    ),
   url: z
     .url()
     .max(2000)

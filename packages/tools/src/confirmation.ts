@@ -37,6 +37,7 @@ const labels: Readonly<Record<string, string>> = {
   email: 'Avviso anche via email',
   forLabel: 'Per chi',
   place: 'Luogo',
+  location: 'Luogo dell’appuntamento',
   label: 'Nome',
   on: 'Quando',
   repeat: 'Ripeti',

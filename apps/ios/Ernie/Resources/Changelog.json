@@ -1,5 +1,18 @@
 [
   {
+    "build": 106,
+    "date": "2026-10-26",
+    "title": "Appuntamenti con tutti i dettagli",
+    "items": [
+      {
+        "icon": "calendar.badge.checkmark",
+        "title": "Luogo, link e note",
+        "detail": "Conserva la sede o l’indirizzo, il link completo del meeting e le note. Puoi aggiungerli, modificarli o cancellarli dalla scheda Promemoria oppure parlandone con Ernie, anche in seguito.",
+        "test": "Crea un promemoria con un link e delle note. Apri la matita: modifica un dettaglio e cancella il link. Verifica che ora e promemoria restino gli stessi."
+      }
+    ]
+  },
+  {
     "build": 105,
     "date": "2026-10-25",
     "title": "Precisazioni e messaggi riusabili",

@@ -5,8 +5,13 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **25 ottobre 2026 (sera)**, Claude Code sul Mac Studio — build 105 preparata (precisazioni
-durante la risposta, messaggi riusabili, chiusura delle voci aperte della revisione).
+Ultimo aggiornamento: **26 ottobre 2026**, Codex sul Mac dell’ufficio — appuntamenti con luogo,
+link e note; build 106 in preparazione sulla base aggiornata `46c36a2`.
+
+Campi facoltativi distinti dal trigger geolocalizzato, nuovo `reminder_update`, editor e collegamenti
+nativi; nessuna migrazione. Test TypeScript e 189 test mirati superati, 9 test nativi di contratto e
+anteprima chiaro/scuro superati. Stato di distribuzione in [build 106](releases/build-106.md).
+Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
 ## Prima di iniziare
 
