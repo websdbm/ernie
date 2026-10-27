@@ -468,7 +468,7 @@ export function createFamilyMessageTool(messenger: FamilyMessenger) {
           'true solo se l’utente, nel messaggio attuale, chiede di rimandare un messaggio già partito',
         ),
     }),
-    outputSchema: z.object({ id: z.string(), to: z.string() }),
+    outputSchema: z.object({ id: z.string(), to: z.string(), notice: z.string() }),
     execute: async (input, ctx) => {
       // Il 16 ott 2026 il modello ha rimandato da solo un urgente partito ore prima (l'aveva mandato la skill e
       // nella cronologia non c'era traccia dello strumento): lo stesso testo alla stessa persona entro 12 ore
@@ -509,7 +509,15 @@ export function createFamilyMessageTool(messenger: FamilyMessenger) {
         );
       lastSent.set(m.id, m);
       if (lastSent.size > 200) lastSent.delete(lastSent.keys().next().value as string);
-      return { id: m.id, to: m.label };
+      return {
+        id: m.id,
+        to: m.label,
+        notice:
+          `Invio riuscito${m.urgent ? ' come urgente' : ''}. La scheda mostra gia destinatario, testo e stato: ` +
+          'rispondi con una sola frase breve di conferma dell’invio, senza ripetere il contenuto. ' +
+          'Non affermare che il telefono stia suonando o che il messaggio sia stato consegnato o letto: ' +
+          'la conferma esplicita di lettura compare nella scheda quando arriva.',
+      };
     },
     present: (_input, out) => {
       const m = lastSent.get(out.id);

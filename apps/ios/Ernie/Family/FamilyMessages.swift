@@ -136,51 +136,20 @@ enum FamilyImageCache {
     }
 }
 
-// MARK: - fumetto
+// MARK: - scheda messaggio
 
-/// Etichetta a forma di busta con chi scrive («da papo») o a chi è andato («a Giorgio»).
-struct EnvelopeTag: View {
-    let text: String
-    let tint: Color
-    let fill: Color
+/// Il destinatario, il contenuto e l'esito restano nella stessa superficie, anche con testo grande.
+/// Lo stato descrive la conferma ricevuta dal server, non presume la consegna o l'audio sul telefono.
+enum FamilyMessageReceipt: Equatable {
+    case sent, received, awaitingConfirmation, needsConfirmation, confirmed(String)
 
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "envelope.fill")
-                .font(.caption.weight(.bold))
-            Text(text)
-                .font(.caption.weight(.bold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.top, 9)
-        .padding(.bottom, 5)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(fill)
-                // La patta della busta: una V sottile dagli angoli in alto.
-                EnvelopeFlap()
-                    .stroke(tint.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, lineJoin: .round))
-                RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(tint.opacity(0.45), lineWidth: 1.2)
-            }
-        }
-        .accessibilityElement(children: .combine)
+    init(_ message: FamilyMessageBlock) {
+        if message.isUrgent, let at = message.acknowledgedAt { self = .confirmed(at) }
+        else if message.awaitingAck { self = message.incoming ? .needsConfirmation : .awaitingConfirmation }
+        else { self = message.incoming ? .received : .sent }
     }
 }
 
-private struct EnvelopeFlap: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX + 3, y: rect.minY + 2))
-        p.addLine(to: CGPoint(x: rect.midX, y: rect.minY + min(8, rect.height * 0.32)))
-        p.addLine(to: CGPoint(x: rect.maxX - 3, y: rect.minY + 2))
-        return p
-    }
-}
-
-/// Messaggio in famiglia nella chat: fumetto color sabbia (ricevuto, a sinistra) o verde acqua (mandato, a destra),
-/// diverso da quelli dell'utente e di Ernie; etichetta a busta, foto, ora e «Rispondi».
 struct FamilyMessageBubble: View {
     let message: FamilyMessageBlock
     @Environment(AppModel.self) private var model
@@ -188,69 +157,15 @@ struct FamilyMessageBubble: View {
     @State private var showImage = false
     @State private var replying = false
 
-    private var tint: SkillTint { message.incoming ? .shopping : .sentinels }
-    private var urgentRed: Color { Theme.dynamic(light: 0xDC2626, dark: 0xF87171) }
-
     var body: some View {
-        HStack {
-            if !message.incoming { Spacer(minLength: 40) }
-            VStack(alignment: message.incoming ? .leading : .trailing, spacing: 8) {
-                HStack(spacing: 6) {
-                    if !message.incoming, message.isUrgent { urgentTag }
-                    EnvelopeTag(
-                        text: message.incoming ? "da \(message.label)" : "a \(message.label)",
-                        tint: tint.color,
-                        fill: tint.soft
-                    )
-                    if message.incoming, message.isUrgent { urgentTag }
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    if message.image != nil { photo }
-                    if !message.text.isEmpty {
-                        Text(message.text)
-                            .foregroundStyle(Theme.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if message.isUrgent { urgentStatus }
-                    HStack(spacing: 10) {
-                        Text(Self.time(message.at))
-                            .font(.caption2)
-                            .foregroundStyle(Theme.inkSecondary)
-                        if message.incoming {
-                            Spacer(minLength: 8)
-                            Button { replying = true } label: {
-                                Label("Rispondi", systemImage: "arrowshape.turn.up.left.fill")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(tint.color)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityHint("Scrivi a \(message.label)")
-                        }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(tint.soft, in: UnevenRoundedRectangle(
-                    topLeadingRadius: message.incoming ? 6 : 20,
-                    bottomLeadingRadius: 20,
-                    bottomTrailingRadius: 20,
-                    topTrailingRadius: message.incoming ? 20 : 6,
-                    style: .continuous
-                ))
-                .overlay(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: message.incoming ? 6 : 20,
-                        bottomLeadingRadius: 20,
-                        bottomTrailingRadius: 20,
-                        topTrailingRadius: message.incoming ? 20 : 6,
-                        style: .continuous
-                    )
-                    .strokeBorder(message.awaitingAck ? urgentRed : tint.color.opacity(0.3), lineWidth: message.awaitingAck ? 2 : 1)
-                )
-            }
-            if message.incoming { Spacer(minLength: 40) }
+        HStack(spacing: 0) {
+            if !message.incoming, !message.isUrgent { Spacer(minLength: 20) }
+            FamilyMessageCard(message: message, image: image,
+                              onPhoto: { if image != nil { showImage = true } },
+                              onReply: { replying = true },
+                              onConfirm: { model.urgent.show(message) })
+            if message.incoming, !message.isUrgent { Spacer(minLength: 20) }
         }
-        .accessibilityElement(children: .contain)
         .task(id: message.id) {
             if message.image != nil, image == nil { image = await FamilyImageCache.image(id: message.id, api: model.api) }
         }
@@ -262,63 +177,6 @@ struct FamilyMessageBubble: View {
         }
     }
 
-    private var urgentTag: some View {
-        Label("URGENTE", systemImage: "exclamationmark.triangle.fill")
-            .font(.caption2.weight(.heavy))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(urgentRed.opacity(message.awaitingAck ? 1 : 0.55), in: Capsule())
-    }
-
-    /// Stato della conferma: per chi l'ha mandato «in attesa» / «letto alle …»; per chi lo riceve il pulsante.
-    @ViewBuilder
-    private var urgentStatus: some View {
-        if let ack = message.acknowledgedAt {
-            Label(message.incoming ? "Hai confermato alle \(Self.time(ack))" : "Letto e confermato alle \(Self.time(ack))",
-                  systemImage: "checkmark.seal.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SkillTint.recipes.color)
-        } else if message.incoming {
-            Button { model.urgent.show(message) } label: {
-                Label("Conferma di averlo letto", systemImage: "hand.tap.fill")
-                    .font(.caption.weight(.bold))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(urgentRed)
-            .controlSize(.small)
-        } else {
-            Label("In attesa di conferma: il suo telefono continua a suonare", systemImage: "bell.and.waves.left.and.right.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(urgentRed)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private var photo: some View {
-        let ratio: CGFloat = {
-            if let w = message.image?.width, let h = message.image?.height, w > 0, h > 0 { return CGFloat(w) / CGFloat(h) }
-            return 4.0 / 3.0
-        }()
-        Group {
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Theme.surfaceMuted
-                    ProgressView()
-                }
-            }
-        }
-        .frame(width: ratio >= 1 ? 230 : 230 * ratio, height: ratio >= 1 ? 230 / ratio : 230)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(Rectangle())
-        .onTapGesture { if image != nil { showImage = true } }
-        .accessibilityLabel("Foto")
-        .accessibilityAddTraits(.isButton)
-    }
-
     static func time(_ iso: String) -> String {
         guard let d = ReminderStore.date(iso) else { return "" }
         let it = Locale(identifier: "it_IT")
@@ -326,6 +184,165 @@ struct FamilyMessageBubble: View {
         if Calendar.current.isDateInToday(d) { return t }
         if Calendar.current.isDateInYesterday(d) { return "ieri \(t)" }
         return "\(d.formatted(.dateTime.day().month(.abbreviated).locale(it))) \(t)"
+    }
+}
+
+/// Vista senza dipendenze di rete, condivisa fra chat, blocchi e anteprime.
+struct FamilyMessageCard: View {
+    let message: FamilyMessageBlock
+    var image: UIImage?
+    var onPhoto: () -> Void = {}
+    var onReply: () -> Void = {}
+    var onConfirm: () -> Void = {}
+    @Environment(\.chatPalette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var receipt: FamilyMessageReceipt { FamilyMessageReceipt(message) }
+    private var urgentColor: Color { Theme.dynamic(light: 0xB42318, dark: 0xFFAAA2) }
+    private var confirmed: Bool { if case .confirmed = receipt { true } else { false } }
+    private func font(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> Font {
+        .system(style, design: palette.terminal ? .monospaced : .default).weight(weight)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            if message.image != nil { photo }
+            if !message.text.isEmpty {
+                Text(message.text)
+                    .font(font(.body))
+                    .foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            footer
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(palette.hairline, lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: message.incoming ? "arrow.down.left" : "paperplane.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.accentText)
+                .frame(width: 34, height: 34)
+                .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message.incoming ? "Da \(message.label)" : "A \(message.label)")
+                    .font(font(.subheadline, .semibold))
+                    .foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { metadata }
+                    VStack(alignment: .leading, spacing: 4) { metadata }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var metadata: some View {
+        if message.isUrgent {
+            Label("Urgente", systemImage: "exclamationmark.circle.fill")
+                .font(font(.caption, .semibold))
+                .foregroundStyle(confirmed ? palette.inkSecondary : urgentColor)
+                .fixedSize()
+        }
+        Text(FamilyMessageBubble.time(message.at))
+            .font(font(.caption))
+            .foregroundStyle(palette.inkSecondary)
+            .fixedSize()
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Rectangle().fill(palette.hairline).frame(height: 1).accessibilityHidden(true)
+            switch receipt {
+            case .awaitingConfirmation:
+                status("In attesa di conferma", icon: "clock", color: palette.inkSecondary)
+            case .needsConfirmation:
+                status("Conferma di lettura richiesta", icon: "bell.badge", color: urgentColor)
+            case .confirmed(let at):
+                status(message.incoming ? "Hai confermato · \(FamilyMessageBubble.time(at))" : "Letto e confermato · \(FamilyMessageBubble.time(at))",
+                       icon: "checkmark.circle.fill", color: palette.positive)
+            case .sent:
+                status("Inviato", icon: "checkmark", color: palette.inkSecondary)
+            case .received:
+                EmptyView()
+            }
+            if message.incoming {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) { actions }
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { actions }
+                        VStack(alignment: .leading, spacing: 8) { actions }
+                    }
+                }
+            }
+        }
+    }
+
+    private func status(_ text: String, icon: String, color: Color) -> some View {
+        Label { Text(text).fixedSize(horizontal: false, vertical: true) }
+            icon: { Image(systemName: icon).accessibilityHidden(true) }
+            .font(font(.footnote))
+            .foregroundStyle(color)
+            .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var actions: some View {
+        if message.awaitingAck {
+            Button(action: onConfirm) {
+                Label("Apri e conferma", systemImage: "hand.tap")
+                    .font(font(.subheadline, .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12).frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(palette.bubbleText)
+            .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
+        }
+        Button(action: onReply) {
+            Label("Rispondi", systemImage: "arrowshape.turn.up.left")
+                .font(font(.subheadline, .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12).frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(palette.accentText)
+        .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityHint("Scrivi a \(message.label)")
+    }
+
+    private var photo: some View {
+        Button(action: onPhoto) {
+            Group {
+                if let image { Image(uiImage: image).resizable().scaledToFit() }
+                else {
+                    ZStack { palette.surfaceMuted; ProgressView() }
+                        .aspectRatio(photoRatio, contentMode: .fit)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: 240)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .disabled(image == nil)
+        .accessibilityLabel("Apri la foto del messaggio")
+    }
+
+    private var photoRatio: CGFloat {
+        guard let width = message.image?.width, let height = message.image?.height, width > 0, height > 0 else { return 4 / 3 }
+        return CGFloat(width) / CGFloat(height)
     }
 }
 

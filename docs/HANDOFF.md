@@ -74,6 +74,14 @@ Nessun nuovo provider, cookie, audio scaricato o integrazione Instagram. 101 tes
 23 test iOS verdi in tre suite; API pubblicata, 108 disponibile su TestFlight/Interni. I tre link pubblici provati non hanno dato sottotitoli utilizzabili:
 il risparmio reale resta da misurare. Dettagli e limiti in [build 108](releases/build-108.md).
 
+### Schede messaggi in famiglia — 27 ottobre, build 109 in verifica
+
+Destinatario, urgenza, ora, testo e conferma riuniti nella stessa superficie. Palette dell’orso e testo grande,
+nessun bordo rosso spesso; stati distinti fra invio e lettura confermata. Azioni ricevuti da 44 pt, verticali
+con Dynamic Type accessibile. Stesse API e schermata di conferma; il risultato del tool richiede al modello
+un riscontro breve senza presumere audio/consegna. 27 test iOS e 10 backend verdi; nessun invio reale di prova.
+Pubblicazione e distribuzione in corso: [build 109](releases/build-109.md).
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali

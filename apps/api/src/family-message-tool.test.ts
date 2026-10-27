@@ -64,4 +64,22 @@ describe('family_message_send: niente doppioni', () => {
     await tool.execute({ to: 'Giorgio', text: 'Vieni a cena' }, ctx);
     expect(calls).toEqual(['Facciamo colazione', 'Vieni a cena']);
   });
+
+  it('lascia i dettagli nella scheda e non presume audio o consegna dal solo invio', async () => {
+    const { messenger } = fakeMessenger(null);
+    const tool = createFamilyMessageTool(messenger);
+    const result = tool.outputSchema.parse(
+      await tool.execute({ to: 'Giorgio', text: 'Vieni a cena', urgent: true }, ctx),
+    ) as { id: string; to: string; notice: string };
+    expect(result.notice).toContain('una sola frase breve');
+    expect(result.notice).toContain('Non affermare che il telefono stia suonando');
+    expect(
+      tool.present?.({ to: 'Giorgio', text: 'Vieni a cena', urgent: true }, result),
+    ).toMatchObject({
+      kind: 'family_message',
+      text: 'Vieni a cena',
+      label: 'Giorgio',
+      urgent: true,
+    });
+  });
 });

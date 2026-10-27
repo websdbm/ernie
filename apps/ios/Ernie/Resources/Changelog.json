@@ -1,5 +1,24 @@
 [
   {
+    "build": 109,
+    "date": "2026-10-27",
+    "title": "Messaggi in famiglia più chiari",
+    "items": [
+      {
+        "icon": "bubble.left.and.text.bubble.right",
+        "title": "Una scheda, tutte le informazioni",
+        "detail": "Destinatario, urgenza, ora e conferma di lettura sono riuniti nella stessa scheda. Il messaggio ha più spazio e un bordo discreto, coerente con la skin dell’orso.",
+        "test": "Controlla un messaggio urgente inviato e uno ricevuto, poi la stessa scheda dopo la conferma."
+      },
+      {
+        "icon": "textformat.size",
+        "title": "Leggibile anche con testo grande",
+        "detail": "La scheda si adatta al tema chiaro, scuro e Borg. I pulsanti dei messaggi ricevuti hanno aree di tocco più ampie e si dispongono in verticale con i caratteri accessibili.",
+        "test": "Prova i caratteri grandi di iOS e apri una foto ricevuta: contenuto e pulsanti devono restare visibili."
+      }
+    ]
+  },
+  {
     "build": 108,
     "date": "2026-10-27",
     "title": "Lettura dei video più trasparente",
