@@ -344,6 +344,7 @@ private final class NativeSpeechOutput: NSObject, SpeechOutput, AVSpeechSynthesi
         synthesizer.speak(utterance)
     }
     func stop() {
+        ErnieSoundPlayer.shared.endVoice(.speech)
         meter?.cancel(); meter = nil
         player?.delegate = nil; player?.stop(); player = nil
         utterance = nil

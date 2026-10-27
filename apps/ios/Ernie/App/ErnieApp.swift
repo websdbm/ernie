@@ -45,6 +45,7 @@ struct RootView: View {
         }
         .onOpenURL { url in model.pendingLink = AppLink(url: url) }
         .onChange(of: scenePhase) { _, phase in
+            ErnieSoundPlayer.shared.setForeground(phase == .active)
             // Ritorno in primo piano: le condivisioni fatte nel foglio «Ernie» entrano nel second brain.
             if phase == .active {
                 Task { await model.mediaUploads.resume() }

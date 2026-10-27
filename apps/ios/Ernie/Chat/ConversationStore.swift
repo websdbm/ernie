@@ -28,6 +28,7 @@ final class ConversationStore {
     var onFamilyMessage: ((FamilyMessageBlock) -> Void)?
     /// Turno chiuso del tutto (risposta finita e voce terminata): la conversazione continua riapre il microfono.
     var onSettled: (() -> Void)?
+    var onFeedback: ((ErnieSound, String?) -> Void)?
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?
@@ -122,6 +123,7 @@ final class ConversationStore {
         performance.end(.abandoned)
         isAttached = false
         onSettled = nil
+        onFeedback = nil
         onBlock = nil
         onFamilyMessage = nil
         speaker.onSpeakingChanged = nil
@@ -265,6 +267,7 @@ final class ConversationStore {
         // Risposta a voce in corso: si zittisce la voce ma il turno continua (la risposta scritta arriva intera);
         // il nuovo messaggio si mette in coda e parte a turno finito.
         if speaker.isSpeaking { muteSpeech() }
+        if inputMode != "voice" { onFeedback?(.send, nil) }
         // Turno in corso e server con le precisazioni (v1.10): il testo entra nella richiesta senza fermarla
         // (scelta dell'utente, 25 ott 2026). Con allegati o server vecchi resta la coda di sempre.
         if let target = activeCorrelationId, attachments.isEmpty, serverProtocolMinor >= 10, connection == .connected {
@@ -573,6 +576,7 @@ final class ConversationStore {
     }
 
     func respond(to card: ConfirmationCard, approve: Bool, always: Bool = false) {
+        onFeedback?(approve ? .approve : .cancel, "decision:\(card.approvalId)")
         update(confirmation: card.approvalId) {
             $0.decision = approve ? "approved" : "denied"
             if approve && always { $0.always = true }
@@ -719,6 +723,10 @@ final class ConversationStore {
             case "cancelled": .cancelled
             default: .completed
             }
+            if e.correlationId == activeCorrelationId {
+                if outcome == .error { onFeedback?(.error, "turn:\(e.correlationId)") }
+                else if outcome == .completed, !speaker.isSpeaking { onFeedback?(.done, "turn:\(e.correlationId)") }
+            }
             performance.complete(request: e.correlationId, outcome: outcome, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
             upsertAssistant(for: e.correlationId) { m in
                 m.isStreaming = false
@@ -733,6 +741,7 @@ final class ConversationStore {
             }
             finishTurn(e.correlationId)
         case .toolConfirmationRequested(let p):
+            if e.correlationId == activeCorrelationId { onFeedback?(.ask, "ask:\(p.approvalId)") }
             performance.mark(.firstToken, request: e.correlationId)
             items.append(.confirmation(ConfirmationCard(approvalId: p.approvalId, correlationId: e.correlationId, toolId: p.toolId, displayName: p.displayName, argsPreview: p.argsPreview, reason: p.reason, expiresAt: p.expiresAt, allowAlways: p.allowAlways, presentation: p.presentation)))
             persist()
@@ -798,6 +807,7 @@ final class ConversationStore {
             }
             if p.code == "session_forbidden" { break }
             performance.complete(request: e.correlationId, outcome: .error, speaking: speaker.isSpeaking && speechCorrelationId == e.correlationId)
+            if e.correlationId == activeCorrelationId { onFeedback?(.error, "turn:\(e.correlationId)") }
             fail(p.message)
             if activeCorrelationId == e.correlationId { finishTurn(e.correlationId) }
         case .sessionPong, .avatarGesture, .avatarGaze, .unknown, .sessionStart, .userMessage, .userCancel, .userSteer, .sessionPing, .toolConfirmationRespond:

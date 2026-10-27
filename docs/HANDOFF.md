@@ -16,6 +16,11 @@ Backend attivo a `72a027e`, nessuna differenza nei sorgenti server rispetto al c
 Dettagli ed evidenze in [build 106](releases/build-106.md).
 Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
+### Build 107 in preparazione — suoni UI
+
+Set originale di sette effetti brevi, preferenze locali e priorità microfono/TTS. Nessuna modifica backend.
+La 106 resta pubblicata durante le verifiche. Dettagli in [build 107](releases/build-107.md).
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali

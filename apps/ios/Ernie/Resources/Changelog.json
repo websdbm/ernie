@@ -1,5 +1,24 @@
 [
   {
+    "build": 107,
+    "date": "2026-10-27",
+    "title": "Ernie si fa sentire",
+    "items": [
+      {
+        "icon": "pawprint.fill",
+        "title": "Zampate e brontolii",
+        "detail": "Sette effetti originali per invio, risposta completata, richiesta di conferma, approvazione, annullamento, spunte ed errori. Brevi suoni da orso con accenti retro, generati localmente senza consumi AI.",
+        "test": "Invia una richiesta scritta, approva una conferma e spunta una voce nella Spesa o nelle Attività."
+      },
+      {
+        "icon": "slider.horizontal.3",
+        "title": "Suoni sotto controllo",
+        "detail": "In Impostazioni → Suoni di Ernie puoi disattivare gli effetti, regolarne il volume e ascoltarli. Rispettano il silenzioso e lasciano la precedenza a voce e microfono.",
+        "test": "Prova le anteprime, azzera il volume e disattiva i suoni. Verifica poi ascolto e risposta vocale: gli effetti non devono sovrapporsi."
+      }
+    ]
+  },
+  {
     "build": 106,
     "date": "2026-10-27",
     "title": "Appuntamenti completi e liste più ordinate",

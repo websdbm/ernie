@@ -317,6 +317,7 @@ final class AppModel {
         if let userID = profile?.userId { _ = DiaryIdentity.scope(for: creds, userID: userID) }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
+        store.onFeedback = { sound, key in ErnieSoundPlayer.shared.play(sound, key: key) }
         store.onFamilyMessage = { [urgent] m in urgent.note(m) }
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
@@ -325,6 +326,8 @@ final class AppModel {
         sshStore.configure(api: api)
         todoStore.onChanged = { [weak self] in await self?.reminders.refresh() }
         shopping.configure(api: api)
+        shopping.onFeedback = { sound in ErnieSoundPlayer.shared.play(sound) }
+        todoStore.onFeedback = { sound in ErnieSoundPlayer.shared.play(sound) }
         reminders.configure(api: api)
         store.onBlock = { [shopping, reminders, todoStore] block in
             if case .todoList(let b) = block {

@@ -16,6 +16,7 @@ final class TodoStore {
     private(set) var loaded = false
     private(set) var lastError: String?
     var onChanged: (() async -> Void)?
+    var onFeedback: ((ErnieSound) -> Void)?
     private var transport: Transport?
     private var generation = UUID()
     private var loadGeneration = UUID()
@@ -89,16 +90,22 @@ final class TodoStore {
         let task = Task { @MainActor [weak self] () -> Bool in
             await previous?.value
             guard let self, self.generation == token, !Task.isCancelled, let value = draft() else { return false }
+            let before = self.lists[id]
             self.busy.insert(id)
             defer { if self.generation == token { self.busy.remove(id) } }
             do {
                 let result = try await (create ? transport.create(value) : transport.update(value))
                 guard self.generation == token, !Task.isCancelled else { return false }
                 self.apply(result); self.unsavedDrafts[id] = nil; self.lastError = nil
+                let completed = result.items.contains { item in
+                    item.status == .done && before?.items.first(where: { $0.id == item.id })?.status != .done
+                }
+                self.onFeedback?(completed ? .check : .approve)
                 await self.onChanged?()
                 return self.generation == token
             } catch {
                 guard self.generation == token, !Task.isCancelled else { return false }
+                self.onFeedback?(.error)
                 self.unsavedDrafts[id] = value
                 if let api = error as? ApiError, api.status == 409 {
                     self.lastError = api.code == "revision_conflict"

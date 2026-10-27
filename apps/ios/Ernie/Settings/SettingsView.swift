@@ -122,6 +122,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Lo stile (neutro, scherzoso, essenziale, antico) e le parole che Ernie impara da te.")
                 }
+                SoundSettingsSection()
                 Section("Voce") {
                     Toggle("Risposte a voce", isOn: Binding(
                         get: { model.settings.voiceOutput },

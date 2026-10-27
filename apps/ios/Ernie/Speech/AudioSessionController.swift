@@ -5,23 +5,36 @@ import AVFoundation
 enum AudioSessionController {
     /// La sintesi avviene a microfono chiuso: voiceChat senza Voice I/O riduce il livello d'uscita.
     /// Playback conserva l'uscita scelta dall'utente (altoparlante/cuffie) e il normale volume multimediale.
-    static func activateForSpeechPlayback() throws {
+    @MainActor static func activateForSpeechPlayback() throws {
+        ErnieSoundPlayer.shared.beginVoice(.speech)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try session.setActive(true)
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true)
+        } catch {
+            ErnieSoundPlayer.shared.endVoice(.speech)
+            throw error
+        }
         Log.speech.info("riproduzione: \(describe(), privacy: .public)")
     }
 
-    static func activateForVoice() throws {
+    @MainActor static func activateForVoice() throws {
+        ErnieSoundPlayer.shared.beginVoice(.microphone)
         let session = AVAudioSession.sharedInstance()
         // `.duckOthers` (che include la miscelazione): mentre Ernie ascolta o parla, musica, video e podcast si
         // abbassano invece di interromperlo; prima la sessione non era miscelabile e qualunque app che partiva con
         // il proprio audio fermava l'ascolto. Chiamate, Siri e sveglie interrompono comunque (regola di iOS).
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
-        try session.setActive(true)
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
+            try session.setActive(true)
+        } catch {
+            ErnieSoundPlayer.shared.endVoice(.microphone)
+            throw error
+        }
     }
 
-    static func deactivate() {
+    @MainActor static func deactivate() {
+        ErnieSoundPlayer.shared.endVoiceSession()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

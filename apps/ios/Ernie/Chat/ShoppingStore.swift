@@ -15,6 +15,7 @@ final class ShoppingStore {
     private(set) var deleted: Set<String> = []
     private(set) var busy: Set<String> = []
     private(set) var lastError: String?
+    var onFeedback: ((ErnieSound) -> Void)?
     private var api: ApiClient?
     private var generation = UUID()
     private var catalogRequest = UUID()
@@ -114,7 +115,7 @@ final class ShoppingStore {
             list.items[i].checked.toggle()
             lists[listId] = list
         }
-        await perform(listId) { api in try await api.shoppingSetChecked(listId: listId, itemId: item.id, checked: !item.checked) }
+        await perform(listId, feedback: item.checked ? .cancel : .check) { api in try await api.shoppingSetChecked(listId: listId, itemId: item.id, checked: !item.checked) }
     }
 
     func add(listId: String, name: String, quantity: String? = nil) async {
@@ -124,7 +125,7 @@ final class ShoppingStore {
     }
 
     func remove(listId: String, item: ShoppingListItem) async {
-        await perform(listId) { api in try await api.shoppingRemoveItem(listId: listId, itemId: item.id) }
+        await perform(listId, feedback: .cancel) { api in try await api.shoppingRemoveItem(listId: listId, itemId: item.id) }
     }
 
     func clearBought(listId: String) async {
@@ -148,13 +149,15 @@ final class ShoppingStore {
             lists[listId] = nil
             summaries.removeAll { $0.id == listId }
             lastError = nil
+            onFeedback?(.cancel)
         } catch {
             guard generation == token, !Task.isCancelled else { return }
             lastError = AppModel.describe(error)
+            onFeedback?(.error)
         }
     }
 
-    private func perform(_ listId: String, _ action: (ApiClient) async throws -> ContentBlock) async {
+    private func perform(_ listId: String, feedback: ErnieSound = .approve, _ action: (ApiClient) async throws -> ContentBlock) async {
         guard let api, !busy.contains(listId) else { return }
         let token = generation
         revisions[listId, default: 0] += 1
@@ -165,9 +168,11 @@ final class ShoppingStore {
             guard generation == token, !Task.isCancelled else { return }
             apply(block)
             lastError = nil
+            onFeedback?(feedback)
         } catch {
             guard generation == token, !Task.isCancelled else { return }
             lastError = AppModel.describe(error)
+            onFeedback?(.error)
             busy.remove(listId)
             await refresh(listId)
         }
