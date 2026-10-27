@@ -5,15 +5,17 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **107 disponibile su
-TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane scritte e rilette
-(718 caratteri). Sette effetti audio originali e controlli in Impostazioni → Suoni di Ernie.
+Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **108 disponibile su
+TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (779 caratteri).
+108: diagnostica dei lettori per account, provenienza YouTube e sottotitoli pubblici per riassunti espliciti,
+con fallback visivo. Nessuna integrazione Instagram o nuovo provider. **101 test backend e 23 test iOS verdi**.
 
-Sorgenti `bcbdae660a9820591d94453449efbbf8954d1b19`, pubblicati prima della compilazione pulita;
-284 input iOS con hash verificati, identici anche nei commit successivi. Preparazione dell’export con lo
-script già pubblicato in `108ad26`; firma Apple Distribution e permessi dell’IPA verificati, diario solo
-nell’app principale. Upload della stessa IPA verificata; Build ID `df71393a-c400-47c3-bb9d-4dc31614800f`.
-Nessuna modifica/deploy backend. Dettagli e comandi riproducibili in [build 107](releases/build-107.md).
+Sorgenti **`f157faf646280c7ed6e56e514a56a88f5233f409`**, pubblicati su GitHub prima della compilazione
+Release da export Git pulito; **287 input iOS** con manifest SHA-256. IPA Apple Distribution verificata
+su app e tre estensioni, build 108 e permessi conformi, diario solo nell’app principale. Upload della stessa
+IPA riuscito (81.001.901 byte), Delivery UUID `f51d2138-4afe-45b6-ab3c-63c10bc495fb`.
+API staging3 pubblicata da Git allo stesso commit, solo container API ricreato; worker/DB/Redis conservati,
+nessuna migrazione. Dettagli e limiti in [build 108](releases/build-108.md).
 Le modifiche locali preesistenti a documentazione/backup e gli asset non tracciati restano esclusi.
 
 ### Firma e distribuzione senza sbloccare il Mac Studio
@@ -28,7 +30,7 @@ Nessuna chiave privata di firma trasferita e nessuna protezione del Portachiavi 
 temporanea rimossa. Interni riceve automaticamente tutte le build: attendere lo stato effettivo, senza
 forzare un’associazione manuale via API (rifiutata per questo gruppo).
 
-88 test verdi in 11 suite; sette WAV riproducibili; IPA verificata su app e tre estensioni alla 107.
+**Per la 107:** 88 test verdi in 11 suite; sette WAV riproducibili; IPA verificata su app e tre estensioni alla 107.
 Evidenze e manifest: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/` sul Mac dell’ufficio.
 Restano da provare i suoni sul dispositivo fisico (altoparlante/cuffie e silenzioso). Nessuna installazione
 diretta sui telefoni in questa sessione. La precedente 106 resta documentata in [build 106](releases/build-106.md).
@@ -63,13 +65,13 @@ valutare sottotitoli come alternativa per riassunti, conservando visione per ric
 Riuso selettivo da provare sul VPS con limiti di durata/costo e isolamento degli account; browser/cookie non
 vanno condivisi fra utenti Ernie. Nessuna installazione, accesso account, servizio aggiunto, build o deploy.
 
-### Implementazione selettiva Agent-Reach — 27 ottobre, build 108 in verifica
+### Implementazione selettiva Agent-Reach — 27 ottobre, build 108
 
 Autorizzata dall’utente dopo l’analisi. Contratto di provenienza YouTube; tentativo di sottotitoli pubblici
 solo per riassunti espliciti, fallback visivo e pausa per account; diagnostica GET `/v1/content-readers`
 con esiti Redis a scadenza 24h, schermata iOS in Diagnostica. Ricette e immagini conservano il video.
-Nessun nuovo provider, cookie, audio scaricato o integrazione Instagram. 47 test backend e TypeScript verdi;
-23 test iOS verdi in tre suite; deploy/distribuzione in corso. I tre link pubblici provati non hanno dato sottotitoli utilizzabili:
+Nessun nuovo provider, cookie, audio scaricato o integrazione Instagram. 101 test backend e TypeScript verdi;
+23 test iOS verdi in tre suite; API pubblicata, 108 disponibile su TestFlight/Interni. I tre link pubblici provati non hanno dato sottotitoli utilizzabili:
 il risparmio reale resta da misurare. Dettagli e limiti in [build 108](releases/build-108.md).
 
 ## Prima di iniziare
@@ -86,9 +88,9 @@ il risparmio reale resta da misurare. Dettagli e limiti in [build 108](releases/
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **107**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti `bcbdae6`, preparazione export `108ad26` |
+| App su TestFlight | build **108**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti `f157faf` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | commit **72a027e** (27 ott); immagine precedente `ernie-app:pre-5abd040`; vedi «Server» |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **f157faf** (27 ott, lettori); worker ancora **72a027e**. Immagine di recupero API `ernie-app:pre-readers-108`; vedi build 108 |
 | Migrazioni | fino alla **0048**, applicate anche sul server |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
