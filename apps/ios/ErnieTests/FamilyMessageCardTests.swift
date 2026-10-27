@@ -6,8 +6,8 @@ import UIKit
 
 @MainActor struct FamilyMessageCardTests {
     private func message(incoming: Bool = false, urgent: Bool = true, acknowledged: Bool = false,
-                         text: String = "Rispondi al messaggio su WhatsApp, Ciccio") -> FamilyMessageBlock {
-        .init(id: "preview", direction: incoming ? "in" : "out", otherUserId: "relative", label: "Giorgio",
+                         text: String = "Ricordati del messaggio per il laboratorio.") -> FamilyMessageBlock {
+        .init(id: "preview", direction: incoming ? "in" : "out", otherUserId: "relative", label: "Familiare",
               text: text, image: nil, replyTo: nil, at: "2026-10-27T15:24:00Z", urgent: urgent,
               acknowledgedAt: acknowledged ? "2026-10-27T15:30:00Z" : nil)
     }
@@ -37,7 +37,7 @@ import UIKit
     @Test func testoEDestinatarioNonVengonoTagliatiSuSchermiPiccoli() throws {
         let short = try render(message(), width: 320)
         var long = message(text: String(repeating: "Questo messaggio contiene tutti i dettagli da leggere. ", count: 12))
-        long.label = "Giorgio con un nome familiare particolarmente lungo"
+        long.label = "Un nome familiare particolarmente lungo"
         let full = try render(long, width: 320)
         #expect(short.size.width == 320)
         #expect(full.size.width == 320)
