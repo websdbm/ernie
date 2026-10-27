@@ -32,3 +32,18 @@ Evidenze locali: `/tmp/ernie-sounds-tests.log`, `/tmp/ernie-sounds-voice-tests.l
 Prima della distribuzione: pubblicazione del commit sorgenti su GitHub main, compilazione pulita
 da quel commit, verifica firma/versioni delle quattro componenti, upload e rilettura stato Apple.
 La resa sonora su altoparlante/cuffie e silenzioso richiede una prova sul dispositivo fisico.
+
+## Firma senza sbloccare il Portachiavi: verifica in corso
+
+Il primo archive firmato si ferma su `CodeSign ErnieNotifications.appex`, `errSecInternalComponent`.
+Il Portachiavi login dell'ufficio risulta sbloccato, ma securityd rifiuta l'operazione della chiave
+(`CSSMERR_CSP_OPERATION_AUTH_DENIED`); sul Mac Studio login risulta bloccato. Nessuna protezione modificata.
+Archivio Release senza firma riuscito dal commit `bcbdae660a9820591d94453449efbbf8954d1b19`:
+284 input SHA-256 verificati, app e tre estensioni alla 107, sette WAV presenti.
+
+Un export automatico Apple dell'archivio grezzo produce un'IPA Distribution valida **senza gli entitlement
+necessari**: NON caricata. Per questo `scripts/prepare-cloud-signing.py` prepara una copia dell'archivio
+con firma ad hoc senza chiavi, usando esattamente gli entitlement versionati e il team in ExportOptions.
+Il pacchetto intermedio non è installabile né distribuibile. Solo dopo l'export Apple e il controllo dell'IPA
+(firma, App Group, push, Keychain condiviso, diario soltanto nel principale) si può caricare.
+Evidenze fuori da Git: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/`.
