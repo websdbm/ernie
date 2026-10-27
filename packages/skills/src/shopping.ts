@@ -43,7 +43,11 @@ export function splitItems(text: string): string[] {
     .map((s) =>
       s
         .trim()
-        .replace(/^(il|lo|la|i|gli|le|l'|un|uno|una|del|della|dello|dei|degli|delle)\s+/i, '')
+        // «una confezione di …», «un pacco di …»: l'articolo fa parte della quantità e resta a parseItem.
+        .replace(
+          /^(?:il|lo|la|i|gli|le|l'|del|della|dello|dei|degli|delle|(?:un|uno|una)(?!\s+(?:kg|g|l|litr|chil|ett|gramm|pacc|confezion|bottigli|vasett|scatol|pezz)))\s+/i,
+          '',
+        )
         .trim(),
     )
     .filter((s) => s.length > 0 && s.length <= 80);
@@ -65,6 +69,28 @@ const cleanName = (s: string) =>
     .trim();
 const withList = <T extends object>(plan: T, list: string | undefined): T & { list?: string } =>
   list ? { ...plan, list } : plan;
+
+/** «cose da comprare», «spesa», «acquisti»: modi di dire «la lista della spesa», non il nome di una lista. */
+const GENERIC_LIST =
+  /^(?:(?:di|delle)\s+)?cose\s+da\s+(?:comprare|acquistare|prendere)$|^(?:della\s+)?spesa$|^(?:degli\s+|per\s+gli\s+)?acquisti$/iu;
+const listName = (raw: string): string | undefined => {
+  const name = cleanName(raw);
+  return GENERIC_LIST.test(name) ? undefined : name;
+};
+/** Una preposizione o un articolo da soli non sono una voce: segno di una frase letta male (27 ott 2026, «alla»). */
+const FUNCTION_WORD =
+  /^(?:a|al|allo|alla|ai|agli|alle|nel|nello|nella|nei|negli|nelle|sul|sulla|dal|dalla|in|di|del|della|il|lo|la|i|gli|le|l'|un|uno|una|e|ed|lista)$/iu;
+const realItems = (names: readonly string[]) =>
+  names.length > 0 && names.every((n) => !FUNCTION_WORD.test(n.trim()));
+/**
+ * Lista prima delle voci: «aggiungi alla lista di cose da comprare una confezione di porridge», «metti nella lista
+ * della spesa due mele», «aggiungi alla lista «Casa» il detersivo». Con un nome non tra virgolette non si sa dove
+ * finisce il nome e iniziano le voci: la frase passa al modello.
+ */
+const LEADING_LIST =
+  /^(?:aggiungi(?:mi)?|metti(?:mi)?|inserisci|segna(?:mi)?)\s+(?:alla|nella|sulla|in)\s+(?:mia\s+)?lista\b\s*(?<rest>.*)$/iu;
+const LEADING_QUALIFIER =
+  /^(?:(?<generic>della\s+spesa|degli\s+acquisti|per\s+gli\s+acquisti|(?:di|delle)\s+cose\s+da\s+(?:comprare|acquistare|prendere))|(?:chiamata\s+)?(?<quoted>«[^»\r\n]{1,60}»|"[^"\r\n]{1,60}"))?\s*:?\s*(?<items>.*)$/iu;
 
 /** Riconosce le richieste sulle liste della spesa in italiano; null se non è una richiesta di questo tipo. */
 export function parseShoppingCommand(input: string): ShoppingPlan | null {
@@ -126,12 +152,28 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
   m = /^lista\s+(?<name>(?!della\s+spesa\b).+)$/iu.exec(original);
   if (m?.groups?.name) return { op: 'list', list: cleanName(m.groups.name) };
 
+  // --- lista prima delle voci ---
+  const lead = LEADING_LIST.exec(original);
+  if (lead) {
+    const q = LEADING_QUALIFIER.exec(lead.groups?.rest ?? '');
+    const generic = Boolean(q?.groups?.generic);
+    const quoted = q?.groups?.quoted;
+    const rest = q?.groups?.items?.trim() ?? '';
+    // «aggiungi alla lista: pane, burro»: i due punti separano le voci.
+    const colon = /^\s*:/u.test(lead.groups?.rest ?? '');
+    // Altrimenti, senza qualificatore, il resto potrebbe essere il nome di una lista: lo decide il modello.
+    if (!rest || (!generic && !quoted && !colon)) return null;
+    const items = splitItems(rest).map(parseItem);
+    if (!realItems(items.map((i) => i.name))) return null;
+    return withList({ op: 'add' as const, items }, quoted ? listName(quoted) : undefined);
+  }
+
   // --- nome della lista in coda: lo stacco e normalizzo la frase su «… alla lista» ---
   let text = original;
   let list: string | undefined;
   const hint = LIST_HINT.exec(original);
   if (hint?.groups?.list) {
-    list = cleanName(hint.groups.list);
+    list = listName(hint.groups.list);
     text = `${original.slice(0, hint.index).trim()} alla lista`;
   }
   const lower = text.toLowerCase();
@@ -158,7 +200,7 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
     'iu',
   );
   const ck = check.exec(text);
-  if (ck?.groups?.items)
+  if (ck?.groups?.items && realItems(splitItems(ck.groups.items)))
     return withList(
       { op: 'check' as const, names: splitItems(ck.groups.items), checked: true },
       list,
@@ -168,7 +210,7 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
     'iu',
   );
   const uk = uncheck.exec(text);
-  if (uk?.groups?.items)
+  if (uk?.groups?.items && realItems(splitItems(uk.groups.items)))
     return withList(
       { op: 'check' as const, names: splitItems(uk.groups.items), checked: false },
       list,
@@ -179,7 +221,7 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
     'iu',
   );
   const rm = remove.exec(text);
-  if (rm?.groups?.items)
+  if (rm?.groups?.items && realItems(splitItems(rm.groups.items)))
     return withList({ op: 'remove' as const, names: splitItems(rm.groups.items) }, list);
 
   const add = new RegExp(
@@ -187,11 +229,14 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
     'iu',
   );
   const ad = add.exec(text);
-  if (ad?.groups?.items)
+  if (ad?.groups?.items) {
+    // «Aggiungi alla lista X …» con la lista in coda letta male: voce «alla». Meglio il modello.
+    if (!realItems(splitItems(ad.groups.items))) return null;
     return withList(
       { op: 'add' as const, items: splitItems(ad.groups.items).map(parseItem) },
       list,
     );
+  }
 
   const need =
     /^(?:segna(?:mi)? che )?(?:devo|dobbiamo|mi serve|mi servono|ci serve|ci servono|ricordami di)\s+(?:(?:comprare|prendere)\s+)?(?<items>.+?)(?:\s+(?:per|alla|nella|in)\s+(?:la\s+)?(?:spesa|lista(?:\s+della\s+spesa)?))?$/iu;
@@ -203,6 +248,7 @@ export function parseShoppingCommand(input: string): ShoppingPlan | null {
   const person = /^(?:prendere\s+)?\p{Lu}\p{Ll}+/u;
   if (
     nd?.groups?.items &&
+    realItems(splitItems(nd.groups.items)) &&
     !/\b(cose|roba|ingredienti)\s+per\b/iu.test(nd.groups.items) &&
     !notShopping.test(nd.groups.items) &&
     !(/prendere\s+\p{Lu}/u.test(text) && person.test(nd.groups.items))

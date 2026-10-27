@@ -258,33 +258,51 @@ describe('shopping skill + registry', () => {
     expect(registry.candidates('che tempo fa domani')).toEqual([]);
   });
 
-  it('propone la lista esistente quando il riferimento è generico, senza creare o aggiungere prima del tap', async () => {
+  it('un riferimento generico alla lista della spesa usa la lista esistente senza chiedere', async () => {
     lists = [spesa];
     vi.mocked(repo.add).mockClear();
     vi.mocked(repo.createList).mockClear();
     const m = registry.match('Aggiungi il miele nella lista di cose da acquistare.');
-    expect(m?.plan).toEqual({ op: 'add', items: [{ name: 'miele' }], list: 'cose da acquistare' });
+    expect(m?.plan).toEqual({ op: 'add', items: [{ name: 'miele' }] });
     const reply = await m?.skill.run(m.plan, ctx);
-    expect(reply?.text).toBe('Vuoi usare la lista «Spesa»?');
-    const block = reply?.blocks?.[0];
-    expect(block).toMatchObject({
-      kind: 'shopping_lists',
-      lists: [{ id: spesa.id, name: 'Spesa' }],
-    });
-    expect(repo.add).not.toHaveBeenCalled();
-    expect(repo.createList).not.toHaveBeenCalled();
-    if (block?.kind !== 'shopping_lists' || !block.pendingText)
-      throw new Error('Scelta senza richiesta');
-    const tapped = registry.match(block.pendingText.replace('{lista}', spesa.name));
-    expect(tapped?.plan).toEqual({ op: 'add', items: [{ name: 'miele' }], list: 'Spesa' });
-    await tapped?.skill.run(tapped.plan, ctx);
+    expect(reply?.text).toBe('Aggiunto miele alla lista «Spesa».');
     expect(repo.add).toHaveBeenCalledExactlyOnceWith('u', spesa.id, [{ name: 'miele' }], 'skill');
+    expect(repo.createList).not.toHaveBeenCalled();
+  });
+
+  it('lista prima delle voci (27 ott 2026): niente voce «alla», quantità conservata', async () => {
+    expect(
+      parseShoppingCommand(
+        'Aggiungi alla lista di cose da comprare una confezione di porridge con frutti rossi.',
+      ),
+    ).toEqual({
+      op: 'add',
+      items: [{ name: 'porridge con frutti rossi', quantity: 'una confezione' }],
+    });
+    expect(parseShoppingCommand('metti nella lista della spesa due mele e il latte')).toEqual({
+      op: 'add',
+      items: [{ name: 'mele', quantity: 'due' }, { name: 'latte' }],
+    });
+    expect(parseShoppingCommand('aggiungi alla lista «Casa» il detersivo')).toEqual({
+      op: 'add',
+      items: [{ name: 'detersivo' }],
+      list: 'Casa',
+    });
+    expect(parseShoppingCommand('aggiungi alla lista: pane, burro')).toEqual({
+      op: 'add',
+      items: [{ name: 'pane' }, { name: 'burro' }],
+    });
+    // Nome senza virgolette seguito dalle voci: non si sa dove finisce, decide il modello.
+    expect(parseShoppingCommand('aggiungi alla lista Esselunga il latte')).toBeNull();
+    // La frase rimandata dalla scheda dopo l'errore: mai una voce «alla».
+    expect(parseShoppingCommand('aggiungi alla nella lista «Spesa»')).toBeNull();
+    expect(parseShoppingCommand('aggiungi alla lista')).toBeNull();
   });
 
   it('propone solo liste attive e il tap conserva quantità e tutte le voci', async () => {
     lists = [spesa, natale, { ...spesa, id: 'archived', name: 'Vacanze', status: 'archived' }];
     vi.mocked(repo.add).mockClear();
-    const m = registry.match('Aggiungi 2 kg di farina e il miele nella lista degli acquisti');
+    const m = registry.match('Aggiungi 2 kg di farina e il miele nella lista del supermercato');
     const reply = await m?.skill.run(m.plan, ctx);
     const block = reply?.blocks?.[0];
     expect(reply?.text).toBe('Quale lista vuoi usare?');
