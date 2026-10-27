@@ -33,6 +33,21 @@ Evidenze e manifest: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/` 
 Restano da provare i suoni sul dispositivo fisico (altoparlante/cuffie e silenzioso). Nessuna installazione
 diretta sui telefoni in questa sessione. La precedente 106 resta documentata in [build 106](releases/build-106.md).
 
+### Analisi Cindy — 27 ottobre, nessuna implementazione
+
+Analisi statica del repository `makecindy/cindy`, snapshot
+`7be4c57d7bdbed3e115685a5fb1aba61772497c7`: README, memoria, apprendimento notturno, scheduler,
+scoperta plugin, componenti delle risposte e setup. Il backend cloud non è incluso in quel repository.
+Idee proposte: strumenti scoperti su richiesta; registro degli apprendimenti con fonti/ambito/annullamento;
+procedure candidate prima di renderle riutilizzabili; piccole schede per chiarire orari e conflitti;
+collegamento di servizi con ripresa dell'intento originale; stato delle operazioni più uniforme.
+Ernie ha già snapshot selettivi, preferenze esplicite/inferite, controlli prima del modello, deduplica delle
+automazioni, schede native e revisione Brain limitata a 24 ore: estendere queste basi, senza ricostruirle.
+Conservare il limite giornaliero, il consolidamento locale dopo un'aggiunta e l'esclusione del diario privato.
+Priorità suggerita: chiarimenti interattivi, strumenti su richiesta (misurando token e latenza), poi registro
+apprendimenti e procedure versionate. Nodo Mac e multiagenti in seconda fase. Prestazioni/integrazioni Cindy
+non provate: nessuna installazione, esecuzione del progetto o modifica applicativa. Nessuna nuova build/deploy.
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali
