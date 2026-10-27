@@ -1,6 +1,7 @@
-# Build 106 — Luogo, link e note negli appuntamenti
+# Build 106 — Appuntamenti completi e liste più ordinate
 
-26 ottobre 2026. Preparata; distribuzione da verificare dopo compilazione e caricamento.
+26 ottobre 2026 (Codex, Mac dell'ufficio): appuntamenti con luogo, link e note. 27 ottobre 2026 (Claude Code, Mac
+Studio): pannello delle liste e giornate archiviate aggiunti alla stessa build, non ancora caricata.
 
 ## Funzionamento
 
@@ -16,9 +17,28 @@
   Dettagli inclusi anche nelle email se questo canale è stato scelto.
 - Ernie chiede solo i dettagli necessari o ambigui e può completarli in seguito. Nessuna informazione inventata.
 
+## Pannello laterale e giornate passate (27 ott)
+
+Richiesta dell'utente: le liste nel pannello erano troppo verbose, spesa e attività mescolate, giornate passate
+ancora in vista.
+
+- `ListShortcutsSection`: due gruppi, «Spesa» e «Attività», una riga per lista (nome troncato, a destra quante
+  voci restano e il giorno breve: «oggi», «domani», «ven», «23 ott»); tre righe per gruppo con «Mostra tutte».
+  Liste della spesa archiviate fuori dal pannello.
+- `TodoTime.isArchived`: una lista con giorno è archiviata quando nel suo fuso è iniziato il giorno dopo; le liste
+  senza giorno non scadono. Fuori dal pannello e in «Archiviate» (chiuso) nella pagina Attività. Calcolato
+  nell'app, nessun dato modificato.
+- Server (già pubblicato il 27 ott, `5abd040`): «aggiungi alla lista … <voci>» non aggiunge più la voce «alla».
+
 ## Verifiche
 
 Compilazione TypeScript completa e 189 test backend/protocollo/tool/routing superati sulla base aggiornata
 alla build 105. Nove test nativi di contratto e anteprima superati: compatibilità, URL e PATCH con cancellazione esplicita.
 Anteprime a 320 pt in tema chiaro e scuro renderizzate e ispezionate.
 Deployment, commit e distribuzione riportati a completamento del rilascio.
+
+Verifiche del 27 ott (Mac Studio, codice unito delle due parti): suite completa dell'app 295 test, 294 verdi;
+`TerminalChatTests.focusProgrammaticoECambioSkinNellaBarraCompleta` (instabile noto) passa con la sua suite.
+Test nuovo `giornataPassataNelSuoFusoEArchiviataEGiornoBreve`; anteprima del pannello disegnata e controllata.
+Server: 823 test unitari verdi; nessun errore nei log dopo la pubblicazione di `72a027e`, che include anche la
+parte server degli appuntamenti.

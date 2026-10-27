@@ -1,14 +1,32 @@
 [
   {
     "build": 106,
-    "date": "2026-10-26",
-    "title": "Appuntamenti con tutti i dettagli",
+    "date": "2026-10-27",
+    "title": "Appuntamenti completi e liste più ordinate",
     "items": [
       {
         "icon": "calendar.badge.checkmark",
         "title": "Luogo, link e note",
         "detail": "Conserva la sede o l’indirizzo, il link completo del meeting e le note. Puoi aggiungerli, modificarli o cancellarli dalla scheda Promemoria oppure parlandone con Ernie, anche in seguito.",
         "test": "Crea un promemoria con un link e delle note. Apri la matita: modifica un dettaglio e cancella il link. Verifica che ora e promemoria restino gli stessi."
+      },
+      {
+        "icon": "sidebar.left",
+        "title": "Pannello laterale più compatto",
+        "detail": "Le liste stanno su una riga sola, divise fra Spesa e Attività, con a destra quante cose restano e il giorno.",
+        "test": "Apri il pannello laterale e guarda il gruppo Spesa e il gruppo Attività."
+      },
+      {
+        "icon": "archivebox",
+        "title": "Giornate passate archiviate",
+        "detail": "Le liste di attività di un giorno già passato escono dal pannello e finiscono in Archiviate, in fondo alla pagina Attività.",
+        "test": "Apri Attività e tocca Archiviate."
+      },
+      {
+        "icon": "cart",
+        "title": "Spesa capita meglio",
+        "detail": "«Aggiungi alla lista della spesa il latte» o «alla lista di cose da comprare…» aggiungono subito alla tua lista, senza domande e senza voci sbagliate.",
+        "test": "Scrivi «aggiungi alla lista di cose da comprare una confezione di porridge»."
       }
     ]
   },

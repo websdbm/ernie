@@ -117,6 +117,32 @@ enum TodoTime {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: value)
     }
+    /// Una giornata è archiviata quando nel suo fuso è già iniziato il giorno dopo (richiesta dell'utente, 27 ott 2026):
+    /// esce dal pannello laterale e va in «Archiviate» nella pagina Attività. Le liste senza giorno non scadono.
+    static func isArchived(_ list: TodoList, now: Date = Date()) -> Bool {
+        guard let start = dayStart(list), let zone = TimeZone(identifier: list.timezone) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return false }
+        return now >= end
+    }
+    /// Giorno breve per il pannello: «oggi», «domani», «ven» entro la settimana, altrimenti «23 ott».
+    static func shortDay(_ list: TodoList, now: Date = Date()) -> String? {
+        guard let start = dayStart(list), let zone = TimeZone(identifier: list.timezone) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: start).day ?? 0
+        switch days {
+        case 0: return "oggi"
+        case 1: return "domani"
+        default:
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "it_IT")
+            formatter.timeZone = zone
+            formatter.dateFormat = (2...6).contains(days) ? "EEE" : "d MMM"
+            return formatter.string(from: start).lowercased()
+        }
+    }
     static func dayStart(_ list: TodoList) -> Date? {
         guard let day = list.day else { return nil }
         let formatter = DateFormatter()

@@ -27,9 +27,9 @@ Le modifiche locali preesistenti a documentazione e backup sono conservate ed es
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **105** caricata il 25 ott ([nota](releases/build-105.md)), commit `ab4c1dd` |
+| App su TestFlight | build **105** (25 ott); **106** pronta nel repository (appuntamenti + pannello liste), da caricare |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | commit **f37a5e6** (25 ott: build 105 + correzione YouTube); copia in `/srv/staging3/backups/ernie-pre-105-20261025`, immagine `ernie-app:pre-105`; vedi «Server» |
+| Server staging3 (`/srv/staging3/projects/ernie`) | commit **72a027e** (27 ott); immagine precedente `ernie-app:pre-5abd040`; vedi «Server» |
 | Migrazioni | fino alla **0048**, applicate anche sul server |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
@@ -132,6 +132,10 @@ Revisione generale delle build 64–103 da sei revisori in parallelo, poi correz
 
 ## Registro delle sessioni
 
+- **27 ott 2026 (mattina) — Mac Studio (Claude Code)**: pannello laterale con Spesa e Attività separate e righe
+  compatte, giornate passate archiviate (`TodoTime.isArchived`, solo nell'app), unite alla build 106 preparata dal
+  Mac dell'ufficio. Server pubblicato a `72a027e` (correzione spesa + parte server degli appuntamenti del 26 ott).
+  106 non ancora su TestFlight.
 - **27 ott 2026 — Mac Studio (Claude Code)**: spesa, «Aggiungi alla lista di cose da comprare una confezione di porridge»
   aggiungeva la voce «alla» alla Spesa dopo una domanda inutile; corretto il parser (`5abd040`, solo server, da
   pubblicare con il via libera dell'utente). YouTube Data API facoltativa (`46c36a2`, `YOUTUBE_API_KEY`): chiave da

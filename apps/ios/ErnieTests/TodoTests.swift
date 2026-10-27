@@ -77,6 +77,20 @@ struct TodoTests {
         #expect(TodoTime.day(start, timezone: list.timezone) == "2026-01-12")
         #expect(TodoTime.clock(start, timezone: list.timezone) == "00:00")
     }
+    @Test func giornataPassataNelSuoFusoEArchiviataEGiornoBreve() throws {
+        let list = TodoFixtures.list  // 19 ottobre 2026, Europe/Rome
+        // 23:59 del 19 a Roma: ancora in corso; 00:00 del 20 a Roma (22:00Z): archiviata.
+        #expect(!TodoTime.isArchived(list, now: try #require(TodoTime.date("2026-10-19T21:59:00Z"))))
+        #expect(TodoTime.isArchived(list, now: try #require(TodoTime.date("2026-10-19T22:00:00Z"))))
+        var undated = list; undated.day = nil
+        #expect(!TodoTime.isArchived(undated, now: try #require(TodoTime.date("2027-01-01T00:00:00Z"))))
+        let morning = try #require(TodoTime.date("2026-10-19T06:00:00Z"))
+        #expect(TodoTime.shortDay(list, now: morning) == "oggi")
+        #expect(TodoTime.shortDay(list, now: try #require(TodoTime.date("2026-10-18T06:00:00Z"))) == "domani")
+        #expect(TodoTime.shortDay(list, now: try #require(TodoTime.date("2026-10-15T06:00:00Z"))) == "lun")
+        #expect(TodoTime.shortDay(list, now: try #require(TodoTime.date("2026-10-01T06:00:00Z"))) == "19 ott")
+        #expect(TodoTime.shortDay(undated, now: morning) == nil)
+    }
     @Test func conversioneEsplicitaETaskEditingNonPerdonoIdentitaOAltreFasce() {
         let list = TodoFixtures.list
         let simple = list.clearingSchedule()

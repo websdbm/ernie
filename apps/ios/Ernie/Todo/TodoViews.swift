@@ -5,6 +5,7 @@ struct TodoLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path: [String]
     @State private var creating = false
+    @State private var showArchived = false
     init(listId: String? = nil) { _path = State(initialValue: listId.map { [$0] } ?? []) }
     var body: some View {
         NavigationStack(path: $path) {
@@ -15,11 +16,28 @@ struct TodoLibraryView: View {
                     if model.todoStore.loaded && model.todoStore.lists.isEmpty {
                         ContentUnavailableView("Le tue liste", systemImage: "checklist", description: Text("Crea una lista oppure chiedi a Ernie di organizzare la giornata."))
                     }
-                    ForEach(model.todoStore.orderedLists) { list in
+                    let lists = model.todoStore.orderedLists
+                    let archived = lists.filter { TodoTime.isArchived($0) }
+                    ForEach(lists.filter { !TodoTime.isArchived($0) }) { list in
                         Button { path.append(list.id) } label: { TodoLibraryRow(list: list) }
                             .buttonStyle(.plain)
                     }
                     Button("Nuova lista", systemImage: "plus") { creating = true }.buttonStyle(.borderedProminent)
+                    // Giornate passate (27 ott 2026): archiviate in fondo, chiuse finché non si aprono.
+                    if !archived.isEmpty {
+                        DisclosureGroup(isExpanded: $showArchived) {
+                            VStack(spacing: 12) {
+                                ForEach(archived.sorted { ($0.day ?? "") > ($1.day ?? "") }) { list in
+                                    Button { path.append(list.id) } label: { TodoLibraryRow(list: list) }
+                                        .buttonStyle(.plain)
+                                }
+                            }.padding(.top, 8)
+                        } label: {
+                            Text("Archiviate (\(archived.count))").font(.headline).foregroundStyle(Theme.inkSecondary)
+                        }
+                        .tint(Theme.inkSecondary)
+                        .accessibilityIdentifier("todo-archived")
+                    }
                 }
                 .padding(16).frame(maxWidth: 700).frame(maxWidth: .infinity)
             }
