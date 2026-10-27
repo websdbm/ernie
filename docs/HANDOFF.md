@@ -5,36 +5,33 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **106 disponibile su
-TestFlight**, compilata e firmata dall’ufficio senza sbloccare il Mac Studio.
-Build **107** con i suoni pronta in Git, 88 test verdi e archivio Release iPhone senza firma verificato;
-**non caricata**: firma ordinaria dell'ufficio rifiutata, Portachiavi login del Mac Studio bloccato.
+Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **107 disponibile su
+TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane scritte e rilette
+(718 caratteri). Sette effetti audio originali e controlli in Impostazioni → Suoni di Ernie.
 
-Sorgenti della build `af5a80238278985525ab2bc03811073f5655d3a2`, pubblicati su GitHub prima della compilazione;
-272 input iOS confrontati con `origin/main` e con il checkout pulito del Mac Studio: nessuna differenza.
-Comprende appuntamenti completi e il pannello liste `89a1f96`. Apple: **VALID**, **IN_BETA_TESTING**, gruppo
-**Interni**, note italiane scritte e rilette. Il commit finale della documentazione non cambia i sorgenti.
-Backend attivo a `72a027e`, nessuna differenza nei sorgenti server rispetto al commit della build.
-Dettagli ed evidenze in [build 106](releases/build-106.md).
-Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
+Sorgenti `bcbdae660a9820591d94453449efbbf8954d1b19`, pubblicati prima della compilazione pulita;
+284 input iOS con hash verificati, identici anche nei commit successivi. Preparazione dell’export con lo
+script già pubblicato in `108ad26`; firma Apple Distribution e permessi dell’IPA verificati, diario solo
+nell’app principale. Upload della stessa IPA verificata; Build ID `df71393a-c400-47c3-bb9d-4dc31614800f`.
+Nessuna modifica/deploy backend. Dettagli e comandi riproducibili in [build 107](releases/build-107.md).
+Le modifiche locali preesistenti a documentazione/backup e gli asset non tracciati restano esclusi.
 
-### Build 107 — suoni UI implementati; ripresa export API come nella 106
+### Firma e distribuzione senza sbloccare il Mac Studio
 
-Set originale di sette effetti brevi, impostazioni locali, volume e priorità microfono/TTS. Conferme sonore
-su scritture delle liste soltanto dopo successo, nessuna ripetizione da replay. Nessuna modifica backend.
-Sorgenti `bcbdae660a9820591d94453449efbbf8954d1b19`, pubblicati e verificati prima della compilazione pulita.
-88 test verdi in 11 suite; sette WAV riproducibili; 284 input e 59 file archivio con manifest fuori da Git:
-`~/Library/Caches/ernie-builds/build-107-20261027-sounds/`. App e tre estensioni alla 107, senza firma.
+**Risolto il blocco per la 107.** La firma Development dell’ufficio ora rifiuta la chiave, ma l’export API
+usa la firma gestita da Apple, come nella 106. Compilare senza firma; su una copia dell’archivio usare
+`apps/ios/scripts/prepare-cloud-signing.py --profiles-from <archivio precedente valido>` per conservare
+profili e permessi. Il prefisso può differire dal Team ID (notifiche legacy): lo script lo risolve per target.
+Esportare prima su disco, verificare firma/entitlement e isolamento del diario nell’IPA, poi caricarla con
+altool e API Apple. Lo script non produce da solo un pacchetto installabile; non caricare gli intermedi.
+Nessuna chiave privata di firma trasferita e nessuna protezione del Portachiavi cambiata. Credenziale API
+temporanea rimossa. Interni riceve automaticamente tutte le build: attendere lo stato effettivo, senza
+forzare un’associazione manuale via API (rifiutata per questo gruppo).
 
-La firma locale fallisce con `errSecInternalComponent` / `CSSMERR_CSP_OPERATION_AUTH_DENIED` anche con login
-ufficio sbloccato. Sul Mac Studio login è bloccato: chiesto all'utente di sbloccarlo direttamente, senza password
-in chat. Export automatico di prova: IPA senza entitlement scartata; export con entitlement completi non
-concluso e interrotto. Nessun upload 107. `prepare-cloud-signing.py` (aggiunto in `10b58bc`) è **sperimentale**,
-non parte della procedura ordinaria di rilascio. Credenziale API temporanea rimossa, protezioni invariate.
-L’utente ha chiesto di riprendere lo stesso export API della 106: in verifica il riuso dei profili Apple
-locali già validi, con prefisso specifico di ciascuna estensione (`--profiles-from`), senza chiavi di firma.
-In alternativa riprendere la normale compilazione/firma sul Mac Studio dopo lo sblocco, verificando che 107 sia ancora
-il prossimo numero libero. La **106 resta pubblicata**. Dettagli in [build 107](releases/build-107.md).
+88 test verdi in 11 suite; sette WAV riproducibili; IPA verificata su app e tre estensioni alla 107.
+Evidenze e manifest: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/` sul Mac dell’ufficio.
+Restano da provare i suoni sul dispositivo fisico (altoparlante/cuffie e silenzioso). Nessuna installazione
+diretta sui telefoni in questa sessione. La precedente 106 resta documentata in [build 106](releases/build-106.md).
 
 ## Prima di iniziare
 
@@ -50,7 +47,7 @@ il prossimo numero libero. La **106 resta pubblicata**. Dettagli in [build 107](
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **106**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti `af5a802` |
+| App su TestFlight | build **107**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti `bcbdae6`, preparazione export `108ad26` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | commit **72a027e** (27 ott); immagine precedente `ernie-app:pre-5abd040`; vedi «Server» |
 | Migrazioni | fino alla **0048**, applicate anche sul server |

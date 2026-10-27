@@ -1,8 +1,9 @@
 # Build 107 — Suoni di Ernie
 
-27 ottobre 2026. Modifica iOS; nessuna dipendenza o pubblicazione backend.
-Stato: **implementata, testata e compilata Release per iPhone; distribuzione in sospeso**.
-TestFlight resta alla **106**. Nessuna IPA della 107 è stata caricata.
+27 ottobre 2026. **Disponibile su TestFlight**, gruppo **Interni**.
+Apple: **VALID**, **IN_BETA_TESTING**. Build ID `df71393a-c400-47c3-bb9d-4dc31614800f`.
+Note italiane scritte dal changelog e rilette: **718 caratteri**.
+Nessuna modifica o pubblicazione backend; nessuna installazione diretta su iPhone fisico.
 
 ## Comportamento
 
@@ -18,63 +19,64 @@ Categoria ambient, rispetto del silenzioso e miscelazione senza ducking. Stop in
 microfono e TTS (anche dettatura diario); nessuna riproduzione differita quando torna il primo piano.
 Notifiche e sveglie conservano il comportamento precedente.
 
-## Verifiche e rilascio
+## Verifiche
 
-Verifiche completate sul simulatore iPhone 17 Pro (iOS 26.5): **88 test** in 11 suite, tutti verdi.
+Sul simulatore iPhone 17 Pro (iOS 26.5): **88 test** in 11 suite, tutti verdi.
 Cinque test dedicati: integrità dei sette audio nel bundle, stop/soppressione con voce e background,
 deduplica replay e cooldown, fine turno corrente, successo Todo soltanto dopo salvataggio e errore distinto.
 Regressioni: Voice, Speech, DramaSpeech, SpeechPlaybackSession, ConversationSpeechLifecycle, Lifecycle,
 PerformanceObservation, Todo, ShoppingCard, Confirmation. Escluso il test che registra dal microfono reale,
 fermato sulla richiesta di permesso del simulatore; le altre tre prove di sessione AVAudioSession sono passate.
 Rigenerazione Python: sette WAV identici byte per byte, picco 0.72, durate 0.16–0.36 s.
-Evidenze locali: `/tmp/ernie-sounds-tests.log`, `/tmp/ernie-sounds-voice-tests.log`,
-`/tmp/ernie-sounds-xcode/Logs/Test/`. `git diff --check` pulito.
+La resa sonora su altoparlante/cuffie e silenzioso richiede ancora una prova sul dispositivo fisico.
 
-Commit sorgenti pubblicato e verificato prima della compilazione:
-**`bcbdae660a9820591d94453449efbbf8954d1b19`**. Export Git pulito, 284 input SHA-256.
-`ARCHIVE SUCCEEDED` con firma disabilitata, tutte e quattro le componenti alla 107, sette WAV inclusi.
-Manifest archivio (59 file) e input conservati fuori da Git. I 284 input sono identici anche al successivo
-`10b58bc` pubblicato, che aggiunge soltanto lo script sperimentale e la nota di rilascio; nessun sorgente
-compilato o risorsa cambiato. Checkout Mac Studio allineato. Backend invariato, nessun deployment.
+## Sorgenti e pacchetto distribuito
 
-Restano necessari firma ordinaria, verifica IPA, upload e rilettura stato Apple prima di distribuire.
-La resa sonora su altoparlante/cuffie e silenzioso richiede una prova sul dispositivo fisico.
+- Sorgenti **`bcbdae660a9820591d94453449efbbf8954d1b19`**, pubblicati e verificati su GitHub prima della
+  compilazione da export Git pulito. **284 input iOS** con SHA-256; confrontati anche con i successivi commit
+  di main: tutti identici. I commit successivi aggiungono soltanto procedura di firma e documentazione.
+- `ARCHIVE SUCCEEDED` in Release per iPhone con `CODE_SIGNING_ALLOWED=NO`; app e tre estensioni alla 107.
+  Questo archivio intermedio non è installabile. Manifest dell’archivio: 59 file.
+- Preparazione per l’export con lo script già pubblicato in **`108ad26bef9688c90f111ff8b541ac5bdf2826a2`**.
+  Profili locali validi della 106, appartenenti allo stesso team e compatibili con i bundle: mai aggiunti a Git.
+- IPA finale con **firma Apple Distribution** verificata su tutte e quattro le componenti mediante
+  `codesign --verify --deep --strict`. Verificati tutti gli entitlement rispetto ai sorgenti: push production,
+  App Group per app/widget/condivisione, Keychain condiviso e **diario privato soltanto nell’app principale**.
+  Sette WAV inclusi e identici ai sorgenti. Manifest IPA: 58 file.
+- SHA-256 dell’IPA caricata:
+  `686dd4036db197e9de0add7e7bff50c3c4a7aa56d5ec9cfd2f4447cc9cf90898`.
+- Upload della **stessa IPA verificata** con `altool --upload-app`: `UPLOAD SUCCEEDED with no errors`, codice 0,
+  80.927.722 byte. Delivery UUID uguale al Build ID sopra. Autenticazione API Apple già configurata;
+  copia temporanea fuori dal repository, accesso ristretto, rimossa al termine.
 
-## Impedimento alla firma e prova alternativa (non distribuita)
+## Procedura senza sbloccare il Mac Studio
 
-Il primo archive firmato si ferma su `CodeSign ErnieNotifications.appex`, `errSecInternalComponent`.
-Il Portachiavi login dell'ufficio risulta sbloccato, ma securityd rifiuta l'operazione della chiave
-(`CSSMERR_CSP_OPERATION_AUTH_DENIED`); sul Mac Studio login risulta bloccato. Nessuna protezione modificata.
-Archivio Release senza firma riuscito dal commit `bcbdae660a9820591d94453449efbbf8954d1b19`:
-284 input SHA-256 verificati, app e tre estensioni alla 107, sette WAV presenti.
+La chiave Development del Mac dell’ufficio, utilizzabile per la 106, ora rifiuta l’operazione con
+`errSecInternalComponent` / `CSSMERR_CSP_OPERATION_AUTH_DENIED`, pur con login sbloccato. Nessuna protezione
+è stata modificata e nessuna chiave privata di firma è stata trasferita.
 
-Un export automatico Apple dell'archivio grezzo produce un'IPA Distribution valida **senza gli entitlement
-necessari**: NON caricata. Per questo `scripts/prepare-cloud-signing.py` prepara una copia dell'archivio
-con firma ad hoc senza chiavi, usando esattamente gli entitlement versionati e il team in ExportOptions.
-Il pacchetto intermedio non è installabile né distribuibile. Solo dopo l'export Apple e il controllo dell'IPA
-(firma, App Group, push, Keychain condiviso, diario soltanto nel principale) si può caricare.
-Evidenze fuori da Git: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/`.
+È stata ripresa la **firma gestita da Apple durante l’export API**, già usata nella 106. Per conservare
+le capacità dell’app, `apps/ios/scripts/prepare-cloud-signing.py` richiede `--profiles-from <archivio precedente>`:
+verifica team, scadenza e bundle prima di riutilizzare i profili; risolve AppIdentifierPrefix per componente.
+Le notifiche hanno un prefisso legacy `QH3PSRG2YB` nel profilo Development: non bisogna sostituirlo alla cieca
+con il Team ID. L’export Apple lo normalizza a `76X78MBPR3`, come nella 106.
 
-L'export della copia con gli entitlement completi è rimasto senza avanzamento per oltre cinque minuti
-ed è stato interrotto. Nessuna IPA di questa prova è stata caricata. `prepare-cloud-signing.py` resta
-**sperimentale**, verificato soltanto nella preparazione ad hoc: non usarlo come procedura di rilascio
-ordinaria finché l'export completo non è validato. Non inferire la causa del blocco dall'assenza di log.
-La copia temporanea della credenziale API Apple è stata rimossa dopo ogni tentativo. Nessuna chiave di firma
-trasferita, nessun permesso del Portachiavi cambiato. Chiesto all'utente di sbloccare direttamente login sul
-Mac Studio per riprendere la procedura ordinaria. Il pacchetto senza firma non è installabile.
+1. Recuperare il commit pubblicato e verificare manifest e numero libero su App Store Connect.
+2. Compilare Release senza firma e preparare **una copia** dell’archivio con lo script, indicando sorgenti
+   pubblicati e archivio precedente con profili ancora validi. Confrontare gli entitlement intermedi.
+3. Esportare con `xcodebuild -exportArchive`, autenticazione API già configurata, firma automatica e una copia
+   di ExportOptions con `destination=export`. PATH di sistema, come nella procedura della 106.
+4. Verificare l’IPA (firma, versioni, permessi, isolamento del diario, risorse), poi caricare **quella stessa IPA**
+   con `altool`. Non caricare mai l’archivio intermedio con firma provvisoria.
+5. Scrivere/rileggere le note con `asc.mjs whats-new`, verificare `VALID`, `IN_BETA_TESTING` e gruppo Interni.
+   Interni ha `hasAccessToAllBuilds=true`: attendere l’associazione automatica. Il tentativo di aggiungerlo
+   manualmente via API è stato rifiutato (422, nessuna modifica); poco dopo l’associazione era presente.
 
-Per riprendere sul Mac Studio: recuperare `main` senza sovrascrivere modifiche, verificare il numero
-successivo disponibile su App Store Connect, ricompilare dal commit pubblicato e usare la normale
-`CURRENT_PROJECT_VERSION=107 apps/ios/scripts/testflight.sh` con l'autenticazione Apple già configurata.
-Verificare realmente upload, stato `VALID`, gruppo Interni e note italiane; poi aggiornare HANDOFF e questa
-nota. Non riutilizzare le IPA di prova prive di entitlement o gli archivi ad hoc sperimentali.
+Le prove precedenti senza profili completi non sono state distribuite: una IPA ometteva gli entitlement,
+un export successivo non avanzava ed è stato interrotto. Il percorso con i profili è invece verificato fino
+alla disponibilità effettiva su TestFlight; non serve più attendere lo sblocco del Mac Studio per questa build.
 
-## Ripresa richiesta dall'utente: stessa esportazione API della 106
-
-Confrontati i log conservati della 106: il suo export API firma tramite Apple e normalizza il prefisso
-legacy `QH3PSRG2YB` delle notifiche al prefisso finale `76X78MBPR3`. Il nuovo helper accetta
-`--profiles-from <archivio 106>`: verifica team, scadenza e bundle prima di copiare i profili locali;
-risolve AppIdentifierPrefix per componente, senza supporre che sia sempre uguale al Team ID.
-Solo profili già presenti sul Mac, mai aggiunti a Git. Export di revisione e verifica IPA prima di ogni upload.
-La firma ordinaria con chiave Development dell'ufficio resta rifiutata al nuovo controllo; non è lo stesso
-stato osservato al momento dell'archive della 106. Ultima build Apple verificata: ancora 106 VALID.
+Evidenze fuori da Git sul Mac dell’ufficio:
+`~/Library/Caches/ernie-builds/build-107-20261027-sounds/` — manifest input/archivio/IPA, verifica permessi,
+`export-profile-api.log`, `upload-verified-ipa.log`, `asc-status.json`, `asc-notes.json`.
+Test: `/tmp/ernie-sounds-tests.log`, `/tmp/ernie-sounds-voice-tests.log`, `/tmp/ernie-sounds-xcode/Logs/Test/`.

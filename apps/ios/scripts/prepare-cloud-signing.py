@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Prepara un archivio senza firma per l'export Apple automatico conservando gli entitlement.
 
-SPERIMENTALE: la preparazione ad hoc è verificata; l'export completo con tutti
- gli entitlement non è ancora validato. Non è il percorso ordinario di rilascio.
+Procedura verificata sulla build 107 con i profili Apple validi dell'archivio
+precedente. Verificare sempre firma e permessi dell'IPA esportata prima dell'upload.
 Non usa chiavi private e non produce un'app installabile. Copiare prima l'archivio;
 poi esportare con xcodebuild e verificare firma/entitlement dell'IPA prima dell'upload.
 """
@@ -37,7 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('archive', type=Path)
     parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--profiles-from", type=Path, help="Archivio precedente con profili Apple validi dello stesso team e bundle")
+    parser.add_argument("--profiles-from", type=Path, required=True, help="Archivio precedente con profili Apple validi dello stesso team e bundle")
     args = parser.parse_args()
     team = plistlib.loads((args.source / 'ExportOptions.plist').read_bytes())['teamID']
     app = args.archive / 'Products/Applications/Ernie.app'
