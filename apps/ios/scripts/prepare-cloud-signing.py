@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Prepara un archivio senza firma per l'export Apple automatico conservando gli entitlement.
 
+SPERIMENTALE: la preparazione ad hoc è verificata; l'export completo con tutti
+ gli entitlement non è ancora validato. Non è il percorso ordinario di rilascio.
 Non usa chiavi private e non produce un'app installabile. Copiare prima l'archivio;
 poi esportare con xcodebuild e verificare firma/entitlement dell'IPA prima dell'upload.
 """

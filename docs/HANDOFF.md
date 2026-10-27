@@ -7,6 +7,8 @@ modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le re
 
 Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **106 disponibile su
 TestFlight**, compilata e firmata dall’ufficio senza sbloccare il Mac Studio.
+Build **107** con i suoni pronta in Git, 88 test verdi e archivio Release iPhone senza firma verificato;
+**non caricata**: firma ordinaria dell'ufficio rifiutata, Portachiavi login del Mac Studio bloccato.
 
 Sorgenti della build `af5a80238278985525ab2bc03811073f5655d3a2`, pubblicati su GitHub prima della compilazione;
 272 input iOS confrontati con `origin/main` e con il checkout pulito del Mac Studio: nessuna differenza.
@@ -16,10 +18,21 @@ Backend attivo a `72a027e`, nessuna differenza nei sorgenti server rispetto al c
 Dettagli ed evidenze in [build 106](releases/build-106.md).
 Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
-### Build 107 in preparazione — suoni UI
+### Build 107 — suoni UI implementati; firma/distribuzione in sospeso
 
-Set originale di sette effetti brevi, preferenze locali e priorità microfono/TTS. Nessuna modifica backend.
-La 106 resta pubblicata durante le verifiche. Dettagli in [build 107](releases/build-107.md).
+Set originale di sette effetti brevi, impostazioni locali, volume e priorità microfono/TTS. Conferme sonore
+su scritture delle liste soltanto dopo successo, nessuna ripetizione da replay. Nessuna modifica backend.
+Sorgenti `bcbdae660a9820591d94453449efbbf8954d1b19`, pubblicati e verificati prima della compilazione pulita.
+88 test verdi in 11 suite; sette WAV riproducibili; 284 input e 59 file archivio con manifest fuori da Git:
+`~/Library/Caches/ernie-builds/build-107-20261027-sounds/`. App e tre estensioni alla 107, senza firma.
+
+La firma locale fallisce con `errSecInternalComponent` / `CSSMERR_CSP_OPERATION_AUTH_DENIED` anche con login
+ufficio sbloccato. Sul Mac Studio login è bloccato: chiesto all'utente di sbloccarlo direttamente, senza password
+in chat. Export automatico di prova: IPA senza entitlement scartata; export con entitlement completi non
+concluso e interrotto. Nessun upload 107. `prepare-cloud-signing.py` (aggiunto in `10b58bc`) è **sperimentale**,
+non parte della procedura ordinaria di rilascio. Credenziale API temporanea rimossa, protezioni invariate.
+Riprendere la normale compilazione/firma sul Mac Studio dopo lo sblocco, verificando prima che 107 sia ancora
+il prossimo numero libero. La **106 resta pubblicata**. Dettagli in [build 107](releases/build-107.md).
 
 ## Prima di iniziare
 

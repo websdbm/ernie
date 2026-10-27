@@ -1,7 +1,8 @@
 # Build 107 — Suoni di Ernie
 
 27 ottobre 2026. Modifica iOS; nessuna dipendenza o pubblicazione backend.
-Stato: preparazione e verifiche; build 106 resta quella pubblicata finché non è verificata la distribuzione Apple.
+Stato: **implementata, testata e compilata Release per iPhone; distribuzione in sospeso**.
+TestFlight resta alla **106**. Nessuna IPA della 107 è stata caricata.
 
 ## Comportamento
 
@@ -29,11 +30,17 @@ Rigenerazione Python: sette WAV identici byte per byte, picco 0.72, durate 0.16�
 Evidenze locali: `/tmp/ernie-sounds-tests.log`, `/tmp/ernie-sounds-voice-tests.log`,
 `/tmp/ernie-sounds-xcode/Logs/Test/`. `git diff --check` pulito.
 
-Prima della distribuzione: pubblicazione del commit sorgenti su GitHub main, compilazione pulita
-da quel commit, verifica firma/versioni delle quattro componenti, upload e rilettura stato Apple.
+Commit sorgenti pubblicato e verificato prima della compilazione:
+**`bcbdae660a9820591d94453449efbbf8954d1b19`**. Export Git pulito, 284 input SHA-256.
+`ARCHIVE SUCCEEDED` con firma disabilitata, tutte e quattro le componenti alla 107, sette WAV inclusi.
+Manifest archivio (59 file) e input conservati fuori da Git. I 284 input sono identici anche al successivo
+`10b58bc` pubblicato, che aggiunge soltanto lo script sperimentale e la nota di rilascio; nessun sorgente
+compilato o risorsa cambiato. Checkout Mac Studio allineato. Backend invariato, nessun deployment.
+
+Restano necessari firma ordinaria, verifica IPA, upload e rilettura stato Apple prima di distribuire.
 La resa sonora su altoparlante/cuffie e silenzioso richiede una prova sul dispositivo fisico.
 
-## Firma senza sbloccare il Portachiavi: verifica in corso
+## Impedimento alla firma e prova alternativa (non distribuita)
 
 Il primo archive firmato si ferma su `CodeSign ErnieNotifications.appex`, `errSecInternalComponent`.
 Il Portachiavi login dell'ufficio risulta sbloccato, ma securityd rifiuta l'operazione della chiave
@@ -47,3 +54,17 @@ con firma ad hoc senza chiavi, usando esattamente gli entitlement versionati e i
 Il pacchetto intermedio non è installabile né distribuibile. Solo dopo l'export Apple e il controllo dell'IPA
 (firma, App Group, push, Keychain condiviso, diario soltanto nel principale) si può caricare.
 Evidenze fuori da Git: `~/Library/Caches/ernie-builds/build-107-20261027-sounds/`.
+
+L'export della copia con gli entitlement completi è rimasto senza avanzamento per oltre cinque minuti
+ed è stato interrotto. Nessuna IPA di questa prova è stata caricata. `prepare-cloud-signing.py` resta
+**sperimentale**, verificato soltanto nella preparazione ad hoc: non usarlo come procedura di rilascio
+ordinaria finché l'export completo non è validato. Non inferire la causa del blocco dall'assenza di log.
+La copia temporanea della credenziale API Apple è stata rimossa dopo ogni tentativo. Nessuna chiave di firma
+trasferita, nessun permesso del Portachiavi cambiato. Chiesto all'utente di sbloccare direttamente login sul
+Mac Studio per riprendere la procedura ordinaria. Il pacchetto senza firma non è installabile.
+
+Per riprendere sul Mac Studio: recuperare `main` senza sovrascrivere modifiche, verificare il numero
+successivo disponibile su App Store Connect, ricompilare dal commit pubblicato e usare la normale
+`CURRENT_PROJECT_VERSION=107 apps/ios/scripts/testflight.sh` con l'autenticazione Apple già configurata.
+Verificare realmente upload, stato `VALID`, gruppo Interni e note italiane; poi aggiornare HANDOFF e questa
+nota. Non riutilizzare le IPA di prova prive di entitlement o gli archivi ad hoc sperimentali.
