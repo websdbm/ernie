@@ -1,7 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { ContentSource } from '@ernie/protocol';
 import type { ToolContext } from '@ernie/tools';
 import { describe, expect, it, vi } from 'vitest';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { guardianSettings } from './guardian.js';
 import { clampVideoAnalysis, createYouTubeTool, VideoAnalysis, YOUTUBE_MODEL } from './youtube.js';
 import {
@@ -10,6 +11,7 @@ import {
   parseIsoDuration,
   parseYouTubeApiVideo,
   parseYouTubeMetadata,
+  playerJson,
   type YouTubeMetadata,
   youtubeLinksIn,
 } from './youtube-metadata.js';
@@ -56,6 +58,7 @@ const ctx = (userId = 'user-a'): ToolContext => ({
 function setup(
   options: {
     html?: string;
+    captions?: Response;
     completions?: Response[];
     blockedDomains?: string[];
     /** false: oEmbed risponde 401 come per un video privato. */
@@ -93,6 +96,8 @@ function setup(
       return options.oembed === false
         ? new Response('Unauthorized', { status: 401 })
         : new Response(JSON.stringify({ title: 'Titolo oEmbed', author_name: 'Canale' }));
+    if (address.includes('/api/timedtext?'))
+      return options.captions?.clone() ?? new Response('', { status: 404 });
     expect(address).toBe(url);
     return new Response(options.html ?? player());
   });
@@ -475,6 +480,20 @@ describe('YouTube reader', () => {
 });
 
 describe('YouTube: limiti temporanei di OpenRouter', () => {
+  it.each([
+    [429, 'video_rate_limited'],
+    [503, 'video_service_error'],
+    [401, 'video_service_auth'],
+  ] as const)(
+    'classifica HTTP %s come errore del servizio, senza attribuirlo al contenuto',
+    async (status, code) => {
+      const s = setup({
+        completions: [new Response('{}', { status }), new Response('{}', { status })],
+      });
+      await expect(s.tool.execute({ url }, ctx())).rejects.toMatchObject({ code });
+      expect(s.calls.length).toBeLessThanOrEqual(2);
+    },
+  );
   it('attende il retry del provider e recupera il video senza segnalare credito esaurito', async () => {
     const s = setup({
       completions: [
@@ -540,5 +559,145 @@ describe('YouTube: risposta del modello oltre i limiti (25 ott 2026)', () => {
     expect(ok.recipe?.steps).toHaveLength(20);
     expect(ok.recipe?.ingredients[1]).toHaveLength(120);
     expect(ok.evidence[0]?.timestamp).toHaveLength(12);
+  });
+});
+
+const readResult = (value: unknown) =>
+  z.object({ source: ContentSource, analysis: VideoAnalysis, notice: z.string() }).parse(value);
+const captionData = JSON.stringify({
+  events: [
+    {
+      tStartMs: 0,
+      dDurationMs: 48_000,
+      segs: [
+        {
+          utf8: 'Il narratore spiega come organizzare le attività della giornata. Individuare gli impegni fissi, poi inserire le attività flessibili senza sovrapposizioni.',
+        },
+      ],
+    },
+  ],
+});
+const validCaptionPage = `<script>var ytInitialPlayerResponse = ${JSON.stringify({
+  ...playerJson(player()),
+  captions: {
+    playerCaptionsTracklistRenderer: {
+      captionTracks: [
+        { baseUrl: `https://www.youtube.com/api/timedtext?v=${id}&lang=it`, languageCode: 'it' },
+      ],
+    },
+  },
+})};</script>`;
+function textCompletion() {
+  return new Response(
+    JSON.stringify({
+      id: 'caption-generation',
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: {
+            content: JSON.stringify({
+              status: 'analyzed',
+              summary: 'Organizzare impegni fissi e attività flessibili.',
+              recipe: null,
+              evidence: [
+                {
+                  source: 'captions',
+                  timestamp: '00:00',
+                  detail: 'Individuare gli impegni fissi.',
+                },
+              ],
+              missing: ['Immagini non analizzate.'],
+            }),
+          },
+        },
+      ],
+      usage: { prompt_tokens: 500, completion_tokens: 100, cost: 0.0004 },
+    }),
+  );
+}
+describe('riassunti economici senza perdere la lettura visiva', () => {
+  it('testo soltanto per un riassunto richiesto, fonte dichiarata e consumo registrato', async () => {
+    const s = setup({
+      html: validCaptionPage,
+      captions: new Response(captionData),
+      completions: [textCompletion()],
+    });
+    const result = await s.tool
+      .execute({ url, mode: 'summary' }, { ...ctx(), userMessage: `Fammi un riassunto di ${url}` })
+      .then(readResult);
+    expect(result.source).toMatchObject({ method: 'captions', language: 'it' });
+    expect(result.source.coverage).not.toContain('frames');
+    expect(JSON.stringify(s.calls[0])).not.toContain('video_url');
+    expect(result.notice).toContain('non affermare di avere visto immagini');
+    expect(result.notice).not.toContain('non contiene una ricetta');
+    expect(s.recorder.record).toHaveBeenCalledOnce();
+  });
+  it('mode suggerito dal modello non basta a togliere le immagini a una ricetta', async () => {
+    const s = setup({ html: validCaptionPage, captions: new Response(captionData) });
+    const result = await s.tool
+      .execute(
+        { url, mode: 'summary' },
+        { ...ctx(), userMessage: 'Estrai gli ingredienti e la ricetta' },
+      )
+      .then(readResult);
+    expect(result.source.method).toBe('video');
+    expect(JSON.stringify(s.calls[0])).toContain('video_url');
+    expect(result.analysis.recipe?.ingredients).toContain('400 g di petto di pollo');
+    expect(s.fetchMock.mock.calls.some(([u]) => String(u).includes('/api/timedtext'))).toBe(false);
+  });
+  it.each([
+    'Non voglio un riassunto, voglio la ricetta completa',
+    'Riassumi il video e salva la ricetta',
+  ])('una richiesta mista o negata conserva la ricetta: %s', async (userMessage) => {
+    const s = setup({ html: validCaptionPage, captions: new Response(captionData) });
+    const result = await s.tool
+      .execute({ url, mode: 'summary' }, { ...ctx(), userMessage })
+      .then(readResult);
+    expect(result.source.method).toBe('video');
+    expect(result.analysis.recipe?.ingredients).toContain('400 g di petto di pollo');
+    expect(s.fetchMock.mock.calls.some(([u]) => String(u).includes('/api/timedtext'))).toBe(false);
+  });
+  it('un riassunto culinario usa il video e una cache distinta dai sottotitoli', async () => {
+    const s = setup({
+      html: validCaptionPage,
+      captions: new Response(captionData),
+      completions: [textCompletion()],
+    });
+    await s.tool.execute({ url, mode: 'summary' }, { ...ctx(), userMessage: 'Riassumi il video' });
+    const result = await s.tool
+      .execute(
+        { url, mode: 'summary' },
+        { ...ctx(), userMessage: 'Voglio un riassunto della ricetta' },
+      )
+      .then(readResult);
+    expect(s.calls).toHaveLength(2);
+    expect(result.source.method).toBe('video');
+    expect(result.analysis.recipe).toBeNull();
+    expect(result.notice).not.toContain('non contiene una ricetta');
+  });
+  it('cache separata per scopo e utente; sottotitoli non riusati come ricetta vista', async () => {
+    const s = setup({
+      html: validCaptionPage,
+      captions: new Response(captionData),
+      completions: [textCompletion()],
+    });
+    const summaryCtx = { ...ctx(), userMessage: 'Riassumi questo video' };
+    await s.tool.execute({ url, mode: 'summary' }, summaryCtx);
+    await s.tool.execute({ url, mode: 'summary' }, summaryCtx);
+    const recipe = await s.tool.execute({ url }, ctx()).then(readResult);
+    expect(recipe.source.method).toBe('video');
+    expect(s.calls).toHaveLength(2);
+    await s.tool.execute({ url }, ctx('user-b'));
+    expect(s.calls).toHaveLength(3);
+  });
+  it('sottotitoli mancanti ripiegano sul video senza nuova API o doppia analisi', async () => {
+    const s = setup();
+    const result = await s.tool
+      .execute({ url, mode: 'summary' }, { ...ctx(), userMessage: 'Riassumi questo video' })
+      .then(readResult);
+    expect(result.source.method).toBe('video');
+    expect(result.analysis.recipe).toBeNull();
+    expect(s.calls).toHaveLength(1);
+    expect(JSON.stringify(s.calls[0])).toContain('video_url');
   });
 });

@@ -63,6 +63,15 @@ valutare sottotitoli come alternativa per riassunti, conservando visione per ric
 Riuso selettivo da provare sul VPS con limiti di durata/costo e isolamento degli account; browser/cookie non
 vanno condivisi fra utenti Ernie. Nessuna installazione, accesso account, servizio aggiunto, build o deploy.
 
+### Implementazione selettiva Agent-Reach — 27 ottobre, build 108 in verifica
+
+Autorizzata dall’utente dopo l’analisi. Contratto di provenienza YouTube; tentativo di sottotitoli pubblici
+solo per riassunti espliciti, fallback visivo e pausa per account; diagnostica GET `/v1/content-readers`
+con esiti Redis a scadenza 24h, schermata iOS in Diagnostica. Ricette e immagini conservano il video.
+Nessun nuovo provider, cookie, audio scaricato o integrazione Instagram. 47 test backend e TypeScript verdi;
+23 test iOS verdi in tre suite; deploy/distribuzione in corso. I tre link pubblici provati non hanno dato sottotitoli utilizzabili:
+il risparmio reale resta da misurare. Dettagli e limiti in [build 108](releases/build-108.md).
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali

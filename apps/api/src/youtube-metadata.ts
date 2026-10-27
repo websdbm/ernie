@@ -71,7 +71,7 @@ const str = (v: unknown, limit: number): string | null =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, limit) : null;
 
 /** Balanced JSON extraction, without executing scripts from the page. */
-function playerJson(html: string): Obj {
+export function playerJson(html: string): Obj {
   const match = /(?:var\s+)?ytInitialPlayerResponse\s*=\s*\{/.exec(html);
   if (!match) return {};
   const start = match.index + match[0].length - 1;
@@ -235,6 +235,16 @@ export async function readYouTubeMetadata(
   signal: AbortSignal,
   youtubeApiKey?: string,
 ): Promise<YouTubeMetadata> {
+  return (await readYouTubeSource(url, doFetch, signal, youtubeApiKey)).metadata;
+}
+
+/** Conserva la pagina solo per il recupero testuale: non entra nella cronologia o nell'output del tool. */
+export async function readYouTubeSource(
+  url: string,
+  doFetch: typeof fetch,
+  signal: AbortSignal,
+  youtubeApiKey?: string,
+): Promise<{ metadata: YouTubeMetadata; page: string }> {
   const { id, url: canonical } = normalizeYouTubeUrl(url);
   const read = async (target: string, max: number) =>
     boundedText(await doFetch(target, { signal, redirect: 'error' }), max);
@@ -266,10 +276,6 @@ export async function readYouTubeMetadata(
       // Optional metadata: a failure must not prevent reading the video.
     }
   }
-  return parseYouTubeMetadata(
-    canonical,
-    page.status === 'fulfilled' ? page.value : '',
-    oembed,
-    api,
-  );
+  const html = page.status === 'fulfilled' ? page.value : '';
+  return { metadata: parseYouTubeMetadata(canonical, html, oembed, api), page: html };
 }

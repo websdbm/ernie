@@ -330,6 +330,35 @@ struct ApprovalResult: Codable, Sendable, Equatable {
     var result: JSONValue?
 }
 
+/// Configurazione e ultimo tentativo dell'account; una GET non avvia prove o analisi AI.
+struct ContentReadersReport: Codable, Sendable, Equatable {
+    var readers: [ContentReaderStatus]
+    var updatedAt: String
+}
+
+struct ContentReaderStatus: Codable, Sendable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var configured: Bool
+    var description: String
+    var lastAttempt: ContentReaderAttempt?
+}
+
+struct ContentReaderAttempt: Codable, Sendable, Equatable {
+    enum Outcome: String, Codable, Sendable {
+        case success, unavailable, blocked, rateLimited = "rate_limited", credits, budget, error, unknown
+
+        init(from decoder: any Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Self(rawValue: raw) ?? .unknown
+        }
+    }
+    var at: String
+    var outcome: Outcome
+    var message: String
+    var durationMs: Double
+}
+
 /// REST del backend con la chiave API dell'utente (stessa autenticazione del WebSocket).
 struct ApiClient: Sendable {
     let credentials: Credentials
@@ -344,6 +373,10 @@ struct ApiClient: Sendable {
     }
 
     func me() async throws -> Profile { try await request("GET", "/v1/me") }
+
+    func contentReaders() async throws -> ContentReadersReport {
+        try await request("GET", "/v1/content-readers")
+    }
 
     func updateSettings(_ patch: [String: JSONValue]) async throws -> [String: JSONValue] {
         struct Out: Decodable { var settings: [String: JSONValue] }

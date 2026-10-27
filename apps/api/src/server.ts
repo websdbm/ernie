@@ -6,6 +6,7 @@ import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
+import { type ContentReaderRoutesOptions, contentReaderRoutes } from './routes/content-readers.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
 import {
@@ -50,6 +51,7 @@ export interface BuildServerOptions {
   readonly me?: MeRoutesOptions;
   readonly usage?: UsageRoutesOptions;
   readonly performance?: PerformanceRoutesOptions;
+  readonly contentReaders?: ContentReaderRoutesOptions;
   /** Catalogo delle skill con interruttori per utente. */
   readonly skills?: SkillsRoutesOptions;
   readonly speech?: SpeechRoutesOptions;
@@ -150,6 +152,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     await app.register(operatingPreferenceRoutes, opts.operatingPreferences);
   if (opts.usage) await app.register(usageRoutes, opts.usage);
   if (opts.performance) await app.register(performanceRoutes, opts.performance);
+  if (opts.contentReaders) await app.register(contentReaderRoutes, opts.contentReaders);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);
   if (opts.privateDiary) await app.register(privateDiaryRoutes, opts.privateDiary);

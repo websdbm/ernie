@@ -9,6 +9,15 @@ struct DiagnosticsView: View {
 
     var body: some View {
         List {
+            Section {
+                NavigationLink {
+                    ContentReadersView()
+                } label: {
+                    Label("Lettura dei contenuti", systemImage: "doc.text.magnifyingglass")
+                }
+            } footer: {
+                Text("Configurazione dei lettori YouTube e Instagram e risultato dell’ultimo tentativo del tuo account.")
+            }
             Section("Latenza udibile (rilascio → prima parola)") {
                 let values = (model.conversation?.latencyHistory ?? []).compactMap(\.audibleLatency)
                 if values.isEmpty {

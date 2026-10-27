@@ -1,5 +1,24 @@
 [
   {
+    "build": 108,
+    "date": "2026-10-27",
+    "title": "Lettura dei video più trasparente",
+    "items": [
+      {
+        "icon": "doc.text.magnifyingglass",
+        "title": "Stato dei lettori",
+        "detail": "In Impostazioni → Diagnostica → Lettura dei contenuti puoi vedere la configurazione e l’ultimo esito del tuo account: YouTube, sottotitoli, servizio video e Instagram. Distinguo credito, limiti temporanei e contenuto non disponibile.",
+        "test": "Apri il pannello e aggiornalo: non avvia analisi AI e non consuma credito."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Riassunti dai sottotitoli, quando disponibili",
+        "detail": "Per i riassunti espliciti provo il testo pubblico dei sottotitoli, indicando fonte e limiti. Se manca, resta la lettura video. Ricette e richieste sulle immagini conservano l’analisi visiva.",
+        "test": "Chiedi un riassunto YouTube, poi estrai una ricetta. Verifica la fonte indicata e che ingredienti e passaggi restino completi."
+      }
+    ]
+  },
+  {
     "build": 107,
     "date": "2026-10-27",
     "title": "Ernie si fa sentire",

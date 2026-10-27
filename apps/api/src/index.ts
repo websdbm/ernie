@@ -128,6 +128,7 @@ import {
 } from './brain-transfer.js';
 import { type ClarificationRecord, createClarificationRecorder } from './clarify.js';
 import { createCompanionFactory } from './companion.js';
+import { createContentReaderDiagnostics } from './content-readers.js';
 import { createContinuityReader } from './continuity.js';
 import { createDocumentsFlow } from './documents-flow.js';
 import { closeLabel, createFamilyRepository } from './family.js';
@@ -682,9 +683,19 @@ async function main(): Promise<void> {
   } else {
     logger.warn('FIRECRAWL_API_KEY assente: tool web non registrati');
   }
+  const contentReaders = createContentReaderDiagnostics(
+    {
+      read: (userId, reader) => redis.client.get(`ernie:reader:${userId}:${reader}`),
+      write: async (userId, reader, value) => {
+        await redis.client.set(`ernie:reader:${userId}:${reader}`, value, 'EX', 86_400);
+      },
+    },
+    { video: Boolean(config.providers.openrouterApiKey) },
+  );
   if (config.providers.openrouterApiKey) {
     registry.register(
       createYouTubeTool({
+        diagnostics: contentReaders,
         apiKey: config.providers.openrouterApiKey,
         ...(config.providers.youtubeApiKey
           ? { youtubeApiKey: config.providers.youtubeApiKey }
@@ -1016,6 +1027,11 @@ async function main(): Promise<void> {
             logger.warn({ err, documentId }, 'indicizzazione del documento fallita'),
           );
       },
+    },
+    contentReaders: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      diagnostics: contentReaders,
     },
     ssh: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: ssh },
     todo: {
