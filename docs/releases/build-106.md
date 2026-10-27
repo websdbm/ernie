@@ -32,13 +32,48 @@ ancora in vista.
 
 ## Verifiche
 
-Compilazione TypeScript completa e 189 test backend/protocollo/tool/routing superati sulla base aggiornata
-alla build 105. Nove test nativi di contratto e anteprima superati: compatibilità, URL e PATCH con cancellazione esplicita.
+Compilazione TypeScript completa e **191 test** backend/protocollo/tool/routing superati (`6f09699`);
+compresi luoghi espressi come etichette, creazione/modifica/cancellazione dei dettagli e compatibilità. Nove test nativi di contratto e anteprima superati: compatibilità, URL e PATCH con cancellazione esplicita.
 Anteprime a 320 pt in tema chiaro e scuro renderizzate e ispezionate.
-Deployment, commit e distribuzione riportati a completamento del rilascio.
+Prova con modello reale `anthropic/claude-sonnet-5.5`: estratti correttamente luogo, URL completo con parametri,
+note e orario; archivio promemoria sostituito da uno stub, nessun appuntamento di prova salvato.
 
 Verifiche del 27 ott (Mac Studio, codice unito delle due parti): suite completa dell'app 295 test, 294 verdi;
 `TerminalChatTests.focusProgrammaticoECambioSkinNellaBarraCompleta` (instabile noto) passa con la sua suite.
 Test nuovo `giornataPassataNelSuoFusoEArchiviataEGiornoBreve`; anteprima del pannello disegnata e controllata.
 Server: 823 test unitari verdi; nessun errore nei log dopo la pubblicazione di `72a027e`, che include anche la
 parte server degli appuntamenti.
+
+
+## Pubblicazione appuntamenti e tracciabilità (verifica 27 ottobre)
+
+- Sorgenti iniziali appuntamenti `4e02ec2`; preparazione iOS `edcd06e`;
+  riconoscimento sedi negli eventi `6f09699`. Tutti pubblicati e verificati su GitHub `main`.
+- Backend distribuito da Git il 26 ottobre, poi aggiornato dal Mac Studio il 27 ottobre con la correzione spesa:
+  checkout attuale `72a027ee0a71772ebcaf326f334833c5df47fa0c`, API healthy e `/health` HTTP 200,
+  versione `0.1.0-reminder-details-106`.
+- Immagine corrente verificata: `sha256:a2bafb183c2cb8d1a1deac78b6b04b9b4105b821c639161bfba3c8a3e10af95e`.
+- Link del workshop recuperato dalla richiesta originale e associato al promemoria esistente tramite store;
+  verificati stesso id, stessa azione e stesso trigger. Nessun dato personale incluso in Git.
+- Evidenze e backup del 26 ottobre: `/srv/staging3/backups/ernie-reminder-106-20261026/`.
+  Questi precedono le modifiche del 27 ottobre; per un eventuale rollback corrente tenere conto del successivo
+  backup `ernie-app:pre-5abd040`, senza ripristinare alla cieca la vecchia configurazione.
+- Il primo build Docker ha incontrato file Git creati da root con permessi 600: ripristinati proprietario e
+  permessi dei soli file tracciati; `.env` e override esclusi. Ricompilazione riuscita.
+  In `.env` è stato aggiornato soltanto `APP_VERSION`, dopo copia privata, per rendere `/health` coerente.
+
+## iOS: compilata senza firma, caricamento in attesa
+
+Sul Mac Studio, da checkout pulito del commit pubblicato `edcd06ec7d4ffe08e1a52776563e64e1d20c1998`,
+è riuscita la compilazione Release iPhone con firma disabilitata. Verificati build 106 su app e tre estensioni,
+e manifest SHA-256 dei 272 input iOS. Evidenze:
+`~/Library/Caches/ernie-builds/build-106-20261026-reminder-details/`.
+
+**Non è un archivio distribuibile**: i tentativi di firma si fermano con `errSecInternalComponent`;
+`SecKeychainGetStatus` conferma Portachiavi login bloccato, anche il 27 ottobre. Non sono state copiate chiavi,
+lette password o modificate le protezioni del Portachiavi. Chiesto all’utente di sbloccarlo direttamente sul Mac.
+
+App Store Connect verificato il 27 ottobre: ultima build **105, VALID**; la 106 non è presente. Non è stata
+installata né distribuita una nuova build. Dopo lo sblocco, aggiornare al commit GitHub che comprende `89a1f96`
+e ricompilare: i prodotti del 26 ottobre non contengono il pannello liste aggiunto il 27. Scrivere e verificare
+«Cosa testare», stato di elaborazione e gruppo TestFlight; aggiornare questo documento e l’handoff dopo l’upload.

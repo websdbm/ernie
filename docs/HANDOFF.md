@@ -5,12 +5,14 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **26 ottobre 2026**, Codex sul Mac dell’ufficio — appuntamenti con luogo,
-link e note; build 106 in preparazione sulla base aggiornata `46c36a2`.
+Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — verifica finale appuntamenti
+ed allineamento con il pannello liste pubblicato dal Mac Studio (`89a1f96`).
 
-Campi facoltativi distinti dal trigger geolocalizzato, nuovo `reminder_update`, editor e collegamenti
-nativi; nessuna migrazione. Test TypeScript e 189 test mirati superati, 9 test nativi di contratto e
-anteprima chiaro/scuro superati. Stato di distribuzione in [build 106](releases/build-106.md).
+Backend appuntamenti già attivo su staging3; il server è a `72a027e`, include anche la correzione spesa.
+Build **106 non ancora caricata**: il Portachiavi login del Mac Studio risulta ancora bloccato (verifica del
+27 ottobre). Occorre sbloccarlo sul Mac; poi compilare e firmare dall’ultimo commit pubblicato, includendo
+le modifiche del pannello liste. Non riusare i prodotti del 26 ottobre: precedono `89a1f96`.
+Dettagli e verifiche in [build 106](releases/build-106.md).
 Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
 ## Prima di iniziare
