@@ -8,7 +8,8 @@ Una sola superficie con destinatario/mittente, urgenza e ora nell’intestazione
 stato della conferma in fondo, separato da una linea sottile. Rimossi etichette esterne a forma di busta,
 bordo rosso spesso e descrizione ripetuta del telefono che suona. Gli urgenti usano tutta la larghezza della chat.
 Il rosso segnala l’urgenza, senza circondare l’intero messaggio. Dopo la conferma compare lo stato positivo con ora.
-Il solo invio non viene presentato come consegna o lettura verificata.
+Il solo invio non viene presentato come consegna o lettura verificata. Verde di conferma nel tema chiaro
+con contrasto 5,02:1 sul bianco; variante chiara distinta da quella scura.
 
 Palette e tipografia seguono l’orso (Borg monospaziato incluso), in chiaro e scuro. Testo e nomi lunghi si
 espandono; con Dynamic Type accessibile le azioni si dispongono in verticale. Pulsanti con altezza minima 44 pt.
@@ -29,7 +30,11 @@ ripetizioni e conferma di lettura conservano il comportamento precedente.
   foto panoramiche/verticali entro i limiti. Anteprima Borg a 390 pt: altezza totale 198,5 pt, margini inclusi.
 - **10 test backend verdi**: family-message-tool, family-urgent e family-push. Invii soltanto simulati;
   nessun messaggio o push reale di prova. TypeScript e Biome riusciti.
-- Nessuna migrazione né nuova credenziale. Pubblicazione sorgenti, API e distribuzione 109: in corso.
+- Ripetuti i quattro test della scheda dopo la rifinitura del contrasto; verdi anche la nuova anteprima
+  chiara dopo conferma e le foto molto verticali/panoramiche.
+- API pubblicata da Git al commit `f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`, solo container API ricreato;
+  health HTTPS OK. Worker, database, Redis, `.env` e override conservati. Nessuna migrazione né nuova credenziale.
+- Build iOS 109: compilazione finale e distribuzione in corso.
 
 ## Riproducibilità
 

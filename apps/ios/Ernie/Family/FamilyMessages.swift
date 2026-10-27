@@ -199,6 +199,7 @@ struct FamilyMessageCard: View {
 
     private var receipt: FamilyMessageReceipt { FamilyMessageReceipt(message) }
     private var urgentColor: Color { Theme.dynamic(light: 0xB42318, dark: 0xFFAAA2) }
+    private var confirmationColor: Color { palette.terminal ? palette.positive : SkillTint.recipes.color }
     private var confirmed: Bool { if case .confirmed = receipt { true } else { false } }
     private func font(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> Font {
         .system(style, design: palette.terminal ? .monospaced : .default).weight(weight)
@@ -272,7 +273,7 @@ struct FamilyMessageCard: View {
                 status("Conferma di lettura richiesta", icon: "bell.badge", color: urgentColor)
             case .confirmed(let at):
                 status(message.incoming ? "Hai confermato · \(FamilyMessageBubble.time(at))" : "Letto e confermato · \(FamilyMessageBubble.time(at))",
-                       icon: "checkmark.circle.fill", color: palette.positive)
+                       icon: "checkmark.circle.fill", color: confirmationColor)
             case .sent:
                 status("Inviato", icon: "checkmark", color: palette.inkSecondary)
             case .received:

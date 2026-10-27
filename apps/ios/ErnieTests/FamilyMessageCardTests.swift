@@ -64,6 +64,7 @@ import UIKit
             ("borg-pending", message(), 390, .borg, .dark, .large),
             ("light-pending", message(), 390, .base, .light, .large),
             ("dark-confirmed", message(acknowledged: true), 390, .base, .dark, .large),
+            ("light-confirmed", message(acknowledged: true), 390, .base, .light, .large),
             ("incoming-pending", message(incoming: true), 390, .borg, .dark, .large),
             ("incoming-accessible", message(incoming: true), 320, .base, .light, .accessibility3),
             ("normal-outgoing", message(urgent: false), 390, .jedi, .light, .large),
