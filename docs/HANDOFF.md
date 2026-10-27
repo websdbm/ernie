@@ -132,6 +132,10 @@ Revisione generale delle build 64–103 da sei revisori in parallelo, poi correz
 
 ## Registro delle sessioni
 
+- **27 ott 2026 — Mac Studio (Claude Code)**: spesa, «Aggiungi alla lista di cose da comprare una confezione di porridge»
+  aggiungeva la voce «alla» alla Spesa dopo una domanda inutile; corretto il parser (`5abd040`, solo server, da
+  pubblicare con il via libera dell'utente). YouTube Data API facoltativa (`46c36a2`, `YOUTUBE_API_KEY`): chiave da
+  creare nella console Google (serve che l'utente confermi la password dell'account) e da mettere nel `.env` del server.
 - **25 ott 2026 (sera) — Mac Studio (Claude Code + tre agenti in worktree)**: precisazioni durante la risposta e
   messaggi riusabili (protocollo v1.10), provati con il modello vero su API locale (precisazione entrata dopo
   `web_search`, risposta adeguata); chiusura delle voci aperte su SSH, backend, prestazioni e diario dell'app; 944 test
