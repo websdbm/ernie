@@ -5,14 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — verifica finale appuntamenti
-ed allineamento con il pannello liste pubblicato dal Mac Studio (`89a1f96`).
+Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **106 disponibile su
+TestFlight**, compilata e firmata dall’ufficio senza sbloccare il Mac Studio.
 
-Backend appuntamenti già attivo su staging3; il server è a `72a027e`, include anche la correzione spesa.
-Build **106 non ancora caricata**: il Portachiavi login del Mac Studio risulta ancora bloccato (verifica del
-27 ottobre). Occorre sbloccarlo sul Mac; poi compilare e firmare dall’ultimo commit pubblicato, includendo
-le modifiche del pannello liste. Non riusare i prodotti del 26 ottobre: precedono `89a1f96`.
-Dettagli e verifiche in [build 106](releases/build-106.md).
+Sorgenti della build `af5a80238278985525ab2bc03811073f5655d3a2`, pubblicati su GitHub prima della compilazione;
+272 input iOS confrontati con `origin/main` e con il checkout pulito del Mac Studio: nessuna differenza.
+Comprende appuntamenti completi e il pannello liste `89a1f96`. Apple: **VALID**, **IN_BETA_TESTING**, gruppo
+**Interni**, note italiane scritte e rilette. Il commit finale della documentazione non cambia i sorgenti.
+Backend attivo a `72a027e`, nessuna differenza nei sorgenti server rispetto al commit della build.
+Dettagli ed evidenze in [build 106](releases/build-106.md).
 Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
 ## Prima di iniziare
@@ -29,7 +30,7 @@ Le modifiche locali preesistenti a documentazione e backup sono conservate ed es
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **105** (25 ott); **106** pronta nel repository (appuntamenti + pannello liste), da caricare |
+| App su TestFlight | build **106**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti `af5a802` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | commit **72a027e** (27 ott); immagine precedente `ernie-app:pre-5abd040`; vedi «Server» |
 | Migrazioni | fino alla **0048**, applicate anche sul server |

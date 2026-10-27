@@ -1,7 +1,10 @@
 # Build 106 — Appuntamenti completi e liste più ordinate
 
-26 ottobre 2026 (Codex, Mac dell'ufficio): appuntamenti con luogo, link e note. 27 ottobre 2026 (Claude Code, Mac
-Studio): pannello delle liste e giornate archiviate aggiunti alla stessa build, non ancora caricata.
+**Disponibile su TestFlight**, verificata il **27 ottobre 2026**: `VALID`, `IN_BETA_TESTING`, gruppo Interni,
+note italiane verificate. Compilata, firmata e caricata dal Mac dell’ufficio.
+
+26 ottobre: appuntamenti con luogo, link e note (Codex, ufficio). 27 ottobre: pannello delle liste e giornate
+archiviate (Claude Code, Mac Studio), inclusi nell’archivio pubblicato. Sorgenti `af5a80238278985525ab2bc03811073f5655d3a2`.
 
 ## Funzionamento
 
@@ -62,7 +65,7 @@ parte server degli appuntamenti.
   permessi dei soli file tracciati; `.env` e override esclusi. Ricompilazione riuscita.
   In `.env` è stato aggiornato soltanto `APP_VERSION`, dopo copia privata, per rendere `/health` coerente.
 
-## iOS: compilata senza firma, caricamento in attesa
+## Tentativi iniziali sul Mac Studio (26–27 ottobre, poi superati)
 
 Sul Mac Studio, da checkout pulito del commit pubblicato `edcd06ec7d4ffe08e1a52776563e64e1d20c1998`,
 è riuscita la compilazione Release iPhone con firma disabilitata. Verificati build 106 su app e tre estensioni,
@@ -73,7 +76,38 @@ e manifest SHA-256 dei 272 input iOS. Evidenze:
 `SecKeychainGetStatus` conferma Portachiavi login bloccato, anche il 27 ottobre. Non sono state copiate chiavi,
 lette password o modificate le protezioni del Portachiavi. Chiesto all’utente di sbloccarlo direttamente sul Mac.
 
-App Store Connect verificato il 27 ottobre: ultima build **105, VALID**; la 106 non è presente. Non è stata
-installata né distribuita una nuova build. Dopo lo sblocco, aggiornare al commit GitHub che comprende `89a1f96`
-e ricompilare: i prodotti del 26 ottobre non contengono il pannello liste aggiunto il 27. Scrivere e verificare
-«Cosa testare», stato di elaborazione e gruppo TestFlight; aggiornare questo documento e l’handoff dopo l’upload.
+Al primo controllo del 27 ottobre App Store Connect aveva ancora la 105: la 106 non era presente.
+I prodotti del 26 ottobre non contenevano il pannello liste aggiunto il 27; sono stati quindi scartati come
+input per la distribuzione e sostituiti dalla compilazione pulita dall’ufficio descritta sotto.
+
+
+## Alternativa completata: firma e upload dal Mac dell’ufficio (27 ottobre)
+
+Il Portachiavi login del Mac dell’ufficio era già sbloccato, con identità Apple valide; una firma di prova
+ha confermato l’accesso alla chiave locale. L’archivio Release della 106 è stato quindi ricompilato dal
+Mac dell’ufficio, senza richiedere lo sblocco del Mac Studio.
+
+- Commit sorgenti **`af5a80238278985525ab2bc03811073f5655d3a2`**, pubblicato su GitHub prima della compilazione:
+  comprende `89a1f96` (pannello liste). Export pulito dei 272 input iOS con manifest SHA-256; confronto
+  finale con `origin/main` e con il checkout pulito del Mac Studio: nessuna differenza.
+- Nessuna differenza nei sorgenti backend fra il checkout server `72a027e` e quel commit.
+- `ARCHIVE SUCCEEDED`; firma dell’archivio verificata con `codesign --verify --deep --strict`.
+  App e tre estensioni alla 106; gruppo Keychain privato del diario presente soltanto nell’app principale.
+- Il primo export con l’account Xcode ha restituito `Failed to Use Accounts`. L’export con l’accesso API Apple
+  già configurato è riuscito: `EXPORT SUCCEEDED`, upload completato con codice 0. La copia temporanea della
+  chiave di autenticazione, fuori dal repository e con accesso ristretto, è stata rimossa al termine.
+  Nessuna chiave privata di firma è stata trasferita tra i Mac.
+- L’upload non ha conservato una IPA locale. Evidenze, archivio firmato, manifest dei 60 file dell’archivio
+  e log sono in `~/Library/Caches/ernie-builds/build-106-20261027-office/` sul Mac dell’ufficio.
+
+Verifica finale tramite App Store Connect:
+
+- Build ID `d1c38641-a500-4a8c-b935-238b8069aa57`, versione **106**, elaborazione **VALID**.
+- Stato interno **IN_BETA_TESTING**, gruppo **Interni**, con accesso alla build.
+- Note italiane scritte dal changelog e rilette: **1147 caratteri**, inclusi appuntamenti, pannello liste,
+  giornate archiviate e correzione spesa.
+- Evidenze API salvate nel percorso locale sopra (`asc-status.json`, `asc-notes.json`).
+
+Il blocco del Portachiavi del Mac Studio riguarda i tentativi iniziali: la distribuzione è completata
+con la procedura alternativa dall’ufficio. Nessuna nuova installazione su iPhone fisico è stata eseguita.
+Il commit finale della documentazione non modifica gli input iOS della build pubblicata.
