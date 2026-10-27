@@ -48,6 +48,21 @@ Priorità suggerita: chiarimenti interattivi, strumenti su richiesta (misurando 
 apprendimenti e procedure versionate. Nodo Mac e multiagenti in seconda fase. Prestazioni/integrazioni Cindy
 non provate: nessuna installazione, esecuzione del progetto o modifica applicativa. Nessuna nuova build/deploy.
 
+### Analisi Agent-Reach — 27 ottobre, nessuna integrazione
+
+Analisi statica di `Panniantong/Agent-Reach`, snapshot `14c213405669414492bda0f8d52cc6531d062c45`
+(v1.6.0, MIT). Interessanti: contratto JSON comune con fonte/backend/tentativi, fallback classificati,
+pausa dei backend guasti e diagnostica per canale; ricerca YouTube e sottotitoli come percorso economico.
+Il canale YouTube usa yt-dlp per metadati/search/subtitle; l'ASR scarica audio, usa ffmpeg e richiede Groq
+oppure OpenAI diretto, senza supporto OpenRouter nel codice esaminato. Non è una soluzione a costo zero
+universale né evita la gestione media sul server quando serve ASR.
+Instagram è sperimentale, con browser/login: azioni search utenti, profile e posts recenti, nessuna azione
+specifica Reel-URL → trascrizione. Non risolve da solo le scritte nei fotogrammi.
+Ernie ha già metadati e analisi visiva YouTube via OpenRouter/Google AI Studio senza download locale:
+valutare sottotitoli come alternativa per riassunti, conservando visione per ricette con dati sullo schermo.
+Riuso selettivo da provare sul VPS con limiti di durata/costo e isolamento degli account; browser/cookie non
+vanno condivisi fra utenti Ernie. Nessuna installazione, accesso account, servizio aggiunto, build o deploy.
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali
