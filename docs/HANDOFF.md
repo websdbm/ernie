@@ -18,7 +18,7 @@ Backend attivo a `72a027e`, nessuna differenza nei sorgenti server rispetto al c
 Dettagli ed evidenze in [build 106](releases/build-106.md).
 Le modifiche locali preesistenti a documentazione e backup sono conservate ed escluse dal rilascio.
 
-### Build 107 — suoni UI implementati; firma/distribuzione in sospeso
+### Build 107 — suoni UI implementati; ripresa export API come nella 106
 
 Set originale di sette effetti brevi, impostazioni locali, volume e priorità microfono/TTS. Conferme sonore
 su scritture delle liste soltanto dopo successo, nessuna ripetizione da replay. Nessuna modifica backend.
@@ -31,7 +31,9 @@ ufficio sbloccato. Sul Mac Studio login è bloccato: chiesto all'utente di sbloc
 in chat. Export automatico di prova: IPA senza entitlement scartata; export con entitlement completi non
 concluso e interrotto. Nessun upload 107. `prepare-cloud-signing.py` (aggiunto in `10b58bc`) è **sperimentale**,
 non parte della procedura ordinaria di rilascio. Credenziale API temporanea rimossa, protezioni invariate.
-Riprendere la normale compilazione/firma sul Mac Studio dopo lo sblocco, verificando prima che 107 sia ancora
+L’utente ha chiesto di riprendere lo stesso export API della 106: in verifica il riuso dei profili Apple
+locali già validi, con prefisso specifico di ciascuna estensione (`--profiles-from`), senza chiavi di firma.
+In alternativa riprendere la normale compilazione/firma sul Mac Studio dopo lo sblocco, verificando che 107 sia ancora
 il prossimo numero libero. La **106 resta pubblicata**. Dettagli in [build 107](releases/build-107.md).
 
 ## Prima di iniziare

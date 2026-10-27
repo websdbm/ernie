@@ -68,3 +68,13 @@ successivo disponibile su App Store Connect, ricompilare dal commit pubblicato e
 `CURRENT_PROJECT_VERSION=107 apps/ios/scripts/testflight.sh` con l'autenticazione Apple già configurata.
 Verificare realmente upload, stato `VALID`, gruppo Interni e note italiane; poi aggiornare HANDOFF e questa
 nota. Non riutilizzare le IPA di prova prive di entitlement o gli archivi ad hoc sperimentali.
+
+## Ripresa richiesta dall'utente: stessa esportazione API della 106
+
+Confrontati i log conservati della 106: il suo export API firma tramite Apple e normalizza il prefisso
+legacy `QH3PSRG2YB` delle notifiche al prefisso finale `76X78MBPR3`. Il nuovo helper accetta
+`--profiles-from <archivio 106>`: verifica team, scadenza e bundle prima di copiare i profili locali;
+risolve AppIdentifierPrefix per componente, senza supporre che sia sempre uguale al Team ID.
+Solo profili già presenti sul Mac, mai aggiunti a Git. Export di revisione e verifica IPA prima di ogni upload.
+La firma ordinaria con chiave Development dell'ufficio resta rifiutata al nuovo controllo; non è lo stesso
+stato osservato al momento dell'archive della 106. Ultima build Apple verificata: ancora 106 VALID.
