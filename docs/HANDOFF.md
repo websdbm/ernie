@@ -85,6 +85,13 @@ con Dynamic Type accessibile. Stesse API e schermata di conferma; il risultato d
 un riscontro breve senza presumere audio/consegna. 27 test iOS e 10 backend verdi; nessun invio reale di prova.
 API pubblicata e 109 disponibile in TestFlight/Interni: [build 109](releases/build-109.md).
 
+### Comandi rapidi — 28 ottobre, build 110 in verifica
+
+Menu locale con `/`, filtro durante la digitazione, `/messaggio` e testo facoltativo per preparare il
+compositore Famiglia. Altri comandi aprono sezioni; `/aiuto` li elenca. Skill attive controllate per account;
+errori locali senza perdere bozza o allegati; nessun invio automatico e nessun modello coinvolto.
+Intervento solo iOS; backend invariato. Dettagli e verifiche: [build 110](releases/build-110.md).
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali

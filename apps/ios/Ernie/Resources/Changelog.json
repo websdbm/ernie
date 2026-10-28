@@ -1,5 +1,24 @@
 [
   {
+    "build": 110,
+    "date": "2026-10-28",
+    "title": "Comandi rapidi con /",
+    "items": [
+      {
+        "icon": "command",
+        "title": "Un menu nella chat",
+        "detail": "Scrivi / per vedere i comandi e continua a digitare per filtrarli. Apri messaggi, Famiglia, attività, ricette, Brain, Media, impegni, automazioni, SSH, impostazioni e consumi. Le skill spente non vengono attivate.",
+        "test": "Scrivi /, poi /mes. Prova /aiuto e una scorciatoia come /promemoria."
+      },
+      {
+        "icon": "square.and.pencil",
+        "title": "Messaggi pronti da inviare",
+        "detail": "/messaggio apre il compositore Famiglia; con /messaggio seguito dal testo lo trovi già compilato. Scegli il destinatario e premi Invia. Le scorciatoie sono locali, senza chiamate al modello.",
+        "test": "Prova /messaggio Ciao, ci vediamo dopo. Controlla il testo e annulla: nessun messaggio deve partire."
+      }
+    ]
+  },
+  {
     "build": 109,
     "date": "2026-10-27",
     "title": "Messaggi in famiglia più chiari",

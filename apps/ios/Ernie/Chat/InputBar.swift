@@ -16,13 +16,26 @@ struct InputBar: View {
     let voice: VoiceController
     /// Allegato in preparazione (skill «Documenti»): «+» a sinistra del campo.
     var documents: DocumentComposer?
+    var onCommand: (SlashCommand) -> Void = { _ in }
     @State private var showScanner = false
     @State private var showFiles = false
     @State private var showPhotos = false
     @State private var showFamilyComposer = false
+    @State private var familyDraft = ""
+    @State private var showCommandHelp = false
+    @State private var helpSelection: SlashCommand?
+    @State private var commandsDismissed = false
+    @State private var commandError: String?
+    @State private var commandSkills: [SkillInfo]?
+    @State private var skillsOwner: Credentials?
+    @State private var loadingCommandSkills = false
+    @State private var commandLoadToken = UUID()
     @State private var photoItems: [PhotosPickerItem] = []
 
     private enum Mode { case mic, send, stop, voice }
+    private var slashInput: SlashInput? { SlashInput(draft) }
+    private var browsingCommands: Bool { slashInput != nil && mode != .voice && documents?.isActive != true }
+    private var currentCommandSkills: [SkillInfo]? { skillsOwner == model.credentials ? commandSkills : nil }
 
     private var mode: Mode {
         if voice.isActive { return .voice }
@@ -33,7 +46,7 @@ struct InputBar: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            if let error = voice.lastError ?? conversation.lastError {
+            if let error = commandError ?? voice.lastError ?? conversation.lastError {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -42,6 +55,12 @@ struct InputBar: View {
             }
             if let documents, documents.isActive {
                 attachmentChip(documents)
+            }
+            if browsingCommands, !commandsDismissed, let input = slashInput {
+                SlashCommandMenu(commands: input.suggestions(skills: currentCommandSkills), loading: loadingCommandSkills,
+                                 onSelect: { performCommand($0, arguments: input.arguments) },
+                                 onClose: { commandsDismissed = true })
+                    .padding(.horizontal, 4)
             }
             // Barra in vetro che galleggia sul contenuto (bozzetti 1 e 2).
             HStack(alignment: .bottom, spacing: 8) {
@@ -93,6 +112,17 @@ struct InputBar: View {
             classicFocused = terminal ? false : composing
         }
         .onAppear { if !palette.terminal { classicFocused = composing } }
+        .onChange(of: draft) { commandError = nil; commandsDismissed = false }
+        .onChange(of: model.credentials) { commandSkills = nil; skillsOwner = nil; commandError = nil; commandLoadToken = UUID(); loadingCommandSkills = false }
+        .task(id: SlashCommandLoadKey(credentials: model.credentials, browsing: browsingCommands || showCommandHelp)) {
+            guard browsingCommands || showCommandHelp, let api = model.api else { return }
+            let token = UUID(); commandLoadToken = token
+            commandSkills = nil; skillsOwner = api.credentials; loadingCommandSkills = true
+            defer { if commandLoadToken == token { loadingCommandSkills = false } }
+            let skills = try? await api.skills()
+            guard !Task.isCancelled, commandLoadToken == token, model.credentials == api.credentials else { return }
+            commandSkills = skills
+        }
         .animation(.easeInOut(duration: 0.15), value: voice.phase)
         .onChange(of: conversation.composerSuggestion) { _, suggestion in
             guard let suggestion else { return }
@@ -118,7 +148,24 @@ struct InputBar: View {
                 documents?.importPhotos(count: 1, source: "photo") { _ in MediaImportPhoto(image: image, location: MediaLocation.read(data)) }
             }
         }
-        .sheet(isPresented: $showFamilyComposer) { FamilyComposerSheet() }
+        .sheet(isPresented: $showFamilyComposer) { FamilyComposerSheet(initialText: familyDraft) }
+        .sheet(isPresented: $showCommandHelp, onDismiss: {
+            if let command = helpSelection { helpSelection = nil; performCommand(command) }
+        }) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Scrivi / nella chat per trovare una scorciatoia. I comandi aprono le schermate senza usare l’AI.")
+                        .font(.callout).foregroundStyle(palette.inkSecondary)
+                    Text("Con /messaggio puoi aggiungere il testo: scegli poi a chi mandarlo e premi Invia.")
+                        .font(.footnote).foregroundStyle(palette.inkSecondary)
+                    SlashCommandMenu(commands: SlashInput("/")!.suggestions(skills: currentCommandSkills).filter { $0 != .help }, loading: loadingCommandSkills, expanded: true,
+                                     onSelect: { helpSelection = $0; showCommandHelp = false })
+                }
+                .padding().background(palette.ground).foregroundStyle(palette.ink)
+                .navigationTitle("Comandi rapidi").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { showCommandHelp = false } } }
+            }
+        }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images, preferredItemEncoding: .current)
         .sheet(isPresented: $showMedia) { MediaLibraryView() }
         .onChange(of: photoItems) { _, items in
@@ -141,7 +188,7 @@ struct InputBar: View {
             Button("Foto · raccolta Media", systemImage: "photo.on.rectangle") { showPhotos = true }
             Button("File (PDF)", systemImage: "folder") { showFiles = true }
             Divider()
-            Button("Messaggio a un familiare", systemImage: "envelope") { showFamilyComposer = true }
+            Button("Messaggio a un familiare", systemImage: "envelope") { familyDraft = ""; showFamilyComposer = true }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .semibold))
@@ -255,8 +302,8 @@ struct InputBar: View {
     private var actionButton: some View {
         switch mode {
         case .send:
-            Button(action: sendDraft) { icon("arrow.up", fill: palette.accent) }
-                .accessibilityLabel("Invia")
+            Button(action: sendDraft) { icon(slashInput == nil ? "arrow.up" : "return", fill: palette.accent) }
+                .accessibilityLabel(slashInput == nil ? "Invia" : "Apri il comando")
         case .stop:
             Button { conversation.bargeIn() } label: { icon("stop.fill", fill: palette.inkSecondary) }
                 .accessibilityLabel("Interrompi")
@@ -288,11 +335,30 @@ struct InputBar: View {
     private var conversationName: String { model.companionName }
 
     private func sendDraft() {
+        if let input = slashInput {
+            if input.name.isEmpty && input.arguments.isEmpty { performCommand(.help) }
+            else if let command = input.command { performCommand(command, arguments: input.arguments) }
+            else { commandError = input.validationError(skills: currentCommandSkills, hasAttachment: documents?.isActive == true) }
+            return
+        }
         let refs = documents?.ready.map { [$0] } ?? []
         let text = refs.isEmpty ? draft : (documents?.messageText(draft: draft) ?? draft)
         draft = ""
         documents?.clear()
         conversation.send(text, inputMode: "text", attachments: refs)
+    }
+
+    private func performCommand(_ command: SlashCommand, arguments: String = "") {
+        let input = SlashInput("/" + command.rawValue + (arguments.isEmpty ? "" : " " + arguments))!
+        if let error = input.validationError(skills: currentCommandSkills, hasAttachment: documents?.isActive == true) {
+            commandError = error; return
+        }
+        draft = ""; composing = false; commandError = nil
+        switch command {
+        case .message: familyDraft = arguments; showFamilyComposer = true
+        case .help: showCommandHelp = true
+        default: onCommand(command)
+        }
     }
 }
 

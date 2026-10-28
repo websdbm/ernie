@@ -80,7 +80,8 @@ struct ChatView: View {
                         Button("Recupera risposta") { conversation.recoverLastRequest() }
                             .buttonStyle(.bordered).padding(.horizontal)
                     }
-                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents)
+                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents,
+                             onCommand: { if let destination = $0.destination { open(destination) } })
                         .onChange(of: conversation.editRequest) { _, request in
                             guard let request else { return }
                             draft = request.text

@@ -402,6 +402,12 @@ struct FamilyComposerSheet: View {
     @State private var relations: [String: String] = [:]
     @FocusState private var focused: Bool
 
+    init(preset: Recipient? = nil, replyTo: String? = nil, initialText: String = "") {
+        self.preset = preset
+        self.replyTo = replyTo
+        _text = State(initialValue: initialText)
+    }
+
     /// «Super snooze» solo da un genitore a un figlio (richiesta dell'utente, 15 ott 2026).
     private var canUrgent: Bool { to.map { relations[$0.userId] == "figlio" } ?? false }
 

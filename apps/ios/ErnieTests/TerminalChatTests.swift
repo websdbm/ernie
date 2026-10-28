@@ -4,6 +4,49 @@ import Testing
 
 @Suite(.serialized)
 struct TerminalChatTests {
+    @Test @MainActor func ilCompositoreRiceveIlTestoSenzaDestinatarioONuoviInvii() async throws {
+        let text = "Messaggio sintetico già pronto."
+        let model = AppModel() // Nessuna credenziale e nessuna connessione.
+        let host = UIHostingController(rootView: FamilyComposerSheet(initialText: text).environment(model))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = host; window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(200)); host.view.layoutIfNeeded()
+        func texts(_ view: UIView) -> [String] {
+            let own = (view as? UITextField)?.text ?? (view as? UITextView)?.text
+            return (own.map { [$0] } ?? []) + view.subviews.flatMap(texts)
+        }
+        #expect(texts(host.view).contains(text))
+        #expect(model.api == nil)
+    }
+
+    @Test @MainActor func slashMostraSuggerimentiSenzaPerdereFocusOTesto() async throws {
+        let state = ComposerState(); state.terminal = true
+        let host = UIHostingController(rootView: TerminalPreview(terminal: true, state: state))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = host; window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(200))
+        let editor = try #require(findEditor(host.view)); editor.becomeFirstResponder()
+        for text in ["/", "m", "e", "s"] {
+            editor.insertText(text)
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(editor.isFirstResponder)
+            #expect(editor.text == state.text)
+        }
+        #expect(state.text == "/mes")
+        host.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true) }
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-slash-inputbar.png")
+        try #require(image.pngData()).write(to: path)
+        print("SLASH_INPUTBAR: \(path.path)")
+    }
     @Test @MainActor func cursoreSegueTestoSelezioneEInvioACapo() async throws {
         let state = ComposerState()
         let host = UIHostingController(rootView: ComposerHarness(state: state))
