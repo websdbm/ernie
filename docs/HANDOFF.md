@@ -5,20 +5,19 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **27 ottobre 2026**, Codex sul Mac dell’ufficio — build **109 disponibile su
-TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (687 caratteri).
-Schede dei messaggi in famiglia rifinite: intestazione unica, contenuto leggibile, stato compatto, palette
-dell’orso e azioni accessibili. **27 test iOS e 10 backend verdi**, ripetuti i quattro della scheda dopo le rifiniture.
+Ultimo aggiornamento: **28 ottobre 2026**, Codex sul Mac dell’ufficio — build **110 disponibile su
+TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (698 caratteri).
+Comandi rapidi locali con `/`, filtro durante la digitazione, `/messaggio` con testo facoltativo e `/aiuto`.
+Le skill spente non si attivano; nessun invio automatico o chiamata al modello. **16 test iOS verdi**.
 
-Sorgenti iOS **`c3cede513ae6041c3040fd05cc5e79800b20cc54`**, pubblicati prima della compilazione Release
-finale da export Git pulito; **288 file iOS** nel manifest SHA-256. IPA Apple Distribution verificata su app
- e tre estensioni alla 109, permessi conformi, diario solo nell’app principale. Caricata la stessa IPA verificata
-(81.004.439 byte), Build ID `1a17f25e-cfb5-4eb4-bd9c-c317cac999aa`. L’ultimo commit cambia solo fixture
-sintetiche dei test e documentazione: input runtime identici per hash, nessun bundle test nella IPA.
+Sorgenti **`e7bd0f35a6771f95fa99fbea8fa6177d110c5b59`**, pubblicati prima della compilazione Release da
+export Git pulito; **290 file iOS** nel manifest SHA-256. IPA Apple Distribution verificata su app e tre
+estensioni alla 110, permessi conformi, diario solo nell’app principale. Caricata la stessa IPA verificata,
+81.076.688 byte, Build ID `82f121a3-012f-423d-bffe-78f17cf0188e`. Credenziali API temporanee rimosse.
+Nessuna installazione diretta su telefoni fisici; nessun invio reale di messaggi nei test.
 
-API staging3 a **`f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`**: il risultato del tool richiede riscontri
-brevi, senza presumere suono/consegna. Solo API ricreata; worker/DB/Redis invariati, nessuna migrazione.
-Dettagli in [build 109](releases/build-109.md); la 108 e la diagnostica lettori restano in [build 108](releases/build-108.md).
+**Nessun deploy backend**: API staging3 ancora `f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`, worker a `72a027e`.
+Dettagli in [build 110](releases/build-110.md); schede Famiglia in [build 109](releases/build-109.md).
 Le modifiche locali preesistenti a documentazione/backup e gli asset non tracciati restano esclusi.
 
 ### Firma e distribuzione senza sbloccare il Mac Studio
@@ -85,12 +84,12 @@ con Dynamic Type accessibile. Stesse API e schermata di conferma; il risultato d
 un riscontro breve senza presumere audio/consegna. 27 test iOS e 10 backend verdi; nessun invio reale di prova.
 API pubblicata e 109 disponibile in TestFlight/Interni: [build 109](releases/build-109.md).
 
-### Comandi rapidi — 28 ottobre, build 110 in verifica
+### Comandi rapidi — 28 ottobre, build 110
 
 Menu locale con `/`, filtro durante la digitazione, `/messaggio` e testo facoltativo per preparare il
 compositore Famiglia. Altri comandi aprono sezioni; `/aiuto` li elenca. Skill attive controllate per account;
 errori locali senza perdere bozza o allegati; nessun invio automatico e nessun modello coinvolto.
-Intervento solo iOS; backend invariato. Dettagli e verifiche: [build 110](releases/build-110.md).
+Intervento solo iOS; backend invariato. 110 disponibile su TestFlight/Interni. Dettagli e verifiche: [build 110](releases/build-110.md).
 
 ## Prima di iniziare
 
@@ -106,7 +105,7 @@ Intervento solo iOS; backend invariato. Dettagli e verifiche: [build 110](releas
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **109**, verificata il 27 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `c3cede5` |
+| App su TestFlight | build **110**, verificata il 28 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `e7bd0f3` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API **f961ab0** (27 ott, messaggi); worker ancora **72a027e**. Immagine di recupero API `ernie-app:pre-family-card-109`; vedi build 109 |
 | Migrazioni | fino alla **0048**, applicate anche sul server |
