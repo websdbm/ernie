@@ -58,6 +58,7 @@ struct InputBar: View {
             }
             if browsingCommands, !commandsDismissed, let input = slashInput {
                 SlashCommandMenu(commands: input.suggestions(skills: currentCommandSkills), loading: loadingCommandSkills,
+                                 arguments: input.arguments,
                                  onSelect: { performCommand($0, arguments: input.arguments) },
                                  onClose: { commandsDismissed = true })
                     .padding(.horizontal, 4)
@@ -154,9 +155,11 @@ struct InputBar: View {
         }) {
             NavigationStack {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Scrivi / nella chat per trovare una scorciatoia. I comandi aprono le schermate senza usare l’AI.")
+                    Text("Scrivi / nella chat per trovare una scorciatoia. La navigazione apre le schermate senza usare l’AI.")
                         .font(.callout).foregroundStyle(palette.inkSecondary)
                     Text("Con /messaggio puoi aggiungere il testo: scegli poi a chi mandarlo e premi Invia.")
+                        .font(.footnote).foregroundStyle(palette.inkSecondary)
+                    Text("/ricordami prepara una bozza. /ricordami domani alle 18 ritira il pacco invia una richiesta. /promemoria seguito dal testo serve anche per modificare o annullare un impegno. Ernie può chiedere chiarimenti e usare l’AI, consumando token.")
                         .font(.footnote).foregroundStyle(palette.inkSecondary)
                     SlashCommandMenu(commands: SlashInput("/")!.suggestions(skills: currentCommandSkills).filter { $0 != .help }, loading: loadingCommandSkills, expanded: true,
                                      onSelect: { helpSelection = $0; showCommandHelp = false })
@@ -302,8 +305,8 @@ struct InputBar: View {
     private var actionButton: some View {
         switch mode {
         case .send:
-            Button(action: sendDraft) { icon(slashInput == nil ? "arrow.up" : "return", fill: palette.accent) }
-                .accessibilityLabel(slashInput == nil ? "Invia" : "Apri il comando")
+            Button(action: sendDraft) { icon(slashInput == nil || slashInput?.requestText != nil ? "arrow.up" : "return", fill: palette.accent) }
+                .accessibilityLabel(slashInput?.actionLabel ?? "Invia")
         case .stop:
             Button { conversation.bargeIn() } label: { icon("stop.fill", fill: palette.inkSecondary) }
                 .accessibilityLabel("Interrompi")
@@ -352,6 +355,18 @@ struct InputBar: View {
         let input = SlashInput("/" + command.rawValue + (arguments.isEmpty ? "" : " " + arguments))!
         if let error = input.validationError(skills: currentCommandSkills, hasAttachment: documents?.isActive == true) {
             commandError = error; return
+        }
+        if let request = input.requestText {
+            guard conversation.isAttached else {
+                commandError = "Apri una conversazione prima di inviare la richiesta."; return
+            }
+            draft = ""; composing = false; commandError = nil
+            conversation.send(request, inputMode: "text")
+            return
+        }
+        if command == .createReminder {
+            draft = "/ricordami "; composing = true; commandError = nil
+            return
         }
         draft = ""; composing = false; commandError = nil
         switch command {

@@ -41,6 +41,11 @@ struct TerminalChatTests {
             #expect(editor.text == state.text)
         }
         #expect(state.text == "/mes")
+        editor.selectedRange = NSRange(location: 0, length: (editor.text as NSString).length)
+        editor.insertText("/promemoria domani alle 18 ritira il pacco")
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(editor.isFirstResponder)
+        #expect(state.text == "/promemoria domani alle 18 ritira il pacco")
         host.view.layoutIfNeeded()
         let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true) }
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-slash-inputbar.png")

@@ -5,20 +5,20 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **28 ottobre 2026**, Codex sul Mac dell’ufficio — build **110 disponibile su
-TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (698 caratteri).
-Comandi rapidi locali con `/`, filtro durante la digitazione, `/messaggio` con testo facoltativo e `/aiuto`.
-Le skill spente non si attivano; nessun invio automatico o chiamata al modello. **16 test iOS verdi**.
+Ultimo aggiornamento: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 in preparazione**.
+Ultima distribuzione verificata: **110**, TestFlight/Interni (`VALID`, `IN_BETA_TESTING`).
+La 111 estende i comandi: `/promemoria` apre l’elenco, con testo invia una richiesta di creazione/modifica/
+annullamento; `/ricordami` prepara una bozza e con testo invia al normale flusso di conversazione.
+Suggerimenti con esempi, icona e accessibilità distinguono navigazione e richiesta. Nessuna chiamata diretta
+a tool: permessi, chiarimenti, recupero del turno e controllo server restano quelli esistenti.
+Le richieste possono usare AI e token. Skill «Ricordami» controllata per account; URL e note conservati.
+Prima verifica sul Mac Studio: **19 test iOS verdi in tre suite**, senza invii reali né promemoria creati.
+In corso verifica finale con versione 111 e anteprima nativa aggiornata, poi archivio e distribuzione.
+Xcode dell’ufficio richiede la nuova licenza: test e compilazione vengono eseguiti sul Mac Studio.
 
-Sorgenti **`e7bd0f35a6771f95fa99fbea8fa6177d110c5b59`**, pubblicati prima della compilazione Release da
-export Git pulito; **290 file iOS** nel manifest SHA-256. IPA Apple Distribution verificata su app e tre
-estensioni alla 110, permessi conformi, diario solo nell’app principale. Caricata la stessa IPA verificata,
-81.076.688 byte, Build ID `82f121a3-012f-423d-bffe-78f17cf0188e`. Credenziali API temporanee rimosse.
-Nessuna installazione diretta su telefoni fisici; nessun invio reale di messaggi nei test.
-
-**Nessun deploy backend**: API staging3 ancora `f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`, worker a `72a027e`.
-Dettagli in [build 110](releases/build-110.md); schede Famiglia in [build 109](releases/build-109.md).
-Le modifiche locali preesistenti a documentazione/backup e gli asset non tracciati restano esclusi.
+**Backend invariato**: API staging3 `f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`, worker `72a027e`.
+Dettagli: [build 111](releases/build-111.md); ultima distribuzione: [build 110](releases/build-110.md).
+Documentazione/backup modificati preesistenti e asset non tracciati restano esclusi.
 
 ### Firma e distribuzione senza sbloccare il Mac Studio
 

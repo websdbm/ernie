@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
 
-/// Scorciatoie locali: nessuna esecuzione di tool o richiesta al modello.
+/// Navigazione locale o richieste esplicite al normale flusso di conversazione.
 enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     case message = "messaggio", family = "famiglia", todo = "todo", recipes = "ricette"
-    case brain = "brain", media = "media", reminders = "promemoria", automations = "automazioni"
+    case brain = "brain", media = "media", reminders = "promemoria", createReminder = "ricordami", automations = "automazioni"
     case ssh = "ssh", settings = "impostazioni", usage = "consumi", help = "aiuto"
     var id: String { rawValue }
     var aliases: [String] {
@@ -25,7 +25,8 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .recipes: "Apri la raccolta ricette"
         case .brain: "Apri il Second Brain"
         case .media: "Apri immagini e foto"
-        case .reminders: "Apri i tuoi impegni"
+        case .reminders: "Apri gli impegni, oppure aggiungi una richiesta"
+        case .createReminder: "Crea un promemoria scrivendo cosa e quando"
         case .automations: "Apri le automazioni"
         case .ssh: "Apri server e siti"
         case .settings: "Apri le impostazioni"
@@ -42,6 +43,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .brain: "brain.head.profile"
         case .media: "photo.on.rectangle"
         case .reminders: "bell"
+        case .createReminder: "bell.badge"
         case .automations: "gearshape.2"
         case .ssh: "server.rack"
         case .settings: "gearshape"
@@ -55,6 +57,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .recipes: "ricette"
         case .brain: "second_brain"
         case .ssh: "ssh"
+        case .createReminder: "ricordami"
         default: nil
         }
     }
@@ -70,7 +73,15 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .ssh: .ssh
         case .settings: .settings
         case .usage: .usage
-        case .help, .message: nil
+        case .help, .message, .createReminder: nil
+        }
+    }
+    var acceptsRequest: Bool { self == .reminders || self == .createReminder }
+    var example: String? {
+        switch self {
+        case .reminders: "/promemoria sposta il dentista a venerdì alle 10"
+        case .createReminder: "/ricordami domani alle 18 ritira il pacco"
+        default: nil
         }
     }
     static func find(_ name: String) -> Self? {
@@ -83,6 +94,12 @@ struct SlashInput: Equatable {
     let name: String
     let arguments: String
     var command: SlashCommand? { SlashCommand.find(name) }
+    /// Resta una richiesta utente, mai un'istruzione di sistema o un tool chiamato direttamente.
+    var requestText: String? {
+        guard let command, command.acceptsRequest, !arguments.isEmpty else { return nil }
+        return command == .createReminder ? "Ricordami \(arguments)" : "Promemoria: \(arguments)"
+    }
+    var actionLabel: String { requestText == nil ? "Apri il comando" : "Invia la richiesta a Ernie" }
     init?(_ draft: String) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.hasPrefix("/") else { return nil }
@@ -101,11 +118,13 @@ struct SlashInput: Equatable {
     func validationError(skills: [SkillInfo]?, hasAttachment: Bool) -> String? {
         if hasAttachment { return "Conserva o togli l’allegato prima di usare un comando." }
         guard let command else { return name.isEmpty && arguments.isEmpty ? nil : "Comando non riconosciuto. Scrivi /aiuto per vedere quelli disponibili." }
-        if let skill = command.skill, skills?.contains(where: { $0.id == skill && $0.active }) != true {
+        let requiredSkill = command.acceptsRequest && !arguments.isEmpty ? "ricordami" : command.skill
+        if let skill = requiredSkill, skills?.contains(where: { $0.id == skill && $0.active }) != true {
             return skills == nil ? "Non riesco ancora a verificare le skill. Riprova tra poco." : "Questa skill è spenta o non disponibile. Controlla Impostazioni → Skill."
         }
-        if command != .message && !arguments.isEmpty { return "Questo comando apre una sezione: usalo senza testo aggiuntivo." }
+        if command != .message && !command.acceptsRequest && !arguments.isEmpty { return "Questo comando apre una sezione: usalo senza testo aggiuntivo." }
         if command == .message && arguments.count > 2000 { return "Il messaggio può contenere al massimo 2.000 caratteri. Accorcialo prima di continuare." }
+        if command.acceptsRequest && arguments.count > 8000 { return "La richiesta può contenere al massimo 8.000 caratteri. Accorciala prima di continuare." }
         return nil
     }
 }
@@ -119,6 +138,7 @@ struct SlashCommandMenu: View {
     var commands: [SlashCommand]
     var loading = false
     var expanded = false
+    var arguments = ""
     var onSelect: (SlashCommand) -> Void
     var onClose: (() -> Void)?
     @Environment(\.chatPalette) private var palette
@@ -147,8 +167,12 @@ struct SlashCommandMenu: View {
                                 Image(systemName: command.symbol).frame(width: 24).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("/" + command.rawValue).font(.system(.subheadline, design: .monospaced).weight(.semibold))
-                                    Text(command.detail).font(.caption).foregroundStyle(palette.inkSecondary)
+                                    Text(command.acceptsRequest && !arguments.isEmpty ? "Invia questa richiesta a Ernie" : command.detail).font(.caption).foregroundStyle(palette.inkSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
+                                    if let example = command.example {
+                                        Text(example).font(.caption2).foregroundStyle(palette.inkSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                                 Spacer(minLength: 0)
                             }

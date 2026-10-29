@@ -1,5 +1,24 @@
 [
   {
+    "build": 111,
+    "date": "2026-10-29",
+    "title": "Comandi che fanno di più",
+    "items": [
+      {
+        "icon": "bell.badge",
+        "title": "Un promemoria con un comando",
+        "detail": "/promemoria apre gli impegni. /ricordami prepara una bozza; seguito da cosa e quando invia la richiesta a Ernie. Anche /promemoria seguito dal testo può creare, spostare o annullare un impegno.",
+        "test": "Prova /ricordami domani alle 18 ritira il pacco, oppure /promemoria sposta il dentista a venerdì alle 10."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Indicazioni chiare e dettagli completi",
+        "detail": "I suggerimenti mostrano esempi e distinguono apertura e invio. URL, note e più impegni restano nel testo. Le richieste usano il flusso normale con chiarimenti e autorizzazioni; possono consumare token AI.",
+        "test": "Prova /ricordami chiama il dentista senza ora: Ernie ti chiederà quando. Le skill spente non vengono attivate."
+      }
+    ]
+  },
+  {
     "build": 110,
     "date": "2026-10-28",
     "title": "Comandi rapidi con /",
