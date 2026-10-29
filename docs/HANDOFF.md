@@ -5,19 +5,25 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 in preparazione**.
-Ultima distribuzione verificata: **110**, TestFlight/Interni (`VALID`, `IN_BETA_TESTING`).
-La 111 estende i comandi: `/promemoria` apre l’elenco, con testo invia una richiesta di creazione/modifica/
-annullamento; `/ricordami` prepara una bozza e con testo invia al normale flusso di conversazione.
-Suggerimenti con esempi, icona e accessibilità distinguono navigazione e richiesta. Nessuna chiamata diretta
-a tool: permessi, chiarimenti, recupero del turno e controllo server restano quelli esistenti.
-Le richieste possono usare AI e token. Skill «Ricordami» controllata per account; URL e note conservati.
-Prima verifica sul Mac Studio: **19 test iOS verdi in tre suite**, senza invii reali né promemoria creati.
-In corso verifica finale con versione 111 e anteprima nativa aggiornata, poi archivio e distribuzione.
-Xcode dell’ufficio richiede la nuova licenza: test e compilazione vengono eseguiti sul Mac Studio.
+Ultimo aggiornamento: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
+TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (765 caratteri).
+`/promemoria` apre l’elenco; con testo invia una richiesta di creazione/modifica/annullamento.
+`/ricordami` prepara una bozza e con testo invia al normale flusso di conversazione. Suggerimenti con esempi,
+icona e accessibilità distinguono navigazione e richiesta. Nessuna chiamata diretta a tool: permessi,
+chiarimenti e recupero del turno restano quelli esistenti. Le richieste possono usare AI e token.
+Skill «Ricordami» controllata per account, URL e note conservati. **19 test iOS verdi in tre suite**.
 
-**Backend invariato**: API staging3 `f961ab088e88c8e8630d98c8b5b4eeeb4b6e041d`, worker `72a027e`.
-Dettagli: [build 111](releases/build-111.md); ultima distribuzione: [build 110](releases/build-110.md).
+Sorgenti **`7c7acb4e3fb6e212e203fccb5bde9bb90db93dcf`**, pubblicati su GitHub prima della compilazione
+sul Mac Studio da export Git pulito: **290 file iOS** identici ai sorgenti e al manifest SHA-256.
+Archivio Release ed export riusciti; IPA Apple Distribution verificata su app e tre estensioni alla 111,
+permessi conformi e diario privato solo nell’app principale. Caricata la stessa IPA verificata,
+81.133.239 byte, Build ID `b1d80a6e-45ab-4af8-97b3-de4bdd272483`.
+Xcode dell’ufficio richiede la nuova licenza; test, archivio ed export eseguiti sul Mac Studio.
+Nessuna chiave copiata, nessun cambiamento al Portachiavi, nessun invio o promemoria reale nei test.
+Nessuna installazione diretta su iPhone, nessuna nuova prova con LLM reale.
+
+**Backend invariato**: nessun deploy; API staging3 documentata a `f961ab0`, worker `72a027e`.
+Dettagli: [build 111](releases/build-111.md); comandi iniziali in [build 110](releases/build-110.md).
 Documentazione/backup modificati preesistenti e asset non tracciati restano esclusi.
 
 ### Firma e distribuzione senza sbloccare il Mac Studio
@@ -91,6 +97,13 @@ compositore Famiglia. Altri comandi aprono sezioni; `/aiuto` li elenca. Skill at
 errori locali senza perdere bozza o allegati; nessun invio automatico e nessun modello coinvolto.
 Intervento solo iOS; backend invariato. 110 disponibile su TestFlight/Interni. Dettagli e verifiche: [build 110](releases/build-110.md).
 
+### Richieste rapide sui promemoria — 29 ottobre, build 111
+
+`/ricordami` con cosa/quando e `/promemoria` con testo usano il flusso di conversazione esistente per
+creare, modificare o annullare impegni; senza testo `/promemoria` conserva l’elenco locale.
+Esempi nel menu, skill per account, testo/URL/note integri; navigazione locale distinta dalle richieste
+che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni: [build 111](releases/build-111.md).
+
 ## Prima di iniziare
 
 1. `git fetch && git status`: lavora sempre sopra `origin/main` aggiornato, senza force push. Le modifiche locali
@@ -105,7 +118,7 @@ Intervento solo iOS; backend invariato. 110 disponibile su TestFlight/Interni. D
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **110**, verificata il 28 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `e7bd0f3` |
+| App su TestFlight | build **111**, verificata il 29 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `7c7acb4` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API **f961ab0** (27 ott, messaggi); worker ancora **72a027e**. Immagine di recupero API `ernie-app:pre-family-card-109`; vedi build 109 |
 | Migrazioni | fino alla **0048**, applicate anche sul server |
