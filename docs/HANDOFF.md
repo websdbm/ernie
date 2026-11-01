@@ -5,18 +5,28 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — risolutore comune delle richieste **in preparazione**.
-Preferenza esplicita: privilegiare il riconoscimento, accettando qualche falso positivo di analisi/domanda.
-Segnale operativo nella chiamata Jev già esistente, catalogo delle capacità attive completo e cache sensibile
-al contesto. Soglia di attivazione 0,30; interpretazione operativa risolta solo da 0,80 (o soglia più alta).
-Domanda LLM sulla capacità obbligatoria e con opzioni vincolate alle funzioni attive; Jev risponde in batch.
-Dubbi residui: pulsanti nativi, turno conservato prima della presentazione, niente esecuzione principale.
-Esito «solo consiglio»: l’esecutore blocca scritture ed effetti esterni, oltre alle istruzioni al modello.
-105 test verdi, TypeScript verde, regressione rossa sul codice precedente; prova reale 5/5 richieste,
-0/4 falsi positivi nel piccolo corpus, resolver LLM→Jev positivo con schema obbligatorio.
-Migrazione 0049: solo ampliamento del tipo di audit, verificato su tabella temporanea e rollback.
-Nessuna nuova build iOS; pubblicazione Git e deploy API ancora in corso. Dettagli in
+Ultimo aggiornamento: **1 novembre 2026**, Codex — risolutore comune **pubblicato su staging3**.
+Preferenza esplicita: più sensibilità nel riconoscimento, accettando qualche falso positivo di analisi/domanda.
+Tutte le capacità attive sono visibili a Jev; segnale operativo da 0,30, risoluzione almeno da 0,80.
+Domanda sulla capacità obbligatoria nello schema LLM e opzioni vincolate agli ID attivi; risposta Jev in batch.
+Dubbi residui: pulsanti nativi e stop prima dell’esecuzione; richiesta/domanda conservate prima della presentazione.
+Esito «solo consiglio»: blocco effettivo di scritture ed effetti esterni, non soltanto istruzioni al modello.
+**105 test verdi**, TypeScript verde, regressione rossa sul codice precedente; prova reale 5/5 richieste,
+0/4 falsi positivi nel piccolo corpus e LLM→Jev positivo con schema obbligatorio. Non è una garanzia statistica.
+
+API sorgenti **`115f8718fcbaa6dfbf10a5514ae06983bb6b9afc`**, immagine
+`sha256:ea1ce1c27fbba5de5fec9a73e9d018982d662920dc8f242c98898bc9a9c8d377`.
+Health pubblico `ok`, container `healthy`, nove hash di moduli/SQL identici al codice locale testato.
+Applicata soltanto la migrazione **0049**, che amplia il tipo di audit; prima provata su tabella TEMP e rollback.
+Ricreata la sola API; worker, Postgres e Redis non riavviati. Nessuna modifica a liste o azioni utente nei test.
+Nessuna nuova build iOS: resta la 111. Backup checkout/DDL e immagine `ernie-app:pre-request-resolver-20261101`
+in `/srv/staging3/backups/ernie-pre-request-resolver-20261101/`. Dettagli in
 [risolutore richieste](releases/backend-2026-11-01-request-resolver.md).
+
+**Deploy rootless:** la maschera 077 è solo per il backup. Ripristinare `umask 022` prima del checkout Git,
+o eseguire il checkout come staging3: i sorgenti devono restare leggibili al builder. Un primo tentativo
+aveva creato file root 0600 e falliva per esportazioni mancanti; corretti i soli 18 file tracciati coinvolti
+con proprietario staging3 e permessi Git, poi compilazione riuscita. API precedente sempre sana fino al cambio.
 
 Rilascio precedente: **1 novembre 2026**, Codex — correzione backend Todo **pubblicata su staging3**.
 Indagine in sola lettura: richiesta di «programmino veloce» instradata su `ricordami`, senza candidata
@@ -61,7 +71,7 @@ Documentazione/backup modificati preesistenti e asset non tracciati restano escl
 
 ### Resolver generale delle richieste — prima versione del 1 novembre
 
-La discussione è diventata un incremento backend in pubblicazione: preflight comune per le richieste
+La discussione è diventata un incremento backend pubblicato: preflight comune per le richieste
 potenzialmente operative, domande del modello leggero, risposta Jev, scelta fra capacità attive e domanda
 alla persona quando necessaria. La preferenza dell’utente riguarda la sensibilità di rilevazione, non
 l’autorizzazione alle azioni. Registrazione e metering comprendono anche la chiamata Jev interna.
@@ -167,8 +177,8 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 |---|---|
 | App su TestFlight | build **111**, verificata il 29 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `7c7acb4` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **1992730** (1 nov, programma Todo); worker ancora **72a027e**. Recupero API `ernie-app:pre-todo-planning-20261101`; vedi nota backend del 1 novembre |
-| Migrazioni | fino alla **0048**, applicate anche sul server |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **115f871** (1 nov, resolver richieste); worker ancora **72a027e**. Recupero API `ernie-app:pre-request-resolver-20261101`; vedi nota resolver |
+| Migrazioni | fino alla **0049**, applicate anche sul server |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server

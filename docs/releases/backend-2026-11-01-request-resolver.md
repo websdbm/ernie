@@ -1,6 +1,6 @@
 # Backend — Risolutore comune orientato al riconoscimento
 
-1 novembre 2026. **In preparazione, non ancora pubblicato**. App iOS invariata alla 111.
+1 novembre 2026. **Pubblicato su staging3**, API sana. App iOS invariata alla 111.
 
 ## Comportamento
 
@@ -56,9 +56,32 @@ anche consumo interno nel riepilogo invece di dichiarare zero chiamate/costo.
 
 ## Distribuzione e limiti
 
-Sorgenti da pubblicare prima del deploy. Migrazione 0049 amplia solo il vincolo dei tipi di audit di
-`interpretation_checks`. Previsti backup checkout/immagine e DDL della tabella, applicazione della sola nuova
-migrazione e aggiornamento API. Worker e configurazioni invariati; nessuna nuova build iOS o notifica.
+Sorgenti **`115f8718fcbaa6dfbf10a5514ae06983bb6b9afc`**, SHA GitHub verificato prima del deploy da Git.
+Backup del checkout e DDL della tabella in `/srv/staging3/backups/ernie-pre-request-resolver-20261101/`;
+immagine precedente preservata come `ernie-app:pre-request-resolver-20261101` (`sha256:51c18a1a…`).
+
+Primo build fallito: la maschera restrittiva del backup era rimasta sul checkout, generando 18 sorgenti
+root 0600 illeggibili al client Docker rootless. Nessuna modifica al codice per risolvere il problema:
+ripristinati proprietario staging3 e permessi Git dei soli file tracciati coinvolti. Secondo build pulito
+riuscito; API precedente rimasta sana fino alla sostituzione. Per i prossimi deploy, maschera 077 solo sul
+backup e 022 prima del checkout. Configurazioni e file non tracciati non modificati.
+
+Il servizio temporaneo di migrazione ha verificato che pendesse solo 0049 e ha applicato soltanto quella
+(48 precedenti già applicate), usando `runMigrations` senza cambiare ruoli/password o avviare init-storage.
+Il vincolo dell’audit riletto ammette i tre vecchi tipi e `request`. Nessun dato di attività o lista modificato.
+Ricreato solo `ernie-api-1`; immagine finale
+`sha256:ea1ce1c27fbba5de5fec9a73e9d018982d662920dc8f242c98898bc9a9c8d377`,
+avvio `2026-11-01T07:36:07.852967661Z`. Health pubblico `ok`, container `healthy`.
+Nove hash SHA-256 dei moduli API/router/questioner/executor e della migrazione coincidono con i file locali
+testati. Soglia 0,30 e schema obbligatorio verificati anche nel container appena avviato.
+Worker ancora `sha256:a2bafb183c2cb8d1a1deac78b6b04b9b4105b821c639161bfba3c8a3e10af95e`,
+avvio `2026-10-27T06:14:49.531012183Z`; Postgres e Redis ancora avviati il 18 ottobre.
+Nessun riavvio VPS, worker o servizi dati; nessuna nuova build iOS, connessione provider o notifica.
+Il campo versione del health resta quello preesistente della 106: il deploy è identificato da Git e immagine.
+Accesso SSH come root a staging3 via Tailscale `100.91.204.102`, peer verificato, nessuna chiave trasferita.
+Log e manifest privati: `~/Library/Caches/ernie-checks/request-resolver-20261101/` sul Mac dell’ufficio.
+Il ripristino può riutilizzare l’immagine precedente lasciando il vincolo di audit ampliato, compatibile con
+il codice precedente. Non serve cancellare le nuove righe diagnostiche per tornare alla vecchia API.
 Il contratto generale di verifica dell’artefatto finale per tutte le skill e lo stato esplicito/versionato
 delle proposte fra dispositivi restano estensioni successive. Questo incremento copre rilevazione, risoluzione,
 escalation alla persona e guardia sulle azioni; non garantisce ogni possibile parafrasi o azione multipla.
