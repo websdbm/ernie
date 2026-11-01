@@ -48,6 +48,7 @@ import {
   type IntentStore,
   requiresSshModel,
   type SkillRegistry,
+  TODO_PLANNING_FALLBACK,
 } from '@ernie/skills';
 import type { ToolContextRef, ToolRuleStore } from '@ernie/tools';
 import { z } from 'zod';
@@ -1152,6 +1153,8 @@ export class ClientConnection {
       contextBlocks.push(
         `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,
       );
+    else if (!attachments.length && !hasYouTube && skills?.guided('todo'))
+      contextBlocks.push(TODO_PLANNING_FALLBACK);
     if (hasYouTube) {
       contextBlocks.push(
         videoContentInstructions('YouTube', 'youtube_read', {

@@ -1329,7 +1329,8 @@ async function main(): Promise<void> {
           },
         },
         tools: {
-          categories: config.tools.categories,
+          // Todo è già nel set core dell'agente: anche Jev deve poterlo distinguere dai promemoria.
+          categories: [...new Set([...config.tools.categories, 'todo'])],
           setToolContext: companions.setToolContext,
           taintTtlSeconds: 1800,
         },

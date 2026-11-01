@@ -13,7 +13,9 @@ import {
   createRecipesSkill,
   createSecondBrainSkill,
   createSshSkill,
+  createTodoSkill,
   SkillRegistry,
+  TODO_PLANNING_FALLBACK,
 } from '@ernie/skills';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../auth.js';
@@ -225,6 +227,63 @@ const client = (sessionId: string) => {
 const tick = () => new Promise((r) => setTimeout(r, 10));
 const field = <T>(e: AgentEvent | undefined, key: string): T | undefined =>
   (e?.payload as Record<string, T> | undefined)?.[key];
+
+describe('ClientConnection: programma personale e scheda Todo', () => {
+  it('recupera il programmino anche se Jev sceglie Ricordami, e conserva la procedura dopo Ok', async () => {
+    const registry = new SkillRegistry().register(createTodoSkill());
+    const inputs: TurnInput[] = [];
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        runTurn: async (input) => {
+          inputs.push(input);
+          await input.emit('assistant.text.completed', {
+            text: 'Propongo quattro fasce: 20 minuti cucina, 10 computer, 15 lettura, 15 preparazione. Va bene?',
+          });
+          await input.emit('assistant.completed', { finishReason: 'stop' });
+        },
+      },
+      undefined,
+      fakeRouter({ skillId: 'ricordami', deepReasoning: true }),
+    );
+    const conn = new ClientConnection(fakeSocket().socket, auth, d);
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    const text =
+      "Ho tempo fino alle 8:30, quindi un'ora: pulire la cucina, leggere 10 pagine, lavarmi, verificare una cosa al computer. Mi fai un programmino veloce?";
+    await conn.handleRaw(c.message(text));
+    await tick();
+    expect(inputs[0]?.text).toBe(text);
+    expect(inputs[0]?.memoryContext).toContain(TODO_PLANNING_FALLBACK);
+    expect(inputs[0]?.memoryContext).toContain('reminderMinutes null');
+    await conn.handleRaw(c.message('Ok'));
+    await tick();
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1]?.text).toBe('Ok');
+    expect(inputs[1]?.memoryContext).toContain(TODO_PLANNING_FALLBACK);
+  });
+
+  it.each([false, true])('non abilita Todo assente o spento; attiva=%s', async (active) => {
+    const registry = active ? new SkillRegistry().register(createTodoSkill()) : new SkillRegistry();
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const d = deps(
+      { skills: { registryFor: async () => registry }, runTurn },
+      undefined,
+      fakeRouter({ skillId: 'todo' }),
+    );
+    const conn = new ClientConnection(fakeSocket().socket, auth, d);
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Organizza le attività di stamattina'));
+    await tick();
+    const context = runTurn.mock.calls[0]?.[0].memoryContext ?? '';
+    if (active) {
+      expect(context).toContain('scheda cronologica');
+      expect(context).toContain('todo_save');
+      expect(context).not.toContain(TODO_PLANNING_FALLBACK);
+    } else expect(context).not.toContain('todo_save');
+  });
+});
 
 describe('ClientConnection', () => {
   it('registra un campione numerico per richiesta, senza duplicarlo al replay', async () => {

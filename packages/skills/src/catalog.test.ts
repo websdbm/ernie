@@ -2,12 +2,29 @@ import { describe, expect, it } from 'vitest';
 import {
   availableSkillIds,
   createRecipesSkill,
+  createTodoSkill,
   disabledToolIds,
   enabledSkillIds,
   SKILL_CATALOG,
 } from './catalog.js';
+import { SkillRegistry } from './registry.js';
 
 describe('catalogo delle skill', () => {
+  it('propone Todo fra le candidate anche per un programmino informale e breve', () => {
+    const registry = new SkillRegistry();
+    for (const entry of SKILL_CATALOG)
+      registry.register({
+        ...createTodoSkill(),
+        id: entry.id,
+        description: entry.description,
+        examples: entry.examples,
+      });
+    expect(
+      registry.candidates(
+        "Ho tempo fino alle 8:30, quindi un'ora: vorrei pulire la cucina, leggere 10 pagine, lavarmi e verificare una cosa al computer. Mi fai un programmino veloce?",
+      ),
+    ).toContain('todo');
+  });
   it('Ricette include la lettura YouTube, che rispetta comunque il blocco web del tutore', () => {
     expect(createRecipesSkill().allowedTools).toContain('youtube_read');
     expect(disabledToolIds({ skills: { ricette: false } }).has('youtube_read')).toBe(false);

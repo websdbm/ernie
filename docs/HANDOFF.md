@@ -5,7 +5,19 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
+Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione backend Todo in preparazione.
+Indagine in sola lettura sulla richiesta «programmino veloce»: Jev aveva scelto `ricordami`, senza
+candidata Todo né categoria `todo`; un solo passo del modello, nessun tool e nessuna lista per il giorno.
+Anche il successivo «Ok» aveva ricevuto solo testo. Correzione: esempi/candidate Todo, categoria visibile
+a Jev, richiamo semantico quando manca una procedura guidata e salvataggio dopo conferma della proposta.
+**84 test verdi**, regressione riprodotta sul codice precedente, TypeScript e Biome verdi.
+Prova con Claude Opus configurato e archivio solo in memoria: prima domanda a scelta sulle durate,
+poi `get_time`/`todo_lists`/`todo_save`, scheda scheduled con quattro attività e zero avvisi dopo «Ok».
+Nessuna modifica alle liste reali; nessuna nuova build iOS necessaria. Pubblicazione Git e deploy API
+su staging3 in corso; worker, DB, Redis e configurazioni restano invariati.
+Dettagli: [correzione Todo del 1 novembre](releases/backend-2026-11-01-todo-planning.md).
+
+Ultimo rilascio iOS: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
 TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (765 caratteri).
 `/promemoria` apre l’elenco; con testo invia una richiesta di creazione/modifica/annullamento.
 `/ricordami` prepara una bozza e con testo invia al normale flusso di conversazione. Suggerimenti con esempi,

@@ -77,12 +77,14 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     tint: 'purple',
     summary: 'Liste annidate e giornata con orari, timeline e promemoria.',
     description:
-      'Racconta cosa devi fare: Ernie organizza gruppi e sottoattività, distingue impegni fissi e flessibili e verifica i conflitti. Le liste semplici e le giornate con orari condividono le stesse attività, modificabili dalla scheda e dalla chat.',
+      'Programmi personali della giornata, anche un programmino veloce per stamattina o per un’ora libera. Racconta cosa devi fare: Ernie organizza gruppi e sottoattività, distingue impegni fissi e flessibili e verifica i conflitti. Le liste semplici e le giornate con orari condividono le stesse attività, modificabili dalla scheda e dalla chat.',
     kind: 'guided',
     tools: ['todo_lists', 'todo_get', 'todo_save', 'get_time', 'present_choices'],
     sharedTools: ['get_time', 'present_choices'],
     examples: [
       'organizza le cose da fare oggi',
+      'mi fai un programmino veloce per stamattina',
+      'ho un’ora per pulire la cucina, leggere, lavarmi e verificare una cosa al computer prima di uscire',
       'sposta nel pomeriggio l’impasto',
       'mostra le mie attività',
       'trasforma la giornata in una lista senza orari',
@@ -517,6 +519,16 @@ export function disabledToolIds(
   return out;
 }
 
+/** Breve richiamo semantico quando il router non ha scelto una procedura guidata.
+ * I tool Todo sono già nel set core: non abilita capacità e non pianifica con regex.
+ */
+export const TODO_PLANNING_FALLBACK = [
+  'Se l’utente chiede un programma di attività personali (anche «un programmino veloce»), usa la scheda Todo: una risposta soltanto descrittiva non realizza il programma. Questo vale anche se il turno precedente conteneva la proposta e ora l’utente la conferma con «Ok». Non applicarlo a programmi informatici, consigli generali o altre conversazioni.',
+  'Leggi get_time per data/fuso correnti e todo_lists/todo_get per la giornata esistente. Per fasce orarie usa todo_save con mode scheduled, day e slots, conservando attività, ID e revision esistenti. Il risultato del tool produce la scheda cronologica: non dichiararla creata senza un salvataggio riuscito.',
+  'Non inventare durate o tragitti. Se un dettaglio essenziale manca, chiedi UNA cosa e attendi; per stime proponi alternative chiare con present_choices. Una proposta di orari accettata dall’utente può essere salvata: riprendila dalla conversazione e non chiedere una nuova conferma generica. Se chiede soltanto consigli o di non salvare, non creare una lista.',
+  'Orari e notifiche sono indipendenti: mantieni reminderMinutes null salvo richiesta esplicita di avvisi. Un rifiuto del validatore non è un salvataggio; spiega il conflitto e chiedi la correzione.',
+].join('\n');
+
 export function createTodoSkill(): GuidedSkill {
   const entry = SKILL_CATALOG.find((s) => s.id === 'todo');
   if (!entry) throw new Error('catalogo: skill todo mancante');
@@ -530,6 +542,7 @@ export function createTodoSkill(): GuidedSkill {
     riskClass: 'low',
     instructions: [
       'Organizza attività personali in liste annidate, senza entità CRM o commesse. La scheda persistente è la fonte di verità.',
+      'Una richiesta come «fammi un programma per stamattina» richiede la scheda cronologica, non soltanto un elenco in prosa. Quando i dettagli sono sufficienti e l’utente ha richiesto la creazione, chiama todo_save. Se hai prima proposto un programma e l’utente risponde «Ok», riprendi quella proposta e salvala dopo avere verificato la giornata corrente, senza un’altra conferma generica. I chiarimenti essenziali vengono comunque prima del salvataggio.',
       'Prima leggi data/ora con get_time e cerca la giornata o lista esistente con todo_lists/todo_get. Non creare un duplicato del giorno. Usa il fuso del dispositivo, chiedilo solo se ignoto.',
       'Dal racconto estrai soggetti, attività, orari fissi/approssimati, durate, dipendenze e attese. Prima di costruire le fasce individua i dettagli mancanti che cambiano la fattibilità: giorno, durata di una tappa, tempo di viaggio, ordine obbligato, flessibilità di un orario. Chiarisci solo ciò che serve: non chiedere dati già presenti nel messaggio, nella memoria verificata o nella lista corrente; non inventare tragitti, durate di ritiro o appuntamenti.',
       'Chiarimenti della timeline: UNA domanda alla volta, iniziando da una o due informazioni decisive, non un questionario. Se ci sono da 2 a 4 alternative concrete usa present_choices con etichette brevi ma autosufficienti (es. «Visita in casa: 30 minuti», «Visita in casa: 60 minuti», «Lascia la visita senza orario»). Le durate proposte sono ipotesi da scegliere, mai fatti già noti. L’utente può sempre rispondere liberamente in chat invece di toccare un pulsante.',
