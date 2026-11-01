@@ -5,7 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — risolutore comune **pubblicato su staging3**.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — build **112 in preparazione**, comando locale `/clear`.
+Nasconde messaggi e schede esistenti, mantenendo sessione, contesto, coda, richieste e cursore replay.
+La visualizzazione viene ricordata per conversazione sul telefono; «Mostra la cronologia» la ripristina.
+Il comando non viene inviato al server e non usa AI/token. Nessun nuovo backend o migrazione.
+26 test iOS verdi in cinque suite; anteprime native chiaro/Borg/caratteri grandi ispezionate.
+Prima della distribuzione: commit e SHA GitHub verificati, archivio da export Git pulito sul Mac Studio.
+Stato effettivo del rilascio in [build 112](releases/build-112.md); la build 111 resta per ora l’ultima distribuita.
+
+Rilascio backend più recente: **1 novembre 2026**, Codex — risolutore comune **pubblicato su staging3**.
 Preferenza esplicita: più sensibilità nel riconoscimento, accettando qualche falso positivo di analisi/domanda.
 Tutte le capacità attive sono visibili a Jev; segnale operativo da 0,30, risoluzione almeno da 0,80.
 Domanda sulla capacità obbligatoria nello schema LLM e opzioni vincolate agli ID attivi; risposta Jev in batch.

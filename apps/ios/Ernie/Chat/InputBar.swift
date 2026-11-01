@@ -159,6 +159,8 @@ struct InputBar: View {
                         .font(.callout).foregroundStyle(palette.inkSecondary)
                     Text("Con /messaggio puoi aggiungere il testo: scegli poi a chi mandarlo e premi Invia.")
                         .font(.footnote).foregroundStyle(palette.inkSecondary)
+                    Text("/clear pulisce solo lo schermo: la conversazione e il contesto restano. Puoi mostrare di nuovo la cronologia.")
+                        .font(.footnote).foregroundStyle(palette.inkSecondary)
                     Text("/ricordami prepara una bozza. /ricordami domani alle 18 ritira il pacco invia una richiesta. /promemoria seguito dal testo serve anche per modificare o annullare un impegno. Ernie può chiedere chiarimenti e usare l’AI, consumando token.")
                         .font(.footnote).foregroundStyle(palette.inkSecondary)
                     SlashCommandMenu(commands: SlashInput("/")!.suggestions(skills: currentCommandSkills).filter { $0 != .help }, loading: loadingCommandSkills, expanded: true,
@@ -372,6 +374,7 @@ struct InputBar: View {
         switch command {
         case .message: familyDraft = arguments; showFamilyComposer = true
         case .help: showCommandHelp = true
+        case .clear: conversation.clearVisibleHistory()
         default: onCommand(command)
         }
     }

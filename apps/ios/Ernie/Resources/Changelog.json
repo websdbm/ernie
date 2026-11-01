@@ -1,5 +1,24 @@
 [
   {
+    "build": 112,
+    "date": "2026-11-01",
+    "title": "Una chat più pulita con /clear",
+    "items": [
+      {
+        "icon": "clear",
+        "title": "Pulisci lo schermo, conserva il contesto",
+        "detail": "Scrivi /clear per nascondere i messaggi e le schede già presenti. La conversazione resta la stessa: Ernie conserva il contesto, senza chiamate AI o consumo di token.",
+        "test": "Prova /clear, poi continua a parlare dello stesso argomento: i nuovi messaggi compaiono normalmente."
+      },
+      {
+        "icon": "clock.arrow.circlepath",
+        "title": "Cronologia sempre recuperabile",
+        "detail": "Mostra la cronologia riporta i contenuti nascosti. La scelta viene ricordata per questa conversazione anche riaprendo l’app; le altre chat mantengono la propria visualizzazione.",
+        "test": "Dopo /clear chiudi e riapri l’app, quindi tocca Mostra la cronologia."
+      }
+    ]
+  },
+  {
     "build": 111,
     "date": "2026-10-29",
     "title": "Comandi che fanno di più",

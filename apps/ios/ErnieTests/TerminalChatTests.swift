@@ -4,6 +4,46 @@ import Testing
 
 @Suite(.serialized)
 struct TerminalChatTests {
+    @Test @MainActor func clearMostraIlRipristinoInChiaroEBorgConTestoGrande() async throws {
+        let name = "clear-preview-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        defer { defaults.removePersistentDomain(forName: name); try? FileManager.default.removeItem(at: directory) }
+        let store = ConversationStore(credentials: Credentials(serverURL: URL(string: "https://example.invalid")!, apiKey: "test-only"),
+            speaker: Speaker(), inbox: InboxStore(), settings: LocalSettings(),
+            transcript: TranscriptStore(directory: directory, defaults: defaults),
+            performanceQueue: PerformanceObservationQueue(send: { _ in }, pause: {}), deviceContext: { nil })
+        defer { store.disconnect() }
+        store.send("Testo da nascondere", inputMode: "text")
+        store.clearVisibleHistory()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-clear-preview")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        for (name, costume, scheme, width, size) in [
+            ("borg", BearCostume.borg, ColorScheme.dark, CGFloat(390), DynamicTypeSize.large),
+            ("light", .base, .light, 390, .large),
+            ("accessible", .base, .dark, 320, .accessibility2)
+        ] {
+            let palette = ChatPalette(costume: costume)
+            let content = MessageList(conversation: store).frame(width: width, height: 500)
+                .background(palette.ground).environment(\.chatPalette, palette)
+                .environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
+            let host = UIHostingController(rootView: content)
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: width, height: 500)
+            window.rootViewController = host; window.makeKeyAndVisible()
+            defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+            try await Task.sleep(for: .milliseconds(250)); host.view.layoutIfNeeded()
+            let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+            let path = folder.appendingPathComponent(name + ".png")
+            try #require(image.pngData()).write(to: path)
+            print("CLEAR_SNAPSHOT: \(path.path)")
+        }
+    }
+
     @Test @MainActor func ilCompositoreRiceveIlTestoSenzaDestinatarioONuoviInvii() async throws {
         let text = "Messaggio sintetico già pronto."
         let model = AppModel() // Nessuna credenziale e nessuna connessione.

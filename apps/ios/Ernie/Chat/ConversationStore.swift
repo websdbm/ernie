@@ -6,6 +6,10 @@ import Observation
 @Observable
 final class ConversationStore {
     private(set) var items: [ChatItem] = []
+    private var hiddenItemIds: Set<String> = []
+    /// Il contesto e le richieste continuano a usare `items`, anche dopo /clear.
+    var visibleItems: [ChatItem] { hiddenItemIds.isEmpty ? items : items.filter { !hiddenItemIds.contains($0.id) } }
+    var hasHiddenHistory: Bool { !hiddenItemIds.isEmpty }
     private(set) var connection: ProtocolClient.ConnectionState = .disconnected
     private(set) var agentState: AgentState = .idle
     private(set) var sessionId: String
@@ -80,6 +84,7 @@ final class ConversationStore {
                 return item
             }
             loadedSeq = file.lastSeq
+            hiddenItemIds = (file.hiddenItemIds ?? []).intersection(loadedItems.map(\.id))
         } else {
             store.setCurrent(sid)
         }
@@ -148,7 +153,7 @@ final class ConversationStore {
         lastSeq = -1
         sessionId = Ids.new()
         transcript.setCurrent(sessionId)
-        if !keepingHistory { items = [] }
+        if !keepingHistory { items = []; hiddenItemIds = [] }
         persist()
         let sid = sessionId
         Log.chat.info("sessione salvata non disponibile: nuova sessione \(sid, privacy: .public)")
@@ -168,6 +173,7 @@ final class ConversationStore {
         // I messaggi in coda appartenevano alla conversazione di prima: non devono partire in questa.
         outbox = []
         items = []
+        hiddenItemIds = []
         lastSeq = -1
         sessionId = Ids.new()
         transcript.setCurrent(sessionId)
@@ -209,6 +215,7 @@ final class ConversationStore {
             }
             return item
         }
+        hiddenItemIds = (file.hiddenItemIds ?? []).intersection(items.map(\.id))
         lastSeq = file.lastSeq
         sessionId = target
         transcript.setCurrent(target)
@@ -225,6 +232,20 @@ final class ConversationStore {
     }
 
     // MARK: - azioni dell'utente
+
+    /// Come `clear` in un terminale: nessun messaggio eliminato o inviato, stessa sessione e coda.
+    /// Gli aggiornamenti di elementi già nascosti restano nascosti; i nuovi elementi sono visibili.
+    func clearVisibleHistory() {
+        guard isAttached else { return }
+        hiddenItemIds.formUnion(items.map(\.id))
+        persist()
+    }
+
+    func showHiddenHistory() {
+        guard isAttached else { return }
+        hiddenItemIds = []
+        persist()
+    }
 
     /// Messaggi scritti o toccati (schede) mentre Ernie sta ancora rispondendo: partono uno alla volta a turno finito.
     private struct Outgoing { let messageId: String; let text: String; let inputMode: String; let attachments: [DocumentRef]; var payload: UserMessagePayload? = nil; var trace: LatencyTrace? = nil }
@@ -962,6 +983,8 @@ final class ConversationStore {
     private func persist() {
         guard isAttached else { return }
         if items.count > 400 { items.removeFirst(items.count - 400) }
-        transcript.save(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now))
+        hiddenItemIds.formIntersection(items.map(\.id))
+        transcript.save(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now,
+                              hiddenItemIds: hiddenItemIds.isEmpty ? nil : hiddenItemIds))
     }
 }

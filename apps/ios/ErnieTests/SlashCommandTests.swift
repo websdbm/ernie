@@ -73,6 +73,120 @@ import UIKit
         #expect(SlashInput("/diario testo riservato")?.requestText == nil)
         #expect(SlashInput("/impostazioni cambia utente")?.requestText == nil)
     }
+    @Test func clearLocaleSenzaArgomentiOSkillNonDiventaUnaRichiesta() throws {
+        let input = try #require(SlashInput(" /CLEAR \n"))
+        #expect(input.command == .clear)
+        #expect(input.requestText == nil && input.command?.destination == nil)
+        #expect(input.validationError(skills: nil, hasAttachment: false) == nil)
+        #expect(input.actionLabel == "Pulisci la schermata della chat")
+        #expect(SlashInput("/cl")?.suggestions(skills: nil) == [.clear])
+        #expect(input.validationError(skills: [], hasAttachment: true) != nil)
+        #expect(SlashInput("/clear cancella tutto")?.validationError(skills: [], hasAttachment: false) != nil)
+        #expect(SlashInput("/clear cancella tutto")?.requestText == nil)
+    }
+
+    private func withClearConversation(_ body: (ConversationStore, TranscriptStore) throws -> Void) throws {
+        let name = "clear-chat-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        defer { defaults.removePersistentDomain(forName: name); try? FileManager.default.removeItem(at: directory) }
+        let transcript = TranscriptStore(directory: directory, defaults: defaults)
+        let store = clearConversation(transcript)
+        defer { store.disconnect() }
+        try body(store, transcript)
+    }
+
+    private func clearConversation(_ transcript: TranscriptStore) -> ConversationStore {
+        ConversationStore(credentials: Credentials(serverURL: URL(string: "https://example.invalid")!, apiKey: "test-only"),
+            speaker: Speaker(), inbox: InboxStore(), settings: LocalSettings(), transcript: transcript,
+            performanceQueue: PerformanceObservationQueue(send: { _ in }, pause: {}), deviceContext: { nil })
+    }
+
+    @Test func clearNascondeSenzaEliminareCronologiaSessioneOCodaEPermetteRipristino() throws {
+        try withClearConversation { store, transcript in
+            store.send("Organizziamo la giornata", inputMode: "text") // Offline: nessuna connessione reale.
+            let items = store.items, sid = store.sessionId, queued = store.queuedCount
+            let savedBefore = try #require(transcript.load(sid))
+            let correlation = store.activeCorrelationId
+            store.clearVisibleHistory()
+            #expect(store.visibleItems.isEmpty && store.hasHiddenHistory)
+            #expect(store.items == items && store.sessionId == sid)
+            #expect(store.queuedCount == queued && store.activeCorrelationId == correlation)
+            let saved = try #require(transcript.load(sid))
+            #expect(saved.items == savedBefore.items && saved.hiddenItemIds == Set(items.map(\.id)))
+            #expect(saved.lastSeq == savedBefore.lastSeq)
+            #expect(transcript.list().first?.title == "Organizziamo la giornata")
+            store.clearVisibleHistory() // Ripetere il comando non modifica il contesto.
+            #expect(store.items == items && store.visibleItems.isEmpty)
+            store.send("E anche la cena", inputMode: "text")
+            #expect(store.visibleItems.count == 1 && store.items.count == 2)
+            store.showHiddenHistory()
+            #expect(store.visibleItems == store.items && !store.hasHiddenHistory)
+            #expect(transcript.load(sid)?.hiddenItemIds == nil)
+        }
+    }
+
+    @Test func clearResisteARiaperturaECambioChatSenzaContaminareNuoveSessioni() throws {
+        try withClearConversation { store, transcript in
+            store.send("Ricordati del contesto", inputMode: "text")
+            let sid = store.sessionId
+            store.clearVisibleHistory()
+            let saved = try #require(transcript.load(sid))
+            let reopened = clearConversation(transcript)
+            defer { reopened.disconnect() }
+            #expect(reopened.sessionId == sid && reopened.items == saved.items)
+            #expect(reopened.visibleItems.isEmpty && reopened.hasHiddenHistory)
+            #expect(reopened.queuedCount == store.queuedCount)
+            reopened.startNewSession()
+            #expect(reopened.sessionId != sid && reopened.items.isEmpty && !reopened.hasHiddenHistory)
+            reopened.send("Conversazione diversa", inputMode: "text")
+            #expect(reopened.visibleItems == reopened.items)
+            reopened.resume(sessionId: sid)
+            #expect(reopened.items == saved.items && reopened.visibleItems.isEmpty)
+            reopened.showHiddenHistory()
+            #expect(reopened.visibleItems == saved.items)
+        }
+    }
+
+    @Test func clearNonInterrompeIlTurnoONuoviElementiEConservaIlCursoreReplay() throws {
+        try withClearConversation { store, transcript in
+            store.send("Prima richiesta", inputMode: "text")
+            let sid = store.sessionId
+            let correlation = try #require(store.activeCorrelationId)
+            let first = AgentEvent(payload: .assistantTextDelta(.init(delta: "Primo testo")),
+                                   sessionId: sid, correlationId: correlation, seq: 7)
+            store.apply(try AgentEvent.decode(first.encoded()))
+            let before = store.items
+            store.clearVisibleHistory()
+            #expect(store.activeCorrelationId == correlation && store.isBusy)
+            let update = AgentEvent(payload: .assistantTextDelta(.init(delta: " aggiornato")),
+                                    sessionId: sid, correlationId: correlation, seq: 8)
+            store.apply(try AgentEvent.decode(update.encoded()))
+            #expect(store.items.map(\.id) == before.map(\.id) && store.visibleItems.isEmpty)
+            // La persistenza ordinaria avviene a turno concluso, non a ogni delta in streaming.
+            store.apply(.init(payload: .assistantCompleted(.init()), sessionId: sid, correlationId: correlation, seq: 9))
+            let saved = try #require(transcript.load(sid))
+            #expect(saved.lastSeq == 9) // Il cursore replay continua ad avanzare.
+            guard case .message(let message) = try #require(saved.items.last) else { Issue.record("Risposta persa"); return }
+            #expect(message.text == "Primo testo aggiornato")
+            let next = AgentEvent(payload: .assistantTextDelta(.init(delta: "Nuova risposta")),
+                                  sessionId: sid, correlationId: "next-turn", seq: 10)
+            store.apply(try AgentEvent.decode(next.encoded()))
+            store.apply(.init(payload: .assistantCompleted(.init()), sessionId: sid, correlationId: "next-turn", seq: 11))
+            #expect(store.visibleItems.count == 1 && store.items.count == 3)
+            #expect(store.sessionId == sid && transcript.load(sid)?.lastSeq == 11)
+        }
+    }
+
+    @Test func cronologiePrecedentiSenzaCampoClearRimangonoVisibili() throws {
+        try withClearConversation { store, transcript in
+            let message = ChatMessage(id: "old", correlationId: "old-turn", role: .user, text: "Cronologia vecchia", createdAt: Date(timeIntervalSince1970: 1_000))
+            transcript.save(.init(sessionId: "old-session", lastSeq: 4, items: [.message(message)], updatedAt: .now))
+            store.resume(sessionId: "old-session")
+            #expect(store.visibleItems == [.message(message)] && !store.hasHiddenHistory)
+        }
+    }
+
     @Test func richiestaPassaNellaConversazioneRecuperabileSenzaCreareLocalmenteImpegni() throws {
         let name = "slash-request-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -101,7 +215,7 @@ import UIKit
             ("accessible", .base, .dark, 320, .accessibility2)
         ] {
             let palette = ChatPalette(costume: costume)
-            let content = SlashCommandMenu(commands: [.message, .family, .help], onSelect: { _ in })
+            let content = SlashCommandMenu(commands: [.clear, .family, .help], onSelect: { _ in })
                 .padding(12).frame(width: width).background(palette.ground)
                 .environment(\.chatPalette, palette).environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
             let renderer = ImageRenderer(content: content); renderer.scale = 2

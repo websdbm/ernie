@@ -5,7 +5,7 @@ import SwiftUI
 enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     case message = "messaggio", family = "famiglia", todo = "todo", recipes = "ricette"
     case brain = "brain", media = "media", reminders = "promemoria", createReminder = "ricordami", automations = "automazioni"
-    case ssh = "ssh", settings = "impostazioni", usage = "consumi", help = "aiuto"
+    case ssh = "ssh", settings = "impostazioni", usage = "consumi", clear = "clear", help = "aiuto"
     var id: String { rawValue }
     var aliases: [String] {
         switch self {
@@ -31,6 +31,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .ssh: "Apri server e siti"
         case .settings: "Apri le impostazioni"
         case .usage: "Apri i tuoi consumi"
+        case .clear: "Pulisci lo schermo: Ernie conserva il contesto"
         case .help: "Vedi tutti i comandi disponibili"
         }
     }
@@ -48,6 +49,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .ssh: "server.rack"
         case .settings: "gearshape"
         case .usage: "chart.bar"
+        case .clear: "clear"
         case .help: "questionmark.circle"
         }
     }
@@ -73,7 +75,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .ssh: .ssh
         case .settings: .settings
         case .usage: .usage
-        case .help, .message, .createReminder: nil
+        case .help, .message, .createReminder, .clear: nil
         }
     }
     var acceptsRequest: Bool { self == .reminders || self == .createReminder }
@@ -99,7 +101,10 @@ struct SlashInput: Equatable {
         guard let command, command.acceptsRequest, !arguments.isEmpty else { return nil }
         return command == .createReminder ? "Ricordami \(arguments)" : "Promemoria: \(arguments)"
     }
-    var actionLabel: String { requestText == nil ? "Apri il comando" : "Invia la richiesta a Ernie" }
+    var actionLabel: String {
+        if command == .clear { return "Pulisci la schermata della chat" }
+        return requestText == nil ? "Apri il comando" : "Invia la richiesta a Ernie"
+    }
     init?(_ draft: String) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.hasPrefix("/") else { return nil }
@@ -122,6 +127,7 @@ struct SlashInput: Equatable {
         if let skill = requiredSkill, skills?.contains(where: { $0.id == skill && $0.active }) != true {
             return skills == nil ? "Non riesco ancora a verificare le skill. Riprova tra poco." : "Questa skill è spenta o non disponibile. Controlla Impostazioni → Skill."
         }
+        if command == .clear && !arguments.isEmpty { return "Usa /clear senza testo aggiuntivo: pulisce solo la schermata della chat." }
         if command != .message && !command.acceptsRequest && !arguments.isEmpty { return "Questo comando apre una sezione: usalo senza testo aggiuntivo." }
         if command == .message && arguments.count > 2000 { return "Il messaggio può contenere al massimo 2.000 caratteri. Accorcialo prima di continuare." }
         if command.acceptsRequest && arguments.count > 8000 { return "La richiesta può contenere al massimo 8.000 caratteri. Accorciala prima di continuare." }
