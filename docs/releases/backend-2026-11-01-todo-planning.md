@@ -1,6 +1,6 @@
 # Backend — Programmi personali e scheda cronologica
 
-1 novembre 2026. **In preparazione, non ancora pubblicato su staging3**. Nessuna nuova build iOS.
+1 novembre 2026. **Pubblicato su staging3**, API sana. Nessuna nuova build iOS: resta la 111.
 
 ## Problema verificato
 
@@ -41,8 +41,23 @@ Non si versionano ID utente/sessione o contenuti privati dei log.
 
 ## Distribuzione e limiti
 
-Sorgenti da pubblicare prima del deploy. API precedente: `f961ab0`, immagine
+Sorgenti **`19927308891c56408605b146cb07f3f9cd78c34a`**, pubblicati e SHA GitHub verificato prima del deploy.
+API precedente: `f961ab0`, immagine
 `sha256:0b968a3df7299121b050e799a0ac0375e793b762a202b19e2a9586e6287ee196`.
-Previsti backup del checkout e tag immagine prima dell’aggiornamento da Git, solo API, senza migrazioni.
+Backup del checkout e tag immagine eseguiti prima dell’aggiornamento da Git:
+`/srv/staging3/backups/ernie-pre-todo-planning-20261101/checkout`,
+`ernie-app:pre-todo-planning-20261101`. Checkout aggiornato al commit pubblicato, immagine costruita sul server,
+ricreato **solo** `ernie-api-1` (`up -d --no-deps api`), senza migrazioni.
+Immagine finale `sha256:51c18a1a7fb75e97d799fb60be77919d422bbc1200da599cf1758a08b221d741`,
+avvio `2026-11-01T06:47:18.223733795Z`. Health pubblico `ok`, container `healthy`.
+SHA-256 di index API, connessione WS e catalogo skill compilati identici ai moduli locali testati;
+richiamo Todo presente e candidatura «programmino» verificata nel container.
+Worker invariato: `sha256:a2bafb183c2cb8d1a1deac78b6b04b9b4105b821c639161bfba3c8a3e10af95e`,
+avvio ancora `2026-10-27T06:14:49.531012183Z`. DB, Redis, configurazioni e migrazioni non modificati.
+Il health espone ancora la versione preesistente `0.1.0-reminder-details-106`: non è il riferimento del codice.
+Accesso SSH come root a staging3 `100.91.204.102` via Tailscale, peer verificato, nessuna chiave installata.
+Il wrapper Docker da root cambia directory: Compose richiede `--project-directory` e file/override assoluti.
+Nessuna chiave o credenziale recuperata/copiata per la prova; provider già configurato nel processo di test.
+Log e hash privati: `~/Library/Caches/ernie-checks/todo-planning-20261101/` sul Mac dell’ufficio.
 Ultima app resta la 111 disponibile su TestFlight. Nessuna modifica retroattiva al piano mattutino dell’utente.
 Le risposte del modello restano probabilistiche: la prova positiva non garantisce ogni parafrasi futura.

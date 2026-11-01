@@ -5,17 +5,25 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione backend Todo in preparazione.
-Indagine in sola lettura sulla richiesta «programmino veloce»: Jev aveva scelto `ricordami`, senza
-candidata Todo né categoria `todo`; un solo passo del modello, nessun tool e nessuna lista per il giorno.
-Anche il successivo «Ok» aveva ricevuto solo testo. Correzione: esempi/candidate Todo, categoria visibile
-a Jev, richiamo semantico quando manca una procedura guidata e salvataggio dopo conferma della proposta.
-**84 test verdi**, regressione riprodotta sul codice precedente, TypeScript e Biome verdi.
-Prova con Claude Opus configurato e archivio solo in memoria: prima domanda a scelta sulle durate,
-poi `get_time`/`todo_lists`/`todo_save`, scheda scheduled con quattro attività e zero avvisi dopo «Ok».
-Nessuna modifica alle liste reali; nessuna nuova build iOS necessaria. Pubblicazione Git e deploy API
-su staging3 in corso; worker, DB, Redis e configurazioni restano invariati.
-Dettagli: [correzione Todo del 1 novembre](releases/backend-2026-11-01-todo-planning.md).
+Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione backend Todo **pubblicata su staging3**.
+Indagine in sola lettura: richiesta di «programmino veloce» instradata su `ricordami`, senza candidata
+né categoria Todo; il modello aveva scritto soltanto testo anche dopo «Ok», senza salvare una lista.
+Correzione: esempi Todo, categoria visibile a Jev, richiamo semantico quando manca una procedura guidata,
+salvataggio della proposta confermata quando i dettagli sono sufficienti, senza nuovi avvisi impliciti.
+**84 test verdi**, regressione rossa sul codice precedente, TypeScript e Biome verdi.
+Prova con il modello heavy configurato e archivio solo in memoria: chiarimento iniziale sulle durate,
+poi `get_time`/`todo_lists`/`todo_save` dopo «Ok», scheda scheduled con quattro attività e zero avvisi.
+Nessuna modifica alle liste reali né nuova build iOS: resta la **111** su TestFlight.
+
+API da Git **`19927308891c56408605b146cb07f3f9cd78c34a`**, immagine
+`sha256:51c18a1a7fb75e97d799fb60be77919d422bbc1200da599cf1758a08b221d741`.
+Health pubblico `ok`, container `healthy`; tre moduli JS compilati identici ai file locali testati.
+Worker immagine/avvio invariati; DB, Redis, configurazioni e migrazioni non toccati.
+Backup: `/srv/staging3/backups/ernie-pre-todo-planning-20261101/checkout`, immagine
+`ernie-app:pre-todo-planning-20261101`. Il campo versione del health resta quello preesistente della 106:
+identificare il deploy da SHA Git e immagine. Dettagli: [Todo del 1 novembre](releases/backend-2026-11-01-todo-planning.md).
+Il wrapper `docker-staging3` cambia directory quando eseguito da root: usare Compose con
+`--project-directory` e percorsi assoluti a `docker-compose.yml` e override, senza modificare `.env`.
 
 Ultimo rilascio iOS: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
 TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (765 caratteri).
@@ -132,7 +140,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 |---|---|
 | App su TestFlight | build **111**, verificata il 29 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `7c7acb4` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **f961ab0** (27 ott, messaggi); worker ancora **72a027e**. Immagine di recupero API `ernie-app:pre-family-card-109`; vedi build 109 |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **1992730** (1 nov, programma Todo); worker ancora **72a027e**. Recupero API `ernie-app:pre-todo-planning-20261101`; vedi nota backend del 1 novembre |
 | Migrazioni | fino alla **0048**, applicate anche sul server |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
