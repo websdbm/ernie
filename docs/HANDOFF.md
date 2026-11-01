@@ -5,13 +5,19 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione presentazione del resolver **pronta, deploy in preparazione**.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione presentazione del resolver **pubblicata su staging3**.
 La riga «Ho inteso» mostrava la descrizione della capacità scelta, copiando esempi dal catalogo (caldaia/Lego).
 Il controllo ordinario `request` ora resta interno: niente riga né pulsante «Correggi». Le vere domande
 irrisolte restano schede esplicite con pulsanti; i titoli delle capacità integrate sostituiscono le descrizioni.
 La capacità è separata dalle interpretazioni semantiche, anche quando due domande hanno lo stesso «about».
 Instradamento, soglie, permessi e audit delle risposte restano attivi; nessuna modifica ai luoghi o alle chat salvate.
 **96 test verdi** in cinque suite, due regressioni rosse sul codice precedente, TypeScript e Biome verdi.
+API sorgenti **`660de62f39e440353fa7b11a805b2dd57653128c`**, immagine
+`sha256:c78b004565e0c5d2884718edcc104438cfa8d27b4e1970066d71e07ff95debbe`, health pubblico `ok`, container `healthy`.
+Tre moduli compilati identici al codice testato e prova nel container senza LLM/account: capacità conservata,
+significati separati e nessun blocco visibile per `request`. Ricreata soltanto l’API; worker/DB/Redis invariati.
+Backup `/srv/staging3/backups/ernie-pre-resolver-presentation-20261101/checkout` e immagine
+`ernie-app:pre-resolver-presentation-20261101`; configurazioni intatte, nessuna migrazione.
 Solo backend: nessuna nuova build iOS, resta la 113. Stato in [presentazione resolver](releases/backend-2026-11-01-resolver-presentation.md).
 
 Ultimo rilascio iOS: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
@@ -209,7 +215,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 |---|---|
 | App su TestFlight | build **113**, verificata il 1 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `650ff4c` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **115f871** (1 nov, resolver richieste); worker ancora **72a027e**. Recupero API `ernie-app:pre-request-resolver-20261101`; vedi nota resolver |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **660de62** (1 nov, presentazione resolver); worker ancora **72a027e**. Recupero API `ernie-app:pre-resolver-presentation-20261101`; vedi nota presentazione resolver |
 | Migrazioni | fino alla **0049**, applicate anche sul server |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
