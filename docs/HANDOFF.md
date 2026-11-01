@@ -5,13 +5,16 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — build **112 in preparazione**, comando locale `/clear`.
-Nasconde messaggi e schede esistenti, mantenendo sessione, contesto, coda, richieste e cursore replay.
-La visualizzazione viene ricordata per conversazione sul telefono; «Mostra la cronologia» la ripristina.
-Il comando non viene inviato al server e non usa AI/token. Nessun nuovo backend o migrazione.
-26 test iOS verdi in cinque suite; anteprime native chiaro/Borg/caratteri grandi ispezionate.
-Prima della distribuzione: commit e SHA GitHub verificati, archivio da export Git pulito sul Mac Studio.
-Stato effettivo del rilascio in [build 112](releases/build-112.md); la build 111 resta per ora l’ultima distribuita.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — build **112 disponibile su TestFlight**, gruppo **Interni**.
+Apple: **VALID**, **IN_BETA_TESTING**; Build ID `6f729ecb-4a51-424f-aa01-0fb3ae7eefde`, note italiane rilette (674 caratteri).
+Comando locale `/clear`: nasconde messaggi e schede esistenti, mantenendo sessione, contesto, coda, richieste
+attive e cursore replay. La visualizzazione viene ricordata per conversazione sul telefono;
+«Mostra la cronologia» la ripristina. Il comando non viene inviato al server e non usa AI/token.
+**26 test iOS verdi in cinque suite**, anteprime native chiaro/Borg/caratteri grandi ispezionate.
+Sorgenti **`c90cacd9d7e0d6236754bc8829513005a67c6fef`**, SHA GitHub verificato prima dell’archivio sul Mac Studio;
+**290 file iOS** identici al codice testato e all’export Git pulito. Archivio/export riusciti, IPA Apple Distribution
+verificata su app e tre estensioni; caricata la stessa IPA (81.143.540 byte), firma e isolamento diario conformi.
+Nessun deploy backend, migrazione o installazione diretta su iPhone. Stato e manifest in [build 112](releases/build-112.md).
 
 Rilascio backend più recente: **1 novembre 2026**, Codex — risolutore comune **pubblicato su staging3**.
 Preferenza esplicita: più sensibilità nel riconoscimento, accettando qualche falso positivo di analisi/domanda.
@@ -56,7 +59,7 @@ identificare il deploy da SHA Git e immagine. Dettagli: [Todo del 1 novembre](re
 Il wrapper `docker-staging3` cambia directory quando eseguito da root: usare Compose con
 `--project-directory` e percorsi assoluti a `docker-compose.yml` e override, senza modificare `.env`.
 
-Ultimo rilascio iOS: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
+Rilascio iOS precedente: **29 ottobre 2026**, Codex sul Mac dell’ufficio — build **111 disponibile su
 TestFlight**, gruppo **Interni**. Apple: **VALID**, **IN_BETA_TESTING**; note italiane rilette (765 caratteri).
 `/promemoria` apre l’elenco; con testo invia una richiesta di creazione/modifica/annullamento.
 `/ricordami` prepara una bozza e con testo invia al normale flusso di conversazione. Suggerimenti con esempi,
@@ -73,7 +76,7 @@ Xcode dell’ufficio richiede la nuova licenza; test, archivio ed export eseguit
 Nessuna chiave copiata, nessun cambiamento al Portachiavi, nessun invio o promemoria reale nei test.
 Nessuna installazione diretta su iPhone, nessuna nuova prova con LLM reale.
 
-**Backend invariato**: nessun deploy; API staging3 documentata a `f961ab0`, worker `72a027e`.
+**Backend al rilascio della 111**: nessun deploy; allora API staging3 a `f961ab0`, worker `72a027e`.
 Dettagli: [build 111](releases/build-111.md); comandi iniziali in [build 110](releases/build-110.md).
 Documentazione/backup modificati preesistenti e asset non tracciati restano esclusi.
 
@@ -183,7 +186,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **111**, verificata il 29 ott: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `7c7acb4` |
+| App su TestFlight | build **112**, verificata il 1 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `c90cacd` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API **115f871** (1 nov, resolver richieste); worker ancora **72a027e**. Recupero API `ernie-app:pre-request-resolver-20261101`; vedi nota resolver |
 | Migrazioni | fino alla **0049**, applicate anche sul server |
