@@ -31,7 +31,7 @@ export function interpretationBlock(c: Clarification): ContentBlock | null {
   if (!c.resolved.length) return null;
   return {
     kind: 'interpretation',
-    trigger: c.trigger,
+    trigger: c.trigger === 'request' ? 'ambiguous' : c.trigger,
     items: c.resolved.slice(0, 4).map((r) => ({
       about: r.about.slice(0, 60),
       meaning: r.meaning.slice(0, 120),
@@ -44,7 +44,7 @@ export interface ClarificationRecord {
   readonly sessionId: string | null;
   readonly requestId: string;
   readonly message: string;
-  readonly trigger: 'ambiguous' | 'correction' | 'skill';
+  readonly trigger: 'ambiguous' | 'correction' | 'skill' | 'request';
   readonly ambiguity?: number | undefined;
   readonly correction?: number | undefined;
   readonly clarification?: Clarification | null;

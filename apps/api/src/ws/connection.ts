@@ -16,6 +16,7 @@ import {
   type ClarifyInput,
   clarificationNote,
   type DecisionRouter,
+  REQUEST_RESOLUTION_ACTIVATION,
   type RouteDecision,
   type SkillCheckInput,
   type SkillCheckResult,
@@ -898,6 +899,10 @@ export class ClientConnection {
       recentTurns: this.recentTurns,
       toolCategories: this.deps.tools?.categories ?? [],
       skillCandidates: skills?.candidates(text) ?? [],
+      capabilities: skills
+        ?.list()
+        .filter((s) => s.id !== 'diario_personale')
+        .map((s) => ({ id: s.id, description: s.description.slice(0, 300) })),
       sessionModelClass: this.session.modelClass,
     });
     this.performanceTrace?.phase('routerMs', routed.latencyMs);
@@ -918,15 +923,29 @@ export class ClientConnection {
     }
 
     // Jev vede i metadati, non il testo OCR: per gli allegati il dubbio si risolve dopo la lettura.
-    const clarifyNote = attachments.length
-      ? undefined
-      : await this.clarifyTurn(
-          modelText,
-          event.payload.inputMode,
-          decision,
-          sessionId,
-          correlationId,
-        );
+    const clarification =
+      attachments.length || youtubeLinksIn(text).length
+        ? undefined
+        : await this.clarifyTurn(
+            modelText,
+            event.payload.inputMode,
+            decision,
+            sessionId,
+            correlationId,
+            skills,
+            ac.signal,
+          );
+    if (clarification?.awaiting) return;
+    const clarifyNote = clarification?.note;
+    const effectiveSkillId =
+      clarification && 'skillId' in clarification ? clarification.skillId : decision.skillId;
+    if (effectiveSkillId === 'ssh' && this.session.modelClass !== 'heavy') {
+      this.session = {
+        ...this.session,
+        modelClass: await this.deps.store.raiseModelClass(this.auth.userId, sessionId, 'heavy'),
+      };
+      this.deps.invalidateCompanion(sessionId);
+    }
 
     const companionStartedAt = performance.now();
     const companion = await this.deps.getCompanion(this.auth, this.session);
@@ -1146,14 +1165,19 @@ export class ClientConnection {
     // Read first: a previous cooking conversation must not force every new video into Ricette.
     const hasYouTube = youtubeLinksIn(text).length > 0;
     const guided =
-      !attachments.length && !hasYouTube && decision.skillId
-        ? skills?.guided(decision.skillId)
+      !attachments.length && !hasYouTube && effectiveSkillId
+        ? skills?.guided(effectiveSkillId)
         : undefined;
     if (guided)
       contextBlocks.push(
         `Procedura «${guided.description}» (usa solo: ${guided.allowedTools.join(', ')}):\n${guided.instructions}`,
       );
-    else if (!attachments.length && !hasYouTube && skills?.guided('todo'))
+    else if (
+      !attachments.length &&
+      !hasYouTube &&
+      clarification?.skillId !== null &&
+      skills?.guided('todo')
+    )
       contextBlocks.push(TODO_PLANNING_FALLBACK);
     if (hasYouTube) {
       contextBlocks.push(
@@ -1169,8 +1193,8 @@ export class ClientConnection {
     if (skillNote) contextBlocks.push(skillNote);
     // Jev vede una richiesta per una skill che il comando rapido non ha riconosciuto (frase insolita o storpiata).
     const missed =
-      !skillNote && decision.route === 'skill' && decision.skillId
-        ? skills?.get(decision.skillId)
+      !skillNote && !attachments.length && !hasYouTube && effectiveSkillId
+        ? skills?.get(effectiveSkillId)
         : undefined;
     if (missed?.kind === 'deterministic')
       contextBlocks.push(
@@ -1210,6 +1234,7 @@ export class ClientConnection {
       modelClass: companion.profile.modelClass,
       scopes: this.auth.scopes,
       run: run_,
+      ...(clarification?.skillId === null ? { allowActions: false } : {}),
       emit: (type, payload) => this.send(type, payload, correlationId),
       signal: ac.signal,
       onTainted: (source) => {
@@ -1413,7 +1438,18 @@ export class ClientConnection {
     userText: string,
     blocks: readonly ContentBlock[] = [],
     actions?: readonly string[],
+    internalUsage?: {
+      costUsd: number;
+      inputTokens: number;
+      llmCalls: number;
+      signal: AbortSignal | undefined;
+    },
   ): Promise<void> {
+    const sid = this.sessionId;
+    // Il tap può arrivare subito: la richiesta e la domanda devono già essere nella memoria del thread.
+    if (internalUsage && sid && this.deps.recordLocalTurn)
+      await this.deps.recordLocalTurn(this.auth.userId, sid, userText, reply, route);
+    internalUsage?.signal?.throwIfAborted();
     await this.send(
       'assistant.started',
       { route, modelClass: this.session?.modelClass ?? 'standard' },
@@ -1432,12 +1468,12 @@ export class ClientConnection {
       {
         finishReason: 'stop',
         usage: {
-          inputTokens: 0,
+          inputTokens: internalUsage?.inputTokens ?? 0,
           outputTokens: 0,
-          llmCalls: 0,
+          llmCalls: internalUsage?.llmCalls ?? 0,
           toolCalls: 0,
           latencyMs: Date.now() - t0,
-          costUsdActual: 0,
+          costUsdActual: internalUsage?.costUsd ?? 0,
           route,
         },
       },
@@ -1445,8 +1481,7 @@ export class ClientConnection {
     );
     this.remember('utente', userText);
     this.remember('assistente', reply);
-    const sid = this.sessionId;
-    if (sid && this.deps.recordLocalTurn)
+    if (!internalUsage && sid && this.deps.recordLocalTurn)
       void this.deps
         .recordLocalTurn(this.auth.userId, sid, userText, reply, route)
         .catch((err: unknown) =>
@@ -1511,13 +1546,19 @@ export class ClientConnection {
     decision: RouteDecision,
     sessionId: string,
     correlationId: string,
-  ): Promise<string | undefined> {
+    skills?: SkillRegistry | null,
+    signal?: AbortSignal,
+  ): Promise<
+    { note?: string | undefined; skillId?: string | null; awaiting?: boolean } | undefined
+  > {
     const c = this.deps.clarify;
     if (!c) return undefined;
     const correcting = isCorrection(text) || (decision.correction ?? 0) >= c.thresholds.correction;
     const ambiguous = (decision.ambiguity ?? 0) >= c.thresholds.ambiguity;
-    if (!correcting && (!ambiguous || decision.route === 'deterministic')) return undefined;
-    const trigger = correcting ? 'correction' : 'ambiguous';
+    const operational = (decision.operationalIntent ?? 0) >= REQUEST_RESOLUTION_ACTIVATION;
+    if (!correcting && !operational && (!ambiguous || decision.route === 'deterministic'))
+      return undefined;
+    const trigger = correcting ? 'correction' : operational ? 'request' : 'ambiguous';
     const correctionNote = correcting
       ? 'L’utente sta correggendo la tua risposta precedente: rileggi la sua richiesta alla luce della correzione e non ripetere lo stesso errore.'
       : undefined;
@@ -1542,12 +1583,60 @@ export class ClientConnection {
           recentTurns: [...this.recentTurns],
           people: known.people,
           places: known.places,
+          capabilities: skills
+            ?.list()
+            .filter((s) => s.id !== 'diario_personale')
+            .map((s) => ({ id: s.id, description: s.description.slice(0, 300) })),
+          signal,
         },
       );
+      signal?.throwIfAborted();
       void c
         .record?.({ ...base, clarification: result, latencyMs: Date.now() - t0 })
         .catch(() => {});
-      if (!result) return correctionNote;
+      if (!result)
+        return {
+          note:
+            correctionNote ??
+            (operational
+              ? 'Potrebbe esserci una richiesta operativa: verifica l’intento originale e usa gli strumenti attivi appropriati; se un dubbio essenziale resta, fai UNA domanda con present_choices. Il controllo interno non è un’autorizzazione e nessuna azione è già eseguita.'
+              : undefined),
+        };
+      const unresolvedQuestion = result.unresolved[0];
+      if (trigger === 'request' && unresolvedQuestion) {
+        const q = unresolvedQuestion;
+        const labels: Record<string, string> = {
+          todo: 'Organizza le attività',
+          ricordami: 'Imposta un promemoria',
+          shopping_list: 'Aggiorna una lista della spesa',
+          ricette: 'Gestisci le ricette',
+          second_brain: 'Gestisci il Second Brain',
+          none: 'Solo un consiglio, senza operazioni',
+        };
+        const options = q.options.slice(0, 4).map((o, i) => ({
+          id: String(i + 1),
+          label: (q.kind === 'capability'
+            ? (labels[o] ?? skills?.get(o)?.description ?? o)
+            : o
+          ).slice(0, 80),
+        }));
+        await this.replyLocally(
+          'skill',
+          q.question,
+          correlationId,
+          t0,
+          text,
+          [{ kind: 'choices', question: q.question, options }],
+          undefined,
+          {
+            costUsd: result.costUsd + decision.costUsd,
+            inputTokens: (result.inputTokens ?? 0) + decision.inputTokens,
+            llmCalls: 1,
+            signal,
+          },
+        );
+        return { awaiting: true };
+      }
       const block = interpretationBlock(result);
       if (block)
         await this.send(
@@ -1555,12 +1644,26 @@ export class ClientConnection {
           { blockId: `${correlationId}:interpretazione`, block },
           correlationId,
         );
-      return clarificationNote(result) ?? correctionNote;
+      return {
+        note: clarificationNote(result) ?? correctionNote,
+        ...(result.capabilityId === null
+          ? { skillId: null }
+          : result.capabilityId && skills?.get(result.capabilityId)
+            ? { skillId: result.capabilityId }
+            : {}),
+      };
     } catch (err) {
+      if (signal?.aborted) throw err;
       const message = err instanceof Error ? err.message : String(err);
       this.deps.logger.warn({ err: message, trigger }, 'chiarimento interno non riuscito');
       void c.record?.({ ...base, latencyMs: Date.now() - t0, error: message }).catch(() => {});
-      return correctionNote;
+      return {
+        note:
+          correctionNote ??
+          (operational
+            ? 'Il controllo interno non è disponibile: considera la possibile richiesta operativa e chiedi con present_choices se un dettaglio essenziale non è chiaro. Non considerare eseguita alcuna azione.'
+            : undefined),
+      };
     }
   }
 

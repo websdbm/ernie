@@ -78,6 +78,30 @@ const echoSpec: ToolSpec = defineTool({
 });
 
 describe('createGuardedTool', () => {
+  it('il resolver none blocca scritture ed effetti esterni anche se il modello li chiama; lascia le letture', async () => {
+    const ref: ToolContextRef = {
+      current: { ...ctx(new RunContext('u', ['chat'], 0)), allowActions: false },
+    };
+    const audit = memoryToolCallRecorder();
+    for (const risk of [
+      { ...echoSpec.risk, write: true },
+      { ...echoSpec.risk, externalEffect: true },
+    ]) {
+      const execute = vi.fn(echoSpec.execute);
+      const tool = createGuardedTool(
+        { ...echoSpec, risk, execute },
+        { policyRules: {}, audit, logger },
+        ref,
+      );
+      const result = await tool.execute?.({ text: 'non deve partire' }, {} as never);
+      expect(result).toMatchObject({ error: 'denied' });
+      expect(execute).not.toHaveBeenCalled();
+    }
+    const read = createGuardedTool(echoSpec, { policyRules: {}, audit, logger }, ref);
+    expect(await read.execute?.({ text: 'lettura consentita' }, {} as never)).toEqual({
+      text: 'lettura consentita',
+    });
+  });
   it('una scrittura identica nello stesso turno condivide conferma ed esito; altri argomenti e turni chiedono un nuovo consenso', async () => {
     const events: Array<{ approvalId: string }> = [];
     const approvals = {

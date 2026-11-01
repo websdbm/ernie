@@ -57,6 +57,32 @@ const observed = JevResponse.parse({
 });
 
 describe('buildQuestions', () => {
+  it('vede tutte le capacità attive, anche fuori dalle prime cinque candidate lessicali', () => {
+    const capabilities = Array.from({ length: 9 }, (_, i) => ({
+      id: `skill_${i}`,
+      description: `Capacità ${i}`,
+    }));
+    const q = buildQuestions({ ...base, capabilities });
+    expect(q.skill_candidate?.type).toBe('choice');
+    if (q.skill_candidate?.type !== 'choice') throw new Error('choice missing');
+    expect(q.skill_candidate.criteria.skill_8).toBe('Capacità 8');
+    const d = mapAnswers(
+      {
+        ...observed,
+        answers: {
+          ...observed.answers,
+          skill_candidate: { type: 'choice', choice: 'skill_8', confidence: 0.9 },
+          operational_intent: { type: 'noul', noul: 0.35 },
+        },
+      },
+      { ...base, capabilities },
+      DEFAULT_THRESHOLDS,
+      1,
+    );
+    expect(d.skillId).toBe('skill_8');
+    expect(d.operationalIntent).toBe(0.35);
+    expect(d.riskSignal).toBe(0.91); // Il segnale operativo non abbassa la policy.
+  });
   it('include tool_category e skill_candidate solo con opzioni disponibili', () => {
     const q = buildQuestions(base);
     expect(Object.keys(q)).toEqual([
@@ -67,6 +93,7 @@ describe('buildQuestions', () => {
       'risk',
       'ambiguous',
       'correction',
+      'operational_intent',
       'tool_category',
       'skill_candidate',
     ]);
@@ -79,6 +106,7 @@ describe('buildQuestions', () => {
       'risk',
       'ambiguous',
       'correction',
+      'operational_intent',
     ]);
   });
 });
@@ -184,6 +212,23 @@ describe('mapAnswers', () => {
 });
 
 describe('createDecisionRouter', () => {
+  it('non riusa la decisione di Ok dopo un cambio di contesto o di capacità attive', async () => {
+    const client = createMockJevClient();
+    const router = createDecisionRouter({ client, cache: createMemoryDecisionCache() });
+    await router.decide({ ...base, text: 'Ok', recentTurns: ['assistente: salvo la lista?'] });
+    await router.decide({
+      ...base,
+      text: 'Ok',
+      recentTurns: ['assistente: vuoi solo un consiglio?'],
+    });
+    await router.decide({
+      ...base,
+      text: 'Ok',
+      recentTurns: ['assistente: salvo la lista?'],
+      capabilities: [],
+    });
+    expect(client.calls).toBe(3);
+  });
   it('usa la cache esatta alla seconda richiesta identica (nessuna chiamata a Jev)', async () => {
     const client = createMockJevClient();
     const cache = createMemoryDecisionCache();

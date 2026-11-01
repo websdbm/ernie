@@ -18,6 +18,8 @@ export interface RouterInput {
   readonly toolCategories: readonly string[];
   /** Skill candidate dal retrieval deterministico (vuoto in M3). */
   readonly skillCandidates: readonly string[];
+  /** Catalogo completo già filtrato per account, oltre alle candidate lessicali. */
+  readonly capabilities?: readonly { id: string; description: string }[] | undefined;
   /** Classe corrente della sessione: dentro il turno la decisione non scende sotto questa. */
   readonly sessionModelClass: 'light' | 'standard' | 'heavy';
   /** Impronta del contesto per la chiave di cache (categorie, skill, classe). */
@@ -104,6 +106,16 @@ export function buildQuestions(input: RouterInput): Record<string, JevQuestion> 
         false: 'Nuova richiesta, continuazione o conferma della conversazione.',
       },
     },
+    operational_intent: {
+      type: 'noul',
+      instructions:
+        'Potrebbe essere una richiesta da eseguire con una capacità dell’assistente, anche implicita o detta in modo informale? Privilegia il riconoscimento: questo segnale avvia soltanto una verifica.',
+      criteria: {
+        true: 'Chiede, propone o conferma di organizzare attività, creare o modificare una scheda/lista/promemoria, cercare dati personali o compiere un’azione. Considera anche «mi servirebbe», «un programmino», correzioni e risposte brevi alla proposta precedente. Nel dubbio fra azione e chiacchiera segnala la possibile azione.',
+        false:
+          'È chiaramente un saluto, ringraziamento, conversazione, domanda informativa generale o citazione priva di richiesta operativa.',
+      },
+    },
   };
   if (input.toolCategories.length > 0) {
     q.tool_category = {
@@ -117,13 +129,16 @@ export function buildQuestions(input: RouterInput): Record<string, JevQuestion> 
       },
     };
   }
-  if (input.skillCandidates.length > 0) {
+  const capabilities =
+    input.capabilities ??
+    input.skillCandidates.slice(0, 5).map((id) => ({ id, description: `Skill ${id}.` }));
+  if (capabilities.length > 0) {
     q.skill_candidate = {
       type: 'choice',
       instructions: 'Quale skill nota può gestire la richiesta?',
       criteria: {
         none: 'Nessuna skill adatta.',
-        ...Object.fromEntries(input.skillCandidates.slice(0, 5).map((s) => [s, `Skill ${s}.`])),
+        ...Object.fromEntries(capabilities.map((s) => [s.id, s.description])),
       },
     };
   }
@@ -137,6 +152,7 @@ export function buildState(input: RouterInput): Record<string, unknown> {
     recent_turns: input.recentTurns.slice(-6),
     available_tool_categories: input.toolCategories,
     skill_candidates: input.skillCandidates.slice(0, 5),
+    ...(input.capabilities ? { active_capabilities: input.capabilities } : {}),
   };
 }
 
@@ -155,6 +171,7 @@ export function fallbackDecision(
     skillId: null,
     riskSignal: 1,
     confidence: 0,
+    operationalIntent: 1, // Orientamento non disponibile: affidare al risolutore, non autorizzare.
     source,
     costUsd: 0,
     inputTokens: 0,
@@ -219,7 +236,10 @@ export function mapAnswers(
       ? [tool.choice]
       : [];
   const skillId =
-    skill && skill.choice !== 'none' && input.skillCandidates.includes(skill.choice)
+    skill &&
+    skill.choice !== 'none' &&
+    (input.capabilities?.some((c) => c.id === skill.choice) ??
+      input.skillCandidates.includes(skill.choice))
       ? skill.choice
       : null;
   const confidence = Math.min(route?.confidence ?? 0, klass?.confidence ?? 1);
@@ -234,6 +254,7 @@ export function mapAnswers(
     riskSignal: risk,
     confidence,
     source: 'jev',
+    operationalIntent: noul(res, 'operational_intent') ?? 1,
     costUsd: res.usage?.cost ?? 0,
     inputTokens: res.usage?.input_tokens ?? 0,
     latencyMs,
@@ -264,7 +285,10 @@ export function createDecisionRouter(opts: RouterOptions): DecisionRouter {
       const fingerprint =
         input.contextFingerprint ??
         `${input.toolCategories.join(',')}|${input.skillCandidates.join(',')}|${input.sessionModelClass}`;
-      const key = decisionCacheKey(input.text, fingerprint);
+      const key = decisionCacheKey(
+        input.text,
+        `resolver-v1|${fingerprint}|${JSON.stringify(input.capabilities ?? null)}|${JSON.stringify(input.recentTurns.slice(-6))}`,
+      );
       const cached = await opts.cache?.get(key);
       if (cached)
         return {

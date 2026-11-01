@@ -38,6 +38,88 @@ const questioner: Questioner = async () => ({
 });
 
 describe('chiarimento interno', () => {
+  it('l’annullamento esterno ferma il chiarimento e non interroga Jev', async () => {
+    const signal = AbortSignal.abort();
+    const jev = createMockJevClient();
+    const clarify = createClarifier({ jev, questioner, minConfidence: 0.8 });
+    await expect(clarify.clarify({ ...input, signal })).rejects.toThrow();
+    expect(jev.calls).toBe(0);
+  });
+  it('risolve una capacità attiva con domande LLM e risposte Jev; none non autorizza operazioni', async () => {
+    const capabilities = [
+      { id: 'todo', description: 'Organizza le attività con orari' },
+      { id: 'ricordami', description: 'Imposta avvisi' },
+    ];
+    const ask: Questioner = async () => ({
+      questions: [
+        {
+          kind: 'capability',
+          about: 'programmino',
+          question: 'Quale risultato vuoi?',
+          options: ['todo', 'ricordami', 'none'],
+        },
+      ],
+      costUsd: 0,
+    });
+    const jev = createMockJevClient(() => ({
+      q1: { type: 'choice', choice: 'o1', confidence: 0.95 },
+    }));
+    const clarify = createClarifier({ jev, questioner: ask, minConfidence: 0.8 });
+    expect(
+      (await clarify.clarify({ ...input, trigger: 'request', capabilities }))?.capabilityId,
+    ).toBe('todo');
+    const noAction = createClarifier({
+      jev: createMockJevClient(() => ({ q1: { type: 'choice', choice: 'o3', confidence: 0.95 } })),
+      questioner: ask,
+      minConfidence: 0.8,
+    });
+    const result = await noAction.clarify({ ...input, trigger: 'request', capabilities });
+    expect(result?.capabilityId).toBeNull();
+    if (!result) throw new Error('missing clarification');
+    expect(clarificationNote(result)).toContain('non autorizza');
+  });
+
+  it('rifiuta capacità inventate/spente e lascia irrisolta una risposta poco sicura', async () => {
+    const capabilities = [{ id: 'todo', description: 'Attività' }];
+    const ask: Questioner = async () => ({
+      questions: [
+        {
+          kind: 'capability',
+          about: 'lista',
+          question: 'Quale funzione?',
+          options: ['todo', 'ssh'],
+        },
+      ],
+      costUsd: 0,
+    });
+    const jev = createMockJevClient(() => ({
+      q1: { type: 'choice', choice: 'o1', confidence: 0.4 },
+    }));
+    expect(
+      await createClarifier({ jev, questioner: ask, minConfidence: 0.8 }).clarify({
+        ...input,
+        trigger: 'request',
+        capabilities,
+      }),
+    ).toBeNull();
+    const uncertain = await createClarifier({
+      jev,
+      questioner: async () => ({
+        questions: [
+          {
+            kind: 'capability',
+            about: 'lista',
+            question: 'Quale funzione?',
+            options: ['todo', 'none'],
+          },
+        ],
+        costUsd: 0,
+      }),
+      minConfidence: 0.8,
+    }).clarify({ ...input, trigger: 'request', capabilities });
+    expect(uncertain?.capabilityId).toBeUndefined();
+    expect(uncertain?.unresolved).toHaveLength(1);
+  });
   it('domande chiuse per Jev con «non si può dire»; stato con persone, luoghi e dettatura', () => {
     const q = clarifyQuestions([
       { about: 'lui', question: 'Chi è «lui»?', options: ['Giorgio', 'Fabio'] },

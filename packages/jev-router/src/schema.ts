@@ -103,6 +103,8 @@ export const RouteDecision = z.object({
   ambiguity: z.number().min(0).max(1).optional(),
   /** P(l'utente sta correggendo un fraintendimento della risposta precedente). */
   correction: z.number().min(0).max(1).optional(),
+  /** Segnale di una possibile richiesta operativa: attiva un controllo, mai un'autorizzazione. */
+  operationalIntent: z.number().min(0).max(1).optional(),
   /**
    * La classe che Jev sceglierebbe senza la classe della sessione: `heavy` se la richiesta è complessa, `standard`
    * se è semplice con sicurezza (soglia `lowerClassConfidence`), assente se è incerta. Serve a far ridiscendere una

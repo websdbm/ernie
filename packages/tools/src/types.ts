@@ -6,6 +6,8 @@ export type { ToolRisk };
 
 /** Contesto di esecuzione per turno: aggiornato dalla connessione prima di ogni turno. */
 export interface ToolContext {
+  /** Resolved as conversation/advice: server can forbid writes, never grant permissions. */
+  readonly allowActions?: boolean;
   /** Original authenticated user message, never supplied by the model or a tool result. */
   readonly userMessage?: string;
   /** Actual model executing this turn; sensitive infrastructure tools require heavy. */

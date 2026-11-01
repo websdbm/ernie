@@ -165,7 +165,14 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
       };
 
       // 1) Policy deterministica, fuori dal modello.
-      const verdict = evaluateToolPolicy(descriptor, ctx.run.toPolicyContext(), deps.policyRules);
+      const verdict =
+        ctx.allowActions === false && (spec.risk.write || spec.risk.externalEffect)
+          ? {
+              kind: 'deny' as const,
+              reason:
+                'La richiesta è stata risolta come conversazione o consiglio: non sono autorizzate modifiche o azioni esterne. Chiedi un chiarimento prima di procedere.',
+            }
+          : evaluateToolPolicy(descriptor, ctx.run.toPolicyContext(), deps.policyRules);
       let approvalId: string | null = null;
       let approved: boolean | null = null;
       if (verdict.kind === 'deny') {

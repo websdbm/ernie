@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { TurnInput } from '@ernie/agent-core';
-import type { RouteDecision } from '@ernie/jev-router';
+import type { Clarification, RouteDecision } from '@ernie/jev-router';
 import { createLogger } from '@ernie/observability';
 import {
   type AgentEvent,
@@ -229,6 +229,137 @@ const field = <T>(e: AgentEvent | undefined, key: string): T | undefined =>
   (e?.payload as Record<string, T> | undefined)?.[key];
 
 describe('ClientConnection: programma personale e scheda Todo', () => {
+  it('un segnale operativo debole avvia il resolver e corregge la procedura scelta da Jev', async () => {
+    const registry = new SkillRegistry().register(createTodoSkill());
+    const run = vi.fn(
+      async (): Promise<Clarification> => ({
+        trigger: 'request',
+        questions: [],
+        answers: [],
+        resolved: [],
+        unresolved: [],
+        costUsd: 0,
+        latencyMs: 1,
+        capabilityId: 'todo',
+      }),
+    );
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        clarify: {
+          run,
+          known: async () => ({ people: [], places: [] }),
+          thresholds: { ambiguity: 0.82, correction: 0.8 },
+        },
+        runTurn,
+      },
+      undefined,
+      fakeRouter({ skillId: 'ricordami', operationalIntent: 0.35, ambiguity: 0.1 }),
+    );
+    const conn = new ClientConnection(fakeSocket().socket, auth, d),
+      c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Mi servirebbe un programmino'));
+    await tick();
+    expect(run).toHaveBeenCalledOnce();
+    expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain('scheda cronologica');
+    expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain('todo_save');
+  });
+
+  it('un dubbio residuo genera pulsanti e termina senza avviare esecuzione; conserva il turno originale', async () => {
+    const registry = new SkillRegistry().register(createTodoSkill());
+    const runTurn = vi.fn(async (_input: TurnInput) => {}),
+      recordLocalTurn = vi.fn(async () => {});
+    const result: Clarification = {
+      trigger: 'request',
+      questions: [],
+      answers: [],
+      resolved: [],
+      unresolved: [
+        {
+          kind: 'capability',
+          about: 'lista',
+          question: 'Che risultato vuoi?',
+          options: ['todo', 'none'],
+        },
+      ],
+      costUsd: 0,
+      latencyMs: 1,
+    };
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        clarify: {
+          run: async () => result,
+          known: async () => ({ people: [], places: [] }),
+          thresholds: { ambiguity: 0.82, correction: 0.8 },
+        },
+        runTurn,
+        recordLocalTurn,
+      },
+      undefined,
+      fakeRouter({ operationalIntent: 0.35 }),
+    );
+    const socket = fakeSocket(),
+      conn = new ClientConnection(socket.socket, auth, d),
+      c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Una lista per stamattina'));
+    await tick();
+    expect(runTurn).not.toHaveBeenCalled();
+    const block = socket.sent.find((e) => e.type === 'assistant.block');
+    expect(block?.payload).toMatchObject({
+      block: {
+        kind: 'choices',
+        options: [
+          { id: '1', label: 'Organizza le attività' },
+          { id: '2', label: 'Solo un consiglio, senza operazioni' },
+        ],
+      },
+    });
+    expect(recordLocalTurn).toHaveBeenCalledWith(
+      auth.userId,
+      expect.any(String),
+      'Una lista per stamattina',
+      'Che risultato vuoi?',
+      'skill',
+    );
+  });
+
+  it('un falso positivo risolto come conversazione toglie la procedura operativa precedente', async () => {
+    const registry = new SkillRegistry().register(createTodoSkill());
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const result: Clarification = {
+      trigger: 'request',
+      questions: [],
+      answers: [],
+      resolved: [],
+      unresolved: [],
+      costUsd: 0,
+      latencyMs: 1,
+      capabilityId: null,
+    };
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        clarify: {
+          run: async () => result,
+          known: async () => ({ people: [], places: [] }),
+          thresholds: { ambiguity: 0.82, correction: 0.8 },
+        },
+        runTurn,
+      },
+      undefined,
+      fakeRouter({ operationalIntent: 0.35, skillId: 'todo' }),
+    );
+    const conn = new ClientConnection(fakeSocket().socket, auth, d),
+      c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Era solo un consiglio, non creare niente'));
+    await tick();
+    expect(runTurn.mock.calls[0]?.[0].memoryContext).not.toContain('Procedura «');
+  });
   it('recupera il programmino anche se Jev sceglie Ricordami, e conserva la procedura dopo Ok', async () => {
     const registry = new SkillRegistry().register(createTodoSkill());
     const inputs: TurnInput[] = [];

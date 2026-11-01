@@ -1,5 +1,5 @@
 import type { JevClient } from './client.js';
-import type { JevQuestion } from './schema.js';
+import type { JevQuestion, JevResponse } from './schema.js';
 
 /**
  * Chiarimento interno (richiesta dell'utente, 15 ott 2026): quando un messaggio è poco chiaro, o l'utente corregge
@@ -7,9 +7,13 @@ import type { JevQuestion } from './schema.js';
  * sceglie la risposta con una confidenza, dal contesto. Le risposte sicure diventano una nota per il modello che
  * risponde; i dubbi restano dubbi (il modello può chiedere all'utente con una domanda a pulsanti).
  */
-export type ClarifyTrigger = 'ambiguous' | 'correction';
+export type ClarifyTrigger = 'ambiguous' | 'correction' | 'request';
+
+/** Soglia iniziale orientata al recall; riguarda l'analisi, non l'esecuzione. */
+export const REQUEST_RESOLUTION_ACTIVATION = 0.3;
 
 export interface ClarifyQuestion {
+  readonly kind?: 'meaning' | 'capability' | undefined;
   /** Il pezzo di testo in dubbio, come l'ha scritto l'utente («lui», «Jeff», «venerdì»). */
   readonly about: string;
   readonly question: string;
@@ -27,13 +31,15 @@ export interface ClarifyInput {
   readonly people: readonly string[];
   /** Luoghi della scheda («casa», «lavoro», «palestra»). */
   readonly places: readonly string[];
+  readonly capabilities?: readonly { id: string; description: string }[] | undefined;
+  readonly signal?: AbortSignal | undefined;
 }
 
 export type Questioner = (
   input: ClarifyInput,
   /** Annulla la chiamata al modello quando il chiarimento scade: niente lavoro a vuoto dopo la risposta. */
   options?: { readonly signal?: AbortSignal },
-) => Promise<{ questions: readonly ClarifyQuestion[]; costUsd: number }>;
+) => Promise<{ questions: readonly ClarifyQuestion[]; costUsd: number; inputTokens?: number }>;
 
 export interface ClarifyAnswer {
   readonly about: string;
@@ -53,6 +59,8 @@ export interface Clarification {
   readonly unresolved: readonly ClarifyQuestion[];
   readonly costUsd: number;
   readonly latencyMs: number;
+  readonly capabilityId?: string | null;
+  readonly inputTokens?: number;
 }
 
 export interface ClarifierOptions {
@@ -63,6 +71,7 @@ export interface ClarifierOptions {
   readonly minConfidence: number;
   /** Tempo massimo complessivo (domande + risposte): oltre, si risponde senza chiarimento. */
   readonly timeoutMs?: number;
+  readonly onAnswer?: (response: JevResponse, latencyMs: number) => Promise<void>;
 }
 
 export interface Clarifier {
@@ -75,6 +84,7 @@ const MAX_QUESTIONS = 4;
 /** Domande chiuse per Jev: una `choice` per domanda, con «non si può dire» sempre fra le opzioni. */
 export function clarifyQuestions(
   questions: readonly ClarifyQuestion[],
+  capabilities: ClarifyInput['capabilities'] = [],
 ): Record<string, JevQuestion> {
   const out: Record<string, JevQuestion> = {};
   questions.slice(0, MAX_QUESTIONS).forEach((q, i) => {
@@ -82,7 +92,17 @@ export function clarifyQuestions(
       type: 'choice',
       instructions: `${q.question} (nel messaggio: «${q.about}»)`,
       criteria: {
-        ...Object.fromEntries(q.options.slice(0, 4).map((o, j) => [`o${j + 1}`, o])),
+        ...Object.fromEntries(
+          q.options
+            .slice(0, 4)
+            .map((o, j) => [
+              `o${j + 1}`,
+              q.kind === 'capability'
+                ? (capabilities?.find((c) => c.id === o)?.description ??
+                  'Solo conversazione o consiglio, nessuna operazione richiesta.')
+                : o,
+            ]),
+        ),
         [UNKNOWN]: 'Dal messaggio e dal contesto non si può stabilire.',
       },
     };
@@ -101,10 +121,13 @@ export function clarifyState(input: ClarifyInput): Record<string, unknown> {
     situation:
       input.trigger === 'correction'
         ? 'L’utente sta correggendo la risposta precedente dell’assistente: le domande riguardano cosa intendeva davvero.'
-        : 'Il messaggio sembra poco chiaro: le domande riguardano cosa intende l’utente.',
+        : input.trigger === 'request'
+          ? 'Potrebbe esserci una richiesta operativa. Distingui intento, funzione e risultato voluto usando soltanto il messaggio e il contesto; riconoscere una possibilità non autorizza a eseguirla.'
+          : 'Il messaggio sembra poco chiaro: le domande riguardano cosa intende l’utente.',
     recent_turns: input.recentTurns.slice(-6),
     known_people: input.people.slice(0, 12),
     known_places: input.places.slice(0, 10),
+    ...(input.capabilities ? { active_capabilities: input.capabilities } : {}),
   };
 }
 
@@ -120,8 +143,12 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
       if (!opts.jev) return null;
       const t0 = Date.now();
       const ac = new AbortController();
+      const onAbort = () => ac.abort(input.signal?.reason);
+      input.signal?.addEventListener('abort', onAbort, { once: true });
+      if (input.signal?.aborted) onAbort();
       const timer = setTimeout(() => ac.abort(), timeoutMs);
       try {
+        ac.signal.throwIfAborted();
         const deadline = new Promise<never>((_, reject) =>
           ac.signal.addEventListener('abort', () =>
             reject(new Error('chiarimento: tempo scaduto')),
@@ -130,16 +157,25 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
         // Se scade mentre risponde Jev, l'errore arriva dalla sua richiesta: questa non deve restare non gestita.
         deadline.catch(() => {});
         const asked = await Promise.race([opts.questioner(input, { signal: ac.signal }), deadline]);
-        const questions = asked.questions.filter(sane).slice(0, MAX_QUESTIONS);
+        const questions = asked.questions
+          .filter(sane)
+          .filter(
+            (q) =>
+              q.kind !== 'capability' ||
+              q.options.every((o) => o === 'none' || input.capabilities?.some((c) => c.id === o)),
+          )
+          .slice(0, MAX_QUESTIONS);
         if (!questions.length) return null;
+        const jevStartedAt = Date.now();
         const res = await opts.jev.decide(
           {
             ...(opts.model ? { model: opts.model } : {}),
             state: clarifyState(input),
-            questions: clarifyQuestions(questions),
+            questions: clarifyQuestions(questions, input.capabilities),
           },
           { signal: ac.signal },
         );
+        await opts.onAnswer?.(res, Date.now() - jevStartedAt);
         const answers: ClarifyAnswer[] = questions.map((q, i) => {
           const a = res.answers[`q${i + 1}`];
           if (a?.type !== 'choice')
@@ -153,11 +189,26 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
             (a): a is ClarifyAnswer & { meaning: string } =>
               a.meaning !== null && a.confidence >= opts.minConfidence,
           )
-          .map((a) => ({ about: a.about, meaning: a.meaning, confidence: a.confidence }));
+          .map((a) => ({
+            about: a.about,
+            meaning:
+              questions.find((q) => q.about === a.about)?.kind === 'capability'
+                ? (input.capabilities?.find((c) => c.id === a.meaning)?.description ??
+                  'Solo conversazione o consiglio, senza operazioni')
+                : a.meaning,
+            confidence: a.confidence,
+          }));
         const unresolved = questions.filter((_, i) => {
           const a = answers[i];
           return !a || a.meaning === null || a.confidence < opts.minConfidence;
         });
+        const capability = questions.findIndex(
+          (q, i) =>
+            q.kind === 'capability' &&
+            answers[i]?.meaning !== null &&
+            (answers[i]?.confidence ?? 0) >= opts.minConfidence,
+        );
+        const capabilityId = capability >= 0 ? answers[capability]?.meaning : undefined;
         return {
           trigger: input.trigger,
           questions,
@@ -165,9 +216,16 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
           resolved,
           unresolved,
           costUsd: asked.costUsd + (res.usage?.cost ?? 0),
+          inputTokens: (asked.inputTokens ?? 0) + (res.usage?.input_tokens ?? 0),
           latencyMs: Date.now() - t0,
+          ...(capabilityId === 'none'
+            ? { capabilityId: null }
+            : capabilityId && input.capabilities?.some((c) => c.id === capabilityId)
+              ? { capabilityId }
+              : {}),
         };
       } finally {
+        input.signal?.removeEventListener('abort', onAbort);
         clearTimeout(timer);
       }
     },
@@ -180,6 +238,10 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
  */
 export function clarificationNote(c: Clarification): string | null {
   const lines: string[] = [];
+  if (c.trigger === 'request')
+    lines.push(
+      'Risoluzione di una possibile richiesta: questa interpretazione non autorizza scritture o azioni. Distingui una richiesta effettiva da consigli, ipotesi e citazioni; verifica dati e permessi prima di eseguire. Se l’utente vuole solo un consiglio non creare, modificare o annullare nulla.',
+    );
   if (c.trigger === 'correction')
     lines.push(
       'L’utente sta correggendo la tua risposta precedente: rileggi la sua richiesta alla luce della correzione e non ripetere lo stesso errore.',

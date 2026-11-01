@@ -69,6 +69,7 @@ import {
   createLlmCallRecorder,
   createMediaLabeler,
   createModelGateway,
+  normalizeUsage,
 } from '@ernie/model-gateway';
 import { createLogger } from '@ernie/observability';
 import { SYSTEM_HEARTBEAT_CHANNEL } from '@ernie/protocol';
@@ -863,7 +864,30 @@ async function main(): Promise<void> {
             createClarifier({
               jev: jevClient,
               questioner: createClarifyQuestioner({ gateway, recorder: clarifyRecorder }, ctx),
-              minConfidence: thresholds.clarifyConfidence,
+              minConfidence:
+                input.trigger === 'request'
+                  ? Math.max(0.8, thresholds.clarifyConfidence)
+                  : thresholds.clarifyConfidence,
+              onAnswer: async (response, latencyMs) =>
+                clarifyRecorder.record({
+                  ...ctx,
+                  stepIndex: 1,
+                  purpose: 'router',
+                  provider: 'openrouter',
+                  model: response.model ?? config.router.jevModel,
+                  modelClass: 'light',
+                  generationId: response.id ?? null,
+                  usage: normalizeUsage(
+                    {
+                      inputTokens: response.usage?.input_tokens ?? 0,
+                      outputTokens: response.usage?.output_tokens ?? 0,
+                    },
+                    { openrouter: { usage: { cost: response.usage?.cost } } },
+                  ),
+                  ttftMs: null,
+                  latencyMs,
+                  finishReason: 'stop',
+                }),
               // Domande di Haiku (2–4 s) più risposte di Jev (~1 s): scatta solo sui messaggi ambigui o le correzioni.
               timeoutMs: 7_000,
               ...(config.router.jevModel ? { model: config.router.jevModel } : {}),

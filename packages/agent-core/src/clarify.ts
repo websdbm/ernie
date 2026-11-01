@@ -17,6 +17,7 @@ const Questions = z.object({
   questions: z
     .array(
       z.object({
+        kind: z.enum(['meaning', 'capability']).optional(),
         about: z.string().min(1).max(60),
         question: z.string().min(3).max(200),
         options: z.array(z.string().min(1).max(100)).min(2).max(4),
@@ -34,13 +35,22 @@ Individua al massimo 3 punti del messaggio che si possono intendere in modi dive
 - una richiesta che ha due letture (fare una cosa o spiegarla, a chi è rivolta).
 
 Per ogni punto: «about» è il pezzo di testo così come l'ha scritto l'utente; «question» una domanda di poche parole; «options» da 2 a 3 interpretazioni brevi (poche parole), concrete e diverse fra loro, prese dal contesto (persone note, luoghi, argomenti degli ultimi scambi), scritte come risposta diretta («Giorgio», «Jev, il router decisionale»). Non aggiungere l'opzione «non si sa»: c'è già.
-Se il messaggio è chiaro, restituisci nessuna domanda. Non chiedere dettagli che servono solo a eseguire la richiesta quando il testo non è ambiguo.`;
+Fuori dalla situazione «richiesta operativa possibile», se il messaggio è chiaro restituisci nessuna domanda. Non chiedere dettagli che servono solo a eseguire la richiesta quando il testo non è ambiguo.
+
+Nella situazione «richiesta operativa possibile» controlla anche quale funzione deve occuparsene e quale risultato si aspetta l'utente. Preferiamo verificare una possibile richiesta piuttosto che ignorarla. Scrivi UNA domanda kind=capability con da 2 a 4 opzioni: gli ID ESATTI delle capacità attive pertinenti (non le sole candidate iniziali) e, se serve, none per sola conversazione/consiglio. Anche se una funzione sembra chiara, questa domanda permette a Jev di verificarla. La domanda può arrivare all'utente: scrivila in italiano comprensibile, senza identificatori tecnici. Non proporre funzioni spente o inventate. Puoi aggiungere fino a due domande kind=meaning sui veri dubbi interpretativi.
+Per questa situazione la domanda sulla funzione va nel campo capability obbligatorio; questions contiene soltanto eventuali altre domande. Negli altri casi usa il solo campo questions.
+Le altre domande hanno opzioni in italiano autosufficienti. Non inventare preferenze, durate, fatti o consenso e non chiedere a Jev di indovinarli: se manca un dato esecutivo, segnala il dubbio al modello principale che potrà leggere i dati e chiedere alla persona. Le conferme brevi si riferiscono soltanto alla proposta identificabile nel contesto. Un dubbio operativo non implica autorizzazione e non cambia le regole delle azioni.`;
 
 export function questionerPrompt(input: ClarifyInput): string {
   return [
     input.trigger === 'correction'
       ? "Situazione: l'utente sta correggendo la risposta precedente dell'assistente. Chiediti cosa intendeva davvero nella richiesta corretta."
-      : 'Situazione: il messaggio sembra poco chiaro.',
+      : input.trigger === 'request'
+        ? 'Situazione: richiesta operativa possibile, da verificare prima di rispondere. Individua funzione e risultato; usa kind=capability per la domanda sulla funzione.'
+        : 'Situazione: il messaggio sembra poco chiaro.',
+    ...(input.capabilities?.length
+      ? ['Capacità attive:', ...input.capabilities.map((c) => `${c.id}: ${c.description}`)]
+      : []),
     input.inputMode === 'voice'
       ? 'Il messaggio è dettato: la trascrizione può storpiare nomi e parole.'
       : '',
@@ -61,6 +71,21 @@ export interface ClarifyQuestionerDeps {
   readonly recorder: LlmCallRecorder;
 }
 
+export function requestResolutionSchema(capabilities: NonNullable<ClarifyInput['capabilities']>) {
+  return z.object({
+    capability: z.object({
+      kind: z.literal('capability'),
+      about: z.string().min(1).max(60),
+      question: z.string().min(3).max(200),
+      options: z
+        .array(z.enum([...capabilities.map((c) => c.id), 'none']))
+        .min(2)
+        .max(4),
+    }),
+    questions: Questions.shape.questions.max(2),
+  });
+}
+
 /** Un questioner per turno: usa il modello leggero e registra la chiamata come parte dell'instradamento. */
 export function createClarifyQuestioner(
   deps: ClarifyQuestionerDeps,
@@ -75,11 +100,14 @@ export function createClarifyQuestioner(
   });
   return async (input, options) => {
     const t0 = Date.now();
+    const ids = input.capabilities?.map((c) => c.id) ?? [];
+    const requestSchema = requestResolutionSchema(input.capabilities ?? []);
+    const request = input.trigger === 'request' && ids.length > 0;
     const result = await agent.generate(questionerPrompt(input), {
       structuredOutput: {
-        schema: Questions,
+        schema: request ? requestSchema : Questions,
         errorStrategy: 'fallback',
-        fallbackValue: { questions: [] },
+        fallbackValue: {}, // Uno schema non valido non può diventare un'interpretazione risolta.
       },
       // Niente ragionamento: domande brevi, servono in fretta (misurato il 15 ott 2026: 2,4–6 s con ~250 token).
       // Un solo livello di tentativi (retryModelCall del gateway); il segnale ferma la chiamata alla scadenza.
@@ -91,7 +119,7 @@ export function createClarifyQuestioner(
       },
     } as never);
     const r = result as unknown as {
-      object?: z.infer<typeof Questions>;
+      object?: unknown;
       usage?: unknown;
       providerMetadata?: unknown;
       response?: { id?: string };
@@ -113,7 +141,18 @@ export function createClarifyQuestioner(
       finishReason: 'stop',
     });
     const parsed = Questions.safeParse(r.object);
-    const questions: ClarifyQuestion[] = parsed.success ? parsed.data.questions : [];
-    return { questions, costUsd: callCostUsd(usage, resolved.profile.modelId) };
+    const requestParsed = requestSchema.safeParse(r.object);
+    const questions: ClarifyQuestion[] = request
+      ? requestParsed.success
+        ? [requestParsed.data.capability, ...requestParsed.data.questions]
+        : []
+      : parsed.success
+        ? parsed.data.questions
+        : [];
+    return {
+      questions,
+      costUsd: callCostUsd(usage, resolved.profile.modelId),
+      inputTokens: usage.inputTokens,
+    };
   };
 }
