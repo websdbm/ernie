@@ -102,14 +102,14 @@ import UIKit
             performanceQueue: PerformanceObservationQueue(send: { _ in }, pause: {}), deviceContext: { nil })
     }
 
-    @Test func clearNascondeSenzaEliminareCronologiaSessioneOCodaEPermetteRipristino() throws {
+    @Test func clearConservaContestoSessioneECodaEMostraSoloNuoviElementi() throws {
         try withClearConversation { store, transcript in
             store.send("Organizziamo la giornata", inputMode: "text") // Offline: nessuna connessione reale.
             let items = store.items, sid = store.sessionId, queued = store.queuedCount
             let savedBefore = try #require(transcript.load(sid))
             let correlation = store.activeCorrelationId
             store.clearVisibleHistory()
-            #expect(store.visibleItems.isEmpty && store.hasHiddenHistory)
+            #expect(store.visibleItems.isEmpty)
             #expect(store.items == items && store.sessionId == sid)
             #expect(store.queuedCount == queued && store.activeCorrelationId == correlation)
             let saved = try #require(transcript.load(sid))
@@ -120,9 +120,7 @@ import UIKit
             #expect(store.items == items && store.visibleItems.isEmpty)
             store.send("E anche la cena", inputMode: "text")
             #expect(store.visibleItems.count == 1 && store.items.count == 2)
-            store.showHiddenHistory()
-            #expect(store.visibleItems == store.items && !store.hasHiddenHistory)
-            #expect(transcript.load(sid)?.hiddenItemIds == nil)
+            #expect(transcript.load(sid)?.hiddenItemIds == saved.hiddenItemIds)
         }
     }
 
@@ -135,16 +133,14 @@ import UIKit
             let reopened = clearConversation(transcript)
             defer { reopened.disconnect() }
             #expect(reopened.sessionId == sid && reopened.items == saved.items)
-            #expect(reopened.visibleItems.isEmpty && reopened.hasHiddenHistory)
+            #expect(reopened.visibleItems.isEmpty)
             #expect(reopened.queuedCount == store.queuedCount)
             reopened.startNewSession()
-            #expect(reopened.sessionId != sid && reopened.items.isEmpty && !reopened.hasHiddenHistory)
+            #expect(reopened.sessionId != sid && reopened.items.isEmpty)
             reopened.send("Conversazione diversa", inputMode: "text")
             #expect(reopened.visibleItems == reopened.items)
             reopened.resume(sessionId: sid)
             #expect(reopened.items == saved.items && reopened.visibleItems.isEmpty)
-            reopened.showHiddenHistory()
-            #expect(reopened.visibleItems == saved.items)
         }
     }
 
@@ -183,7 +179,7 @@ import UIKit
             let message = ChatMessage(id: "old", correlationId: "old-turn", role: .user, text: "Cronologia vecchia", createdAt: Date(timeIntervalSince1970: 1_000))
             transcript.save(.init(sessionId: "old-session", lastSeq: 4, items: [.message(message)], updatedAt: .now))
             store.resume(sessionId: "old-session")
-            #expect(store.visibleItems == [.message(message)] && !store.hasHiddenHistory)
+            #expect(store.visibleItems == [.message(message)])
         }
     }
 

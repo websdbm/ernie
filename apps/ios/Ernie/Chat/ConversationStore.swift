@@ -9,7 +9,6 @@ final class ConversationStore {
     private var hiddenItemIds: Set<String> = []
     /// Il contesto e le richieste continuano a usare `items`, anche dopo /clear.
     var visibleItems: [ChatItem] { hiddenItemIds.isEmpty ? items : items.filter { !hiddenItemIds.contains($0.id) } }
-    var hasHiddenHistory: Bool { !hiddenItemIds.isEmpty }
     private(set) var connection: ProtocolClient.ConnectionState = .disconnected
     private(set) var agentState: AgentState = .idle
     private(set) var sessionId: String
@@ -238,12 +237,6 @@ final class ConversationStore {
     func clearVisibleHistory() {
         guard isAttached else { return }
         hiddenItemIds.formUnion(items.map(\.id))
-        persist()
-    }
-
-    func showHiddenHistory() {
-        guard isAttached else { return }
-        hiddenItemIds = []
         persist()
     }
 

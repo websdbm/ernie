@@ -4,7 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct TerminalChatTests {
-    @Test @MainActor func clearMostraIlRipristinoInChiaroEBorgConTestoGrande() async throws {
+    @Test @MainActor func clearLasciaSoloSfondoInChiaroEBorgConTestoGrande() async throws {
         let name = "clear-preview-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name)
@@ -38,6 +38,15 @@ struct TerminalChatTests {
             let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
                 host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
             }
+            // Nessun testo o pulsante deve apparire: l'intera area è lo stesso sfondo.
+            let cg = try #require(image.cgImage)
+            let width = cg.width, height = cg.height
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            let context = try #require(CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let first = Array(pixels[0..<4])
+            #expect(stride(from: 0, to: pixels.count, by: 4).allSatisfy { Array(pixels[$0..<$0 + 4]) == first })
             let path = folder.appendingPathComponent(name + ".png")
             try #require(image.pngData()).write(to: path)
             print("CLEAR_SNAPSHOT: \(path.path)")

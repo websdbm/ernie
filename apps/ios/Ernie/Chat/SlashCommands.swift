@@ -31,7 +31,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
         case .ssh: "Apri server e siti"
         case .settings: "Apri le impostazioni"
         case .usage: "Apri i tuoi consumi"
-        case .clear: "Pulisci lo schermo: Ernie conserva il contesto"
+        case .clear: "Pulisci la schermata"
         case .help: "Vedi tutti i comandi disponibili"
         }
     }

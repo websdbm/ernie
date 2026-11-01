@@ -1,5 +1,18 @@
 [
   {
+    "build": 113,
+    "date": "2026-11-01",
+    "title": "Clear, solo schermo pulito",
+    "items": [
+      {
+        "icon": "clear",
+        "title": "Nessun testo dopo /clear",
+        "detail": "La chat resta vuota, senza messaggi di servizio o pulsanti di ripristino. Ernie conserva il contesto.",
+        "test": "Scrivi /clear e continua la conversazione."
+      }
+    ]
+  },
+  {
     "build": 112,
     "date": "2026-11-01",
     "title": "Una chat più pulita con /clear",

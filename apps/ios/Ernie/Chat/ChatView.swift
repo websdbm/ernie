@@ -404,7 +404,6 @@ struct ChatBackdrop: View {
 
 struct MessageList: View {
     let conversation: ConversationStore
-    @Environment(\.chatPalette) private var palette
     /// Spazio lasciato in alto per l'avatar che galleggia sopra la lista.
     var topInset: CGFloat = 0
 
@@ -417,20 +416,6 @@ struct MessageList: View {
 
     @ViewBuilder
     private var rows: some View {
-        if conversation.hasHiddenHistory {
-            VStack(spacing: 4) {
-                if conversation.visibleItems.isEmpty {
-                    Text("Schermata pulita").font(.headline)
-                    Text("La conversazione continua: Ernie conserva il contesto.")
-                        .font(.footnote).foregroundStyle(palette.inkSecondary)
-                }
-                Button("Mostra la cronologia") { conversation.showHiddenHistory() }
-                    .font(.footnote).frame(minHeight: 44)
-            }
-            .foregroundStyle(palette.ink)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-        }
         ForEach(conversation.visibleItems) { item in
             switch item {
             case .message(let m): MessageRow(message: m, conversation: conversation)

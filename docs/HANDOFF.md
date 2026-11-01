@@ -5,7 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — build **112 disponibile su TestFlight**, gruppo **Interni**.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — build **113 in preparazione**.
+Correzione richiesta dall’utente: `/clear` lascia soltanto lo sfondo, senza testi, conferme o pulsanti
+per ripristinare i contenuti. Rimossi anche il metodo di ripristino e il relativo invito nell’aiuto.
+Contesto, sessione e persistenza della pulizia restano invariati; nessuna cancellazione lato server.
+26 test verdi in cinque suite, inclusa la verifica nativa di tutti i pixel: solo sfondo uniforme
+in chiaro, Borg e con caratteri grandi. Nessun deploy backend.
+Dettagli e stato effettivo: [build 113](releases/build-113.md). Ultima distribuita per ora: 112.
+
+Rilascio iOS precedente: **1 novembre 2026**, Codex — build **112 disponibile su TestFlight**, gruppo **Interni**.
 Apple: **VALID**, **IN_BETA_TESTING**; Build ID `6f729ecb-4a51-424f-aa01-0fb3ae7eefde`, note italiane rilette (674 caratteri).
 Comando locale `/clear`: nasconde messaggi e schede esistenti, mantenendo sessione, contesto, coda, richieste
 attive e cursore replay. La visualizzazione viene ricordata per conversazione sul telefono;
