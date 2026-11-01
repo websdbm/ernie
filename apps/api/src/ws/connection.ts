@@ -48,6 +48,7 @@ import {
   formatFiredIntents,
   type IntentStore,
   requiresSshModel,
+  SKILL_CATALOG,
   type SkillRegistry,
   TODO_PLANNING_FALLBACK,
 } from '@ernie/skills';
@@ -1616,7 +1617,10 @@ export class ClientConnection {
         const options = q.options.slice(0, 4).map((o, i) => ({
           id: String(i + 1),
           label: (q.kind === 'capability'
-            ? (labels[o] ?? skills?.get(o)?.description ?? o)
+            ? (labels[o] ??
+              SKILL_CATALOG.find((s) => s.id === o)?.title ??
+              skills?.get(o)?.description ??
+              o)
             : o
           ).slice(0, 80),
         }));

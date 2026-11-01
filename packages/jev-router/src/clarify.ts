@@ -53,7 +53,7 @@ export interface Clarification {
   readonly trigger: ClarifyTrigger;
   readonly questions: readonly ClarifyQuestion[];
   readonly answers: readonly ClarifyAnswer[];
-  /** Risposte sopra la soglia: entrano nella nota per il modello e nella riga in chat. */
+  /** Interpretazioni semantiche sopra soglia; la capacità scelta resta separata in capabilityId. */
   readonly resolved: readonly { about: string; meaning: string; confidence: number }[];
   /** Domande rimaste aperte (Jev incerto o «non si può dire»). */
   readonly unresolved: readonly ClarifyQuestion[];
@@ -184,20 +184,15 @@ export function createClarifier(opts: ClarifierOptions): Clarifier {
           const meaning = idx ? (q.options[Number(idx) - 1] ?? null) : null;
           return { about: q.about, question: q.question, meaning, confidence: a.confidence ?? 0 };
         });
-        const resolved = answers
-          .filter(
-            (a): a is ClarifyAnswer & { meaning: string } =>
-              a.meaning !== null && a.confidence >= opts.minConfidence,
-          )
-          .map((a) => ({
-            about: a.about,
-            meaning:
-              questions.find((q) => q.about === a.about)?.kind === 'capability'
-                ? (input.capabilities?.find((c) => c.id === a.meaning)?.description ??
-                  'Solo conversazione o consiglio, senza operazioni')
-                : a.meaning,
-            confidence: a.confidence,
-          }));
+        // L'instradamento non è un significato del testo. Non copiare descrizioni/esempi del catalogo
+        // nelle interpretazioni; usa l'indice, perché due domande possono riguardare lo stesso «about».
+        const resolved = answers.flatMap((a, i) =>
+          a.meaning !== null &&
+          a.confidence >= opts.minConfidence &&
+          questions[i]?.kind !== 'capability'
+            ? [{ about: a.about, meaning: a.meaning, confidence: a.confidence }]
+            : [],
+        );
         const unresolved = questions.filter((_, i) => {
           const a = answers[i];
           return !a || a.meaning === null || a.confidence < opts.minConfidence;

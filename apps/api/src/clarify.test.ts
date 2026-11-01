@@ -52,4 +52,27 @@ describe('chiarimento interno (server)', () => {
       items: [{ about: 'lui', meaning: 'Giorgio' }],
     });
   });
+
+  it('non mostra il riepilogo interno del resolver come una richiesta alla persona', () => {
+    expect(
+      interpretationBlock({
+        trigger: 'request',
+        questions: [],
+        answers: [],
+        unresolved: [],
+        costUsd: 0,
+        latencyMs: 1,
+        resolved: [
+          {
+            about: 'Segna il posto come casa di Francesco',
+            meaning:
+              'Di’ «annota che il codice della caldaia è 4471», «metti nel second brain che a Giorgio piacciono i Lego Technic».',
+            confidence: 0.95,
+          },
+          { about: 'casa di Francesco', meaning: 'Nuovo luogo da salvare', confidence: 0.9 },
+        ],
+        capabilityId: 'second_brain',
+      }),
+    ).toBeNull();
+  });
 });

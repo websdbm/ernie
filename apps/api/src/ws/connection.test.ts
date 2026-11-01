@@ -229,6 +229,98 @@ const field = <T>(e: AgentEvent | undefined, key: string): T | undefined =>
   (e?.payload as Record<string, T> | undefined)?.[key];
 
 describe('ClientConnection: programma personale e scheda Todo', () => {
+  it('il resolver risolto prosegue senza mostrare la propria analisi come una domanda', async () => {
+    const registry = new SkillRegistry().register(createSecondBrainSkill());
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const socket = fakeSocket();
+    const conn = new ClientConnection(
+      socket.socket,
+      auth,
+      deps(
+        {
+          skills: { registryFor: async () => registry },
+          clarify: {
+            run: async () => ({
+              trigger: 'request',
+              questions: [],
+              answers: [],
+              unresolved: [],
+              costUsd: 0,
+              latencyMs: 1,
+              resolved: [
+                { about: 'casa di Francesco', meaning: 'Nuovo luogo da salvare', confidence: 0.9 },
+              ],
+              capabilityId: 'second_brain',
+            }),
+            known: async () => ({ people: [], places: [] }),
+            thresholds: { ambiguity: 0.82, correction: 0.8 },
+          },
+          runTurn,
+        },
+        undefined,
+        fakeRouter({ operationalIntent: 0.9 }),
+      ),
+    );
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Segna il posto in cui mi trovo come casa di Francesco'));
+    await tick();
+    expect(runTurn).toHaveBeenCalledOnce();
+    expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain('Nuovo luogo da salvare');
+    expect(socket.sent.filter((e) => e.type === 'assistant.block')).toEqual([]);
+  });
+
+  it('i pulsanti per le altre capacità integrate usano il titolo, non gli esempi del catalogo', async () => {
+    const socket = fakeSocket();
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const conn = new ClientConnection(
+      socket.socket,
+      auth,
+      deps(
+        {
+          clarify: {
+            run: async () => ({
+              trigger: 'request',
+              questions: [],
+              answers: [],
+              resolved: [],
+              unresolved: [
+                {
+                  kind: 'capability',
+                  about: 'documento',
+                  question: 'Come vuoi procedere?',
+                  options: ['documenti', 'none'],
+                },
+              ],
+              costUsd: 0,
+              latencyMs: 1,
+            }),
+            known: async () => ({ people: [], places: [] }),
+            thresholds: { ambiguity: 0.82, correction: 0.8 },
+          },
+          runTurn,
+        },
+        undefined,
+        fakeRouter({ operationalIntent: 0.9 }),
+      ),
+    );
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Lavoriamo sul documento'));
+    await tick();
+    expect(runTurn).not.toHaveBeenCalled();
+    const card = socket.sent.find((e) => e.type === 'assistant.block');
+    expect(card?.payload).toMatchObject({
+      block: {
+        kind: 'choices',
+        question: 'Come vuoi procedere?',
+        options: [
+          { id: '1', label: 'Documenti' },
+          { id: '2', label: 'Solo un consiglio, senza operazioni' },
+        ],
+      },
+    });
+  });
   it('un segnale operativo debole avvia il resolver e corregge la procedura scelta da Jev', async () => {
     const registry = new SkillRegistry().register(createTodoSkill());
     const run = vi.fn(

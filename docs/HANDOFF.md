@@ -5,7 +5,16 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione presentazione del resolver **pronta, deploy in preparazione**.
+La riga «Ho inteso» mostrava la descrizione della capacità scelta, copiando esempi dal catalogo (caldaia/Lego).
+Il controllo ordinario `request` ora resta interno: niente riga né pulsante «Correggi». Le vere domande
+irrisolte restano schede esplicite con pulsanti; i titoli delle capacità integrate sostituiscono le descrizioni.
+La capacità è separata dalle interpretazioni semantiche, anche quando due domande hanno lo stesso «about».
+Instradamento, soglie, permessi e audit delle risposte restano attivi; nessuna modifica ai luoghi o alle chat salvate.
+**96 test verdi** in cinque suite, due regressioni rosse sul codice precedente, TypeScript e Biome verdi.
+Solo backend: nessuna nuova build iOS, resta la 113. Stato in [presentazione resolver](releases/backend-2026-11-01-resolver-presentation.md).
+
+Ultimo rilascio iOS: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
 Apple: **VALID**, **IN_BETA_TESTING**; Build ID `18e62402-c242-4585-80d9-73a80d916084`, note italiane rilette (232 caratteri).
 Correzione esplicita dell’utente: `/clear` lascia l’area della chat vuota, senza testi, conferme o pulsanti
 per tornare ai contenuti nascosti. Rimossi metodo di ripristino e invito nell’aiuto. Contesto, sessione,

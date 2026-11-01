@@ -26,12 +26,12 @@ export function isCorrection(text: string): boolean {
   return afterNo.test(t) || opening.test(t);
 }
 
-/** Riga «Ho inteso …» per la chat: solo le risposte sicure, e solo se ce ne sono. */
+/** Riga «Ho inteso …» solo per ambiguità/correzioni, non per il controllo ordinario del resolver. */
 export function interpretationBlock(c: Clarification): ContentBlock | null {
-  if (!c.resolved.length) return null;
+  if (c.trigger === 'request' || !c.resolved.length) return null;
   return {
     kind: 'interpretation',
-    trigger: c.trigger === 'request' ? 'ambiguous' : c.trigger,
+    trigger: c.trigger,
     items: c.resolved.slice(0, 4).map((r) => ({
       about: r.about.slice(0, 60),
       meaning: r.meaning.slice(0, 120),

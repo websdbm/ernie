@@ -38,6 +38,46 @@ const questioner: Questioner = async () => ({
 });
 
 describe('chiarimento interno', () => {
+  it('separa la capacità dal significato anche quando le domande riguardano lo stesso testo', async () => {
+    const description =
+      'Di’ «annota che il codice della caldaia è 4471» o «a Giorgio piacciono i Lego Technic».';
+    const c = await createClarifier({
+      jev: createMockJevClient(() => ({
+        q1: { type: 'choice', choice: 'o1', confidence: 0.95 },
+        q2: { type: 'choice', choice: 'o1', confidence: 0.95 },
+      })),
+      minConfidence: 0.8,
+      questioner: async () => ({
+        costUsd: 0,
+        questions: [
+          {
+            kind: 'capability',
+            about: 'casa di Francesco',
+            question: 'Quale funzione?',
+            options: ['second_brain', 'none'],
+          },
+          {
+            kind: 'meaning',
+            about: 'casa di Francesco',
+            question: 'Quale luogo?',
+            options: ['Nuovo luogo da salvare', 'Luogo già esistente'],
+          },
+        ],
+      }),
+    }).clarify({
+      ...input,
+      trigger: 'request',
+      capabilities: [{ id: 'second_brain', description }],
+    });
+    expect(c?.capabilityId).toBe('second_brain');
+    expect(c?.answers).toHaveLength(2); // Il controllo resta nell'audit.
+    expect(c?.resolved).toEqual([
+      { about: 'casa di Francesco', meaning: 'Nuovo luogo da salvare', confidence: 0.95 },
+    ]);
+    const note = clarificationNote(c as NonNullable<typeof c>);
+    expect(note).not.toContain('4471');
+    expect(note).not.toContain('Lego');
+  });
   it('l’annullamento esterno ferma il chiarimento e non interroga Jev', async () => {
     const signal = AbortSignal.abort();
     const jev = createMockJevClient();
