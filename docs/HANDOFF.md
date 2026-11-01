@@ -5,13 +5,17 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — build **113 in preparazione**.
-Correzione richiesta dall’utente: `/clear` lascia soltanto lo sfondo, senza testi, conferme o pulsanti
-per ripristinare i contenuti. Rimossi anche il metodo di ripristino e il relativo invito nell’aiuto.
-Contesto, sessione e persistenza della pulizia restano invariati; nessuna cancellazione lato server.
-26 test verdi in cinque suite, inclusa la verifica nativa di tutti i pixel: solo sfondo uniforme
-in chiaro, Borg e con caratteri grandi. Nessun deploy backend.
-Dettagli e stato effettivo: [build 113](releases/build-113.md). Ultima distribuita per ora: 112.
+Ultimo aggiornamento: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
+Apple: **VALID**, **IN_BETA_TESTING**; Build ID `18e62402-c242-4585-80d9-73a80d916084`, note italiane rilette (232 caratteri).
+Correzione esplicita dell’utente: `/clear` lascia l’area della chat vuota, senza testi, conferme o pulsanti
+per tornare ai contenuti nascosti. Rimossi metodo di ripristino e invito nell’aiuto. Contesto, sessione,
+richieste e persistenza della pulizia restano invariati. Nessun deploy backend o cancellazione lato server.
+**26 test verdi in cinque suite**, compreso il controllo nativo di tutti i pixel: solo sfondo uniforme
+in chiaro, Borg e con caratteri grandi. Sorgenti **`650ff4c0ae7c9837c603ca08caec93887c9f1c6f`** pubblicati
+prima dell’archivio sul Mac Studio; **290 file iOS** identici al codice testato e all’export Git pulito.
+Archivio/export riusciti, IPA Apple Distribution verificata su app e tre estensioni; caricata la stessa IPA
+(81.139.035 byte), firma e isolamento diario conformi. Nessuna installazione diretta su iPhone.
+Dettagli e stato effettivo: [build 113](releases/build-113.md).
 
 Rilascio iOS precedente: **1 novembre 2026**, Codex — build **112 disponibile su TestFlight**, gruppo **Interni**.
 Apple: **VALID**, **IN_BETA_TESTING**; Build ID `6f729ecb-4a51-424f-aa01-0fb3ae7eefde`, note italiane rilette (674 caratteri).
@@ -194,7 +198,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **112**, verificata il 1 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `c90cacd` |
+| App su TestFlight | build **113**, verificata il 1 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `650ff4c` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API **115f871** (1 nov, resolver richieste); worker ancora **72a027e**. Recupero API `ernie-app:pre-request-resolver-20261101`; vedi nota resolver |
 | Migrazioni | fino alla **0049**, applicate anche sul server |
