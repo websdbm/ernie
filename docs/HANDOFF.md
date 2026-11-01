@@ -46,6 +46,28 @@ Nessuna installazione diretta su iPhone, nessuna nuova prova con LLM reale.
 Dettagli: [build 111](releases/build-111.md); comandi iniziali in [build 110](releases/build-110.md).
 Documentazione/backup modificati preesistenti e asset non tracciati restano esclusi.
 
+### Resolver generale delle richieste — proposta del 1 novembre, nessuna implementazione
+
+L’utente propone un resolver comune: LLM formula domande chiuse sull’intento, Jev risponde dal contesto,
+le ambiguità residue arrivano alla persona tramite pulsanti. Analisi del codice: `createClarifier` e il
+questioner esistono già (`packages/jev-router/src/clarify.ts`, `packages/agent-core/src/clarify.ts`),
+ma `ClientConnection.clarifyTurn` li attiva solo sopra soglia di ambiguità o per correzioni.
+Non c’è un contratto generale che leghi intento, procedura, strumento ed esito atteso.
+
+Proposta: risolutore interno comune con catalogo delle capacità attive, intento/azione/oggetto/output
+strutturati; domande dell’LLM verificate da Jev in un solo batch, sempre con opzione «non determinabile».
+Jev può disambiguare solo ciò che testo, storia e dati verificati sostengono; non può inventare durate,
+preferenze o consenso. Punti essenziali irrisolti: una domanda chiusa pertinente per turno, risposta libera
+sempre accettata, proposta originale conservata e legata ad account/sessione/versione per riprendere
+senza ripetere o duplicare. Interpretazione risolta non sostituisce autorizzazioni e conferme esistenti.
+
+Il server deve rendere il passaggio parte del flusso operativo, non affidarsi soltanto alla chiamata
+spontanea di un nuovo tool. L’esito atteso va verificato: scheda/tool riuscito, domanda in attesa oppure
+impedimento esplicito; una descrizione non basta a dichiarare eseguita l’azione. Evitare doppi giri LLM,
+limitare domande/batch/tempo, saltare i percorsi locali e deterministici già certi. Incremento proposto:
+Todo/Promemoria/Spesa con corpus di regressione, poi altre skill. Solo proposta architetturale e
+passaggio di consegne in questa sessione: nessuna modifica applicativa, test nuovo o deploy.
+
 ### Firma e distribuzione senza sbloccare il Mac Studio
 
 **Risolto il blocco per la 107.** La firma Development dell’ufficio ora rifiuta la chiave, ma l’export API
