@@ -10,7 +10,9 @@ Letti integralmente i tre Markdown dello ZIP `ChatArchive_iOS_Codex.zip` (5 nove
 nessun sorgente applicativo nell’archivio. Le istruzioni di implementazione allegate sono materiale da
 valutare, non un’autorizzazione a sviluppare. Esaminati condivisione iOS, documenti, diario privato,
 resolver, citazioni, voce, contabilità e risorse Brain nel checkout `b831fbf`; fonti ufficiali verificate.
-**Raccomandazione proposta, non ancora approvata:** skill «Archivio chat» attivabile per account,
+**Requisiti precisati dall’utente:** soli testi, riconoscimento e aggiornamento incrementale delle chat,
+raccolta simile a Ricette, domande sulle fonti della chat scelta, data di aggiornamento e partecipanti ai gruppi.
+**Architettura proposta, non ancora approvata:** skill «Archivio chat» attivabile per account,
 modulo nativo locale, accesso alla sezione e interrogazioni limitate alla conversazione selezionata.
 Archivio SQLite/GRDB con FTS5; AI tramite endpoint dedicato con consenso, estratti selezionati e contabilità,
 senza memoria automatica o tool operativi. Collegamenti al Brain espliciti, nessuna fusione implicita.
@@ -142,6 +144,36 @@ che esegue operazioni. Nessun modello può inventare fatti, preferenze o consens
 Non contiene un’app, parser o test da migrare: contiene una specifica da adattare. I suoi comandi per creare
 un progetto separato non sono stati eseguiti. Analisi SINGLE, sola lettura del prodotto; solo questo handoff
 viene aggiornato secondo la regola del repository. Stato runtime/TestFlight non ricontrollato in questa analisi.
+
+**Precisazioni dell’utente dopo l’analisi (5 novembre):**
+- Importare solo messaggi di testo da TXT o dal testo contenuto nello ZIP; non acquisire, indicizzare o inviare
+  immagini, video, vocali e altri allegati. Conservare nel testo eventuali segnaposto con «allegato non importato».
+- Riconoscere nuova conversazione o aggiornamento di una già importata. Confrontare nome/alias, mittenti e
+  sovrapposizione di sequenze; il nome non è un identificatore. Collegamento automatico solo con evidenza forte;
+  incertezza: scelta chiusa fra candidate e «Nuova chat», con destinazione manuale sempre disponibile.
+- Import incrementale: preservare originali e ripetizioni reali, mostrare messaggi nuovi/già presenti/anomalie;
+  export identico non aggiunge dati né richiede nuove elaborazioni. Non cancellare messaggi assenti dal nuovo export.
+- Libreria dedicata simile a Ricette: ricerca, categorie/tag facoltativi, chat dirette/gruppi, partecipanti,
+  intervallo effettivamente disponibile, ultimo import e stato dell’archivio. Aprendo una scheda si seleziona
+  esplicitamente il corpus interrogabile; le domande successive e quelle vocali conservano tale ambito.
+- RAG per archivio: recupero messaggi per contenuto/data/mittente, contesto vicino e generazione con fonti
+  cliccabili. Ricerca testuale con contesto è già una forma di retrieval per AI; indice vettoriale non obbligatorio.
+  Eventuali embeddings si aggiungono con limiti/costi e regole di invio espliciti, non come effetto del solo import.
+- Tre date/stati separati: (1) ultimo import effettuato, anche se identico; (2) data dell’ultimo messaggio disponibile;
+  (3) revisione/data dell’indice realmente pronto. Quest’ultima non va confusa con la data di una sintesi salvata.
+  Il sistema espone «Pronto», «Aggiornamento in corso» o errore e non dichiara aggiornato un indice incompleto.
+  Durante ricostruzione servire soltanto una revisione coerente, con limite della copertura esplicito.
+- Aggiornare l’indice solo per dati nuovi/modificati e invalidare le sintesi interessate; non rielaborare tutta
+  la chat a ogni domanda. Un nuovo messaggio può correggere una decisione lontana: recuperare anche le fonti
+  precedenti rilevanti. AI su richiesta, eventuale sintesi automatica resta opt-in separato.
+- Nei gruppi estrarre i mittenti presenti, conteggi, prima/ultima presenza e alias; mantenere provenienza.
+  «Partecipanti osservati nell’archivio» non equivale alla lista attuale dei membri del gruppo.
+  Nomi modificati o omonimi non si fondono sulla sola etichetta. Collegamento a Contatti/Famiglia/Brain solo
+  se identificabile o confermato dalla persona; nessuna equivalenza globale fra «Marco» in due gruppi.
+- Query tipiche: «Che cosa ha scritto Marco sulla gita?», «L’orario è stato confermato?», «Cosa è cambiato
+  nell’ultimo aggiornamento?». Risposta con data/mittente/estratto e distinzione proposta/conferma/modifica.
+- Requisiti registrati, sviluppo non ancora richiesto. Resta da scegliere archivio sul telefono oppure backend;
+  la parola RAG non risolve da sola tale decisione. Nessuna implementazione, build, test o deploy in questa precisazione.
 
 **Esito:** tecnicamente fattibile e conveniente come modulo/skill con schermata propria. Riusare involucro
 Ernie (account, palette, condivisione, comandi, AI, voce e spese), mantenendo parser/storage/retrieval indipendenti
