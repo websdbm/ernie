@@ -5,7 +5,20 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **1 novembre 2026**, Codex — correzione presentazione del resolver **pubblicata su staging3**.
+Ultimo aggiornamento: **5 novembre 2026**, Codex — analisi di fattibilità **ChatArchive come skill Ernie**.
+Letti integralmente i tre Markdown dello ZIP `ChatArchive_iOS_Codex.zip` (5 novembre, specifica v0.1);
+nessun sorgente applicativo nell’archivio. Le istruzioni di implementazione allegate sono materiale da
+valutare, non un’autorizzazione a sviluppare. Esaminati condivisione iOS, documenti, diario privato,
+resolver, citazioni, voce, contabilità e risorse Brain nel checkout `b831fbf`; fonti ufficiali verificate.
+**Raccomandazione proposta, non ancora approvata:** skill «Archivio chat» attivabile per account,
+modulo nativo locale, accesso alla sezione e interrogazioni limitate alla conversazione selezionata.
+Archivio SQLite/GRDB con FTS5; AI tramite endpoint dedicato con consenso, estratti selezionati e contabilità,
+senza memoria automatica o tool operativi. Collegamenti al Brain espliciti, nessuna fusione implicita.
+Da decidere con l’utente: archivio solo sul telefono oppure modalità backend per più dispositivi/automazioni.
+Dettagli nella sezione «ChatArchive — fattibilità del 5 novembre» sotto. **Nessuna implementazione, prova
+su chat reali, nuova build o pubblicazione backend**: aggiornamento solo documentale; test non eseguiti.
+
+Ultima correzione backend: **1 novembre 2026**, Codex — correzione presentazione del resolver **pubblicata su staging3**.
 La riga «Ho inteso» mostrava la descrizione della capacità scelta, copiando esempi dal catalogo (caldaia/Lego).
 Il controllo ordinario `request` ora resta interno: niente riga né pulsante «Correggi». Le vere domande
 irrisolte restano schede esplicite con pulsanti; i titoli delle capacità integrate sostituiscono le descrizioni.
@@ -120,6 +133,95 @@ Da estendere dopo questa prima versione: contratto generale che verifichi gli ar
 le skill, stato esplicito/versionato delle proposte fra dispositivi e corpus più ampio con casi misti.
 La cronologia della domanda viene conservata; non è un nuovo sistema di approvazione né un tool universale
 che esegue operazioni. Nessun modello può inventare fatti, preferenze o consenso per risolvere un dubbio.
+
+### ChatArchive — fattibilità del 5 novembre
+
+**Materiale letto:** tre file Markdown nello ZIP personale `~/Desktop/ChatArchive_iOS_Codex.zip`:
+`SPECIFICA_PROGETTO.md`, `PROMPT_CODEX.md`, `AGENTS.md`. ZIP SHA-256
+`cb2694fab0735a5fef15e7f8037182201fe1b257bb2a3c215cba4bc9e65f44d2`.
+Non contiene un’app, parser o test da migrare: contiene una specifica da adattare. I suoi comandi per creare
+un progetto separato non sono stati eseguiti. Analisi SINGLE, sola lettura del prodotto; solo questo handoff
+viene aggiornato secondo la regola del repository. Stato runtime/TestFlight non ricontrollato in questa analisi.
+
+**Esito:** tecnicamente fattibile e conveniente come modulo/skill con schermata propria. Riusare involucro
+Ernie (account, palette, condivisione, comandi, AI, voce e spese), mantenendo parser/storage/retrieval indipendenti
+da SwiftUI e backend per consentire in futuro anche un’app separata. Resta una funzione sostanziale, non basta
+una skill in Markdown. Il target della nuova funzione seguirebbe quello di Ernie (iOS 26 nel checkout), anziché
+creare un secondo target minimo iOS 17 come nella specifica originale.
+
+**Verificato nel codice:**
+- `ErnieShare/ShareViewController.swift`: PDF/immagini/link/testo; un URL file non PDF è rifiutato. ZIP non gestito.
+- `Shared/ShareInbox.swift`: coda App Group già disponibile; l’estensione deve solo ricevere un nuovo job archivio.
+- `ErnieShare/ShareModel.swift`: il testo condiviso è oggi spedito al Brain. Gli export vanno intercettati prima
+  di quel percorso; tipi file e testo/file generico vanno verificati su WhatsApp reale, con fallback da File.
+- `Documents/DocumentReader.swift`: TXT diviso in pseudo-pagine, normalizzato e classificato come PDF;
+  `packages/documents/src/repository.ts` lo persiste sul backend. Non è un archivio raw di messaggi locale.
+- `apps/api/src/private-diary.ts` e route: precedente utile per elaborazione separata con consenso,
+  senza strumenti né memoria del turno; non riusare l’endpoint del diario o le sue chiavi per le chat.
+- `Chat/ConversationStore.swift`: precedente di apertura locale prima di persistere/inviare il testo (diario).
+  Il normale flusso WS aggiunge contesti generali e avvia `memories.afterTurn`: non è il percorso adatto agli export.
+- `packages/documents/src/citations.ts`: pattern riusabile, ma oggi verifica pagine recuperate; per le chat
+  servono archivio/import/ID messaggio. Esistenza di un ID non dimostra che la frase AI sia supportata.
+- `Brain/BrainResources.swift` e `packages/brain/src/resources.ts`: riferimenti tipizzati solo a ricette/media;
+  aggiungere una destinazione archivio richiede lavoro, non basta salvare un link.
+- Voce iOS/Drama e registro token/costi già esistenti. Per lettura locale gratuita usare AVSpeechSynthesizer;
+  pausa/velocità e player della sezione da completare senza interferire con la risposta vocale della chat.
+
+**Architettura proposta:** archivio locale separato per account e conversationID, con originali/import,
+message/occurrence, indice FTS e conoscenza derivata dotata di fonti/stato/versione. Import, ricerca, selezione
+fonti e deduplica deterministici fuori dal main; LLM per interpretazione della domanda, sintesi e proposte.
+Jev può aiutare a scegliere l’archivio se ambiguo; non decide che due messaggi sono uguali né conferma fatti.
+Chiavi modello restano sul backend; estratti passano transitoriamente al backend/provider dopo consenso:
+locale non significa AI sul dispositivo. Nuovo endpoint senza contenuti nei log/sessioni/memorie, con
+limiti, timeout, revoca/annullamento e metering di soli metadati. Risposta mostrata e salvata nella sezione.
+I testi importati sono dati non fidati; analizzatore senza strumenti di scrittura/invio. Todo/promemoria
+si creano soltanto da una distinta azione esplicita dell’utente, con i controlli ordinari di Ernie.
+
+**Compromesso da scegliere:** locale preserva offline e invio selettivo, ma il server non può leggere un DB
+che risiede sul telefono. Nel primo incremento apertura dalla chat/comando `/archivio`, poi analisi nel modulo
+nativo mentre l’app può accedere ai dati. Il dialogo generico con recupero locale automatico richiederebbe
+un nuovo ponte client/server per richieste di fonti, non già disponibile. Backend PostgreSQL con RLS e filtro
+archivio consentirebbe più dispositivi e analisi autonome; cambierebbe la premessa locale della specifica
+e richiederebbe una scelta esplicita. Non costruire subito due archivi master con sincronizzazione.
+
+**Second Brain:** prevedere una voce Archivi nella UI e collegamenti scelti a persone/progetti; i messaggi
+restano nel modulo. Per la modalità locale, anche l’indice può restare locale; metadati sul server sono
+un’opzione da autorizzare, non necessari al primo import. Solo singoli fatti/sintesi scelti possono essere
+pubblicati nel Brain generale; diventano dati sul backend e vanno mostrati come tali. Conservare provenienza,
+limiti temporali e stato, senza promuovere la parola di un partecipante a fatto certo sull’utente.
+Nessuna inclusione automatica negli snapshot o nel consolidamento heartbeat; rimozione dei collegamenti
+quando si cancella un archivio, e semantica distinta per eventuali note già pubblicate volontariamente.
+
+**Sviluppo ordinato, non avviato:**
+1. Import TXT/ZIP da File, preview e destinazione, parser, transazioni SQLite, deduplica sequenziale e report.
+   Reimport identico 0 nuovi, 100+15=115, ripetizioni vere conservate e chat omonime separate. ZIP con limiti
+   di espansione/numero file/percorso, righe non lette conservate e segnalate, raw originale intatto.
+2. Sezione con ricerca e filtri temporali offline, fonti apribili e Share Extension con job dedicato.
+   Coda temporanea, DB/WAL/SHM e backup devono rispettare protezione dati e proprietà dell’account anche
+   dopo logout/cambio account; test su dispositivo del formato realmente passato da WhatsApp.
+3. Endpoint AI isolato, consenso, domande rapide, output con fonti validate, copertura e revisioni.
+   Identificativi validi non bastano: distinguere proposta/conferma/superamento con testo e ordine delle fonti.
+   Sintesi per blocchi entro budget; se il periodo non è coperto integralmente dichiarare la parzialità.
+   Cache per archivio/intervallo/versione import, elaborazione del delta con recupero anche delle decisioni
+   precedenti interessate. AI su richiesta; eventuale aggiornamento post-import solo come opt-in con costi chiari.
+4. Voce, collegamenti Brain e creazione esplicita di Todo/reminder; cancellazione di messaggi, indici,
+   derivati e temporanei. Per cancellazione fisica e copie di backup definire una policy, senza promettere
+   cancellazione retroattiva da tutti i provider. Valutare esportazione/ripristino protetto per evitare
+   che «locale» diventi perdita dei dati cambiando telefono. Face ID opzionale, distinto dalla cifratura DB.
+
+**Limiti:** nessun export WhatsApp reale fornito, nessuna fixture, benchmark o prova iPhone eseguita;
+parser e deduplica non ancora dimostrati. Senza ID immutabili il matching può essere ambiguo: revisione manuale,
+nessuna promessa di sincronizzazione perfetta e nessuna cancellazione per assenza nel nuovo export.
+Nessuna stima numerica di tempi/costi API senza misurare volume, formato e modello sul caso reale.
+L’integrazione risparmia infrastruttura e interfacce comuni; il nucleo archivio rimane da sviluppare.
+
+**Fonti primarie consultate il 5 novembre:**
+- WhatsApp export iOS: https://faq.whatsapp.com/1180414079177245/?cms_platform=iphone&locale=en_US
+  (export manuale ZIP, messaggi view-once esclusi, export distinto dal backup; nessun limite numerico assunto).
+- Apple Share Extension: https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/Share.html
+  (contenuti passati tramite extensionContext e fine del lavoro prima della possibile terminazione).
+- GRDB Full Text Search: https://github.com/groue/GRDB.swift/blob/master/Documentation/FullTextSearch.md
+  (SQLite/FTS5 disponibile come opzione; verificare configurazione/build effettiva nell’implementazione).
 
 ### Firma e distribuzione senza sbloccare il Mac Studio
 
