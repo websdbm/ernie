@@ -34,6 +34,7 @@ final class AppModel {
     var settings = LocalSettings.load()
     /// Destinazione richiesta dal widget, conservata fino a quando la navigazione è pronta.
     var pendingLink: AppLink?
+    var pendingChatArchiveImport: PendingChatArchiveImport?
     /// Coda delle condivisioni in elaborazione: una passata alla volta.
     @ObservationIgnored private var isProcessingShares = false
 
@@ -58,6 +59,7 @@ final class AppModel {
     /// Verifica le credenziali su `/v1/me`, le salva nel Keychain e avvia la conversazione.
     func signIn(serverURL: URL, apiKey: String) async -> Bool {
         signInError = nil
+        pendingChatArchiveImport = nil
         let attempt = UUID()
         signInAttempt = attempt
         let candidate = Credentials(
@@ -100,6 +102,7 @@ final class AppModel {
         conversation = nil
         voice = nil
         profile = nil
+        pendingChatArchiveImport = nil
         Credentials.clear()
         credentials = nil
         speaker.configure(credentials: nil, engine: settings.speechEngine, style: settings.speechStyle)
@@ -233,6 +236,11 @@ final class AppModel {
         for item in ShareInbox.pending() {
             guard conversation.isAttached, !Task.isCancelled else { return }
             switch item.kind {
+            case .chatArchive(let url, let owner):
+                guard pendingChatArchiveImport == nil,
+                      owner == ShareInbox.ownerScope(serverURL: credentials.serverURL, apiKey: credentials.apiKey) else { continue }
+                pendingChatArchiveImport = PendingChatArchiveImport(id: item.id, url: url, owner: owner, item: item)
+
             case .link(let url, let title, let note):
                 if await deliverShare(url: url, text: nil, title: title, note: note, credentials: credentials) {
                     ShareInbox.remove(item)
@@ -303,7 +311,7 @@ final class AppModel {
         let token = lifecycle
         voice?.cancelListening()
         conversation?.disconnect()
-        if let old = credentials, old != creds { resetLocalState() }
+        if let old = credentials, old != creds { pendingChatArchiveImport = nil; resetLocalState() }
         credentials = creds
         mediaUploads.configure(creds)
         speaker.configure(credentials: creds, engine: settings.speechEngine, style: settings.speechStyle)

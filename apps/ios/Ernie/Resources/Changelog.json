@@ -1,5 +1,30 @@
 [
   {
+    "build": 114,
+    "date": "2026-11-05",
+    "title": "Archivio chat",
+    "items": [
+      {
+        "icon": "bubble.left.and.text.bubble.right",
+        "title": "Le tue conversazioni, ricercabili",
+        "detail": "Attiva Archivio chat nelle Skill: importa esportazioni WhatsApp TXT o ZIP senza media, aggiorna le chat senza duplicarle e consulta messaggi e partecipanti.",
+        "test": "Reimporta una chat con nuovi messaggi: controlla il report e le date di aggiornamento."
+      },
+      {
+        "icon": "text.magnifyingglass",
+        "title": "Domande con fonti, separate dal Second Brain",
+        "detail": "Apri una chat o chiedi «nella chat con…»: scegli la conversazione quando il riferimento è ambiguo. L’AI legge solo quella chat, dopo consenso; il trasferimento al Second Brain è esplicito.",
+        "test": "Fai una domanda e apri i messaggi citati."
+      },
+      {
+        "icon": "arrow.up.forward.app",
+        "title": "Torna su WhatsApp",
+        "detail": "Associa un numero internazionale per aprire una chat privata con una bozza. Per gruppi e canali usa un link salvato o condividi il testo scegliendo il destinatario. L’invio resta manuale.",
+        "test": "Prova «Apri o scrivi su WhatsApp» dalla scheda."
+      }
+    ]
+  },
+  {
     "build": 113,
     "date": "2026-11-01",
     "title": "Clear, solo schermo pulito",

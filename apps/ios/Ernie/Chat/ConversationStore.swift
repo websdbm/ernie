@@ -23,6 +23,8 @@ final class ConversationStore {
     var composerSuggestion: String?
     /// Local game launch shared by typed input and speech transcription; never queued to the server.
     var diaryLaunch: DiaryLaunch?
+    private(set) var chatArchiveLaunchID: UUID?
+    private(set) var chatArchiveReference: ChatArchiveReferenceRequest?
     private(set) var gameLaunchID: UUID?
     let gameStorageID: String
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
@@ -123,6 +125,7 @@ final class ConversationStore {
     }
 
     func disconnect() {
+        chatArchiveLaunchID = nil; chatArchiveReference = nil
         performanceQueue.invalidate()
         performance.end(.abandoned)
         isAttached = false
@@ -262,6 +265,16 @@ final class ConversationStore {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, !attachments.isEmpty { text = "Leggi questo allegato." }
         guard !text.isEmpty else { return }
+        if ChatArchiveLaunch.matches(text, hasAttachments: !attachments.isEmpty) {
+            if speaker.isSpeaking { muteSpeech() }
+            chatArchiveLaunchID = UUID()
+            return
+        }
+        if let request = ChatArchiveLaunch.request(from: text, hasAttachments: !attachments.isEmpty) {
+            if speaker.isSpeaking { muteSpeech() }
+            chatArchiveReference = request
+            return
+        }
         if let launch = DiaryLaunch.parse(text) {
             if speaker.isSpeaking { muteSpeech() }
             if activeCorrelationId == nil { currentTrace = nil }

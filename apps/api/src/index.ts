@@ -127,6 +127,8 @@ import {
   formatTransferProposal,
   transferCandidate,
 } from './brain-transfer.js';
+import { createChatArchiveRepository } from './chat-archive/repository.js';
+import { createArchiveModel, createChatArchiveAnalysis } from './chat-archive/service.js';
 import { type ClarificationRecord, createClarificationRecorder } from './clarify.js';
 import { createCompanionFactory } from './companion.js';
 import { createContentReaderDiagnostics } from './content-readers.js';
@@ -971,6 +973,21 @@ async function main(): Promise<void> {
         pendingPerformance--;
       });
   };
+  const chatArchiveRepo = createChatArchiveRepository(postgres.pool);
+  const chatArchiveAnalysis = createChatArchiveAnalysis({
+    repo: chatArchiveRepo,
+    model: gateway
+      ? createArchiveModel({
+          gateway,
+          recorder: createLlmCallRecorder(postgres.pool, logger),
+          checkBudget: createUserBudgetCheck(postgres.pool, config.llm.dailyBudgetUsd),
+        })
+      : async () => {
+          throw Object.assign(new Error('Configura un modello AI per analizzare la chat.'), {
+            statusCode: 503,
+          });
+        },
+  });
   const app = await buildServer({
     config,
     logger,
@@ -1050,6 +1067,16 @@ async function main(): Promise<void> {
           .catch((err: unknown) =>
             logger.warn({ err, documentId }, 'indicizzazione del documento fallita'),
           );
+      },
+    },
+    chatArchives: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      repo: chatArchiveRepo,
+      analysis: chatArchiveAnalysis,
+      canUse: async (userId) => {
+        const settings = await loadUserSettings(userId);
+        return settings.killSwitch !== true && enabledSkillIds(settings).has('chat_archive');
       },
     },
     contentReaders: {

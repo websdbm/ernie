@@ -6,6 +6,7 @@ import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
+import { type ChatArchiveRoutesOptions, chatArchiveRoutes } from './routes/chat-archives.js';
 import { type ContentReaderRoutesOptions, contentReaderRoutes } from './routes/content-readers.js';
 import { type DocumentsRoutesOptions, documentsRoutes } from './routes/documents.js';
 import { type FamilyRoutesOptions, familyRoutes } from './routes/family.js';
@@ -60,6 +61,7 @@ export interface BuildServerOptions {
   readonly todo?: TodoRoutesOptions;
   readonly ssh?: SshRoutesOptions;
   readonly recipes?: RecipeRoutesOptions;
+  readonly chatArchives?: ChatArchiveRoutesOptions;
   readonly media?: MediaRoutesOptions;
   readonly reminders?: RemindersRoutesOptions;
   /** Scheda anagrafica dell'utente (13 ott 2026). */
@@ -169,6 +171,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.profile) await app.register(profileRoutes, opts.profile);
   if (opts.brain) await app.register(brainRoutes, opts.brain);
   if (opts.recipes) await app.register(recipeRoutes, opts.recipes);
+  if (opts.chatArchives) await app.register(chatArchiveRoutes, opts.chatArchives);
   if (opts.media) await app.register(mediaRoutes, opts.media);
 
   return app;

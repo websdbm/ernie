@@ -25,6 +25,8 @@ struct ChatView: View {
     @State private var diaryLaunch: DiaryLaunch?
     @State private var listSheet: ListSheet?
     @State private var showRecipes = false
+    @State private var showChatArchives = false
+    @State private var archiveReference: ChatArchiveReferenceRequest?
     @State private var showMedia = false
     @State private var showReminders = false
     @State private var showAutomations = false
@@ -143,6 +145,8 @@ struct ChatView: View {
             case .shopping(let id): ShoppingListDetailView(listId: id)
             }
         }
+        .modifier(ChatArchivePresentationModifier(library: $showChatArchives, reference: $archiveReference,
+            panelOpen: $panelOpen, composing: $composing, onDismiss: sheetDidDismiss))
         .sheet(isPresented: $showRecipes, onDismiss: sheetDidDismiss) { RecipeLibraryView() }
         .sheet(isPresented: $showMedia, onDismiss: sheetDidDismiss) { MediaLibraryView() }
         .sheet(isPresented: $showReminders, onDismiss: sheetDidDismiss) { RemindersView() }
@@ -183,7 +187,7 @@ struct ChatView: View {
             dismissingForLink = true
             showSettings = false; showUsage = false; showUsageAdmin = false
             showBrain = false; showSSH = false; showGame = false; diaryLaunch = nil; listSheet = nil
-            showRecipes = false; showMedia = false; showReminders = false
+            archiveReference = nil; showChatArchives = false; showRecipes = false; showMedia = false; showReminders = false
             showAutomations = false; showSkills = false; showFamily = false
             showProfile = false; whatsNew = nil; debugIcons = false
             return
@@ -208,7 +212,7 @@ struct ChatView: View {
 
     private var hasPresentedSheet: Bool {
         showSettings || showUsage || showUsageAdmin || showBrain || showSSH || listSheet != nil
-        || showRecipes || showMedia || showReminders || showAutomations || showSkills
+        || archiveReference != nil || showChatArchives || showRecipes || showMedia || showReminders || showAutomations || showSkills
         || showFamily || showProfile || whatsNew != nil || debugIcons || showGame || diaryLaunch != nil
     }
 
@@ -237,6 +241,7 @@ struct ChatView: View {
         case .reminders: showReminders = true
         case .automations: showAutomations = true
         case .brain, .health: showBrain = true
+        case .chatArchives: showChatArchives = true
         case .recipes: showRecipes = true
         case .media: showMedia = true
         case .family: showFamily = true

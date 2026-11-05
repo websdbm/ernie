@@ -7,6 +7,7 @@ enum ShareContent: Equatable {
     case text(String)
     case images(folder: URL, names: [String])
     case pdf(folder: URL, name: String)
+    case chatArchive(folder: URL, name: String)
     /// Tipo di contenuto che Ernie non sa salvare.
     case unsupported
     /// Il contenuto c'è ma non si riesce a leggerlo.
@@ -55,6 +56,8 @@ final class ShareModel {
         }
     }
 
+    var isChatArchive: Bool { if case .chatArchive = content { return true }; return false }
+
     /// Si può salvare: c'è un contenuto leggibile e il salvataggio non è iniziato.
     var canSave: Bool { content != nil && !isFinishing }
 
@@ -65,7 +68,7 @@ final class ShareModel {
             phase = .error("Questo tipo di contenuto non è supportato.")
         case .unreadable:
             phase = .error("Non riesco a leggere ciò che hai condiviso.")
-        case .link, .text, .images, .pdf:
+        case .link, .text, .images, .pdf, .chatArchive:
             content = result
             phase = .ready
         }
@@ -85,6 +88,13 @@ final class ShareModel {
             queue(.images(names.map { folder.appendingPathComponent($0) }, note: comment), folder: folder)
         case .pdf(let folder, let name):
             queue(.pdf(folder.appendingPathComponent(name), note: comment), folder: folder)
+        case .chatArchive(let folder, let name):
+            guard let credentials else { return }
+            do {
+                try ShareInbox.enqueue(.chatArchive(folder.appendingPathComponent(name), owner: ShareInbox.ownerScope(serverURL: credentials.serverURL, apiKey: credentials.apiKey)), folder: folder)
+                phase = .info("Apri Archivio chat in Ernie per verificare e importare il testo. Nessun contenuto viene inviato al Second Brain.")
+                finishSoon(after: 2.5)
+            } catch { phase = .error("Non riesco a conservare l’esportazione. Riprova.") }
         case .unsupported, .unreadable:
             break
         }
@@ -99,7 +109,7 @@ final class ShareModel {
     /// Cartella con i file copiati (immagini o PDF), se ce ne sono.
     private var stagedFolder: URL? {
         switch content {
-        case .images(let folder, _), .pdf(let folder, _): folder
+        case .images(let folder, _), .pdf(let folder, _), .chatArchive(let folder, _): folder
         case .link, .text, .unsupported, .unreadable, nil: nil
         }
     }

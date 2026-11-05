@@ -12,6 +12,7 @@ enum PanelDestination: Hashable {
     case reminders
     case automations
     case recipes
+    case chatArchives
     case media
     case brain
     case health
@@ -214,6 +215,9 @@ struct SidePanel: View {
             sectionRow("Media", icon: "photo.on.rectangle.angled", tint: .neutral, destination: .media)
             if skills.contains(where: { $0.id == "ricette" && $0.active }) {
                 sectionRow("Ricette", icon: "fork.knife", tint: .recipes, destination: .recipes)
+            }
+            if isSkillActive("chat_archive") {
+                sectionRow("Archivio chat", icon: "bubble.left.and.text.bubble.right", tint: .brain, destination: .chatArchives)
             }
             if showsBrain {
                 sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)

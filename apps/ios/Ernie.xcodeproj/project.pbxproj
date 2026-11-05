@@ -83,6 +83,7 @@
 		57CF0DA18B43EAD53CA6D4E8 /* DocumentReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E17EBA84621CA7DC748663 /* DocumentReader.swift */; };
 		5A1BDBFA1A7E9A4687ACB2B2 /* ReminderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585A161721BF631A7CFAD1DC /* ReminderStore.swift */; };
 		5B6CB32ACCE85CC8179D5861 /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
+		5BA0CD0351DE00C81B0466D9 /* ChatArchiveBrainExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93601195399529EB7C586024 /* ChatArchiveBrainExportView.swift */; };
 		5E3CEA619D4AC55422BB60A7 /* MediaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346B1014BC6507B34DF933A3 /* MediaDetailView.swift */; };
 		5EAF29823E6D879B464C701F /* BrainKnowledgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED90D5C7399306032FD23D1D /* BrainKnowledgeTests.swift */; };
 		5F03AC027E3815A0BAB7DE88 /* TodoEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAB2DED1213687E95977991 /* TodoEditors.swift */; };
@@ -104,6 +105,7 @@
 		7DDD8E789DFBC19D46C12D50 /* SSHImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D764BDF574C81692398DEC8C /* SSHImportView.swift */; };
 		7F9E0792061E98393F4CCD8A /* RecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9539D37ECC6A21D3554A8833 /* RecipesView.swift */; };
 		7FE6B143B6EB5698C61E6D83 /* StyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5700506AF1CE47020C9191C /* StyleView.swift */; };
+		83DC2BDFA71EC206692B1360 /* ChatArchiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6815FD5482A3F4DE0923C9C /* ChatArchiveModels.swift */; };
 		85A08467E17617AC07DD155E /* MediaLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C29E7C242702D29D63B15CCA /* MediaLocation.swift */; };
 		85D4CC6592B92FA5DE1150DE /* VoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD343071ED74C53EE49555CE /* VoiceTests.swift */; };
 		86291D2B3C13D022CEE68020 /* ernie-ui-error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 32CD837166EF0BE1B348109E /* ernie-ui-error.wav */; };
@@ -118,6 +120,7 @@
 		8E9DB90775BCEE871D63E97B /* TodoViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7EFF111F3561E2A6576F70 /* TodoViews.swift */; };
 		8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482E5F1386683C4811B2C6EE /* CardExport.swift */; };
 		8EDE82C5228FE0AB4B4E8AB9 /* PlacePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CE16F21C672E0074F4A59C /* PlacePermission.swift */; };
+		8F2D6686A34049B9B43951FF /* ChatArchiveReferenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC2976E5C40623BC990E553F /* ChatArchiveReferenceView.swift */; };
 		9117D08D032FDF526EFCAC9D /* DiagnosticsReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D01A54F963F34DF905AEFF /* DiagnosticsReporter.swift */; };
 		929FC8DFAD8C2223D22A08BB /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5805C7F8E13A9BB5B66DD2A3 /* SentenceSplitter.swift */; };
 		92C356F55133FDE22653707D /* ErnieShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E5156E50AC31BC18C2094CD /* ErnieShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -157,6 +160,7 @@
 		BD3195B52FBDD98D652B7956 /* BearPawTapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA8E07EDF3310160FC266EF /* BearPawTapTests.swift */; };
 		BF64100397A47A685BDF8482 /* BearAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C04E03146CD97D1D3B63A22 /* BearAtlas.swift */; };
 		BFA5F40D64C007CA647CE8EC /* FamilyLatest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */; };
+		BFAEEDD15DDBFB6990BF8CD0 /* ChatArchiveDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B568A1F39C210678341EA5 /* ChatArchiveDictation.swift */; };
 		C0D01254C35E462FD19A38AD /* OperatingPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036F0DF7FEA403A5EBFFC870 /* OperatingPreferencesView.swift */; };
 		C325109281E152FF2237FE4E /* DocumentComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372714292F29616AAC713015 /* DocumentComposer.swift */; };
 		C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4361E7F7124014F0D94B4EA2 /* ChatView.swift */; };
@@ -183,9 +187,11 @@
 		DA654FF8E4F434294E32CBC7 /* DiaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF6CDC1B803582982A064C0 /* DiaryStore.swift */; };
 		DD3855B9C9095C581715E26E /* ernie-bear-v3-base.png in Resources */ = {isa = PBXBuildFile; fileRef = EFD73097C08BE1E06287A3FA /* ernie-bear-v3-base.png */; };
 		DF38A2E1B2EBBCE2DBA783E7 /* ReadabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EAED8097FB2EF14E6B4514 /* ReadabilityTests.swift */; };
+		E028395149BD144EE1FD47B0 /* ChatArchiveCatalogRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EADF393879F54D4F4B1EF7B /* ChatArchiveCatalogRow.swift */; };
 		E0D30800D07C6BE73237642E /* BearAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C04E03146CD97D1D3B63A22 /* BearAtlas.swift */; };
 		E1797B732BA3CB43BB560210 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A03E811988D4217D0911B5 /* VoiceController.swift */; };
 		E3E219EB9A7EF76918B200F3 /* SSHStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A602BA56D38EFD9F3306D65 /* SSHStore.swift */; };
+		E4B08459C07AF72328E2B355 /* ChatArchiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C054DB19D62CDBBCD1C55E1 /* ChatArchiveTests.swift */; };
 		E52BB26A1BA0398CB23C06F0 /* ContentReadersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C63EF0E9CACDE23645FA4D /* ContentReadersTests.swift */; };
 		E5EE6BC917331155085BF71E /* OrderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */; };
 		E5FB31D4AB5EF418065B5A8E /* ErnieSounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F27A0F0EF33A9BC5CB08317 /* ErnieSounds.swift */; };
@@ -211,6 +217,7 @@
 		F6200A90D63F4EC2AB9BB8B4 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC094642FF9A09140787A348 /* DocumentScannerView.swift */; };
 		F64CDA48A475C654E2F80861 /* ConfirmationCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A04F7AC1E243E495725298C /* ConfirmationCopy.swift */; };
 		F6712BF7ABEC68159F9696FA /* RecipesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1368F35E3B735718D566D794 /* RecipesTests.swift */; };
+		F7D226214128B18300CF421D /* ChatArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21241FD6119D15331A37896 /* ChatArchiveViews.swift */; };
 		F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58FE4A46EDE5F9A3362F7B15 /* ProtocolClient.swift */; };
 		F9AD2856B250E20BC0B17496 /* ernie-bear-v3-classic.png in Resources */ = {isa = PBXBuildFile; fileRef = 1183B47F868369335880B88E /* ernie-bear-v3-classic.png */; };
 		FA0559571C4FC98A6A05BDCD /* DiaryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356A9007AF35315A3BF10A7C /* DiaryModels.swift */; };
@@ -296,6 +303,7 @@
 		12E17EBA84621CA7DC748663 /* DocumentReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentReader.swift; sourceTree = "<group>"; };
 		1368F35E3B735718D566D794 /* RecipesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesTests.swift; sourceTree = "<group>"; };
 		13F03D0188054458FDFAFA7A /* ErnieFamilyWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieFamilyWidget.swift; sourceTree = "<group>"; };
+		14B568A1F39C210678341EA5 /* ChatArchiveDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveDictation.swift; sourceTree = "<group>"; };
 		16B52987A1F5FA3450087F76 /* ernie-bear-v3-detective.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-detective.png"; sourceTree = "<group>"; };
 		18135035CD14820BAC03C2C7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		190E476F7A4B520D7A77930F /* TodoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoTests.swift; sourceTree = "<group>"; };
@@ -327,6 +335,7 @@
 		392BDC4D0B612F4A89A72523 /* MediaLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryView.swift; sourceTree = "<group>"; };
 		3B5A05A74A82D7EAD93D989E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3BEC6F53575D7E7F9605D081 /* BearAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BearAnimationTests.swift; sourceTree = "<group>"; };
+		3EADF393879F54D4F4B1EF7B /* ChatArchiveCatalogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveCatalogRow.swift; sourceTree = "<group>"; };
 		3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningOverlay.swift; sourceTree = "<group>"; };
 		4361E7F7124014F0D94B4EA2 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		43B33A6E44E071A365EA8BCE /* SSHTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTests.swift; sourceTree = "<group>"; };
@@ -394,11 +403,13 @@
 		8A290ACEF62401F040E749BA /* AudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionController.swift; sourceTree = "<group>"; };
 		8A37E9DA13EC9874F83CDD80 /* BearAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BearAnimation.swift; sourceTree = "<group>"; };
 		8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		8C054DB19D62CDBBCD1C55E1 /* ChatArchiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveTests.swift; sourceTree = "<group>"; };
 		8D07BF5B3DFD216187A1FAED /* SpeechTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechTests.swift; sourceTree = "<group>"; };
 		8EC1882273941A8EA35BCF52 /* ContentReadersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentReadersView.swift; sourceTree = "<group>"; };
 		8ED4B2043A7966ACD2D7F9A7 /* TodoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoStore.swift; sourceTree = "<group>"; };
 		900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ErnieWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		911A4F9BD9D2717A244FE250 /* SSHEditors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHEditors.swift; sourceTree = "<group>"; };
+		93601195399529EB7C586024 /* ChatArchiveBrainExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveBrainExportView.swift; sourceTree = "<group>"; };
 		94BF9C574E0EAF58A5AA418A /* UsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTests.swift; sourceTree = "<group>"; };
 		95077EE0D59B17CE3E41099E /* WidgetLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLinkTests.swift; sourceTree = "<group>"; };
 		9539D37ECC6A21D3554A8833 /* RecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesView.swift; sourceTree = "<group>"; };
@@ -442,16 +453,19 @@
 		D99380D8A01AB596E32A9A16 /* ernie-ui-cancel.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "ernie-ui-cancel.wav"; sourceTree = "<group>"; };
 		DB0EA7B4A9D0C84DE34B2C89 /* AppLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLink.swift; sourceTree = "<group>"; };
 		DBB93D8A0DC5980EA1653897 /* ernie-bear-v3-mono.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-mono.png"; sourceTree = "<group>"; };
+		DC2976E5C40623BC990E553F /* ChatArchiveReferenceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveReferenceView.swift; sourceTree = "<group>"; };
 		DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderAlarm.swift; sourceTree = "<group>"; };
 		DEB47AF47D4704A70EE3D728 /* Changelog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Changelog.json; sourceTree = "<group>"; };
 		E301AE358A7D2CC27A3EF958 /* ErnieTRIXEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieTRIXEngine.swift; sourceTree = "<group>"; };
 		E31E1C3C371F8AECA3F49822 /* DiaryCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryCrypto.swift; sourceTree = "<group>"; };
 		E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshot.swift; sourceTree = "<group>"; };
 		E634369454E54E9A56C8CE39 /* TodoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoModels.swift; sourceTree = "<group>"; };
+		E6815FD5482A3F4DE0923C9C /* ChatArchiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveModels.swift; sourceTree = "<group>"; };
 		ED90D5C7399306032FD23D1D /* BrainKnowledgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainKnowledgeTests.swift; sourceTree = "<group>"; };
 		ED9D1D88567C68BB81CA0AC4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		EE7C91876D2292383C015461 /* BrainKnowledge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainKnowledge.swift; sourceTree = "<group>"; };
 		EFD73097C08BE1E06287A3FA /* ernie-bear-v3-base.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-base.png"; sourceTree = "<group>"; };
+		F21241FD6119D15331A37896 /* ChatArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveViews.swift; sourceTree = "<group>"; };
 		F4FEC958643F49BCFA9F6F98 /* ErnieTRIXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieTRIXTests.swift; sourceTree = "<group>"; };
 		F6A862602C16F8D90092418C /* BrainResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainResources.swift; sourceTree = "<group>"; };
 		F73AEB0AE202B3FA98948CB6 /* FamilyMessageCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyMessageCardTests.swift; sourceTree = "<group>"; };
@@ -511,6 +525,7 @@
 				FAA8E07EDF3310160FC266EF /* BearPawTapTests.swift */,
 				ED90D5C7399306032FD23D1D /* BrainKnowledgeTests.swift */,
 				854353EA66DDD2954507D96E /* BrainResourcesTests.swift */,
+				8C054DB19D62CDBBCD1C55E1 /* ChatArchiveTests.swift */,
 				36A10CACB2E5D6881E92E6A8 /* ConfirmationTests.swift */,
 				63C63EF0E9CACDE23645FA4D /* ContentReadersTests.swift */,
 				B884361CA064C58A61AD27F0 /* DiaryTests.swift */,
@@ -563,6 +578,19 @@
 			path = Design;
 			sourceTree = "<group>";
 		};
+		35568D68D54C7F46D89B0809 /* ChatArchive */ = {
+			isa = PBXGroup;
+			children = (
+				93601195399529EB7C586024 /* ChatArchiveBrainExportView.swift */,
+				3EADF393879F54D4F4B1EF7B /* ChatArchiveCatalogRow.swift */,
+				14B568A1F39C210678341EA5 /* ChatArchiveDictation.swift */,
+				E6815FD5482A3F4DE0923C9C /* ChatArchiveModels.swift */,
+				DC2976E5C40623BC990E553F /* ChatArchiveReferenceView.swift */,
+				F21241FD6119D15331A37896 /* ChatArchiveViews.swift */,
+			);
+			path = ChatArchive;
+			sourceTree = "<group>";
+		};
 		39E00D3D640F9F37578B10F3 /* Ernie */ = {
 			isa = PBXGroup;
 			children = (
@@ -574,6 +602,7 @@
 				A1CB7095301D1F93E42B5AAA /* Automations */,
 				E1DA6F70E1C483F5146CF30B /* Brain */,
 				8CDE19C05534E51D68489807 /* Chat */,
+				35568D68D54C7F46D89B0809 /* ChatArchive */,
 				6A132ED97A8573A5D8CEAA36 /* Core */,
 				284DF727F2F3AE2EEDD92D35 /* Design */,
 				0501C600DA9DFE4C5E8D8565 /* Diary */,
@@ -1114,6 +1143,7 @@
 				BD3195B52FBDD98D652B7956 /* BearPawTapTests.swift in Sources */,
 				5EAF29823E6D879B464C701F /* BrainKnowledgeTests.swift in Sources */,
 				D0843292BFE16841485D6B00 /* BrainResourcesTests.swift in Sources */,
+				E4B08459C07AF72328E2B355 /* ChatArchiveTests.swift in Sources */,
 				D6B53954DB440868689672C5 /* ConfirmationTests.swift in Sources */,
 				E52BB26A1BA0398CB23C06F0 /* ContentReadersTests.swift in Sources */,
 				38E2C77CCB80711FEAD2236F /* DiaryTests.swift in Sources */,
@@ -1210,6 +1240,12 @@
 				8E9FE9F877B71D583A44FBAD /* CardExport.swift in Sources */,
 				561D42B9AB9454058424BA69 /* ChangeServerView.swift in Sources */,
 				AB71A44F9F5D3FC78ED5ABBA /* ChatAppearance.swift in Sources */,
+				5BA0CD0351DE00C81B0466D9 /* ChatArchiveBrainExportView.swift in Sources */,
+				E028395149BD144EE1FD47B0 /* ChatArchiveCatalogRow.swift in Sources */,
+				BFAEEDD15DDBFB6990BF8CD0 /* ChatArchiveDictation.swift in Sources */,
+				83DC2BDFA71EC206692B1360 /* ChatArchiveModels.swift in Sources */,
+				8F2D6686A34049B9B43951FF /* ChatArchiveReferenceView.swift in Sources */,
+				F7D226214128B18300CF421D /* ChatArchiveViews.swift in Sources */,
 				4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */,
 				C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */,
 				F64CDA48A475C654E2F80861 /* ConfirmationCopy.swift in Sources */,
@@ -1343,7 +1379,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1398,7 +1434,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1489,7 +1525,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1510,7 +1546,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1534,7 +1570,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1617,7 +1653,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1638,7 +1674,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1662,7 +1698,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 113;
+				CURRENT_PROJECT_VERSION = 114;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

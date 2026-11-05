@@ -28,6 +28,20 @@ export interface SkillCatalogEntry {
 
 export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
+    id: 'chat_archive',
+    title: 'Archivio chat',
+    icon: 'bubble.left.and.text.bubble.right',
+    tint: 'teal',
+    summary: 'Importa conversazioni testuali, ritrova accordi e risposte con le fonti.',
+    description:
+      'Archivia i testi esportati da WhatsApp nella tua raccolta privata. Riconosce import successivi, distingue partecipanti, aggiorna l’indice e risponde nella chat scelta citando i messaggi. Apri Archivio chat o usa /archivio. Le analisi AI richiedono consenso; i testi non entrano automaticamente nella memoria generale.',
+    kind: 'guided',
+    tools: [],
+    examples: ['apri archivio chat', 'apri le chat archiviate'],
+    defaultAvailable: true,
+    defaultEnabled: false,
+  },
+  {
     id: 'diario_personale',
     title: 'Diario personale',
     icon: 'book.closed.fill',

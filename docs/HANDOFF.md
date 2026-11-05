@@ -5,20 +5,20 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **5 novembre 2026**, Codex — analisi di fattibilità **ChatArchive come skill Ernie**.
-Letti integralmente i tre Markdown dello ZIP `ChatArchive_iOS_Codex.zip` (5 novembre, specifica v0.1);
-nessun sorgente applicativo nell’archivio. Le istruzioni di implementazione allegate sono materiale da
-valutare, non un’autorizzazione a sviluppare. Esaminati condivisione iOS, documenti, diario privato,
-resolver, citazioni, voce, contabilità e risorse Brain nel checkout `b831fbf`; fonti ufficiali verificate.
-**Requisiti precisati dall’utente:** soli testi, riconoscimento e aggiornamento incrementale delle chat,
-raccolta simile a Ricette, domande sulle fonti della chat scelta, data di aggiornamento e partecipanti ai gruppi.
-**Architettura proposta, non ancora approvata:** skill «Archivio chat» attivabile per account,
-modulo nativo locale, accesso alla sezione e interrogazioni limitate alla conversazione selezionata.
-Archivio SQLite/GRDB con FTS5; AI tramite endpoint dedicato con consenso, estratti selezionati e contabilità,
-senza memoria automatica o tool operativi. Collegamenti al Brain espliciti, nessuna fusione implicita.
-Da decidere con l’utente: archivio solo sul telefono oppure modalità backend per più dispositivi/automazioni.
-Dettagli nella sezione «ChatArchive — fattibilità del 5 novembre» sotto. **Nessuna implementazione, prova
-su chat reali, nuova build o pubblicazione backend**: aggiornamento solo documentale; test non eseguiti.
+Ultimo aggiornamento: **5 novembre 2026**, Codex — implementazione della skill **Archivio chat**, autorizzata dall’utente.
+Scelto il **backend** per testi e indice, isolati per account e conversazione; sostituisce l’ipotesi locale
+nell’analisi sotto. Import TXT/ZIP solo testo, confronto incrementale conservativo, fonti originali e ricerca
+per chat/mittente/periodo. Catalogo con titolo, descrizione modificabile, tipo, date e indice pronto.
+Interrogazioni in agente dedicato senza memoria, strumenti o Brain; consenso AI esplicito, costi nel registro
+ordinario. I riferimenti espliciti dalla chat principale aprono la sezione separata prima della persistenza:
+scelta fra archivi quando ambiguo, solo metadati per individuare la chat. Nessun riversamento automatico nel Brain.
+Unica esportazione al Brain: azione dell’utente, anteprima modificabile e conferma. Import e ricerca testuale
+non usano LLM. Contesto delle risposte limitato e copertura parziale dichiarata, prove citate verificabili.
+WhatsApp: numero internazionale per aprire una privata con bozza; link salvato per gruppi/canali, condivisione
+manuale come alternativa. Nessun invio automatico e nessuna sincronizzazione diretta WhatsApp.
+**56 test backend verdi (7 PostgreSQL reali), 23 iOS verdi; TypeScript e Biome verdi.**
+Rendering nativo verificato in chiaro/scuro/Borg e caratteri accessibili. Pubblicazione e build 114 ancora da completare. Dettagli e stato in
+[build 114](releases/build-114.md). File preesistenti estranei conservati ed esclusi dal rilascio.
 
 Ultima correzione backend: **1 novembre 2026**, Codex — correzione presentazione del resolver **pubblicata su staging3**.
 La riga «Ho inteso» mostrava la descrizione della capacità scelta, copiando esempi dal catalogo (caldaia/Lego).
@@ -136,7 +136,7 @@ le skill, stato esplicito/versionato delle proposte fra dispositivi e corpus pi�
 La cronologia della domanda viene conservata; non è un nuovo sistema di approvazione né un tool universale
 che esegue operazioni. Nessun modello può inventare fatti, preferenze o consenso per risolvere un dubbio.
 
-### ChatArchive — fattibilità del 5 novembre
+### ChatArchive — fattibilità del 5 novembre (decisione backend e implementazione sopra)
 
 **Materiale letto:** tre file Markdown nello ZIP personale `~/Desktop/ChatArchive_iOS_Codex.zip`:
 `SPECIFICA_PROGETTO.md`, `PROMPT_CODEX.md`, `AGENTS.md`. ZIP SHA-256

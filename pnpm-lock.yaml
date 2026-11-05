@@ -71,6 +71,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.3.4
         version: 11.3.4
+      '@mastra/core':
+        specifier: ^1.75.0
+        version: 1.75.0(ai@7.0.137(zod@4.6.5))(zod@4.6.5)
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -87,6 +90,9 @@ importers:
       '@types/ssh2':
         specifier: ^1.15.6
         version: 1.15.6
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
 
   apps/worker:
     dependencies:
@@ -1376,6 +1382,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   figures@6.1.0:
     resolution: {integrity: sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg==}
@@ -3001,6 +3010,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   figures@6.1.0:
     dependencies:

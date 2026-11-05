@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Coda delle condivisioni: il foglio «Ernie» (estensione di condivisione) scrive qui ciò che non può consegnare
 /// subito, e tutti i file (immagini e PDF); l'app li processa al ritorno in primo piano.
@@ -30,6 +31,8 @@ enum ShareInbox {
             case images([URL], note: String?)
             /// PDF già copiato nella cartella dell'elemento.
             case pdf(URL, note: String?)
+            /// File testuale WhatsApp, destinazione esplicita e legata alle credenziali che lo hanno ricevuto.
+            case chatArchive(URL, owner: String)
         }
 
         /// Nome della cartella: identifica l'elemento.
@@ -48,6 +51,7 @@ enum ShareInbox {
         var files: [String]?
         var note: String?
         var createdAt: Date
+        var owner: String? = nil
     }
 
     /// Radice della coda nel gruppo app; nil se il gruppo non è disponibile.
@@ -57,10 +61,10 @@ enum ShareInbox {
     }
 
     /// Crea la cartella di un nuovo elemento. Immagini e PDF vi vengono copiati prima di `enqueue`.
-    static func makeFolder() throws -> URL {
+    static func makeFolder(protected: Bool = false) throws -> URL {
         guard let root = rootURL else { throw QueueError.noContainer }
         let folder = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: protected ? [.protectionKey: FileProtectionType.complete] : nil)
         return folder
     }
 
@@ -79,11 +83,14 @@ enum ShareInbox {
             sidecar = Sidecar(kind: "images", url: nil, title: nil, text: nil, files: try fileNames(urls, in: dir), note: note, createdAt: now)
         case .pdf(let url, let note):
             sidecar = Sidecar(kind: "pdf", url: nil, title: nil, text: nil, files: try fileNames([url], in: dir), note: note, createdAt: now)
+        case .chatArchive(let url, let owner):
+            sidecar = Sidecar(kind: "chatArchive", url: nil, title: nil, text: nil, files: try fileNames([url], in: dir), note: nil, createdAt: now, owner: owner)
         }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
-        try encoder.encode(sidecar).write(to: dir.appendingPathComponent(sidecarName), options: .atomic)
+        let options: Data.WritingOptions = sidecar.kind == "chatArchive" ? [.atomic, .completeFileProtection] : [.atomic]
+        try encoder.encode(sidecar).write(to: dir.appendingPathComponent(sidecarName), options: options)
         return Item(id: dir.lastPathComponent, kind: kind, createdAt: now, folder: dir)
     }
 
@@ -102,6 +109,15 @@ enum ShareInbox {
     /// Cancella la cartella di un elemento, anche una copia non ancora messa in coda.
     static func discard(_ folder: URL) {
         try? FileManager.default.removeItem(at: folder)
+    }
+
+    /// Nessuna chiave o identificativo leggibile nel sidecar. Una coda non passa a un altro account.
+    static func ownerScope(serverURL: URL, apiKey: String) -> String {
+        var c = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)
+        c?.query = nil; c?.fragment = nil; c?.user = nil; c?.password = nil
+        let endpoint = c?.url?.absoluteString ?? serverURL.absoluteString
+        return SHA256.hash(data: Data(("ernie-chat-archive-share-v1\n" + endpoint + "\n" + apiKey).utf8))
+            .map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - privato
@@ -136,6 +152,11 @@ enum ShareInbox {
         case "pdf":
             guard let name = sidecar.files?.first else { return nil }
             kind = .pdf(folder.appendingPathComponent(name), note: sidecar.note)
+        case "chatArchive":
+            guard let name = sidecar.files?.first, name == (name as NSString).lastPathComponent,
+                  !name.contains(".."), ["txt", "zip"].contains((name as NSString).pathExtension.lowercased()),
+                  let owner = sidecar.owner, owner.count == 64 else { return nil }
+            kind = .chatArchive(folder.appendingPathComponent(name), owner: owner)
         default:
             return nil
         }

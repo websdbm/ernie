@@ -3,12 +3,14 @@ import SwiftUI
 
 /// Navigazione locale o richieste esplicite al normale flusso di conversazione.
 enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
+    case chatArchives = "archivio"
     case message = "messaggio", family = "famiglia", todo = "todo", recipes = "ricette"
     case brain = "brain", media = "media", reminders = "promemoria", createReminder = "ricordami", automations = "automazioni"
     case ssh = "ssh", settings = "impostazioni", usage = "consumi", clear = "clear", help = "aiuto"
     var id: String { rawValue }
     var aliases: [String] {
         switch self {
+        case .chatArchives: ["archiviochat", "chatarchivio"]
         case .message: ["msg"]
         case .todo: ["attivita"]
         case .brain: ["memoria", "secondbrain"]
@@ -19,6 +21,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     }
     var detail: String {
         switch self {
+        case .chatArchives: "Apri le conversazioni importate"
         case .message: "Prepara un messaggio a un familiare"
         case .family: "Apri Famiglia"
         case .todo: "Apri le liste di attività"
@@ -37,6 +40,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     }
     var symbol: String {
         switch self {
+        case .chatArchives: "bubble.left.and.text.bubble.right"
         case .message: "square.and.pencil"
         case .family: "person.2"
         case .todo: "checklist"
@@ -55,6 +59,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     }
     var skill: String? {
         switch self {
+        case .chatArchives: "chat_archive"
         case .todo: "todo"
         case .recipes: "ricette"
         case .brain: "second_brain"
@@ -65,6 +70,7 @@ enum SlashCommand: String, CaseIterable, Identifiable, Sendable {
     }
     var destination: PanelDestination? {
         switch self {
+        case .chatArchives: .chatArchives
         case .family: .family
         case .todo: .todo
         case .recipes: .recipes

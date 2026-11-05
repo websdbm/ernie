@@ -44,8 +44,14 @@ final class ShareViewController: UIViewController {
         model.didLoad(await read(providers, title: title))
     }
 
-    /// Primo tipo riconosciuto vince, nell'ordine PDF, immagini, link, testo.
+    /// I file di esportazione precedono PDF, immagini, link e normale testo condiviso.
     private func read(_ providers: [NSItemProvider], title: String?) async -> ShareContent {
+        // Esportazioni testuali prima del percorso generico: non diventano note del Brain.
+        for type in [UTType.zip, UTType.plainText] {
+            if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(type.identifier) && (type == .zip || $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) || $0.suggestedName?.lowercased().hasSuffix(".txt") == true) }) {
+                return await stageArchive(provider, type: type)
+            }
+        }
         if let pdf = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) }) {
             return await stagePDF(pdf)
         }
@@ -56,6 +62,7 @@ final class ShareViewController: UIViewController {
         if let web = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }),
            let url = await loadURL(web) {
             if url.isFileURL {
+                if ["txt", "zip"].contains(url.pathExtension.lowercased()) { return await stageArchiveURL(url) }
                 return url.pathExtension.lowercased() == "pdf" ? await stageFile(url) : .unsupported
             }
             return .link(url, title: title)
@@ -66,6 +73,52 @@ final class ShareViewController: UIViewController {
             return trimmed.isEmpty ? .unsupported : .text(trimmed)
         }
         return .unsupported
+    }
+
+    /// Copia limitata: nessuna analisi o richiesta di rete nell’estensione.
+    private func stageArchive(_ provider: NSItemProvider, type: UTType) async -> ShareContent {
+        guard let folder = try? ShareInbox.makeFolder(protected: true) else { return .unreadable }
+        do {
+            let suggestedName = provider.suggestedName
+            let name: String = try await withCheckedThrowingContinuation { continuation in
+                _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { @Sendable source, failure in
+                    guard let source else { continuation.resume(throwing: failure ?? ShareReadError.unreadable); return }
+                    do {
+                        let name = Self.archiveFilename(suggestedName ?? source.lastPathComponent, extension: type == .zip ? "zip" : "txt")
+                        try Self.copyArchiveFile(source, to: folder.appendingPathComponent(name))
+                        continuation.resume(returning: name)
+                    } catch { continuation.resume(throwing: error) }
+                }
+            }
+            return .chatArchive(folder: folder, name: name)
+        } catch { ShareInbox.discard(folder); return .unreadable }
+    }
+    private func stageArchiveURL(_ source: URL) async -> ShareContent {
+        guard let folder = try? ShareInbox.makeFolder(protected: true) else { return .unreadable }
+        let name = Self.archiveFilename(source.lastPathComponent, extension: source.pathExtension.lowercased())
+        do {
+            try await Task.detached {
+                let scoped = source.startAccessingSecurityScopedResource()
+                defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+                try Self.copyArchiveFile(source, to: folder.appendingPathComponent(name))
+            }.value
+            return .chatArchive(folder: folder, name: name)
+        } catch { ShareInbox.discard(folder); return .unreadable }
+    }
+    nonisolated private static func archiveFilename(_ raw: String, extension ext: String) -> String {
+        let base = URL(fileURLWithPath: raw).deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "..", with: "").replacingOccurrences(of: ":", with: "-")
+        return (base.isEmpty ? "chat" : String(base.prefix(150))) + "." + ext
+    }
+    nonisolated private static func copyArchiveFile(_ source: URL, to target: URL) throws {
+        let maximum = 8 * 1024 * 1024
+        let meta = try source.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard meta.isRegularFile == true, let size = meta.fileSize, size > 0, size <= maximum else { throw ShareReadError.unreadable }
+        let file = try FileHandle(forReadingFrom: source)
+        defer { try? file.close() }
+        let data = try file.read(upToCount: maximum + 1) ?? Data()
+        guard !data.isEmpty, data.count <= maximum else { throw ShareReadError.unreadable }
+        try data.write(to: target, options: [.atomic, .completeFileProtection])
     }
 
     private func stagePDF(_ provider: NSItemProvider) async -> ShareContent {

@@ -98,6 +98,7 @@ describe('catalogo delle skill', () => {
 
   it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
+      'chat_archive',
       'diario',
       'diario_personale',
       'documenti',
@@ -115,6 +116,7 @@ describe('catalogo delle skill', () => {
     expect([
       ...availableSkillIds({
         skillsAvailable: {
+          chat_archive: false,
           ricette: false,
           documenti: false,
           ricordami: false,
@@ -133,6 +135,7 @@ describe('catalogo delle skill', () => {
     expect([
       ...enabledSkillIds({
         skillsAvailable: {
+          chat_archive: false,
           ricette: false,
           documenti: false,
           ricordami: false,
@@ -154,6 +157,7 @@ describe('catalogo delle skill', () => {
       [
         ...enabledSkillIds({
           skillsAvailable: {
+            chat_archive: false,
             ricette: true,
             documenti: false,
             ricordami: false,

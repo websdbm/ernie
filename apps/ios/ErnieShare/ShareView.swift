@@ -12,7 +12,7 @@ struct ShareView: View {
             } else {
                 if let content = model.content {
                     preview(for: content)
-                    noteField
+                    if !model.isChatArchive { noteField }
                 }
                 phaseStatus
             }
@@ -36,7 +36,7 @@ struct ShareView: View {
                 Text("Ernie")
                     .font(Theme.title(20))
                     .foregroundStyle(Theme.ink)
-                Text("Salva nel second brain")
+                Text(model.isChatArchive ? "Importa in Archivio chat" : "Salva nel second brain")
                     .font(.subheadline)
                     .foregroundStyle(Theme.inkSecondary)
             }
@@ -112,14 +112,14 @@ struct ShareView: View {
         VStack(spacing: 10) {
             if model.canSave {
                 Button(action: model.save) {
-                    Text("Salva nel second brain")
+                    Text(model.isChatArchive ? "Importa in Archivio chat" : "Salva nel second brain")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
                 .controlSize(.large)
-                .accessibilityHint("Salva ciò che hai condiviso nel tuo second brain di Ernie")
+                .accessibilityHint(model.isChatArchive ? "Prepara l’importazione in Archivio chat" : "Salva ciò che hai condiviso nel tuo second brain di Ernie")
             }
             if !model.isFinishing {
                 Button("Annulla", role: .cancel, action: model.cancel)
@@ -164,6 +164,8 @@ private extension ShareContent {
         case .images(_, let names):
             Summary(symbol: "photo.on.rectangle.angled", eyebrow: "Immagini",
                     title: names.count == 1 ? "1 immagine" : "\(names.count) immagini", detail: nil)
+        case .chatArchive(_, let name):
+            Summary(symbol: "bubble.left.and.text.bubble.right", eyebrow: "Archivio chat", title: name, detail: "Solo testo · importazione da confermare nell’app")
         case .pdf(_, let name):
             Summary(symbol: "doc.richtext", eyebrow: "PDF", title: name, detail: nil)
         case .unsupported, .unreadable:
