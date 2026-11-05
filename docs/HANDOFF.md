@@ -17,7 +17,12 @@ non usano LLM. Contesto delle risposte limitato e copertura parziale dichiarata,
 WhatsApp: numero internazionale per aprire una privata con bozza; link salvato per gruppi/canali, condivisione
 manuale come alternativa. Nessun invio automatico e nessuna sincronizzazione diretta WhatsApp.
 **56 test backend verdi (7 PostgreSQL reali), 23 iOS verdi; TypeScript e Biome verdi.**
-Rendering nativo verificato in chiaro/scuro/Borg e caratteri accessibili. Pubblicazione e build 114 ancora da completare. Dettagli e stato in
+Rendering nativo verificato in chiaro/scuro/Borg e caratteri accessibili. API **pubblicata e sana**, sorgenti
+`5734a281ebf09e716ff453bcc68ff6f8754ccb03`, migrazione 50 sola, immagine `ae6ff1f3…`,
+worker/DB/Redis invariati. Prova LLM reale e smoke HTTPS sintetici passati; fixture eliminate.
+Build 114 **disponibile su TestFlight**, gruppo **Interni**, **VALID / IN_BETA_TESTING**; archivio/export,
+firme dei quattro target e 297 input Git verificati sul Mac Studio. Build ID
+`1bf03f8d-f095-43b5-bed4-9d97486cbf17`; note italiane rilette e conformi al changelog (899 caratteri). Dettagli e stato in
 [build 114](releases/build-114.md). File preesistenti estranei conservati ed esclusi dal rilascio.
 
 Ultima correzione backend: **1 novembre 2026**, Codex — correzione presentazione del resolver **pubblicata su staging3**.
@@ -35,7 +40,7 @@ Backup `/srv/staging3/backups/ernie-pre-resolver-presentation-20261101/checkout`
 `ernie-app:pre-resolver-presentation-20261101`; configurazioni intatte, nessuna migrazione.
 Solo backend: nessuna nuova build iOS, resta la 113. Stato in [presentazione resolver](releases/backend-2026-11-01-resolver-presentation.md).
 
-Ultimo rilascio iOS: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
+Rilascio iOS precedente: **1 novembre 2026**, Codex — build **113 disponibile su TestFlight**, gruppo **Interni**.
 Apple: **VALID**, **IN_BETA_TESTING**; Build ID `18e62402-c242-4585-80d9-73a80d916084`, note italiane rilette (232 caratteri).
 Correzione esplicita dell’utente: `/clear` lascia l’area della chat vuota, senza testi, conferme o pulsanti
 per tornare ai contenuti nascosti. Rimossi metodo di ripristino e invito nell’aiuto. Contesto, sessione,
