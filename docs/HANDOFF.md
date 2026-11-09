@@ -6,7 +6,11 @@ modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le re
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
 Ultimo aggiornamento: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
-**Build 115 preparata, non ancora pubblicata**; API in produzione ancora alla revisione della 114.
+**Build 115 compilata e firmata, non ancora pubblicata**; API in produzione ancora alla revisione della 114.
+Sorgenti GitHub `a2f50e5fbbfbb8430093a77c0e9becf2554386cc`, 300 input iOS verificati contro Git e test;
+archivio/export riusciti sul Mac Studio, quattro firme Apple Distribution e isolamento diario verificati.
+IPA pronta in `~/Library/Caches/ernie-builds/build-115-20261109-performance/export-profile-api/Ernie.ipa`.
+Via libera per API/TestFlight richiesto dopo i controlli; in attesa della risposta.
 Fino a tre sessioni nell’app, risolutore light per precisazioni/nuovi compiti, scelte nei dubbi e messaggi
 in attesa conservati. Primo testo immediato, frammenti successivi raggruppati, preparazione contesto/agente
 sovrapposta e salvataggi locali su coda dedicata. Scritture tool serializzate per account nel processo;
