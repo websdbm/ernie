@@ -1,8 +1,9 @@
 # Build 115 — Più compiti, meno attese
 
-9 novembre 2026. **Build compilata, firmata e verificata; pubblicazione non ancora effettuata.**
-Versione distribuita corrente: 114, riletta in App Store Connect come VALID.
-API corrente: sorgenti `5734a281ebf09e716ff453bcc68ff6f8754ccb03`; nessuna modifica alla produzione in questa sessione.
+9 novembre 2026. **Disponibile su TestFlight**, gruppo **Interni**; API pubblicata e sana.
+Apple **VALID**, **IN_BETA_TESTING**, Build ID `dcd20e25-2552-4815-9356-7c4b61c4824b`.
+Note italiane rilette e identiche al changelog: **1.179 caratteri**.
+Sorgenti API `a2f50e5fbbfbb8430093a77c0e9becf2554386cc`. Pubblicazione autorizzata dall’utente il 9 novembre.
 
 ## Modifiche
 
@@ -28,7 +29,8 @@ Analisi, misure e limiti in [performance e concorrenza](../research/21-performan
   Simulatore Mac Studio «Ernie prova», Xcode 27.0. Anteprime native ispezionate.
 - Classificatore reale su quattro casi sintetici: 4/4 corretti, 963–2.348 ms, 33–64 token output,
   zero reasoning; nessun dato personale inviato. Campione puntuale, non garanzia statistica.
-- Nessuna migrazione, scrittura nel database reale, notifica o messaggio a terzi nelle prove.
+- Nessuna migrazione o modifica ai dati degli utenti. Prove HTTPS con account sintetico poi rimosso;
+  nessuna notifica o messaggio a terzi.
 
 ## Rilascio
 
@@ -44,11 +46,32 @@ Artefatto e manifest sul Mac Studio:
 `~/Library/Caches/ernie-builds/build-115-20261109-performance/` (`export-profile-api/Ernie.ipa`,
 `source-sha.txt`, `source-ios-sha256.json`, `ipa-verification.json`). Test e prova LLM sintetica in
 `~/Library/Caches/ernie-checks/performance-20261109/`; log nativo finale `native-tests-final-2.log`.
-L'IPA non è stata caricata né installata su telefoni.
-Conferma per API/TestFlight richiesta dopo la preparazione e verifica dell’artefatto; in attesa di risposta.
-Prima del deploy effettuare backup e aggiornare la sola API da Git; nessuna migrazione richiesta.
-Worker, Redis, Postgres e configurazioni possono rimanere invariati. Un backend precedente mantiene le
-scelte manuali ma non offre classificazione automatica e nuovo tool.
+Caricata la stessa IPA verificata: `UPLOAD SUCCEEDED with no errors`, Delivery UUID coincidente
+con il Build ID. Disponibilità verificata tramite API Apple, gruppo Interni assegnato automaticamente.
+Manifest finale `release-manifest.json`, risposte Apple `asc-build.json`/`asc-notes.json` e log upload
+conservati nella cartella della build. Nessuna installazione diretta su telefoni.
+Conferma esplicita dell’utente ricevuta il 9 novembre: pubblicare API e build 115.
+
+API aggiornata da Git alla revisione dei sorgenti della build, immagine
+`sha256:d3d57a721d5deacbe994f380823681701d7326b30bbd6b5af4d68a343623bfa6`, avvio
+`2026-11-09T09:10:29.831188098Z`. Health HTTPS `ok`, container `healthy`; dodici moduli JS compilati
+identici per SHA-256 al codice locale testato. Prima del passaggio, prova isolata della nuova immagine
+senza rete: calcolo intervalli, raggruppamento testo e validazione destinazioni corretti.
+Ricreata soltanto l’API con `--no-deps --no-build`; nessuna migrazione. Identità/immagine/avvio di worker,
+Postgres e Redis identici al controllo precedente; `.env` e override verificati invariati tramite hash.
+Il health conserva l'etichetta versione preesistente della 106 dal `.env`: usare SHA/immagine per identificare il codice.
+
+Smoke HTTPS con account e chiave temporanei: 401 senza autenticazione, 400 su destinazioni duplicate,
+403 con kill switch; tre prompt sintetici classificati correttamente come precisazione (3.354 ms),
+nuovo compito (963 ms), dubbio da chiarire (1.058 ms). Tre chiamate registrate, 127 token output,
+zero sessioni di chat create. Account e chiave rimossi; resta soltanto l’audit contabile anonimo previsto.
+Nessuna conversazione personale letta o modificata e nessun messaggio/notifica inviato nelle prove.
+
+Backup protetto `/srv/staging3/backups/ernie-pre-performance-20261109/checkout`, immagine precedente
+`ernie-app:pre-performance-20261109`. Rollback: ritaggare quest'immagine come `ernie-app:local` e ricreare
+solo `api` senza build/dipendenze; nessun rollback del database necessario. Log e prove in
+`/srv/staging3/checks/performance-20261109/`; copia delle evidenze sull’ufficio in
+`~/Library/Caches/ernie-checks/performance-20261109/`.
 
 Le prove su iPhone fisico, durata batteria con tre connessioni, comportamento sotto sospensione iOS e
 latenze con rete mobile non sono comprese nei test del simulatore. Non si promette esecuzione continua

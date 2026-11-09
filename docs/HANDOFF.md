@@ -6,11 +6,13 @@ modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le re
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
 Ultimo aggiornamento: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
-**Build 115 compilata e firmata, non ancora pubblicata**; API in produzione ancora alla revisione della 114.
+**Build 115 disponibile su TestFlight**, gruppo **Interni**, Apple **VALID / IN_BETA_TESTING**;
+**API pubblicata e sana**. Build ID `dcd20e25-2552-4815-9356-7c4b61c4824b`, note italiane verificate
+identiche al changelog (1.179 caratteri).
 Sorgenti GitHub `a2f50e5fbbfbb8430093a77c0e9becf2554386cc`, 300 input iOS verificati contro Git e test;
 archivio/export riusciti sul Mac Studio, quattro firme Apple Distribution e isolamento diario verificati.
 IPA pronta in `~/Library/Caches/ernie-builds/build-115-20261109-performance/export-profile-api/Ernie.ipa`.
-Via libera per API/TestFlight richiesto dopo i controlli; in attesa della risposta.
+Via libera esplicito per API/TestFlight ricevuto il 9 novembre. Upload riuscito senza errori; caricata la stessa IPA verificata.
 Fino a tre sessioni nell’app, risolutore light per precisazioni/nuovi compiti, scelte nei dubbi e messaggi
 in attesa conservati. Primo testo immediato, frammenti successivi raggruppati, preparazione contesto/agente
 sovrapposta e salvataggi locali su coda dedicata. Scritture tool serializzate per account nel processo;
@@ -20,7 +22,10 @@ Stile condiviso per pulsanti e schede in chat, ricette, Todo, promemoria, Brain 
 Misure iniziali: 14 turni iOS 114, primo contenuto mediano 3,48 s, p95 35,75 s: campione piccolo,
 nessuna percentuale di accelerazione generale dichiarata. Piano strumenti e limiti in
 [performance e concorrenza](research/21-performance-concurrency.md), stato artefatto e rilascio in
-[build 115](releases/build-115.md). Produzione e TestFlight ancora invariati: manca il via libera al deploy.
+[build 115](releases/build-115.md). API dalla stessa revisione `a2f50e5`, immagine `d3d57a72…`,
+health HTTPS `ok`, dodici moduli compilati verificati. Worker/Postgres/Redis e configurazioni invariati;
+nessuna migrazione. Smoke HTTPS sintetico passato: precisazione/nuovo compito/domanda, autorizzazioni,
+registro consumi e rimozione account di prova. Backup `ernie-pre-performance-20261109` e immagine omonima.
 Modifiche preesistenti a documentazione, backup e asset non pertinenti conservate ed escluse dal commit.
 
 Rilascio precedente: **5 novembre 2026**, Codex — implementazione della skill **Archivio chat**, autorizzata dall’utente.
@@ -370,9 +375,9 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **114**, `VALID` riletta il 9 nov; Interni/IN_BETA_TESTING verificati al rilascio del 5 nov; sorgenti iOS `5734a28`. Build 115 preparata, non distribuita |
+| App su TestFlight | build **115**, verificata il 9 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `a2f50e5` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **5734a28** (5 nov, Archivio chat), checkout `ceb9f63` verificato il 9 nov; worker invariato. Recupero API `ernie-app:pre-chatarchive-20261105` |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **a2f50e5** (9 nov, performance/compiti paralleli), immagine `d3d57a72…`, healthy; worker invariato. Recupero API `ernie-app:pre-performance-20261109` |
 | Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 115 |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
