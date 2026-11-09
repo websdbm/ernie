@@ -118,6 +118,7 @@ import {
   presentChoicesTool,
   presentRecipesTool,
   ToolRegistry,
+  timeWindowsTool,
 } from '@ernie/tools';
 import { createAuthenticator } from './auth.js';
 import { createBrainRuntime } from './brain.js';
@@ -166,6 +167,7 @@ import { createSshTools } from './ssh/tools.js';
 import { createSshProviderAdapters } from './ssh-providers.js';
 import { createSshTransport } from './ssh-transport.js';
 import { createStyleTool } from './style.js';
+import { createTaskIntentResolver } from './task-intent.js';
 import { createTodoReminderSync } from './todo-reminders.js';
 import { createProviderBalance, createUsageService } from './usage.js';
 import { createUserBudgetCheck } from './user-budget.js';
@@ -438,6 +440,7 @@ async function main(): Promise<void> {
   const readContinuity = createContinuityReader(postgres.pool);
   const registry = new ToolRegistry()
     .register(getTimeTool)
+    .register(timeWindowsTool)
     .register(presentRecipesTool)
     .register(presentChoicesTool)
     .register(createMemorySearchSpec(memories))
@@ -760,6 +763,7 @@ async function main(): Promise<void> {
         'operating_preference_save',
         'operating_preference_remove',
         'get_time',
+        'time_windows',
         'present_recipes',
         'present_choices',
         'todo_lists',
@@ -991,6 +995,19 @@ async function main(): Promise<void> {
   const app = await buildServer({
     config,
     logger,
+    ...(gateway
+      ? {
+          taskIntent: {
+            authenticator,
+            allowedOrigins: config.ws.allowedOrigins,
+            resolve: createTaskIntentResolver({
+              gateway,
+              recorder: createLlmCallRecorder(postgres.pool, logger),
+              checkBudget: checkUserBudget,
+            }),
+          },
+        }
+      : {}),
     checks: { postgres: () => postgres.check(), redis: () => redis.check() },
     automations: {
       authenticator,

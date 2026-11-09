@@ -142,7 +142,7 @@ final class VoiceController {
     /// Barge-in dalla conversazione continua: ferma Ernie, dice al server fin dove è stato sentito, riapre il microfono.
     func interrupt() {
         guard phase == .waitingReply else { return }
-        conversation.bargeIn()
+        conversation.prepareForSpokenInput()
         beginCapture()
     }
 
@@ -154,7 +154,7 @@ final class VoiceController {
         lastFinalText = nil
         heardSpeech = false
         inputLevel = 0
-        if speaker.isSpeaking || conversation.isBusy { conversation.bargeIn() }
+        if speaker.isSpeaking || conversation.isBusy { conversation.prepareForSpokenInput() }
         phase = .preparing
         captureGeneration = UUID()
         let token = captureGeneration

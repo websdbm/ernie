@@ -30,6 +30,7 @@ struct TranscriptStore {
     }
 
     func load(_ sessionId: String) -> SessionFile? {
+        Self.writes.flush()
         guard let data = try? Data(contentsOf: fileURL(sessionId)),
               var file = try? Self.decoder.decode(SessionFile.self, from: data) else { return nil }
         // Ripara anche le schede duplicate salvate dalle versioni precedenti, all'avvio e nella cronologia.
@@ -38,11 +39,27 @@ struct TranscriptStore {
     }
 
     func save(_ file: SessionFile) {
+        Self.writes.flush()
+        write(file)
+    }
+
+    private func write(_ file: SessionFile) {
         guard let data = try? Self.encoder.encode(file) else { return }
         try? data.write(to: fileURL(file.sessionId), options: [.atomic, .completeFileProtection])
         // L'indice si scrive dopo la conversazione: se manca o è più vecchio, `list` lo ricostruisce.
         writeSummary(Self.summary(of: file), for: file.sessionId)
     }
+
+    /// Snapshot encoding and disk I/O never block the composer or streaming UI. Serial ordering
+    /// also makes logout/deletion a barrier: an older save cannot resurrect deleted content.
+    func saveInBackground(_ file: SessionFile) {
+        let directory = self.directory
+        Self.writes.enqueue {
+            TranscriptStore(directory: directory).write(file)
+        }
+    }
+
+    private static let writes = TranscriptWrites()
 
     /// Conversazione salvata sul telefono, per lo storico del pannello laterale.
     struct SessionSummary: Identifiable, Sendable, Equatable {
@@ -63,6 +80,7 @@ struct TranscriptStore {
     /// salvata prima dell'indice (blocchi da watchdog delle build 97–98: fino a 80 conversazioni decodificate sul
     /// main a ogni apertura del pannello).
     func list(limit: Int = 40) -> [SessionSummary] {
+        Self.writes.flush()
         let urls = (try? FileManager.default.contentsOfDirectory(at: self.directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let recent = urls
             .filter { $0.pathExtension == "json" }
@@ -95,11 +113,13 @@ struct TranscriptStore {
     }
 
     func delete(_ sessionId: String) {
+        Self.writes.flush()
         try? FileManager.default.removeItem(at: fileURL(sessionId))
         try? FileManager.default.removeItem(at: summaryURL(sessionId))
     }
 
     func clearAll() {
+        Self.writes.flush()
         try? FileManager.default.removeItem(at: directory)
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
         defaults.removeObject(forKey: Self.currentKey)
@@ -142,14 +162,20 @@ struct TranscriptStore {
         directory.appending(path: "\(sessionId).summary")
     }
 
-    private static let encoder: JSONEncoder = {
+    private static var encoder: JSONEncoder {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         return e
-    }()
-    private static let decoder: JSONDecoder = {
+    }
+    private static var decoder: JSONDecoder {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
-    }()
+    }
+}
+
+private final class TranscriptWrites: Sendable {
+    private let queue = DispatchQueue(label: "it.ernie.transcript-writes", qos: .utility)
+    func enqueue(_ write: @escaping @Sendable () -> Void) { queue.async(execute: write) }
+    func flush() { queue.sync {} }
 }

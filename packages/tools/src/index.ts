@@ -10,6 +10,7 @@ export * from './builtins/reminders.js';
 export * from './builtins/sentinels.js';
 export * from './builtins/shopping.js';
 export * from './builtins/time.js';
+export * from './builtins/time-windows.js';
 export * from './builtins/todo.js';
 export * from './builtins/web.js';
 export * from './executor.js';

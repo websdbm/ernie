@@ -42,6 +42,81 @@ function collector() {
   return { events, emit };
 }
 
+it('batches text without losing its tail and flushes before tools, errors and completion', async () => {
+  const companion = fakeCompanion([
+    ...['uno', ' due', ' tre'].map((text) => ({ type: 'text-delta', payload: { text } })),
+    { type: 'tool-call', payload: { toolCallId: 't', toolName: 'get_time', args: {} } },
+    { type: 'tool-result', payload: { toolCallId: 't', toolName: 'get_time', result: {} } },
+    ...[' quattro', ' cinque'].map((text) => ({ type: 'text-delta', payload: { text } })),
+    { type: 'error', payload: { error: new Error('provider failed') } },
+  ]);
+  const { events, emit } = collector();
+  const result = await runTurn({
+    userId: 'u',
+    sessionId: 's',
+    correlationId: 'c',
+    text: 'test',
+    inputMode: 'text',
+    companion,
+    abortSignal: new AbortController().signal,
+    recorder: { record: vi.fn(async () => {}) },
+    logger,
+    emit,
+  });
+  expect(events.map((event) => event.type)).toEqual([
+    'assistant.started',
+    'assistant.text.delta',
+    'assistant.text.delta',
+    'tool.started',
+    'tool.completed',
+    'assistant.text.delta',
+    'error',
+    'assistant.completed',
+  ]);
+  const transmitted = events
+    .filter((event) => event.type === 'assistant.text.delta')
+    .map((event) => (event.payload as { delta: string }).delta)
+    .join('');
+  expect(transmitted).toBe('uno due tre quattro cinque');
+  expect(result.text).toBe(transmitted);
+});
+
+it('flushes buffered text before cancellation and leaves no delayed text event', async () => {
+  const controller = new AbortController();
+  const companion = fakeCompanion([]);
+  companion.agent.stream = vi.fn(async () => ({
+    fullStream: (async function* () {
+      yield { type: 'text-delta', payload: { text: 'primo' } };
+      yield { type: 'text-delta', payload: { text: ' ultimo' } };
+      controller.abort();
+      yield { type: 'finish', payload: {} };
+    })(),
+  })) as never;
+  const { events, emit } = collector();
+  const result = await runTurn({
+    userId: 'u',
+    sessionId: 's',
+    correlationId: 'c',
+    text: 'test',
+    inputMode: 'text',
+    companion,
+    abortSignal: controller.signal,
+    recorder: { record: vi.fn(async () => {}) },
+    logger,
+    emit,
+  });
+  expect(result.cancelled).toBe(true);
+  expect(events.map((event) => event.type)).toEqual([
+    'assistant.started',
+    'assistant.text.delta',
+    'assistant.text.delta',
+    'assistant.cancelled',
+  ]);
+  expect(events[2]?.payload).toEqual({ delta: ' ultimo' });
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(events).toHaveLength(4);
+});
+
 describe('runTurn', () => {
   it('traduce lo stream in eventi e registra una riga per step', async () => {
     const recorder = { record: vi.fn(async () => {}) };

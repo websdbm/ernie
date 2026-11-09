@@ -34,6 +34,14 @@ final class ConversationStore {
     /// Turno chiuso del tutto (risposta finita e voce terminata): la conversazione continua riapre il microfono.
     var onSettled: (() -> Void)?
     var onFeedback: ((ErnieSound, String?) -> Void)?
+    /// Called only after local/private entry points have been handled. Independent jobs use separate sessions.
+    var onConcurrentInput: ((String, String, [DocumentRef]) -> Void)?
+    private(set) var isForeground = true
+    var activeTaskTitle: String {
+        activeRequest?.payload.text ?? items.compactMap { item in
+            if case .message(let m) = item, m.role == .user { return m.text }; return nil
+        }.last ?? "Conversazione"
+    }
 
     private(set) var activeCorrelationId: String?
     private var activeInputMode: String?
@@ -61,6 +69,8 @@ final class ConversationStore {
 
 
     init(credentials: Credentials, speaker: Speaker, inbox: InboxStore, settings: LocalSettings, transcript: TranscriptStore = TranscriptStore(), performanceQueue: PerformanceObservationQueue? = nil,
+         initialSessionId: String? = nil,
+         observeInbox: Bool = true,
          deviceContext: @escaping () -> DeviceContextPayload? = { DeviceContextProvider.shared.context() }) {
         self.gameStorageID = ErnieTRIXSession.storageID(for: credentials)
         self.deviceContext = deviceContext
@@ -73,7 +83,7 @@ final class ConversationStore {
         self.inbox = inbox
         self.settings = settings
         let store = transcript
-        let sid = store.currentSessionId ?? Ids.new()
+        let sid = initialSessionId ?? store.currentSessionId ?? Ids.new()
         var loadedItems: [ChatItem] = []
         var loadedSeq = -1
         if let file = store.load(sid) {
@@ -97,7 +107,7 @@ final class ConversationStore {
         outbox = Self.pendingOutbox(loadedItems)
         restoreRequest(loadedItems)
         wireSpeaker()
-        inbox.onCards = { [weak self] cards in self?.merge(cards) }
+        if observeInbox { inbox.onCards = { [weak self] cards in self?.merge(cards) } }
     }
 
     // MARK: - connessione
@@ -131,6 +141,7 @@ final class ConversationStore {
         isAttached = false
         onSettled = nil
         onFeedback = nil
+        onConcurrentInput = nil
         onBlock = nil
         onFamilyMessage = nil
         speaker.onSpeakingChanged = nil
@@ -235,6 +246,14 @@ final class ConversationStore {
 
     // MARK: - azioni dell'utente
 
+    func setForeground(_ foreground: Bool) {
+        isForeground = foreground
+        if foreground { transcript.setCurrent(sessionId) }
+        else { muteSpeech() }
+    }
+
+    func receiveNotifications(_ cards: [NotificationCard]) { merge(cards) }
+
     /// Come `clear` in un terminale: nessun messaggio eliminato o inviato, stessa sessione e coda.
     /// Gli aggiornamenti di elementi già nascosti restano nascosti; i nuovi elementi sono visibili.
     func clearVisibleHistory() {
@@ -260,7 +279,7 @@ final class ConversationStore {
     /// Ultimo evento ricevuto per il turno aperto: senza notizie per troppo tempo il turno si chiude da solo.
     private var turnActivityAt = Date.distantPast
 
-    func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = []) {
+    func send(_ raw: String, inputMode: String, attachments: [DocumentRef] = [], resolveConcurrent: Bool = true, asNewTurn: Bool = false) {
         guard isAttached else { return }
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, !attachments.isEmpty { text = "Leggi questo allegato." }
@@ -291,13 +310,17 @@ final class ConversationStore {
             recoverLastRequest()
             return
         }
+        if resolveConcurrent, activeCorrelationId != nil, let onConcurrentInput {
+            onConcurrentInput(text, inputMode, attachments)
+            return
+        }
         // Risposta a voce in corso: si zittisce la voce ma il turno continua (la risposta scritta arriva intera);
         // il nuovo messaggio si mette in coda e parte a turno finito.
         if speaker.isSpeaking { muteSpeech() }
         if inputMode != "voice" { onFeedback?(.send, nil) }
         // Turno in corso e server con le precisazioni (v1.10): il testo entra nella richiesta senza fermarla
         // (scelta dell'utente, 25 ott 2026). Con allegati o server vecchi resta la coda di sempre.
-        if let target = activeCorrelationId, attachments.isEmpty, serverProtocolMinor >= 10, connection == .connected {
+        if !asNewTurn, let target = activeCorrelationId, attachments.isEmpty, serverProtocolMinor >= 10, connection == .connected {
             sendSteer(text, inputMode: inputMode, target: target)
             return
         }
@@ -585,6 +608,12 @@ final class ConversationStore {
         }
     }
 
+    /// Opening the microphone adds input; only the explicit Stop cancels existing work.
+    func prepareForSpokenInput() {
+        if onConcurrentInput != nil { muteSpeech() }
+        else { bargeIn() }
+    }
+
     /// Barge-in: ferma la voce subito e dice al server fino a dove l'utente ha sentito.
     func bargeIn() {
         performance.end(.cancelled)
@@ -843,7 +872,7 @@ final class ConversationStore {
     }
 
     private func shouldSpeak(_ correlationId: String) -> Bool {
-        guard isAttached, correlationId != mutedCorrelationId, correlationId == activeCorrelationId, settings.voiceOutput else { return false }
+        guard isAttached, isForeground, correlationId != mutedCorrelationId, correlationId == activeCorrelationId, settings.voiceOutput else { return false }
         return activeInputMode == "voice" || settings.speakTextReplies
     }
 
@@ -990,7 +1019,7 @@ final class ConversationStore {
         guard isAttached else { return }
         if items.count > 400 { items.removeFirst(items.count - 400) }
         hiddenItemIds.formIntersection(items.map(\.id))
-        transcript.save(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now,
+        transcript.saveInBackground(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now,
                               hiddenItemIds: hiddenItemIds.isEmpty ? nil : hiddenItemIds))
     }
 }

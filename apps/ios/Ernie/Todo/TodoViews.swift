@@ -22,7 +22,7 @@ struct TodoLibraryView: View {
                         Button { path.append(list.id) } label: { TodoLibraryRow(list: list) }
                             .buttonStyle(.plain)
                     }
-                    Button("Nuova lista", systemImage: "plus") { creating = true }.buttonStyle(.borderedProminent)
+                    Button("Nuova lista", systemImage: "plus") { creating = true }.buttonStyle(ErnieButtonStyle(emphasis: .primary))
                     // Giornate passate (27 ott 2026): archiviate in fondo, chiuse finché non si aprono.
                     if !archived.isEmpty {
                         DisclosureGroup(isExpanded: $showArchived) {
@@ -125,7 +125,7 @@ struct TodoCardContent: View {
                 }
             }
             Button(list.mode == .scheduled ? "Apri timeline" : "Apri lista", systemImage: "arrow.up.right", action: open)
-                .buttonStyle(.bordered)
+                .buttonStyle(ErnieButtonStyle())
         }.foregroundStyle(palette.ink)
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
@@ -156,7 +156,7 @@ struct TodoDetailView: View {
                     if let error = model.todoStore.lastError { TodoErrorBanner(message: error) }
                     if model.todoStore.unsavedDrafts[listId] != nil {
                         Button("Rivedi modifiche non salvate", systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90") { reviewingDraft = true }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(ErnieButtonStyle())
                     }
                     Text("\(list.tasks.filter { $0.status == .done }.count) di \(list.tasks.filter { $0.status != .cancelled }.count) completate")
                         .font(.subheadline).foregroundStyle(Theme.positive)
@@ -185,18 +185,17 @@ struct TodoDetailView: View {
                             }.foregroundStyle(Theme.inkSecondary)
                         }
                     }
-                    HStack {
+                    FlowLayout(spacing: 8) {
                         Button("Attività", systemImage: "plus") { editing = TodoItem(title: "", position: list.items.count) }
-                        Spacer()
                         Button("Gruppo", systemImage: "folder.badge.plus") { editing = TodoItem(title: "", kind: .group, position: list.items.count) }
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(ErnieButtonStyle())
                     Button("Ripianifica in chat", systemImage: "bubble.left") {
                         let text = "Vorrei ripianificare la lista Todo «\(list.name)» (id: \(list.id)), conservando gli impegni fissi e tutte le attività. "
                         if let chatDraft { chatDraft(text) } else { model.conversation?.composerSuggestion = text }
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(ErnieButtonStyle())
                     if list.mode == .scheduled {
                         Button("Converti in lista senza orari", role: .destructive) { converting = true }
-                            .font(.footnote)
+                            .buttonStyle(ErnieButtonStyle(emphasis: .destructive))
                     }
                 }.padding(16).frame(maxWidth: 700).frame(maxWidth: .infinity)
                 .sheet(item: $editing) { item in
@@ -219,7 +218,7 @@ struct TodoDetailView: View {
             else {
                 VStack {
                     if let error = model.todoStore.lastError { TodoErrorBanner(message: error) }
-                    Button("Ricarica lista") { Task { await model.todoStore.refresh(listId) } }
+                    Button("Ricarica lista") { Task { await model.todoStore.refresh(listId) } }.buttonStyle(ErnieButtonStyle())
                 }.padding()
             }
         }
@@ -284,7 +283,10 @@ struct TodoTaskRow: View {
             Button(action: edit) {
                 VStack(alignment: .leading, spacing: 5) {
                     if let group { Text(group).font(.caption.weight(.semibold)).foregroundStyle(Theme.inkSecondary) }
-                    Text(item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Image(systemName: "pencil").font(.caption).foregroundStyle(Theme.accentText).accessibilityHidden(true)
+                    }
                     if let slot, let start = slot.start, let end = slot.end {
                         Text("\(TodoTime.clock(start, timezone: timezone))–\(TodoTime.clock(end, timezone: timezone))\(slot.fixed ? " · fisso" : "")")
                             .font(.caption).foregroundStyle(Theme.inkSecondary)
@@ -298,7 +300,7 @@ struct TodoTaskRow: View {
                         Text(status).font(.caption.weight(.medium))
                             .foregroundStyle(item.status == .done ? Theme.positive : active ? Theme.accentText : Theme.inkSecondary)
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(maxWidth: .infinity, minHeight: Theme.actionHeight, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityHint("Modifica attività e orari")

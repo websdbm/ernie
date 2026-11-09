@@ -13,6 +13,7 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { ToolCallRecorder } from './audit.js';
 import { confirmationPresentation, confirmationReason } from './confirmation.js';
+import { AccountMutationQueue } from './mutation-queue.js';
 import type { ToolRuleStore } from './rules.js';
 import { type ToolContext, ToolError, type ToolSpec } from './types.js';
 
@@ -85,18 +86,28 @@ function truncateResult(value: unknown, maxChars: number): unknown {
   return walk(value);
 }
 
-async function withTimeout<T>(p: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
+async function withTimeout<T>(
+  p: Promise<T>,
+  ms: number,
+  signal?: AbortSignal,
+  onTimeout?: () => void,
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
+  let onAbort: (() => void) | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new ToolError(`timeout dopo ${ms} ms`, 'timeout', true)), ms);
-    signal?.addEventListener('abort', () => reject(new ToolError('annullato', 'aborted', false)), {
-      once: true,
-    });
+    timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new ToolError(`timeout dopo ${ms} ms`, 'timeout', true));
+    }, ms);
+    onAbort = () => reject(new ToolError('annullato', 'aborted', false));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
   });
   try {
     return await Promise.race([p, timeout]);
   } finally {
     if (timer) clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
   }
 }
 
@@ -124,12 +135,22 @@ function oncePerTurn(
   };
 }
 
+// The dependency object is shared by session factories; keep account lanes across their tools.
+const mutationQueues = new WeakMap<ExecutorDeps, AccountMutationQueue>();
+
 /**
  * Avvolge un ToolSpec in un tool Mastra con: policy deny → ask → allow, approvazione monouso,
  * timeout e retry sugli errori transitori, taint dopo contenuti non fidati, audit per chiamata,
  * tetto sulla dimensione del risultato. Gli errori tornano al modello come `{ error }`, mai come eccezioni.
  */
 export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: ToolContextRef) {
+  let mutations = mutationQueues.get(deps);
+  if (!mutations) {
+    mutations = new AccountMutationQueue();
+    mutationQueues.set(deps, mutations);
+  }
+  const mutationQueue = mutations;
+  const mutating = spec.risk.write || spec.risk.externalEffect;
   const descriptor: ToolPolicyDescriptor = {
     id: spec.id,
     risk: spec.risk,
@@ -292,8 +313,21 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
       let lastErr: unknown;
       for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
-          const signal = ctx.signal ?? execCtx?.abortSignal;
-          const raw = await withTimeout(spec.execute(input, ctx), timeoutMs, signal);
+          const callerSignals = [ctx.signal, execCtx?.abortSignal].filter(
+            (signal): signal is AbortSignal => signal !== undefined,
+          );
+          const signal = callerSignals.length ? AbortSignal.any(callerSignals) : undefined;
+          const timeoutAbort = new AbortController();
+          const executionSignal = AbortSignal.any([timeoutAbort.signal, ...callerSignals]);
+          const execute = async () => {
+            if (executionSignal.aborted) throw new ToolError('annullato', 'aborted', false);
+            return spec.execute(input, { ...ctx, signal: executionSignal });
+          };
+          // Approval precedes the queue: a pending question must not block other approved work.
+          const execution = mutating
+            ? mutationQueue.run(ctx.userId, execute, executionSignal)
+            : Promise.resolve().then(execute);
+          const raw = await withTimeout(execution, timeoutMs, signal, () => timeoutAbort.abort());
           const parsed = spec.outputSchema.safeParse(raw);
           if (!parsed.success)
             throw new ToolError(
@@ -335,7 +369,8 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
         } catch (err) {
           lastErr = err;
           // Il timeout non annulla necessariamente la scrittura: non avviarne un'altra in parallelo.
-          if (spec.oncePerTurn && err instanceof ToolError && err.code === 'timeout') break;
+          if ((spec.oncePerTurn || mutating) && err instanceof ToolError && err.code === 'timeout')
+            break;
           const retryable = err instanceof ToolError ? err.retryable : false;
           if (!retryable || attempt === attempts) break;
           await new Promise((r) => setTimeout(r, (spec.retry?.backoffMs ?? 500) * attempt));
@@ -356,10 +391,15 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
       return {
         error: lastErr instanceof ToolError ? lastErr.code : 'tool_failed',
         reason:
-          spec.oncePerTurn && lastErr instanceof ToolError && lastErr.code === 'timeout'
+          (spec.oncePerTurn || mutating) &&
+          lastErr instanceof ToolError &&
+          lastErr.code === 'timeout'
             ? 'Esito non ancora verificato: la scrittura potrebbe essere riuscita. Non ripeterla; controlla prima i dati salvati con gli strumenti di lettura.'
             : message.slice(0, 300),
-        retryable: !spec.oncePerTurn && lastErr instanceof ToolError ? lastErr.retryable : false,
+        retryable:
+          !spec.oncePerTurn && lastErr instanceof ToolError
+            ? !(mutating && lastErr.code === 'timeout') && lastErr.retryable
+            : false,
       } satisfies ToolErrorResult;
     }),
   });

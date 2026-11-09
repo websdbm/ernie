@@ -30,6 +30,7 @@ import { type RemindersRoutesOptions, remindersRoutes } from './routes/reminders
 import { type ShoppingRoutesOptions, shoppingRoutes } from './routes/shopping.js';
 import { type SkillsRoutesOptions, skillsRoutes } from './routes/skills.js';
 import { type SpeechRoutesOptions, speechRoutes } from './routes/speech.js';
+import { type TaskIntentRoutesOptions, taskIntentRoutes } from './routes/task-intent.js';
 import { type TodoRoutesOptions, todoRoutes } from './routes/todo.js';
 import { type ToolRulesRoutesOptions, toolRulesRoutes } from './routes/tool-rules.js';
 import { type UsageRoutesOptions, usageRoutes } from './routes/usage.js';
@@ -52,6 +53,7 @@ export interface BuildServerOptions {
   readonly me?: MeRoutesOptions;
   readonly usage?: UsageRoutesOptions;
   readonly performance?: PerformanceRoutesOptions;
+  readonly taskIntent?: TaskIntentRoutesOptions;
   readonly contentReaders?: ContentReaderRoutesOptions;
   /** Catalogo delle skill con interruttori per utente. */
   readonly skills?: SkillsRoutesOptions;
@@ -154,6 +156,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     await app.register(operatingPreferenceRoutes, opts.operatingPreferences);
   if (opts.usage) await app.register(usageRoutes, opts.usage);
   if (opts.performance) await app.register(performanceRoutes, opts.performance);
+  if (opts.taskIntent) await app.register(taskIntentRoutes, opts.taskIntent);
   if (opts.contentReaders) await app.register(contentReaderRoutes, opts.contentReaders);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);

@@ -32,7 +32,11 @@ enum Theme {
         .system(size: size, weight: weight, design: .rounded)
     }
     /// Etichetta maiuscola delle schede («PROMEMORIA IMPOSTATO»).
-    static let eyebrow = Font.system(size: 12, weight: .semibold)
+    static let eyebrow = Font.caption.weight(.semibold)
+    static let cardTitle = Font.system(.headline, design: .rounded, weight: .bold)
+    static let actionFont = Font.subheadline.weight(.semibold)
+    static let actionHeight: CGFloat = 44
+    static let actionRadius: CGFloat = 12
 
     // MARK: forme e ombre
 
@@ -105,6 +109,8 @@ struct SkillIcon: View {
 /// La scheda comune: intestazione con icona della skill, etichetta maiuscola (o titolo), azione facoltativa a destra,
 /// poi il contenuto. Stessi margini, angoli e ombra per tutte le schede della chat.
 struct ErnieCard<Content: View, Action: View>: View {
+    @Environment(\.chatPalette) private var palette
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let icon: String
     let tint: SkillTint
     let eyebrow: String
@@ -115,35 +121,48 @@ struct ErnieCard<Content: View, Action: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                SkillIcon(systemName: icon, tint: tint)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(eyebrow.uppercased())
-                        .font(Theme.eyebrow)
-                        .kerning(0.4)
-                        .foregroundStyle(tint.color)
-                        .lineLimit(1)
-                    if let title, !title.isEmpty {
-                        Text(title)
-                            .font(Theme.title(17))
-                            .foregroundStyle(Theme.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(Theme.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    heading
+                    action()
                 }
-                Spacer(minLength: 4)
-                action()
+            } else {
+                HStack(alignment: .center, spacing: 10) {
+                    heading
+                    Spacer(minLength: 4)
+                    action()
+                }
             }
             content()
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .ernieSurface()
+    }
+
+    private var heading: some View {
+        HStack(alignment: .top, spacing: 10) {
+            SkillIcon(systemName: icon, tint: tint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(eyebrow.uppercased())
+                    .font(Theme.eyebrow)
+                    .kerning(0.4)
+                    .foregroundStyle(tint.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let title, !title.isEmpty {
+                    Text(title)
+                        .font(palette.terminal ? .headline.monospaced() : Theme.cardTitle)
+                        .foregroundStyle(palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 }
 
@@ -165,23 +184,53 @@ extension View {
     }
 }
 
-/// Azione testuale a destra dell'intestazione di una scheda («Modifica», «Apri», «Salva»).
+/// Azione riconoscibile anche senza il colore: superficie, bordo e area tattile minima.
 struct CardActionButton: View {
     let title: String
     let action: () -> Void
 
     var body: some View {
         Button(title, action: action)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Theme.accentText)
-            .buttonStyle(.plain)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
+            .buttonStyle(ErnieButtonStyle())
+    }
+}
+
+/// Stesso linguaggio per le azioni dentro schede e pagine. Le righe di navigazione mantengono il loro chevron;
+/// i pulsanti di toolbar, menu e dialoghi conservano lo stile nativo del sistema.
+struct ErnieButtonStyle: ButtonStyle {
+    enum Emphasis { case primary, secondary, destructive }
+    var emphasis: Emphasis = .secondary
+    var fillsWidth = false
+    @Environment(\.chatPalette) private var palette
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func makeBody(configuration: Configuration) -> some View {
+        let destructive = emphasis == .destructive || configuration.role == .destructive
+        let warning = Theme.dynamic(light: 0xA61B1B, dark: 0xFFB4B4)
+        let foreground = destructive ? warning : emphasis == .primary ? palette.bubbleText : palette.accentText
+        let background = destructive ? Theme.dynamic(light: 0xFDECEC, dark: 0x351A20) : emphasis == .primary ? palette.accent : palette.accentSoft
+        let shape = RoundedRectangle(cornerRadius: Theme.actionRadius, style: .continuous)
+        return configuration.label
+            .font(Theme.actionFont)
+            .fontDesign(palette.terminal ? .monospaced : .default)
+            .multilineTextAlignment(.center)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(minWidth: Theme.actionHeight, maxWidth: fillsWidth ? .infinity : nil, minHeight: Theme.actionHeight)
+            .foregroundStyle(foreground)
+            .background(background, in: shape)
+            .overlay(shape.strokeBorder(destructive ? warning.opacity(0.45) : palette.accentText.opacity(contrast == .increased ? 0.7 : 0.3), lineWidth: contrast == .increased ? 2 : 1))
+            .contentShape(shape)
+            .opacity(!enabled ? 0.48 : configuration.isPressed ? 0.72 : 1)
     }
 }
 
 /// Chip: neutro (dati), selezionato (accento tenue) o suggerimento toccabile (bordo accento).
 struct ErnieChip: View {
+    @Environment(\.chatPalette) private var palette
     enum Style { case neutral, selected, suggestion, tinted(SkillTint) }
     let text: String
     var systemImage: String?
@@ -190,31 +239,39 @@ struct ErnieChip: View {
     var body: some View {
         HStack(spacing: 5) {
             if let systemImage { Image(systemName: systemImage).font(.caption.weight(.semibold)) }
-            Text(text).lineLimit(1)
+            Text(text).fixedSize(horizontal: false, vertical: true)
         }
-        .font(.subheadline)
+        .font(isAction ? Theme.actionFont : .subheadline)
         .foregroundStyle(foreground)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(background, in: Capsule())
+        .padding(.horizontal, isAction ? 14 : 12)
+        .padding(.vertical, isAction ? 10 : 7)
+        .frame(minHeight: isAction ? Theme.actionHeight : nil)
+        .background {
+            if isAction {
+                RoundedRectangle(cornerRadius: Theme.actionRadius, style: .continuous).fill(background)
+            } else {
+                Capsule().fill(background)
+            }
+        }
         .overlay {
-            if case .suggestion = style { Capsule().strokeBorder(Theme.accent.opacity(0.22)) }
+            if isAction { RoundedRectangle(cornerRadius: Theme.actionRadius, style: .continuous).strokeBorder(palette.accentText.opacity(0.3)) }
         }
     }
 
+    private var isAction: Bool { if case .suggestion = style { true } else { false } }
+
     private var foreground: Color {
         switch style {
-        case .neutral: Theme.ink
-        case .selected, .suggestion: Theme.accentText
+        case .neutral: palette.ink
+        case .selected, .suggestion: palette.accentText
         case .tinted(let t): t.color
         }
     }
 
     private var background: Color {
         switch style {
-        case .neutral: Theme.surfaceMuted
-        case .selected: Theme.accentSoft
-        case .suggestion: Theme.surface
+        case .neutral: palette.surfaceMuted
+        case .selected, .suggestion: palette.accentSoft
         case .tinted(let t): t.soft
         }
     }

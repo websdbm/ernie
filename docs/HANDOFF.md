@@ -5,7 +5,21 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **5 novembre 2026**, Codex — implementazione della skill **Archivio chat**, autorizzata dall’utente.
+Ultimo aggiornamento: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
+**Build 115 preparata, non ancora pubblicata**; API in produzione ancora alla revisione della 114.
+Fino a tre sessioni nell’app, risolutore light per precisazioni/nuovi compiti, scelte nei dubbi e messaggi
+in attesa conservati. Primo testo immediato, frammenti successivi raggruppati, preparazione contesto/agente
+sovrapposta e salvataggi locali su coda dedicata. Scritture tool serializzate per account nel processo;
+nuovo calcolo deterministico `time_windows`. Diario/Archivio chat restano separati.
+Stile condiviso per pulsanti e schede in chat, ricette, Todo, promemoria, Brain e Archivio chat.
+**111 test backend, 47 iOS**, TypeScript/Biome e quattro casi sintetici col modello reale verdi.
+Misure iniziali: 14 turni iOS 114, primo contenuto mediano 3,48 s, p95 35,75 s: campione piccolo,
+nessuna percentuale di accelerazione generale dichiarata. Piano strumenti e limiti in
+[performance e concorrenza](research/21-performance-concurrency.md), stato artefatto e rilascio in
+[build 115](releases/build-115.md). Produzione e TestFlight ancora invariati: manca il via libera al deploy.
+Modifiche preesistenti a documentazione, backup e asset non pertinenti conservate ed escluse dal commit.
+
+Rilascio precedente: **5 novembre 2026**, Codex — implementazione della skill **Archivio chat**, autorizzata dall’utente.
 Scelto il **backend** per testi e indice, isolati per account e conversazione; sostituisce l’ipotesi locale
 nell’analisi sotto. Import TXT/ZIP solo testo, confronto incrementale conservativo, fonti originali e ricerca
 per chat/mittente/periodo. Catalogo con titolo, descrizione modificabile, tipo, date e indice pronto.
@@ -352,10 +366,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **113**, verificata il 1 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `650ff4c` |
+| App su TestFlight | build **114**, `VALID` riletta il 9 nov; Interni/IN_BETA_TESTING verificati al rilascio del 5 nov; sorgenti iOS `5734a28`. Build 115 preparata, non distribuita |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **660de62** (1 nov, presentazione resolver); worker ancora **72a027e**. Recupero API `ernie-app:pre-resolver-presentation-20261101`; vedi nota presentazione resolver |
-| Migrazioni | fino alla **0049**, applicate anche sul server |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **5734a28** (5 nov, Archivio chat), checkout `ceb9f63` verificato il 9 nov; worker invariato. Recupero API `ernie-app:pre-chatarchive-20261105` |
+| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 115 |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server

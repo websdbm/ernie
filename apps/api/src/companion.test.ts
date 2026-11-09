@@ -3,7 +3,7 @@ import type { Logger } from '@ernie/observability';
 import type { LearnedSkillRepository } from '@ernie/skills';
 import { createRecipesSkill, createShoppingListSkill } from '@ernie/skills';
 import type { SoulRepository } from '@ernie/soul';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createCompanionFactory, supervisedNote } from './companion.js';
 
 const logger = {
@@ -28,6 +28,76 @@ const shopping = {
 } as unknown as Parameters<typeof createShoppingListSkill>[0];
 
 describe('skill per utente a metà conversazione', () => {
+  it('starts settings and learned reads together and shares them across simultaneous tasks', async () => {
+    const started: string[] = [];
+    let settingsReady: (value: Record<string, unknown>) => void = () => {};
+    let skillsReady: () => void = () => {};
+    const factory = createCompanionFactory({
+      gateway: null,
+      memory: {} as Memory,
+      souls: {} as SoulRepository,
+      logger,
+      loadSettings: async () => {
+        started.push('settings');
+        return new Promise<Record<string, unknown>>((resolve) => {
+          settingsReady = resolve;
+        });
+      },
+      skills: {
+        builtin: [createShoppingListSkill(shopping), createRecipesSkill()],
+        learned: {
+          loadActiveGuided: async () => {
+            started.push('skills');
+            await new Promise<void>((resolve) => {
+              skillsReady = resolve;
+            });
+            return [];
+          },
+        } as unknown as LearnedSkillRepository,
+      },
+    });
+    const auth = { userId: 'parallel-user', settings: {} };
+    const one = factory.skillsFor(auth),
+      two = factory.skillsFor(auth);
+    await vi.waitFor(() => expect(started.sort()).toEqual(['settings', 'skills']));
+    settingsReady({ skills: { ricette: false } });
+    skillsReady();
+    expect(await one).toBe(await two);
+    expect((await one).list().map((skill) => skill.id)).toEqual(['shopping_list']);
+    expect(started).toHaveLength(2);
+  });
+
+  it('does not repopulate revoked settings or skill cache from an older pending load', async () => {
+    let oldReady: (value: Record<string, unknown>) => void = () => {};
+    const loadSettings = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            oldReady = resolve;
+          }),
+      )
+      .mockResolvedValue({ skills: { ricette: false } });
+    const factory = createCompanionFactory({
+      gateway: null,
+      memory: {} as Memory,
+      souls: {} as SoulRepository,
+      logger,
+      loadSettings,
+      skills: { builtin: [createRecipesSkill()], learned },
+    });
+    const auth = { userId: 'changing-user', settings: { skills: { ricette: true } } };
+    const old = factory.skillsFor(auth);
+    await vi.waitFor(() => expect(loadSettings).toHaveBeenCalledTimes(1));
+    factory.invalidateUser(auth.userId);
+    const fresh = await factory.skillsFor(auth);
+    expect(fresh.list()).toEqual([]);
+    oldReady({ skills: { ricette: true } });
+    expect(await old).toBe(fresh);
+    expect((await factory.skillsFor(auth)).list()).toEqual([]);
+    expect(loadSettings).toHaveBeenCalledTimes(2);
+  });
+
   it('usa le impostazioni correnti dal database e, dopo invalidateUser, aggiorna il registry senza nuova sessione', async () => {
     let settings: Record<string, unknown> = { skills: { ricette: false } };
     let loads = 0;

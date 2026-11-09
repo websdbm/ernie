@@ -1,5 +1,36 @@
 [
   {
+    "build": 115,
+    "date": "2026-11-09",
+    "title": "Più compiti, meno attese",
+    "items": [
+      {
+        "icon": "square.stack.3d.up",
+        "title": "Fino a tre compiti insieme",
+        "detail": "Aggiungi una precisazione mentre Ernie lavora oppure avvia un incarico indipendente. Se il riferimento non è chiaro, scegli a quale compito collegarlo o mettilo in coda.",
+        "test": "Durante un piano cena scrivi «siamo in quattro», poi chiedi il meteo. Controlla le schede dei compiti."
+      },
+      {
+        "icon": "bolt",
+        "title": "Risposte più fluide",
+        "detail": "Preparazione delle risposte in parallelo, meno aggiornamenti minuscoli e salvataggi della chat fuori dall’interfaccia. I tempi del modello e dei servizi esterni restano variabili.",
+        "test": "Scrivi o parla mentre una risposta è in corso, poi passa fra i compiti."
+      },
+      {
+        "icon": "calendar.badge.clock",
+        "title": "Orari controllati",
+        "detail": "Ernie può verificare conflitti e spazi liberi con un calcolo preciso sugli impegni disponibili. I dettagli mancanti vengono chiariti prima di organizzare la giornata.",
+        "test": "Chiedi dove inserire un’attività di 40 minuti fra impegni già noti."
+      },
+      {
+        "icon": "rectangle.and.hand.point.up.left",
+        "title": "Azioni più riconoscibili",
+        "detail": "Pulsanti, titoli e spaziature uniformi nelle schede e nelle raccolte, con testi a capo, caratteri grandi e palette abbinate all’orso.",
+        "test": "Prova una scelta con testo lungo e confronta tema chiaro, scuro e Borg."
+      }
+    ]
+  },
+  {
     "build": 114,
     "date": "2026-11-05",
     "title": "Archivio chat",

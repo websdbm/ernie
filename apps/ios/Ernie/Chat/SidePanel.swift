@@ -361,10 +361,9 @@ struct SidePanel: View {
         .buttonStyle(PanelRowStyle())
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
         .contextMenu {
-            if !isCurrent {
+            if model.canDeleteConversation(session.id) {
                 Button("Elimina dal telefono", role: .destructive) {
-                    model.conversation?.deleteSession(session.id)
-                    sessions.removeAll { $0.id == session.id }
+                    if model.deleteConversation(session.id) { sessions.removeAll { $0.id == session.id } }
                 }
             }
         }

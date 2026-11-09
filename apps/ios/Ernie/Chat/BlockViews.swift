@@ -62,24 +62,22 @@ struct InterpretationLine: View {
     }
 
     var body: some View {
-        Button { correcting = true } label: {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "text.magnifyingglass")
                 Text("Ho inteso: \(summary)")
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                if !sent {
-                    Text("Correggi").fontWeight(.semibold).foregroundStyle(Color.accentColor)
-                }
             }
             .font(.caption)
             .foregroundStyle(Theme.inkSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            if !sent {
+                Button("Correggi interpretazione", systemImage: "pencil") { correcting = true }
+                    .buttonStyle(ErnieButtonStyle())
+                    .disabled(conversation == nil)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(sent || conversation == nil)
-        .accessibilityLabel("Ernie ha inteso: \(summary)")
-        .accessibilityHint("Tocca per correggere l'interpretazione")
         .confirmationDialog("Cosa non era giusto?", isPresented: $correcting, titleVisibility: .visible) {
             ForEach(block.items, id: \.self) { item in
                 Button("«\(item.about)» non è \(item.meaning)") {
@@ -103,28 +101,22 @@ struct ChoicesCard: View {
 
     var body: some View {
         ErnieCard(icon: "questionmark.bubble.fill", tint: .reminders, eyebrow: "Dimmi tu", title: block.question) {
-            FlowLayout(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(block.options) { option in
                     Button {
                         guard chosen == nil, let conversation else { return }
                         chosen = option.id
                         conversation.send(option.label, inputMode: "text")
                     } label: {
-                        Text(option.label)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                chosen == option.id ? Color.accentColor.opacity(0.22) : Theme.surfaceMuted,
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().strokeBorder(chosen == option.id ? Color.accentColor : Theme.hairline))
-                            .foregroundStyle(chosen == nil || chosen == option.id ? Theme.ink : Theme.inkSecondary)
+                        HStack(spacing: 10) {
+                            Text(option.label).frame(maxWidth: .infinity, alignment: .leading)
+                                .multilineTextAlignment(.leading)
+                            if chosen == option.id { Image(systemName: "checkmark.circle.fill") }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ErnieButtonStyle(emphasis: chosen == option.id ? .primary : .secondary, fillsWidth: true))
                     .disabled(chosen != nil || conversation == nil)
+                    .accessibilityValue(chosen == option.id ? "Scelta selezionata" : "")
                 }
             }
         }
@@ -362,24 +354,11 @@ struct RemindersCard: View {
     /// Matita (modifica) e «Annulla»: stessi comandi in entrambe le disposizioni.
     @ViewBuilder
     private func actions(_ r: ReminderItem) -> some View {
-        Button {
+        Button(editing == r.id ? "Chiudi" : "Modifica", systemImage: editing == r.id ? "xmark" : "pencil") {
             editing = editing == r.id ? nil : r.id
-        } label: {
-            Image(systemName: editing == r.id ? "pencil.circle.fill" : "pencil.circle")
-                .font(.title3)
-                .foregroundStyle(Theme.accentText)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Modifica")
-        Button("Annulla") { Task { await model.reminders.cancel(r) } }
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .fixedSize()
-            .foregroundStyle(Theme.inkSecondary)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .overlay(Capsule().strokeBorder(Theme.hairline))
+        }.buttonStyle(ErnieButtonStyle())
+        Button("Annulla", role: .destructive) { Task { await model.reminders.cancel(r) } }
+            .buttonStyle(ErnieButtonStyle(emphasis: .destructive))
     }
 
     /// Preavviso di un appuntamento: «Appuntamento alle 19:00, avviso un'ora prima».
@@ -595,11 +574,11 @@ struct ReminderEditForm: View {
                 .textFieldStyle(.roundedBorder)
             Text("Puoi completare o cancellare questi dettagli anche in seguito.")
                 .font(.caption).foregroundStyle(Theme.inkSecondary)
-            HStack {
+            FlowLayout(spacing: 8) {
                 Button("Salva") { Task { await save() } }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .buttonStyle(ErnieButtonStyle(emphasis: .primary))
                     .disabled(saving || !validDetails || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("Lascia così") { onDone() }.controlSize(.small)
+                Button("Annulla modifiche") { onDone() }.buttonStyle(ErnieButtonStyle())
             }
         }
     }
@@ -684,7 +663,7 @@ struct ReminderChannelChips: View {
     }
 }
 
-/// Chip di canale: acceso = accento tenue con spunta; spento = superficie con filo sottile.
+/// Canale selezionato riconoscibile dalla spunta, oltre che dal colore.
 private struct ReminderChannelChip: View {
     let title: String
     let symbol: String
@@ -695,23 +674,13 @@ private struct ReminderChannelChip: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: symbol)
-                    .font(.caption2.weight(.semibold))
                 Text(title)
-                    .lineLimit(1)
                 if on {
                     Image(systemName: "checkmark")
-                        .font(.caption2.weight(.bold))
                 }
             }
-            .font(.caption.weight(.medium))
-            .fixedSize()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .foregroundStyle(on ? Theme.accentText : Theme.inkSecondary)
-            .background(on ? Theme.accentSoft : Theme.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(on ? Color.clear : Theme.hairline, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ErnieButtonStyle(emphasis: on ? .primary : .secondary))
         .accessibilityValue(on ? "attiva" : "spenta")
     }
 }
@@ -816,9 +785,7 @@ struct HealthCard: View {
                     Button(showAll ? "Mostra meno" : "Mostra tutti (\(block.rows.count))") {
                         withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accentText)
-                    .buttonStyle(.plain)
+                    .buttonStyle(ErnieButtonStyle())
                 }
                 if let summary = block.summary, !summary.isEmpty {
                     Text(summary)
@@ -1249,9 +1216,7 @@ struct DocumentCard: View {
                 }
                 if let glossary = block.glossary, !glossary.isEmpty {
                     Button(showGlossary ? "Nascondi il glossario" : "Glossario (\(glossary.count))") { showGlossary.toggle() }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accentText)
-                        .buttonStyle(.plain)
+                        .buttonStyle(ErnieButtonStyle())
                     if showGlossary {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(glossary) { entry in
@@ -1625,9 +1590,7 @@ struct RecipesCard: View {
                             Button(expanded.contains(recipe.id) ? "Nascondi i passaggi" : "Mostra i passaggi") {
                                 if expanded.contains(recipe.id) { expanded.remove(recipe.id) } else { expanded.insert(recipe.id) }
                             }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.accentText)
-                            .buttonStyle(.plain)
+                            .buttonStyle(ErnieButtonStyle())
                         }
                         actions(for: recipe)
                     }
@@ -1635,7 +1598,7 @@ struct RecipesCard: View {
             }
             Button("Apri raccolta ricette", systemImage: "books.vertical") {
                 selectedRecipe = nil; showLibrary = true
-            }.font(.subheadline).buttonStyle(.bordered)
+            }.buttonStyle(ErnieButtonStyle())
         }
         .sheet(isPresented: $showLibrary) { RecipeLibraryView(recipeId: selectedRecipe) }
     }
@@ -1769,8 +1732,7 @@ struct ShoppingListCard: View {
                 .onSubmit(submit)
             if !newItem.trimmingCharacters(in: .whitespaces).isEmpty {
                 Button("Aggiungi", action: submit)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.accentText)
+                    .buttonStyle(ErnieButtonStyle(emphasis: .primary))
             }
         }
         .font(.callout)

@@ -223,12 +223,12 @@ struct RecipeLibraryView: View {
                         Button("\(category.label) (\(category.count))") { query.category = category.value }
                     }
                 } label: { Label("Categoria", systemImage: "line.3.horizontal.decrease") }
-                .buttonStyle(.bordered)
+                .buttonStyle(ErnieButtonStyle())
                 Menu {
                     Button("Tutti i tag") { query.tag = nil }
                     ForEach(store.tags) { tag in Button("\(tag.name) (\(tag.count))") { query.tag = tag.name } }
                 } label: { Label("Tag", systemImage: "tag") }
-                .buttonStyle(.bordered)
+                .buttonStyle(ErnieButtonStyle())
             }
             ErnieFlow(spacing: 8) {
                 if let category = query.category {
@@ -242,7 +242,7 @@ struct RecipeLibraryView: View {
                 }
                 if query.isFiltered { Button("Azzera filtri") { query = RecipeQuery() } }
             }
-            .font(.subheadline).buttonStyle(.bordered)
+            .font(.subheadline).buttonStyle(ErnieButtonStyle())
         }
     }
 
@@ -274,7 +274,7 @@ struct RecipeLibraryContent: View {
             if let error {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.circle").font(.callout)
-                    Button("Riprova", action: retry).buttonStyle(.bordered)
+                    Button("Riprova", action: retry).buttonStyle(ErnieButtonStyle())
                 }.foregroundStyle(Theme.inkSecondary)
             } else if loaded && recipes.isEmpty && !loading {
                 VStack(alignment: .leading, spacing: 8) {
@@ -293,7 +293,7 @@ struct RecipeLibraryContent: View {
             }
             if loading { ProgressView("Carico le ricette…").frame(maxWidth: .infinity) }
             if hasMore && !loading {
-                Button("Carica altre", action: more).buttonStyle(.bordered).frame(maxWidth: .infinity)
+                Button("Carica altre", action: more).buttonStyle(ErnieButtonStyle()).frame(maxWidth: .infinity)
             }
         }
     }
@@ -391,13 +391,13 @@ struct RecipeDetailView: View {
                 if let recipe {
                     RecipeDetailContent(recipe: recipe)
                     Button("Apri nel Second Brain", systemImage: "brain.head.profile") { showBrain = true }
-                        .buttonStyle(.bordered).frame(minHeight: 44)
+                        .buttonStyle(ErnieButtonStyle()).frame(minHeight: 44)
                     Button("Affina con Ernie", systemImage: "slider.horizontal.3") { refine(recipe) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ErnieButtonStyle())
                 } else if error == nil { ProgressView("Carico la ricetta…").frame(maxWidth: .infinity) }
                 if let error {
                     Text(error).font(.callout).foregroundStyle(Theme.inkSecondary)
-                    Button("Ricarica") { Task { await load() } }.buttonStyle(.bordered)
+                    Button("Ricarica") { Task { await load() } }.buttonStyle(ErnieButtonStyle())
                 }
             }.padding(20).frame(maxWidth: 700, alignment: .leading).frame(maxWidth: .infinity)
         }

@@ -10,6 +10,7 @@ import type { z } from 'zod';
 import type { CompanionAgent } from './agent.js';
 import { interpretChunk, mapFinishReason } from './chunks.js';
 import { StuckDetector } from './loop.js';
+import { TextDeltaBuffer } from './text-deltas.js';
 
 export type Route = z.infer<typeof RouteKind>;
 
@@ -99,7 +100,12 @@ export function turnContext(
  * limiti hard da profilo; rilevamento di loop; cancellazione via AbortSignal.
  */
 export async function runTurn(input: TurnInput): Promise<TurnResult> {
-  const { companion, emit, logger } = input;
+  const { companion, logger } = input;
+  const textDeltas = new TextDeltaBuffer((delta) => input.emit('assistant.text.delta', { delta }));
+  const emit: TurnInput['emit'] = async (type, payload) => {
+    await textDeltas.flush();
+    await input.emit(type, payload);
+  };
   const t0 = Date.now();
   let firstTokenAt: number | undefined;
   let stepIndex = 0;
@@ -192,7 +198,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
         case 'text':
           firstTokenAt ??= Date.now();
           text += signal.delta;
-          await emit('assistant.text.delta', { delta: signal.delta });
+          await textDeltas.push(signal.delta);
           break;
         case 'tool.started':
           toolCalls++;
@@ -253,6 +259,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
     await emit('assistant.completed', { finishReason: 'error' });
     return result(false);
   } finally {
+    textDeltas.dispose();
     input.abortSignal.removeEventListener('abort', onExternalAbort);
   }
 

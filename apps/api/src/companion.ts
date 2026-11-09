@@ -85,6 +85,9 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     { settings: Readonly<Record<string, unknown>>; at: number }
   >();
   const sessionsByUser = new Map<string, Set<string>>();
+  // A shared cold read per account: independent tasks need separate agents, not duplicate settings queries.
+  const settingsLoads = new Map<string, Promise<Readonly<Record<string, unknown>>>>();
+  const skillLoads = new Map<string, Promise<SkillRegistry>>();
   const TTL_MS = 5 * 60_000;
 
   /** Impostazioni correnti: dal caricatore (se c'è) con cache, altrimenti la foto dell'AuthContext. */
@@ -94,17 +97,64 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     if (!deps.loadSettings) return auth.settings;
     const hit = settingsCache.get(auth.userId);
     if (hit && Date.now() - hit.at < TTL_MS) return hit.settings;
-    try {
-      const settings = await deps.loadSettings(auth.userId);
-      settingsCache.set(auth.userId, { settings, at: Date.now() });
-      return settings;
-    } catch (err) {
-      deps.logger.warn(
-        { err, userId: auth.userId },
-        'impostazioni non caricate: uso quelle della sessione',
-      );
-      return auth.settings;
-    }
+    const active = settingsLoads.get(auth.userId);
+    if (active) return active;
+    const pending: Promise<Readonly<Record<string, unknown>>> = Promise.resolve().then(async () => {
+      try {
+        const settings = (await deps.loadSettings?.(auth.userId)) ?? auth.settings;
+        // An invalidation while this read was pending must not restore revoked permissions.
+        if (settingsLoads.get(auth.userId) !== pending) return currentSettings(auth);
+        settingsCache.set(auth.userId, { settings, at: Date.now() });
+        return settings;
+      } catch (err) {
+        if (settingsLoads.get(auth.userId) !== pending) return currentSettings(auth);
+        deps.logger.warn(
+          { err, userId: auth.userId },
+          'impostazioni non caricate: uso quelle della sessione',
+        );
+        return auth.settings;
+      } finally {
+        if (settingsLoads.get(auth.userId) === pending) settingsLoads.delete(auth.userId);
+      }
+    });
+    settingsLoads.set(auth.userId, pending);
+    return pending;
+  };
+
+  const skillsFor = async (
+    auth: Pick<AuthContext, 'userId' | 'settings'>,
+  ): Promise<SkillRegistry> => {
+    const hit = skillCache.get(auth.userId);
+    if (hit && Date.now() - hit.at < TTL_MS) return hit.registry;
+    const active = skillLoads.get(auth.userId);
+    if (active) return active;
+    const pending: Promise<SkillRegistry> = Promise.resolve().then(async () => {
+      try {
+        const [learned, settings] = await Promise.all([
+          deps.skills?.learned.loadActiveGuided(auth.userId) ?? Promise.resolve([]),
+          currentSettings(auth),
+        ]);
+        if (skillLoads.get(auth.userId) !== pending) return skillsFor(auth);
+        const all = new SkillRegistry();
+        for (const skill of [...(deps.skills?.builtin ?? []), ...learned]) all.register(skill);
+        const enabled = enabledSkillIds(settings);
+        // Learned skills are outside the built-in catalog and retain their existing availability.
+        const keep = new Set([
+          ...enabled,
+          ...all
+            .list()
+            .filter((skill) => !isCatalogSkill(skill.id))
+            .map((skill) => skill.id),
+        ]);
+        const registry = all.only(keep);
+        skillCache.set(auth.userId, { registry, at: Date.now() });
+        return registry;
+      } finally {
+        if (skillLoads.get(auth.userId) === pending) skillLoads.delete(auth.userId);
+      }
+    });
+    skillLoads.set(auth.userId, pending);
+    return pending;
   };
 
   return {
@@ -126,6 +176,8 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     invalidateUser(userId: string): void {
       skillCache.delete(userId);
       settingsCache.delete(userId);
+      skillLoads.delete(userId);
+      settingsLoads.delete(userId);
       for (const sessionId of sessionsByUser.get(userId) ?? []) {
         cache.delete(sessionId);
         toolContexts.delete(sessionId);
@@ -133,26 +185,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
       sessionsByUser.delete(userId);
     },
     /** Registry delle skill per utente: integrate + apprese attive, filtrate dagli interruttori (cache 5 minuti). */
-    async skillsFor(auth: Pick<AuthContext, 'userId' | 'settings'>): Promise<SkillRegistry> {
-      const hit = skillCache.get(auth.userId);
-      if (hit && Date.now() - hit.at < TTL_MS) return hit.registry;
-      const all = new SkillRegistry();
-      for (const s of deps.skills?.builtin ?? []) all.register(s);
-      if (deps.skills)
-        for (const s of await deps.skills.learned.loadActiveGuided(auth.userId)) all.register(s);
-      const enabled = enabledSkillIds(await currentSettings(auth));
-      // Le skill apprese non stanno nel catalogo: restano attive.
-      const keep = new Set([
-        ...enabled,
-        ...all
-          .list()
-          .filter((s) => !isCatalogSkill(s.id))
-          .map((s) => s.id),
-      ]);
-      const registry = all.only(keep);
-      skillCache.set(auth.userId, { registry, at: Date.now() });
-      return registry;
-    },
+    skillsFor,
     async getCompanion(auth: AuthContext, session: SessionRecord): Promise<CompanionAgent | null> {
       if (!deps.gateway) return null;
       const cached = cache.get(session.id);
@@ -260,6 +293,10 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
             core: deps.tools.core,
           })
           .filter((t) => !off.has(t.id));
+        if (specs.some((tool) => tool.id === 'time_windows')) {
+          memorySnapshot +=
+            '\n\nAnticipa i controlli utili alla richiesta: per organizzare orari leggi gli impegni pertinenti con gli strumenti autorizzati e usa time_windows per verificare sovrapposizioni e intervalli liberi. Il calcolo vale solo per i dati forniti: non certifica un calendario completo. Durate, spostamenti e margini mancanti vanno chiesti o presentati come ipotesi da confermare, mai inventati. Proponi il prossimo passo quando serve; non attivare notifiche, modifiche o invii non richiesti e non consultare diario o archivi chat fuori dal loro ambito esplicito.';
+        }
         tools = buildSessionTools(specs, deps.tools.executor, ctxRef);
         toolContexts.set(session.id, ctxRef);
       }

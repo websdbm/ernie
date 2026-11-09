@@ -65,12 +65,14 @@
 		47DD1F6CCD7439A9D114DC27 /* ErnieTRIXScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8AD3B0B70BFA7F74E2BA8B2 /* ErnieTRIXScene.swift */; };
 		48035C0A3B1E5E600B1FDDF1 /* ernie-ui-cancel.wav in Resources */ = {isa = PBXBuildFile; fileRef = D99380D8A01AB596E32A9A16 /* ernie-ui-cancel.wav */; };
 		48125CBA37A2FB47533D6A69 /* MediaLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392BDC4D0B612F4A89A72523 /* MediaLibraryView.swift */; };
+		487AA2BD78BCFF6230BFDE99 /* ConcurrentTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA51C9304F13805F093E4E6E /* ConcurrentTask.swift */; };
 		49F26F0E064105E1C6D5B91D /* ReminderSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E411C5D13713BD6F0F64AB60 /* ReminderSnapshot.swift */; };
 		4A897B3B8DB9DC6A36D677DD /* ContentReadersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC1882273941A8EA35BCF52 /* ContentReadersView.swift */; };
 		4B1BCB49F3E1F3CDD98091A9 /* PlaceEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226A064044FE204795B8F540 /* PlaceEditor.swift */; };
 		4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1072AD1394544857B5BED36D /* ChatModels.swift */; };
 		4DA753DCCC2BC370FEC48679 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 964663D7C194F32CAB945CD0 /* ShareModel.swift */; };
 		4F14D88AC2451671828A022F /* EventsCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2589F13E371B721791902AA /* EventsCodingTests.swift */; };
+		524785570BA8546B91256478 /* ActionStyleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D504D57B250D8179E480ADFC /* ActionStyleTests.swift */; };
 		52AB997AC4AAC6F5E17C4231 /* BrainKnowledgeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF9FE4CC3C709F9957D683A /* BrainKnowledgeViews.swift */; };
 		530915FB409B912C50D89900 /* SpeechTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D07BF5B3DFD216187A1FAED /* SpeechTests.swift */; };
 		5422E1784BA6E9BDE114CE27 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F71764273FF93B42753C6E1 /* Theme.swift */; };
@@ -185,6 +187,7 @@
 		DA06C739A154FABDFE5018A0 /* SlashCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D490C4FF93ADD4B0FB0198FE /* SlashCommandTests.swift */; };
 		DA37CEABA10BE64C87B1705E /* ErnieTRIXView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C311ACF6BEA9C3926C2004 /* ErnieTRIXView.swift */; };
 		DA654FF8E4F434294E32CBC7 /* DiaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF6CDC1B803582982A064C0 /* DiaryStore.swift */; };
+		DCC1CD4CB6A9151C3F03B1EB /* ConcurrentTaskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2340BA3C91943598E10EBD /* ConcurrentTaskTests.swift */; };
 		DD3855B9C9095C581715E26E /* ernie-bear-v3-base.png in Resources */ = {isa = PBXBuildFile; fileRef = EFD73097C08BE1E06287A3FA /* ernie-bear-v3-base.png */; };
 		DF38A2E1B2EBBCE2DBA783E7 /* ReadabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EAED8097FB2EF14E6B4514 /* ReadabilityTests.swift */; };
 		E028395149BD144EE1FD47B0 /* ChatArchiveCatalogRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EADF393879F54D4F4B1EF7B /* ChatArchiveCatalogRow.swift */; };
@@ -347,6 +350,7 @@
 		4ACB8BB3C74086AE6C9519EC /* ernie-bear-v3-night.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-night.png"; sourceTree = "<group>"; };
 		4C582BDD29CFEE84A945F289 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C613DF81D08BC87E5207E14 /* ChangeServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeServerView.swift; sourceTree = "<group>"; };
+		4D2340BA3C91943598E10EBD /* ConcurrentTaskTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentTaskTests.swift; sourceTree = "<group>"; };
 		4E97819581F2B938AE812A5E /* ChatAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAppearance.swift; sourceTree = "<group>"; };
 		52FF043456831431801189D0 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		54C358554D2B07798B83D777 /* Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Events.swift; sourceTree = "<group>"; };
@@ -438,6 +442,7 @@
 		C5700506AF1CE47020C9191C /* StyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleView.swift; sourceTree = "<group>"; };
 		C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceContextProvider.swift; sourceTree = "<group>"; };
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
+		CA51C9304F13805F093E4E6E /* ConcurrentTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentTask.swift; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStore.swift; sourceTree = "<group>"; };
 		CBF9FE4CC3C709F9957D683A /* BrainKnowledgeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainKnowledgeViews.swift; sourceTree = "<group>"; };
@@ -447,6 +452,7 @@
 		D2589F13E371B721791902AA /* EventsCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsCodingTests.swift; sourceTree = "<group>"; };
 		D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieWidgets.swift; sourceTree = "<group>"; };
 		D490C4FF93ADD4B0FB0198FE /* SlashCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlashCommandTests.swift; sourceTree = "<group>"; };
+		D504D57B250D8179E480ADFC /* ActionStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionStyleTests.swift; sourceTree = "<group>"; };
 		D764BDF574C81692398DEC8C /* SSHImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHImportView.swift; sourceTree = "<group>"; };
 		D79B29962422A9B73336D63E /* ernie-ui-ask.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "ernie-ui-ask.wav"; sourceTree = "<group>"; };
 		D938C458270FB5964436CBF8 /* BlockViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockViews.swift; sourceTree = "<group>"; };
@@ -521,11 +527,13 @@
 		22A9BBE23A356BA082DEC987 /* ErnieTests */ = {
 			isa = PBXGroup;
 			children = (
+				D504D57B250D8179E480ADFC /* ActionStyleTests.swift */,
 				3BEC6F53575D7E7F9605D081 /* BearAnimationTests.swift */,
 				FAA8E07EDF3310160FC266EF /* BearPawTapTests.swift */,
 				ED90D5C7399306032FD23D1D /* BrainKnowledgeTests.swift */,
 				854353EA66DDD2954507D96E /* BrainResourcesTests.swift */,
 				8C054DB19D62CDBBCD1C55E1 /* ChatArchiveTests.swift */,
+				4D2340BA3C91943598E10EBD /* ConcurrentTaskTests.swift */,
 				36A10CACB2E5D6881E92E6A8 /* ConfirmationTests.swift */,
 				63C63EF0E9CACDE23645FA4D /* ContentReadersTests.swift */,
 				B884361CA064C58A61AD27F0 /* DiaryTests.swift */,
@@ -749,6 +757,7 @@
 				D938C458270FB5964436CBF8 /* BlockViews.swift */,
 				1072AD1394544857B5BED36D /* ChatModels.swift */,
 				4361E7F7124014F0D94B4EA2 /* ChatView.swift */,
+				CA51C9304F13805F093E4E6E /* ConcurrentTask.swift */,
 				7A04F7AC1E243E495725298C /* ConfirmationCopy.swift */,
 				6DD07317404B3BEF77505FA3 /* ConversationStore.swift */,
 				304F43BBDD3A21364CD93225 /* DirectionsCard.swift */,
@@ -1139,11 +1148,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				524785570BA8546B91256478 /* ActionStyleTests.swift in Sources */,
 				0EC4E0EBD89936082FDFAEF8 /* BearAnimationTests.swift in Sources */,
 				BD3195B52FBDD98D652B7956 /* BearPawTapTests.swift in Sources */,
 				5EAF29823E6D879B464C701F /* BrainKnowledgeTests.swift in Sources */,
 				D0843292BFE16841485D6B00 /* BrainResourcesTests.swift in Sources */,
 				E4B08459C07AF72328E2B355 /* ChatArchiveTests.swift in Sources */,
+				DCC1CD4CB6A9151C3F03B1EB /* ConcurrentTaskTests.swift in Sources */,
 				D6B53954DB440868689672C5 /* ConfirmationTests.swift in Sources */,
 				E52BB26A1BA0398CB23C06F0 /* ContentReadersTests.swift in Sources */,
 				38E2C77CCB80711FEAD2236F /* DiaryTests.swift in Sources */,
@@ -1248,6 +1259,7 @@
 				F7D226214128B18300CF421D /* ChatArchiveViews.swift in Sources */,
 				4D3889F127776B99D99C7555 /* ChatModels.swift in Sources */,
 				C3AAFD55A3370243F03626A9 /* ChatView.swift in Sources */,
+				487AA2BD78BCFF6230BFDE99 /* ConcurrentTask.swift in Sources */,
 				F64CDA48A475C654E2F80861 /* ConfirmationCopy.swift in Sources */,
 				4A897B3B8DB9DC6A36D677DD /* ContentReadersView.swift in Sources */,
 				25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */,
@@ -1379,7 +1391,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1434,7 +1446,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1525,7 +1537,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1546,7 +1558,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1570,7 +1582,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1653,7 +1665,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1674,7 +1686,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1698,7 +1710,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 114;
+				CURRENT_PROJECT_VERSION = 115;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

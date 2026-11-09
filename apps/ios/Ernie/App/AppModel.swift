@@ -4,7 +4,7 @@ import UIKit
 import UserNotifications
 import WidgetKit
 
-/// Stato radice: credenziali, profilo, conversazione, voce, notifiche. Una sola conversazione attiva per volta.
+/// Stato radice: una conversazione visibile, fino a tre compiti con sessioni indipendenti.
 @MainActor
 @Observable
 final class AppModel {
@@ -20,7 +20,23 @@ final class AppModel {
     let inbox = InboxStore()
     /// Messaggi urgenti da confermare («super snooze»): a tutto schermo finché non si conferma.
     let urgent = FamilyUrgentStore()
-    let speaker = Speaker()
+    private(set) var speaker = Speaker()
+    private(set) var concurrentTasks: [ConcurrentTask] = []
+    private(set) var pendingTaskInput: PendingTaskInput?
+    private(set) var resolvingTask = false
+    private(set) var taskNotice: String?
+    private var queuedTaskInputs: [PendingTaskInput] = []
+    private var taskResolution: Task<Void, Never>?
+    private var connectTaskTransports = true
+    private var taskTranscript: TranscriptStore?
+    private var taskIntentResolver: ((TaskIntentRequest) async throws -> TaskIntentDecision)?
+    private var protectedTaskIDs: Set<String> {
+        Set((pendingTaskInput.map { [$0.sourceId] } ?? []) + queuedTaskInputs.map(\.sourceId))
+    }
+    var canStartParallelTask: Bool {
+        concurrentTasks.filter(\.isRunning).count < 3 && (concurrentTasks.count < 3 ||
+            concurrentTasks.contains { !$0.isRunning && !protectedTaskIDs.contains($0.id) })
+    }
     /// Allegato in preparazione (skill «Documenti»): lettura sul telefono e caricamento del testo.
     let documents = DocumentComposer()
     let mediaUploads = MediaUploadQueue.shared
@@ -40,6 +56,23 @@ final class AppModel {
 
     var api: ApiClient? { credentials.map { ApiClient(credentials: $0) } }
     var companionName: String { profile?.companionName ?? "Ernie" }
+
+    init() {}
+
+    #if DEBUG
+    /// Offline integration tests exercise the same coordinator without live accounts or sockets.
+    init(testTasks: [ConcurrentTask], credentials: Credentials, transcript: TranscriptStore,
+         resolver: @escaping (TaskIntentRequest) async throws -> TaskIntentDecision) {
+        self.credentials = credentials
+        self.concurrentTasks = testTasks
+        self.taskIntentResolver = resolver
+        self.connectTaskTransports = false
+        self.taskTranscript = transcript
+        inbox.onCards = { [weak self] cards in self?.conversation?.receiveNotifications(cards) }
+        for task in testTasks { wireTask(task.conversation) }
+        if let first = testTasks.first { selectTask(first.id) }
+    }
+    #endif
 
     func start() async {
         #if DEBUG
@@ -98,7 +131,7 @@ final class AppModel {
         lifecycle = UUID()
         signInAttempt = UUID()
         voice?.cancelListening()
-        conversation?.disconnect()
+        stopTaskWorkspaces()
         conversation = nil
         voice = nil
         profile = nil
@@ -119,6 +152,8 @@ final class AppModel {
     /// All'uscita non resta niente dell'account sul telefono (revisione del 16 ott 2026: le sveglie suonavano ancora,
     /// chi entrava dopo vedeva le chat precedenti e un urgente del vecchio account non si chiudeva più).
     private func resetLocalState() {
+        UserDefaults.standard.removeObject(forKey: "ernie.parallelSessions")
+        PendingTaskInput.clearSaved()
         mediaImports.reset()
         TranscriptStore().clearAll()
         let center = UNUserNotificationCenter.current()
@@ -140,14 +175,192 @@ final class AppModel {
     }
 
     func newConversation() {
-        conversation?.startNewSession()
+        guard let task = makeTask(sessionId: Ids.new()) else {
+            taskNotice = pendingTaskInput == nil
+                ? "Ci sono già tre compiti in corso. Aprine uno per seguirlo o fermarlo."
+                : "Scegli prima dove aggiungere la richiesta in attesa."
+            return
+        }
+        selectTask(task.id)
+    }
+
+    func resumeConversation(_ id: String) {
+        if concurrentTasks.contains(where: { $0.id == id }) { selectTask(id); return }
+        guard let task = makeTask(sessionId: id) else {
+            taskNotice = "Prima termina un compito o assegna la richiesta in attesa, poi riapri questa conversazione."
+            return
+        }
+        selectTask(task.id)
+    }
+
+    func canDeleteConversation(_ id: String) -> Bool {
+        id != conversation?.sessionId && !protectedTaskIDs.contains(id) &&
+            !concurrentTasks.contains { $0.id == id && $0.isRunning }
+    }
+
+    @discardableResult func deleteConversation(_ id: String) -> Bool {
+        guard canDeleteConversation(id) else { return false }
+        if let index = concurrentTasks.firstIndex(where: { $0.id == id }) {
+            concurrentTasks[index].voice.cancelListening()
+            concurrentTasks[index].conversation.disconnect()
+            concurrentTasks.remove(at: index)
+            rememberTaskSessions()
+        }
+        conversation?.deleteSession(id)
+        return true
+    }
+
+    func selectTask(_ id: String) {
+        guard let task = concurrentTasks.first(where: { $0.id == id }) else { return }
+        if conversation !== task.conversation {
+            voice?.cancelListening()
+            conversation?.setForeground(false)
+        }
+        conversation = task.conversation
+        voice = task.voice
+        speaker = task.speaker
+        task.conversation.settings = settings
+        task.speaker.configure(credentials: credentials, engine: settings.speechEngine, style: settings.speechStyle)
+        task.conversation.setForeground(true)
+        taskNotice = nil
+        rememberTaskSessions()
+    }
+
+    private func rememberTaskSessions() {
+        UserDefaults.standard.set(concurrentTasks.map(\.id), forKey: "ernie.parallelSessions")
+    }
+
+    private func stopTaskWorkspaces() {
+        taskResolution?.cancel(); taskResolution = nil
+        pendingTaskInput = nil; queuedTaskInputs = []; resolvingTask = false
+        for task in concurrentTasks { task.voice.cancelListening(); task.conversation.disconnect() }
+        concurrentTasks = []
+        conversation?.disconnect()
+    }
+
+    @discardableResult private func makeTask(sessionId: String) -> ConcurrentTask? {
+        guard let creds = credentials, canStartParallelTask else { return nil }
+        if concurrentTasks.count >= 3,
+           let disposable = concurrentTasks.firstIndex(where: { !$0.isRunning && !protectedTaskIDs.contains($0.id) && $0.id != conversation?.sessionId })
+            ?? concurrentTasks.firstIndex(where: { !$0.isRunning && !protectedTaskIDs.contains($0.id) }) {
+            concurrentTasks[disposable].voice.cancelListening()
+            concurrentTasks[disposable].conversation.disconnect()
+            concurrentTasks.remove(at: disposable)
+        }
+        let taskSpeaker = Speaker()
+        taskSpeaker.configure(credentials: creds, engine: settings.speechEngine, style: settings.speechStyle)
+        let store = ConversationStore(credentials: creds, speaker: taskSpeaker, inbox: inbox,
+                                      settings: settings, transcript: taskTranscript ?? TranscriptStore(),
+                                      initialSessionId: sessionId, observeInbox: false)
+        store.setForeground(false)
+        wireTask(store)
+        let task = ConcurrentTask(conversation: store, speaker: taskSpeaker,
+                                  voice: VoiceController(conversation: store, speaker: taskSpeaker))
+        concurrentTasks.append(task)
+        if connectTaskTransports { store.connect() }
+        rememberTaskSessions()
+        return task
+    }
+
+    private func wireTask(_ store: ConversationStore) {
+        store.onConcurrentInput = { [weak self, weak store] text, mode, attachments in
+            guard let self, let store else { return }
+            self.acceptTaskInput(.init(sourceId: store.sessionId, text: text, inputMode: mode, attachments: attachments))
+        }
+        store.onFeedback = { [weak store] sound, key in
+            if store?.isForeground == true { ErnieSoundPlayer.shared.play(sound, key: key) }
+        }
+        store.onFamilyMessage = { [urgent] m in urgent.note(m) }
+        store.onBlock = { [shopping, reminders, todoStore] block in
+            if case .todoList(let b) = block { todoStore.apply(b.list); Task { await reminders.refresh() } }
+            shopping.apply(block); reminders.apply(block)
+        }
+    }
+
+    private func acceptTaskInput(_ input: PendingTaskInput) {
+        voice?.cancelListening()
+        if pendingTaskInput != nil { queuedTaskInputs.append(input); saveTaskInputs(); return }
+        pendingTaskInput = input
+        saveTaskInputs()
+        let candidates = concurrentTasks.filter(\.isRunning).map {
+            TaskIntentRequest.Candidate(id: $0.id, title: String($0.conversation.activeTaskTitle.prefix(1000)))
+        }
+        let snapshot = Dictionary(uniqueKeysWithValues: concurrentTasks.compactMap { task in
+            task.conversation.activeCorrelationId.map { (task.id, $0) }
+        })
+        guard !candidates.isEmpty else { resolvePendingTask(targetId: input.sourceId); return }
+        guard input.attachments.isEmpty, input.text.count <= 4000, let api else { return }
+        resolvingTask = true
+        let token = lifecycle
+        let resolve = taskIntentResolver ?? { request in try await api.resolveTask(request) }
+        taskResolution = Task { [weak self] in
+            let decision = try? await resolve(.init(text: input.text, tasks: candidates))
+            guard let self, !Task.isCancelled, self.lifecycle == token, self.pendingTaskInput?.id == input.id else { return }
+            self.resolvingTask = false
+            let current = Dictionary(uniqueKeysWithValues: self.concurrentTasks.compactMap { task in
+                task.conversation.activeCorrelationId.map { (task.id, $0) }
+            })
+            guard current == snapshot else { return } // A result may only route the exact turns it classified.
+            if let target = decision?.destination(in: candidates) { self.resolvePendingTask(targetId: target) }
+            else if decision?.isIndependent == true, self.canStartParallelTask { self.resolvePendingTaskAsNew() }
+            // Timeout, unsupported backend, doubtful intent or full capacity: visible choices remain.
+        }
+    }
+
+    private func saveTaskInputs() {
+        guard let credentials else { return }
+        PendingTaskInput.save((pendingTaskInput.map { [$0] } ?? []) + queuedTaskInputs,
+                              owner: ErnieTRIXSession.storageID(for: credentials))
+    }
+
+    private func consumeTaskInput() -> PendingTaskInput? {
+        taskResolution?.cancel(); taskResolution = nil; resolvingTask = false
+        let input = pendingTaskInput; pendingTaskInput = nil
+        saveTaskInputs()
+        return input
+    }
+
+    private func nextTaskInput() {
+        if !queuedTaskInputs.isEmpty { let next = queuedTaskInputs.removeFirst(); acceptTaskInput(next) }
+    }
+
+    func resolvePendingTask(targetId: String) {
+        guard let task = concurrentTasks.first(where: { $0.id == targetId }), let input = consumeTaskInput() else { return }
+        selectTask(targetId)
+        task.conversation.send(input.text, inputMode: input.inputMode, attachments: input.attachments, resolveConcurrent: false)
+        nextTaskInput()
+    }
+
+    func resolvePendingTaskAsNew() {
+        guard let pending = pendingTaskInput, let task = makeTask(sessionId: Ids.new()) else { return }
+        _ = consumeTaskInput()
+        selectTask(task.id)
+        task.conversation.send(pending.text, inputMode: pending.inputMode, attachments: pending.attachments, resolveConcurrent: false)
+        nextTaskInput()
+    }
+
+    func queuePendingTask() {
+        guard let pending = pendingTaskInput,
+              let task = concurrentTasks.first(where: { $0.id == pending.sourceId }),
+              let input = consumeTaskInput() else { return }
+        task.conversation.send(input.text, inputMode: input.inputMode, attachments: input.attachments,
+                               resolveConcurrent: false, asNewTurn: true)
+        nextTaskInput()
+    }
+
+    func editPendingTask() {
+        guard let pending = pendingTaskInput, concurrentTasks.contains(where: { $0.id == pending.sourceId }) else { return }
+        guard let input = consumeTaskInput() else { return }
+        selectTask(input.sourceId)
+        conversation?.composerSuggestion = input.text
+        nextTaskInput()
     }
 
     /// Voce accesa/spenta: vale subito; spegnendola, se Ernie sta parlando, si zittisce senza interrompere il turno.
     func setVoiceOutput(_ on: Bool) {
         settings.voiceOutput = on
         settings.save()
-        conversation?.settings = settings
+        for task in concurrentTasks { task.conversation.settings = settings }
         if !on { conversation?.muteSpeech() }
     }
 
@@ -310,7 +523,7 @@ final class AppModel {
         lifecycle = UUID()
         let token = lifecycle
         voice?.cancelListening()
-        conversation?.disconnect()
+        stopTaskWorkspaces()
         if let old = credentials, old != creds { pendingChatArchiveImport = nil; resetLocalState() }
         credentials = creds
         mediaUploads.configure(creds)
@@ -324,11 +537,22 @@ final class AppModel {
         // Lo scope del diario si ricorda per queste credenziali: senza rete il diario locale si apre lo stesso.
         if let userID = profile?.userId { _ = DiaryIdentity.scope(for: creds, userID: userID) }
         inbox.configure(api: api)
-        let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings)
+        let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings, observeInbox: false)
+        inbox.onCards = { [weak self] cards in self?.conversation?.receiveNotifications(cards) }
         store.onFeedback = { sound, key in ErnieSoundPlayer.shared.play(sound, key: key) }
         store.onFamilyMessage = { [urgent] m in urgent.note(m) }
         conversation = store
         voice = VoiceController(conversation: store, speaker: speaker)
+        wireTask(store)
+        if let voice { concurrentTasks = [.init(conversation: store, speaker: speaker, voice: voice)] }
+        let previousTasks = UserDefaults.standard.stringArray(forKey: "ernie.parallelSessions") ?? []
+        let selectedID = store.sessionId
+        for id in previousTasks.prefix(3) where id != selectedID { makeTask(sessionId: id) }
+        selectTask(selectedID)
+        let pendingInputs = PendingTaskInput.load(owner: ErnieTRIXSession.storageID(for: creds))
+        if let first = pendingInputs.first {
+            pendingTaskInput = first; queuedTaskInputs = Array(pendingInputs.dropFirst())
+        }
         documents.configure(api: api)
         todoStore.configure(api: api)
         sshStore.configure(api: api)

@@ -47,7 +47,7 @@ struct BrainDirectorySections: View {
                     }
                 }
                 if group.count > group.notes.count {
-                    Button("Apri tutte le \(group.count) schede") { category(group.type) }
+                    Button("Apri tutte le \(group.count) schede") { category(group.type) }.buttonStyle(ErnieButtonStyle())
                         .frame(minHeight: 44, alignment: .leading)
                 }
             } header: {
@@ -84,7 +84,7 @@ struct BrainKnowledgeContent: View {
                         .font(.footnote).foregroundStyle(Theme.inkSecondary).fixedSize(horizontal: false, vertical: true)
                     if let openAgenda {
                         Button("Consulta per data", systemImage: "calendar") { openAgenda() }
-                            .frame(minHeight: 44, alignment: .leading).buttonStyle(.bordered)
+                            .frame(minHeight: 44, alignment: .leading).buttonStyle(ErnieButtonStyle())
                     }
                     ForEach(knowledge.routines) { routine in
                         BrainRoutineCard(routine: routine)
@@ -151,9 +151,10 @@ private struct BrainFactSource: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(evidence.quote).font(.subheadline).textSelection(.enabled)
                 if let url = URL(string: evidence.ref), ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
-                    Link("Apri fonte", destination: url)
+                    Link("Apri fonte", destination: url).buttonStyle(ErnieButtonStyle())
                 } else if evidence.ref.hasSuffix(".md") && !evidence.ref.contains(":") && !evidence.ref.contains("..") {
                     NavigationLink(value: BrainDestination.path(evidence.ref)) { Text("Apri scheda fonte") }
+                        .buttonStyle(ErnieButtonStyle())
                 } else {
                     Text(evidence.ref.hasPrefix("chat:") ? "Conversazione con Ernie" : evidence.ref)
                         .font(.caption).foregroundStyle(Theme.inkSecondary)
@@ -268,7 +269,7 @@ struct BrainAgendaContent: View {
                     if let place = entry.place, !place.isEmpty { Label(place, systemImage: "mappin").font(.subheadline) }
                     if let notes = entry.notes, !notes.isEmpty { Text(Markdown.render(BrainFormat.linkify(notes))).font(.subheadline) }
                     Button("Fonte: \(entry.noteTitle)", systemImage: "arrow.up.right.square") { openSource(entry.notePath) }
-                        .font(.subheadline).frame(minHeight: 44, alignment: .leading)
+                        .buttonStyle(ErnieButtonStyle())
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Divider()
             }
@@ -276,7 +277,7 @@ struct BrainAgendaContent: View {
                 DisclosureGroup("Schede consultate (\(agenda.subjects.count))") {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(agenda.subjects) { subject in
-                            Button(subject.title) { openSource(subject.path) }.frame(minHeight: 44, alignment: .leading)
+                            Button(subject.title) { openSource(subject.path) }.buttonStyle(ErnieButtonStyle())
                         }
                     }
                 }.font(.subheadline)
@@ -304,7 +305,7 @@ struct BrainAgendaView: View {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     DatePicker("Data", selection: $date, displayedComponents: .date).datePickerStyle(.compact)
-                    Button("Oggi") { date = .now }.frame(minHeight: 44, alignment: .leading)
+                    Button("Oggi") { date = .now }.buttonStyle(ErnieButtonStyle())
                 }
                 if let result = store.result(for: query, credentials: model.credentials) {
                     BrainAgendaContent(agenda: result, openSource: openSource)
@@ -312,7 +313,7 @@ struct BrainAgendaView: View {
                     ProgressView("Consulto gli orari…").frame(maxWidth: .infinity)
                 } else if let error = store.error {
                     Text(error).foregroundStyle(.secondary)
-                    Button("Riprova") { Task { await load() } }.frame(minHeight: 44)
+                    Button("Riprova") { Task { await load() } }.buttonStyle(ErnieButtonStyle())
                 } else if model.api == nil {
                     Text("Accedi per consultare gli orari.").foregroundStyle(.secondary)
                 }

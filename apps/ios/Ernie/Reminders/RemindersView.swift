@@ -98,26 +98,35 @@ struct RemindersView: View {
     private func row(_ r: ReminderItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { editing = r } label: {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(r.text)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                    Text(RemindersCard.when(r) + RemindersCard.who(r))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let other = r.forLabel { ReminderForBadge(label: other) }
-                    if let rep = r.repeatInfo {
-                        Label(rep.label, systemImage: "repeat")
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(r.text)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                        Text(RemindersCard.when(r) + RemindersCard.who(r))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let other = r.forLabel { ReminderForBadge(label: other) }
+                        if let rep = r.repeatInfo {
+                            Label(rep.label, systemImage: "repeat")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let place = r.place, let line = RemindersCard.placeLine(place) {
+                            Label(line.text, systemImage: line.symbol)
+                                .font(.caption)
+                                .foregroundStyle(line.warning ? Color.orange : .secondary)
+                        }
                     }
-                    if let place = r.place, let line = RemindersCard.placeLine(place) {
-                        Label(line.text, systemImage: line.symbol)
-                            .font(.caption)
-                            .foregroundStyle(line.warning ? Color.orange : .secondary)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "pencil")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .frame(width: 44, height: 44)
+                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.actionRadius))
+                        .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: Theme.actionHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

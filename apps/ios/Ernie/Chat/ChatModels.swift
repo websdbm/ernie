@@ -225,6 +225,7 @@ enum ToolLabels {
         "present_choices": "Proposta delle opzioni",
         "present_recipes": "Presentazione delle ricette",
         "get_time": "Consultazione di data e ora",
+        "time_windows": "Calcolo degli orari liberi",
         "health_parameter": "Lettura dei valori degli esami",
         "health_report": "Lettura del referto",
         "health_overview": "Riepilogo della salute",

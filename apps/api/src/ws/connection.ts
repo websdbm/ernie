@@ -949,22 +949,9 @@ export class ClientConnection {
     }
 
     const companionStartedAt = performance.now();
-    const companion = await this.deps.getCompanion(this.auth, this.session);
-    this.performanceTrace?.phase('companionMs', performance.now() - companionStartedAt);
-    this.deps.logger.debug(
-      { sessionId, correlationId, companionMs: Math.round(performance.now() - companionStartedAt) },
-      'preparazione agente turno',
-    );
-    ac.signal.throwIfAborted();
-    if (!companion) {
-      await this.sendError(
-        'llm_unavailable',
-        'Nessun provider LLM configurato',
-        false,
-        correlationId,
-      );
-      return;
-    }
+    const companionRead = this.deps.getCompanion(this.auth, this.session).finally(() => {
+      this.performanceTrace?.phase('companionMs', performance.now() - companionStartedAt);
+    });
 
     // Contesto del turno (fuori dal prefisso): memorie pertinenti e, se Jev indica una skill guidata, la sua procedura.
     const contextStartedAt = performance.now();
@@ -984,43 +971,60 @@ export class ClientConnection {
         text.trim().split(/\s+/).length >= 4,
     );
     // Solo letture indipendenti: gli avvisi consumati e le prenotazioni restano applicati in ordine.
-    const [suggestionRead, retrievalRead, memoryNoticesRead, profileNoticesRead, continuityRead] =
-      await Promise.allSettled([
-        timedRead('brainSuggestMs', () =>
-          canSuggest
-            ? (this.deps.brainSuggest?.(this.auth.userId, text, [...this.brainSuggested]) ??
-              Promise.resolve(null))
-            : Promise.resolve(null),
-        ),
-        timedRead('retrievalMs', () =>
-          decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0
-            ? this.deps.memories.repo.search({
-                userId: this.auth.userId,
-                query: text,
-                limit: this.deps.memories.retrievalLimit,
-              })
-            : Promise.resolve([]),
-        ),
-        timedRead(
-          'memoryNoticesMs',
-          () => this.deps.memories?.repo.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
-        ),
-        timedRead(
-          'profileNoticesMs',
-          () => this.deps.profiles?.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
-        ),
-        timedRead(
-          'continuityMs',
-          () =>
-            this.deps.continuity?.(
-              this.auth.userId,
-              sessionId,
-              text,
-              event.payload.device?.timezone,
-            ) ?? Promise.resolve({ text: '', untrusted: false }),
-        ),
-      ]);
+    const [
+      companionResult,
+      suggestionRead,
+      retrievalRead,
+      memoryNoticesRead,
+      profileNoticesRead,
+      continuityRead,
+    ] = await Promise.allSettled([
+      companionRead,
+      timedRead('brainSuggestMs', () =>
+        canSuggest
+          ? (this.deps.brainSuggest?.(this.auth.userId, text, [...this.brainSuggested]) ??
+            Promise.resolve(null))
+          : Promise.resolve(null),
+      ),
+      timedRead('retrievalMs', () =>
+        decision.needsMemory && this.deps.memories && this.deps.memories.retrievalLimit > 0
+          ? this.deps.memories.repo.search({
+              userId: this.auth.userId,
+              query: text,
+              limit: this.deps.memories.retrievalLimit,
+            })
+          : Promise.resolve([]),
+      ),
+      timedRead(
+        'memoryNoticesMs',
+        () => this.deps.memories?.repo.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
+      ),
+      timedRead(
+        'profileNoticesMs',
+        () => this.deps.profiles?.pendingNotices(this.auth.userId, 5) ?? Promise.resolve([]),
+      ),
+      timedRead(
+        'continuityMs',
+        () =>
+          this.deps.continuity?.(
+            this.auth.userId,
+            sessionId,
+            text,
+            event.payload.device?.timezone,
+          ) ?? Promise.resolve({ text: '', untrusted: false }),
+      ),
+    ]);
     ac.signal.throwIfAborted();
+    const companion = readResult(companionResult);
+    if (!companion) {
+      await this.sendError(
+        'llm_unavailable',
+        'Nessun provider LLM configurato',
+        false,
+        correlationId,
+      );
+      return;
+    }
     const contextBlocks: string[] = [];
     const untrustedContext = new Set<string>();
     const privateContext = new Set<string>();
@@ -1248,6 +1252,7 @@ export class ClientConnection {
       this.deps.tools?.setToolContext(sessionId, null);
     };
     // Il turno gira in background così `user.cancel` e `tool.confirmation.respond` possono essere gestiti nel frattempo.
+    let responseFinished = false;
     void run({
       userId: this.auth.userId,
       sessionId,
@@ -1285,6 +1290,7 @@ export class ClientConnection {
       },
     })
       .then(async (res) => {
+        responseFinished = true;
         if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         const r = res as
           | {
@@ -1299,6 +1305,10 @@ export class ClientConnection {
           | undefined;
         if (r?.cancelled) this.noteInterruption(correlationId, r.text ?? '');
         this.spokenThrough.delete(correlationId);
+        // Preserve interruption context before a late steer can start the next turn.
+        this.activeTurns.delete(correlationId);
+        if (this.requestInFlight === correlationId) this.requestInFlight = undefined;
+        await this.flushLateSteers(correlationId);
         const cites =
           !r?.cancelled && r?.text ? this.deps.citations?.(correlationId, r.text) : null;
         if (cites)
@@ -1330,6 +1340,10 @@ export class ClientConnection {
         });
       })
       .catch(async (err) => {
+        if (responseFinished) {
+          this.deps.logger.warn({ correlationId }, 'post-elaborazione turno non completata');
+          return;
+        }
         if (this.activeTurns.get(correlationId) === ac) clearToolContext();
         this.deps.logger.error({ err, correlationId }, 'runTurn ha rigettato');
         await this.sendError('turn_failed', 'Il turno non è stato completato', true, correlationId);

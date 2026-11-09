@@ -295,7 +295,7 @@ struct InputBar: View {
                 .accessibilityLabel("Invia quello che ho detto")
         case .waitingReply:
             Button { voice.interrupt() } label: { icon("mic.fill", fill: palette.accent) }
-                .accessibilityLabel("Interrompi Ernie e parla")
+                .accessibilityLabel("Aggiungi una richiesta a voce")
         default:
             BearActivityIcon(status: .working, size: 30)
                 .frame(width: 44, height: 44)
@@ -310,8 +310,12 @@ struct InputBar: View {
             Button(action: sendDraft) { icon(slashInput == nil || slashInput?.requestText != nil ? "arrow.up" : "return", fill: palette.accent) }
                 .accessibilityLabel(slashInput?.actionLabel ?? "Invia")
         case .stop:
-            Button { conversation.bargeIn() } label: { icon("stop.fill", fill: palette.inkSecondary) }
-                .accessibilityLabel("Interrompi")
+            HStack(spacing: 4) {
+                Button { composing = false; voice.startListening() } label: { icon("mic.fill", fill: palette.accent) }
+                    .accessibilityLabel("Aggiungi una richiesta a voce")
+                Button { conversation.bargeIn() } label: { icon("stop.fill", fill: palette.inkSecondary) }
+                    .accessibilityLabel("Ferma questo compito")
+            }
         case .mic, .voice:
             Button {
                 composing = false

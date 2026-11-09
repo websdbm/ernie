@@ -40,63 +40,15 @@ struct ChatView: View {
     @State private var whatsNew: [ChangelogEntry]?
     @State private var debugIcons = false
     @State private var draft = ""
+    @State private var taskDrafts: [String: String] = [:]
     @AppStorage(BearCostume.preferenceKey) private var bearCostume = BearCostume.automatic.rawValue
     @State private var composing = false
 
-    var body: some View {
+    private var chatRoot: some View {
         ZStack {
             ChatBackdrop()
             if let conversation = model.conversation, let voice = model.voice {
-                VStack(spacing: 0) {
-                    topBar(conversation)
-                    ZStack(alignment: .top) {
-                        if conversation.items.isEmpty {
-                            HomeView(conversation: conversation, onOpen: open)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        } else {
-                            MessageList(
-                                conversation: conversation,
-                                topInset: model.settings.avatarFloating ? FloatingAvatar.topInset(model.settings, composing: composing) : 0
-                            )
-                            // Su richiesta resta l'avatar galleggiante di prima (trascinabile, ridimensionabile).
-                            if model.settings.avatarFloating {
-                                FloatingAvatar(
-                                    state: conversation.agentState,
-                                    name: model.companionName,
-                                    connection: conversation.connection,
-                                    emotion: conversation.lastAvatarEmotion,
-                                    composing: composing,
-                                    mouthOpen: model.speaker.mouthOpen
-                                )
-                                .transition(.identity)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
-                    .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
-                    if let status = conversation.recoveryStatus {
-                        Text(status).font(.footnote).foregroundStyle(palette.inkSecondary)
-                            .padding(.horizontal).accessibilityAddTraits(.updatesFrequently)
-                    }
-                    if conversation.canRecoverRequest {
-                        Button("Recupera risposta") { conversation.recoverLastRequest() }
-                            .buttonStyle(.bordered).padding(.horizontal)
-                    }
-                    InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents,
-                             onCommand: { if let destination = $0.destination { open(destination) } })
-                        .onChange(of: conversation.editRequest) { _, request in
-                            guard let request else { return }
-                            draft = request.text
-                            composing = true
-                        }
-                }
-                if Self.showsListening(voice.phase) {
-                    ListeningOverlay(voice: voice, conversation: conversation)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                        .zIndex(1)
-                }
-                SidePanel(isOpen: $panelOpen, onSelect: open)
-                    .zIndex(2)
+                conversationContents(conversation, voice: voice)
             } else {
                 ProgressView()
             }
@@ -111,9 +63,18 @@ struct ChatView: View {
             }
         }
         .onChange(of: model.conversation?.agentState) { appearanceIdleSince = .now; appearanceDate = .now }
+        .onChange(of: model.conversation?.sessionId) { previous, next in
+            if let previous { taskDrafts[previous] = draft }
+            draft = next.flatMap { taskDrafts[$0] } ?? ""
+        }
+        .onChange(of: model.credentials) { taskDrafts = [:]; draft = "" }
         .onChange(of: model.conversation?.lastAvatarEmotion) { appearanceIdleSince = .now; appearanceDate = .now }
         .environment(\.bearContext, BearContext.latest(in: model.conversation?.items ?? []))
         .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
+    }
+
+    private var detailSheets: some View {
+        chatRoot
         .sheet(isPresented: $showSettings, onDismiss: sheetDidDismiss) { SettingsView() }
         .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
         .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
@@ -147,12 +108,16 @@ struct ChatView: View {
         }
         .modifier(ChatArchivePresentationModifier(library: $showChatArchives, reference: $archiveReference,
             panelOpen: $panelOpen, composing: $composing, onDismiss: sheetDidDismiss))
+    }
+
+    var body: some View {
+        detailSheets
         .sheet(isPresented: $showRecipes, onDismiss: sheetDidDismiss) { RecipeLibraryView() }
         .sheet(isPresented: $showMedia, onDismiss: sheetDidDismiss) { MediaLibraryView() }
         .sheet(isPresented: $showReminders, onDismiss: sheetDidDismiss) { RemindersView() }
         .sheet(isPresented: $showAutomations, onDismiss: sheetDidDismiss) { AutomationsView() }
         .sheet(isPresented: $showSkills, onDismiss: sheetDidDismiss) { SkillsSheet() }
-        .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { whatsNew = nil } }), onDismiss: sheetDidDismiss) {
+        .sheet(isPresented: whatsNewPresented, onDismiss: sheetDidDismiss) {
             WhatsNewView(entries: whatsNew ?? [])
         }
         .task {
@@ -175,6 +140,71 @@ struct ChatView: View {
         .sheet(isPresented: $debugIcons, onDismiss: sheetDidDismiss) { IconGalleryView() }
         .onAppear { debugIcons = ProcessInfo.processInfo.environment["ERNIE_DEBUG_ICONS"] != nil }
         #endif
+    }
+
+    private var whatsNewPresented: Binding<Bool> {
+        Binding(get: { whatsNew != nil }, set: { if !$0 { whatsNew = nil } })
+    }
+
+    @ViewBuilder
+    private func conversationContents(_ conversation: ConversationStore, voice: VoiceController) -> some View {
+        VStack(spacing: 0) {
+            topBar(conversation)
+            ConcurrentTasksBar()
+            if let notice = model.taskNotice {
+                Text(notice).font(.footnote).foregroundStyle(palette.inkSecondary).padding(.horizontal)
+            }
+            ZStack(alignment: .top) {
+                if conversation.items.isEmpty {
+                    HomeView(conversation: conversation, onOpen: open)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    MessageList(
+                        conversation: conversation,
+                        topInset: model.settings.avatarFloating ? FloatingAvatar.topInset(model.settings, composing: composing) : 0
+                    )
+                    // Su richiesta resta l'avatar galleggiante di prima (trascinabile, ridimensionabile).
+                    if model.settings.avatarFloating {
+                        FloatingAvatar(
+                            state: conversation.agentState,
+                            name: model.companionName,
+                            connection: conversation.connection,
+                            emotion: conversation.lastAvatarEmotion,
+                            composing: composing,
+                            mouthOpen: model.speaker.mouthOpen
+                        )
+                        .transition(.identity)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .animation(.spring(duration: 0.45), value: conversation.items.isEmpty)
+            if let status = conversation.recoveryStatus {
+                Text(status).font(.footnote).foregroundStyle(palette.inkSecondary)
+                    .padding(.horizontal).accessibilityAddTraits(.updatesFrequently)
+            }
+            if conversation.canRecoverRequest {
+                Button("Recupera risposta") { conversation.recoverLastRequest() }
+                    .buttonStyle(.bordered).padding(.horizontal)
+            }
+            if let pending = model.pendingTaskInput {
+                TaskInputChoiceView(input: pending)
+            }
+            InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents,
+                     onCommand: { if let destination = $0.destination { open(destination) } })
+                .onChange(of: conversation.editRequest) { _, request in
+                    guard let request else { return }
+                    draft = request.text
+                    composing = true
+                }
+        }
+        if Self.showsListening(voice.phase) {
+            ListeningOverlay(voice: voice, conversation: conversation)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .zIndex(1)
+        }
+        SidePanel(isOpen: $panelOpen, onSelect: open)
+            .zIndex(2)
     }
 
     private func consumeLink() {
@@ -232,7 +262,7 @@ struct ChatView: View {
     private func open(_ destination: PanelDestination) {
         switch destination {
         case .newConversation: model.newConversation()
-        case .conversation(let id): model.conversation?.resume(sessionId: id)
+        case .conversation(let id): model.resumeConversation(id)
         case .ernietrix: openGame()
         case .ssh: showSSH = true
         case .todo: listSheet = .todo(nil)

@@ -980,7 +980,7 @@ describe('ClientConnection: contesto del telefono (v1.10)', () => {
 });
 
 describe('ClientConnection: preparazione parallela e persistenza', () => {
-  it('avvia le quattro letture indipendenti insieme e assembla in ordine con taint prima del modello', async () => {
+  it('prepara agente e quattro letture indipendenti insieme, con taint prima del modello', async () => {
     const started: string[] = [];
     const release = new Map<string, () => void>();
     const read = async <T>(name: string, value: T) => {
@@ -999,6 +999,7 @@ describe('ClientConnection: preparazione parallela e persistenza', () => {
       auth,
       deps(
         {
+          getCompanion: () => read('companion', companion as never),
           brainSuggest: () =>
             read('brain', { path: 'test.md', title: 'BRAIN', passage: 'note', when: 'oggi' }),
           memories: {
@@ -1047,10 +1048,10 @@ describe('ClientConnection: preparazione parallela e persistenza', () => {
     await conn.handleRaw(c.start());
     const pending = conn.handleRaw(c.message('parliamo di questa cosa insieme'));
     try {
-      await vi.waitFor(() => expect(started).toHaveLength(4));
+      await vi.waitFor(() => expect(started).toHaveLength(5));
       expect(context).toBe('');
       // Completamento inverso all'ordine di presentazione.
-      for (const name of ['profileNotices', 'memoryNotices', 'retrieval', 'brain'])
+      for (const name of ['profileNotices', 'memoryNotices', 'retrieval', 'brain', 'companion'])
         release.get(name)?.();
       await pending;
       await vi.waitFor(() => expect(context).toContain('PROFILE_NOTICE'));
@@ -2076,4 +2077,100 @@ describe('continuity and grounded tool user input', () => {
       });
     },
   );
+});
+
+describe('independent tasks and completed-turn handoff', () => {
+  it('runs two sessions concurrently; cancellation and steering stay with the target', async () => {
+    const running = new Map<string, TurnInput>();
+    const finish = new Map<string, () => void>();
+    const shared = deps({
+      runTurn: async (input) => {
+        running.set(input.sessionId, input);
+        await new Promise<void>((r) => finish.set(input.sessionId, r));
+        return { cancelled: input.abortSignal.aborted };
+      },
+    });
+    const sa = randomUUID(),
+      sb = randomUUID();
+    const a = fakeSocket(),
+      b = fakeSocket();
+    const ca = client(sa),
+      cb = client(sb);
+    const first = new ClientConnection(a.socket, auth, shared);
+    const second = new ClientConnection(b.socket, auth, shared);
+    try {
+      await Promise.all([first.handleRaw(ca.start()), second.handleRaw(cb.start())]);
+      const ra = randomUUID(),
+        rb = randomUUID();
+      await Promise.all([
+        first.handleRaw(ca.message('Prepara il piano cena', ra)),
+        second.handleRaw(cb.message('Controlla il sito', rb)),
+      ]);
+      await vi.waitFor(() => expect(running.size).toBe(2));
+      expect(a.sent.every((e) => e.sessionId === sa)).toBe(true);
+      expect(b.sent.every((e) => e.sessionId === sb)).toBe(true);
+      await first.handleRaw(
+        JSON.stringify(
+          createEvent(
+            'user.steer',
+            { targetCorrelationId: ra, text: 'Siamo in quattro', inputMode: 'text' },
+            { sessionId: sa, correlationId: ra, seq: 2 },
+          ),
+        ),
+      );
+      expect(
+        running
+          .get(sa)
+          ?.takeSteers?.()
+          .map((n) => n.text),
+      ).toEqual(['Siamo in quattro']);
+      expect(running.get(sb)?.takeSteers?.()).toEqual([]);
+      await first.handleRaw(ca.cancel(ra));
+      expect(running.get(sa)?.abortSignal.aborted).toBe(true);
+      expect(running.get(sb)?.abortSignal.aborted).toBe(false);
+    } finally {
+      for (const done of finish.values()) done();
+      await first.close();
+      await second.close();
+    }
+  });
+  it('does not keep a completed reply busy while memory post-processing is pending', async () => {
+    let release!: () => void;
+    const memoryWork = new Promise<void>((r) => {
+      release = r;
+    });
+    let calls = 0;
+    const socket = fakeSocket();
+    const c = client(randomUUID());
+    const conn = new ClientConnection(
+      socket.socket,
+      auth,
+      deps({
+        runTurn: async (input) => {
+          calls++;
+          await input.emit('assistant.completed', { finishReason: 'stop' });
+          return { text: 'Fatto' };
+        },
+        memories: {
+          retrievalLimit: 0,
+          repo: { pendingNotices: async () => [] } as never,
+          afterTurn: () => memoryWork,
+        },
+      }),
+    );
+    try {
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('Prima richiesta'));
+      await vi.waitFor(() => expect(socket.types()).toContain('assistant.completed'));
+      await tick();
+      await conn.handleRaw(c.message('Seconda richiesta'));
+      await vi.waitFor(() => expect(calls).toBe(2));
+      expect(
+        socket.sent.filter((e) => e.type === 'error' && field(e, 'code') === 'busy'),
+      ).toHaveLength(0);
+    } finally {
+      release();
+      await conn.close();
+    }
+  });
 });

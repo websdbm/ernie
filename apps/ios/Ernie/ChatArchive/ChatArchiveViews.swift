@@ -23,7 +23,7 @@ struct ChatArchiveLibraryView: View {
         NavigationStack {
             List {
                 if let error {
-                    Section { Text(error).foregroundStyle(.red); Button("Riprova") { Task { await load() } }; Button("Gestisci skill") { manageSkills = true } }
+                    Section { Text(error).foregroundStyle(.red); Button("Riprova") { Task { await load() } }.buttonStyle(ErnieButtonStyle()); Button("Gestisci skill") { manageSkills = true }.buttonStyle(ErnieButtonStyle()) }
                 }
                 if let report {
                     Section("Importazione completata") {
@@ -36,7 +36,7 @@ struct ChatArchiveLibraryView: View {
                 if archives.isEmpty && !loading && error == nil {
                     ContentUnavailableView("Le tue chat archiviate", systemImage: "bubble.left.and.text.bubble.right",
                         description: Text("Esporta una chat WhatsApp senza media e importa il TXT o lo ZIP. I testi restano sul tuo backend Ernie."))
-                    Button("Importa chat", systemImage: "square.and.arrow.down") { importFile = true }
+                    Button("Importa chat", systemImage: "square.and.arrow.down") { importFile = true }.buttonStyle(ErnieButtonStyle(emphasis: .primary))
                 }
                 ForEach(archives) { archive in
                     NavigationLink {
@@ -46,7 +46,7 @@ struct ChatArchiveLibraryView: View {
                     }
                 }
                 if loading { ProgressView().frame(maxWidth: .infinity) }
-                if archives.count < total && !loading { Button("Carica altre chat") { Task { await load(more: true) } } }
+                if archives.count < total && !loading { Button("Carica altre chat") { Task { await load(more: true) } }.buttonStyle(ErnieButtonStyle()) }
             }
             .navigationTitle("Archivio chat")
             .searchable(text: $search, prompt: "Cerca chat, categoria o tag")
@@ -167,10 +167,10 @@ struct ChatArchiveImportView: View {
                     Section {
                         Text("Il file e i testi vengono conservati nel tuo account sul backend Ernie. Questa importazione non avvia l’AI.")
                             .font(.footnote).foregroundStyle(.secondary)
-                        Button("Conferma importazione") { Task { await commit() } }
+                        Button("Conferma importazione") { Task { await commit() } }.buttonStyle(ErnieButtonStyle(emphasis: .primary))
                             .disabled(busy || (selection == "new" && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                     }
-                } else if !busy { Button("Riprova") { Task { await prepare() } } }
+                } else if !busy { Button("Riprova") { Task { await prepare() } }.buttonStyle(ErnieButtonStyle()) }
             }
             .navigationTitle("Importa chat").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -298,7 +298,7 @@ struct ChatArchiveDetailView: View {
                     }.padding()
                 }.refreshable { await load() }
             } else if loading { ProgressView() }
-            else { ContentUnavailableView("Chat non disponibile", systemImage: "bubble.left", description: Text(error ?? "Riprova tra poco.")); Button("Riprova") { Task { await load() } } }
+            else { ContentUnavailableView("Chat non disponibile", systemImage: "bubble.left", description: Text(error ?? "Riprova tra poco.")); Button("Riprova") { Task { await load() } }.buttonStyle(ErnieButtonStyle()) }
         }
         .navigationTitle(detail?.archive.name ?? "Chat").navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -379,22 +379,21 @@ struct ChatArchiveDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
                     ForEach([( "24h", "Ultime 24 ore"), ("7d", "Ultimi 7 giorni"), ("decisions", "Decisioni"), ("tasks", "Da fare"), ("dates", "Date e orari"), ("brief", "Brief")], id: \.0) { key, label in
-                        Button(label) { mode = key; question = label; dictation.stop(); consent = true }.buttonStyle(.bordered).disabled(asking)
+                        Button(label) { mode = key; question = label; dictation.stop(); consent = true }.buttonStyle(ErnieButtonStyle()).disabled(asking)
                     }
                 }
             }
             TextField("Che cosa vuoi sapere?", text: $question, axis: .vertical).lineLimit(2...6).textFieldStyle(.roundedBorder)
                 .disabled(asking).accessibilityLabel("Domanda sulla chat selezionata")
-            HStack {
+            FlowLayout(spacing: 8) {
                 Button(dictation.recording ? "Ferma dettatura" : "Detta", systemImage: dictation.recording ? "stop.circle" : "mic") {
                     if dictation.recording { dictation.stop() } else { speech.stop(); dictation.start(prefix: question) { question = $0 } }
-                }.disabled(asking)
-                Spacer()
+                }.buttonStyle(ErnieButtonStyle()).disabled(asking)
                 if asking {
-                    Button("Annulla") { aiTask?.cancel(); askGeneration = UUID(); asking = false }
+                    Button("Annulla") { aiTask?.cancel(); askGeneration = UUID(); asking = false }.buttonStyle(ErnieButtonStyle())
                 } else {
                     Button("Chiedi a Ernie", systemImage: "arrow.up.circle.fill") { mode = "question"; dictation.stop(); consent = true }
-                        .buttonStyle(.borderedProminent).disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || question.count > 4000)
+                        .buttonStyle(ErnieButtonStyle(emphasis: .primary)).disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || question.count > 4000)
                 }
             }
             if let error = dictation.error { Text(error).font(.footnote).foregroundStyle(.red) }
@@ -406,20 +405,24 @@ struct ChatArchiveDetailView: View {
                 ForEach(Array(result.uncertainties.enumerated()), id: \.offset) { _, text in Text(text).font(.footnote).foregroundStyle(.secondary) }
                 Text("Fonti dell’archivio fino al \(ChatArchivePresentation.date(result.coverage.latestMessageAt)) · \(result.coverage.usedCount) messaggi usati")
                     .font(.caption).foregroundStyle(.secondary)
-                HStack {
+                FlowLayout(spacing: 8) {
                     Button(speech.speaking ? "Ferma lettura" : "Ascolta", systemImage: speech.speaking ? "stop.circle" : "speaker.wave.2") {
                         dictation.stop(); if speech.speaking { speech.stop() } else { speech.read(result.answer) }
                     }
                     if speech.speaking { Button(speech.paused ? "Riprendi" : "Pausa") { speech.togglePause() } }
-                }
+                }.buttonStyle(ErnieButtonStyle())
                 if !result.sources.isEmpty {
                     Text("Messaggi citati").font(.headline)
                     ForEach(result.sources) { message in
-                        Button { source = message } label: { ChatArchiveMessageRow(message: message).contentShape(Rectangle()) }.buttonStyle(.plain)
+                        VStack(alignment: .leading, spacing: 8) {
+                            ChatArchiveMessageRow(message: message)
+                            Button("Apri nel contesto", systemImage: "text.magnifyingglass") { source = message }
+                                .buttonStyle(ErnieButtonStyle())
+                        }
                     }
                 }
-                if answeredMode == "brief" { Button("Usa come descrizione della chat") { Task { await saveBrief(result.answer) } } }
-                Button("Salva nel Second Brain…", systemImage: "brain.head.profile") { brainExport = true }
+                if answeredMode == "brief" { Button("Usa come descrizione della chat") { Task { await saveBrief(result.answer) } }.buttonStyle(ErnieButtonStyle()) }
+                Button("Salva nel Second Brain…", systemImage: "brain.head.profile") { brainExport = true }.buttonStyle(ErnieButtonStyle())
                 Text("Modello: \(result.model)").font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -428,11 +431,11 @@ struct ChatArchiveDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Cerca nei messaggi", text: $messageQuery).textFieldStyle(.roundedBorder)
             filters
-            Button("Applica filtri") { Task { await loadMessages() } }
+            Button("Applica filtri") { Task { await loadMessages() } }.buttonStyle(ErnieButtonStyle())
             if loading { ProgressView() }
             Text("\(messageTotal) messaggi trovati").font(.caption).foregroundStyle(.secondary)
             ForEach(messages) { message in ChatArchiveMessageRow(message: message) }
-            if messages.count < messageTotal { Button("Carica altri messaggi") { Task { await loadMessages(more: true) } }.disabled(loading) }
+            if messages.count < messageTotal { Button("Carica altri messaggi") { Task { await loadMessages(more: true) } }.buttonStyle(ErnieButtonStyle()).disabled(loading) }
         }
     }
     private func dates() -> (String?, String?) {
@@ -616,16 +619,16 @@ private struct ChatArchiveWhatsAppView: View {
                 Section(archive.name) {
                     if let link = ChatArchiveWhatsApp.compose(phone: archive.kind == "direct" ? archive.whatsappPhone : nil)
                         ?? ChatArchiveWhatsApp.safeURL(archive.whatsappUrl) {
-                        Button("Apri in WhatsApp", systemImage: "arrow.up.forward.app") { openURL(link) }
+                        Button("Apri in WhatsApp", systemImage: "arrow.up.forward.app") { openURL(link) }.buttonStyle(ErnieButtonStyle())
                     } else { Text("Aggiungi un numero o un link WhatsApp in Modifica scheda.").foregroundStyle(.secondary) }
                 }
                 Section("Prepara un messaggio") {
                     TextField("Testo da scrivere", text: $draft, axis: .vertical).lineLimit(3...10)
                     if archive.kind == "direct", let link = ChatArchiveWhatsApp.compose(phone: archive.whatsappPhone, text: draft) {
-                        Button("Apri la bozza su WhatsApp") { openURL(link) }.disabled(draft.isEmpty || draft.count > 4000)
+                        Button("Apri la bozza su WhatsApp") { openURL(link) }.buttonStyle(ErnieButtonStyle(emphasis: .primary)).disabled(draft.isEmpty || draft.count > 4000)
                     }
-                    Button("Condividi e scegli la chat", systemImage: "square.and.arrow.up") { share = true }.disabled(draft.isEmpty)
-                    Button("Copia testo", systemImage: "doc.on.doc") { UIPasteboard.general.string = draft }.disabled(draft.isEmpty)
+                    Button("Condividi e scegli la chat", systemImage: "square.and.arrow.up") { share = true }.buttonStyle(ErnieButtonStyle()).disabled(draft.isEmpty)
+                    Button("Copia testo", systemImage: "doc.on.doc") { UIPasteboard.general.string = draft }.buttonStyle(ErnieButtonStyle()).disabled(draft.isEmpty)
                     Text("Controlla la chat di destinazione e premi Invia in WhatsApp. Per gruppi e canali il link può aprire un invito o una pagina: scegli la destinazione nel foglio Condividi.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

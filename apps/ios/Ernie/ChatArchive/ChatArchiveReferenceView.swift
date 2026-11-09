@@ -26,7 +26,7 @@ struct ChatArchiveReferenceView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let error {
-                    Section { Text(error).foregroundStyle(.red); Button("Riprova") { Task { await load() } }; Button("Gestisci skill") { skills = true } }
+                    Section { Text(error).foregroundStyle(.red); Button("Riprova") { Task { await load() } }.buttonStyle(ErnieButtonStyle()); Button("Gestisci skill") { skills = true }.buttonStyle(ErnieButtonStyle()) }
                 }
                 ForEach(archives) { archive in
                     NavigationLink(value: archive.id) {
@@ -35,7 +35,7 @@ struct ChatArchiveReferenceView: View {
                 }
                 if loading { ProgressView().frame(maxWidth: .infinity) }
                 else if archives.isEmpty && error == nil { Text("Nessuna chat corrispondente. Cerca un altro nome o importa la conversazione da Archivio chat.").foregroundStyle(.secondary) }
-                if !loading && (archives.count < total || !browsingAll) { Button(browsingAll ? "Carica altre chat" : "Mostra tutte le chat") { Task { await load(more: true) } } }
+                if !loading && (archives.count < total || !browsingAll) { Button(browsingAll ? "Carica altre chat" : "Mostra tutte le chat") { Task { await load(more: true) } }.buttonStyle(ErnieButtonStyle()) }
             }
             .navigationTitle("Scegli la chat")
             .searchable(text: $search, prompt: "Nome, descrizione, categoria o tag")
