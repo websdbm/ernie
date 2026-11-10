@@ -27,6 +27,8 @@ ha trovato/corretto scadenza durante attesa DB e avvisi superati tramite un rife
 TypeScript/Biome e controllo whitespace verificati. Evidenze locali temporanee:
 `/tmp/ernie-health-protection-final-tests.log`, `typecheck-final.log` con lo stesso prefisso,
 `/tmp/ernie-health-deletion-red-final.log`. Nessuna build iOS o pubblicazione nuova.
+Sorgenti `65357097597d00e4685341722d4ffa4b31032a8d` pubblicati su GitHub e SHA remoto verificato.
+Container/database sintetici e relative credenziali temporanee rimossi dopo i test.
 
 **R4 non è completato**: restano collegamento documenti/media/referti, caricamento cifrato dall'ingresso,
 API/UI e guardie su tutti i percorsi AI, copie in chat/replay/cache e migrazione di dati/vault/cronologia.
