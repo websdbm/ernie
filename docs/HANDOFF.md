@@ -5,19 +5,31 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — pubblicazione API e build **117 autorizzata** dall’utente.
-Prima dell’upload l’utente ha chiesto anche la rifinitura dei promemoria: Modifica solo nel menu, Sveglia/Email
-azionabili come icone senza label, stato tramite colore e simbolo pieno/vuoto. Componente comune chat/raccolta,
-richiesta email mancante conservata, giorno non duplicato. **Ricompilazione della 117 in corso**: la prima IPA
-di Maximize (sorgenti `6db4934`) non è stata distribuita ed è superata dalla revisione UI.
-Richiesta aggiunta durante il rilascio: voce Drama **15% più veloce**, tramite `atempo=1.15` nel trattamento
-audio già esistente, prima della normalizzazione; tono e obiettivo di volume invariati. Nessun cambio del
-prompt vocale, del modello o della velocità iOS: evita doppia accelerazione. Vale anche per le build precedenti.
+Ultimo aggiornamento: **10 novembre 2026**, Codex — API **pubblicata e sana**, build **117 disponibile su TestFlight**,
+gruppo **Interni**, **VALID / IN_BETA_TESTING**. Build ID `e2b157be-606b-46c2-b3fc-19a8fbbdb974`;
+note italiane rilette e identiche al changelog (1.739 caratteri). Pubblicazione autorizzata esplicitamente dall’utente.
 
-Maximize: skill disponibile ma spenta per account; scelta modello/provider/sforzo per conversazione,
-congelata quando il messaggio entra in coda. Cataloghi reali, controllo dei permessi, nessun fallback silenzioso.
-113 test backend e 35 test iOS superati, prove sintetiche reali su Fable/Sol riuscite. Backend senza migrazioni.
-**API ancora a2f50e5; TestFlight ancora alla 116.** [Verifiche e rilascio](releases/build-117.md).
+- Promemoria: Modifica solo nel menu; Sveglia/Email azionabili direttamente con icone senza label,
+  colore e simbolo pieno/vuoto. Componente comune chat/raccolta, richiesta email mancante conservata,
+  giorno non duplicato, aree 44 pt e VoiceOver. Verificati chiaro/scuro/Borg e caratteri grandi.
+- Voce Drama **15% più veloce**, tramite `atempo=1.15` prima della normalizzazione già esistente; registro,
+  prompt, modello e obiettivo di volume invariati. Modifica backend attiva anche per le build precedenti;
+  nessuna doppia accelerazione iOS, ripiego locale invariato. Prova sul server: frequenza 169,91 → 170,02 Hz.
+- Maximize: skill disponibile ma **spenta per account**; modello/provider/sforzo per conversazione,
+  congelati nella coda. Cataloghi reali, permessi e controllo genitori, nessun fallback silenzioso.
+
+Sorgenti finali **`6b5a9bb54f53b17c1ad28d849c563fa879d17ae5`** pubblicati e SHA remoto verificato prima
+dell’archivio. 304 input iOS identici a Git, 303 ai test nativi; soltanto il changelog finale differisce,
+validato separatamente. **125 test backend e 35 iOS superati**, TypeScript/Biome verdi; firme Apple Distribution
+ed entitlement dei quattro bundle verificati, isolamento diario conservato. Nessuna prova su iPhone fisico.
+Le prime compilazioni 117 (`6db4934` e `a17ddd1`) sono superate e non sono state caricate.
+
+API dalla stessa revisione, immagine **`b4101522…`**, health HTTPS `ok`, container healthy, 14 moduli compilati
+identici al codice testato. Solo API ricreata, worker/Postgres/Redis/configurazioni invariati; nessuna migrazione.
+Smoke HTTPS sintetico: catalogo 292 modelli (quattro Anthropic), skill spenta, revoca/kill switch/guardian/scope
+verificati, account e chiave temporanei eliminati; zero chiamate LLM. Account reali invariati.
+Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261110`.
+[Manifest, verifiche e stato distribuzione](releases/build-117.md).
 
 Stato del rilascio precedente: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
@@ -420,10 +432,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **116**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `603cf6e` |
+| App su TestFlight | build **117**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `6b5a9bb` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **a2f50e5** (9 nov, performance/compiti paralleli), immagine `d3d57a72…`, healthy; worker invariato. Recupero API `ernie-app:pre-performance-20261109` |
-| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 116 |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **6b5a9bb** (10 nov, Maximize e voce +15%), immagine `b4101522…`, healthy; worker invariato. Recupero API `ernie-app:pre-maximize-20261110` |
+| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 117 |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server

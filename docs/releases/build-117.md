@@ -1,8 +1,8 @@
 # Build 117 — Maximize e promemoria compatti
 
-10 novembre 2026. **Pubblicazione API e build 117 autorizzata dall’utente**. Prima dell’upload richiesti anche
-i comandi compatti sui promemoria: ricompilazione in corso, prima IPA non distribuita.
-**Non ancora distribuita. API non ancora pubblicata.** Nessuna migrazione.
+10 novembre 2026. **Pubblicazione API e build 117 autorizzata dall’utente**. Inclusi anche i comandi compatti
+sui promemoria e la voce 15% più rapida richiesti prima dell’upload. **API pubblicata e sana; build disponibile
+su TestFlight**, gruppo Interni, **VALID / IN_BETA_TESTING**. Nessuna migrazione.
 
 - Promemoria: Modifica solo nel menu; Sveglia/Email azionabili direttamente, icone senza label e stato tramite
   colore e pieno/vuoto, aree 44 pt, VoiceOver conservato. Giorno non duplicato; stessa scheda in chat/raccolta.
@@ -56,6 +56,41 @@ Artefatti sul Mac Studio: `~/Library/Caches/ernie-builds/build-117-20261110-maxi
 `release-manifest.json`, log archive/export, lettura ASC precedente al rilascio (116 e 115 VALID).
 Nessuna chiave privata copiata e nessuna modifica al Portachiavi.
 
-**Nessun upload TestFlight o deploy API ancora eseguito.** Via libera ricevuto dall’utente; pubblicare la
-revisione comprensiva dei nuovi comandi sui promemoria, senza migrazioni. La skill resta spenta finché l’utente la attiva.
-La versione attualmente distribuita resta 116; API a2f50e5. Abitudini/HealthKit/analisi immagini restano aperti.
+Questa prima IPA non è stata caricata. La skill resta spenta finché l’utente la attiva.
+Abitudini/HealthKit/analisi immagini restano aperti.
+
+## Compilazione finale e API pubblicata
+
+Sorgenti definitivi **`6b5a9bb54f53b17c1ad28d849c563fa879d17ae5`**, pubblicati su GitHub e SHA remoto verificato
+prima dell’archivio. Include UI promemoria (`a17ddd1`) e accelerazione voce. **304 input iOS** identici a Git;
+303 identici ai test nativi, soltanto il changelog aggiunge la voce audio e viene validato separatamente.
+Archivio ed export Apple riusciti sul Mac Studio: quattro firme Apple Distribution verificate, build 117,
+entitlement conformi, isolamento diario conservato e changelog dell’IPA identico ai sorgenti.
+
+IPA finale **82.026.171 byte**, SHA-256
+`b5ce6b1194e431fae320730891498ca220b213c6fcfe04dab2112312a3521354`.
+Artefatti: `~/Library/Caches/ernie-builds/build-117-20261110-maximize-compact/`; manifest, sorgenti, hash,
+archivi, IPA verificata e log. Nessuna chiave privata copiata, nessuna modifica al Portachiavi.
+Accessi SSH esistenti riusciti su Mac Studio (alessandro, 100.103.139.85) e staging3 (root, 100.91.204.102),
+solo tramite Tailscale; nessuna nuova chiave installata o porta pubblica aperta.
+
+API dal medesimo commit Git, immagine
+`sha256:b4101522cdb1b1027700ad6e7904493d289521a48c9d6fccd8a7f4786f51f793`.
+Container healthy, health HTTPS `ok`; 14 moduli JS identici alla compilazione locale testata. Nessun errore nei
+log dopo il rilascio. Solo API ricreata; worker/Postgres/Redis e hash delle configurazioni invariati.
+Backup `/srv/staging3/backups/ernie-pre-maximize-20261110/`, recupero immagine `ernie-app:pre-maximize-20261110`.
+
+Smoke HTTPS con account/chiave temporanei sintetici, poi eliminati: 401 senza autenticazione, skill spenta
+inizialmente, catalogo live con 292 modelli (quattro Anthropic diretti), revoca/kill switch/controllo genitori,
+403 senza scope chat. Zero chiamate LLM e zero conversazioni create; account reali invariati.
+Nel container FFmpeg prova sintetica positiva: 4,049 s → 3,553 s (padding MP3 incluso), frequenza
+169,91 → 170,02 Hz, uscita -12,53 dBFS, picco 0,294. Accelerazione nel server, senza moltiplicarla nel client.
+Evidenze locali: `/tmp/ernie117-http-smoke-result.json`, `/tmp/ernie117-runtime-audio-result.json`.
+
+## Distribuzione verificata
+
+Caricata soltanto l’IPA finale verificata (82.026.171 byte), senza errori. Apple **VALID / IN_BETA_TESTING**,
+gruppo **Interni**; Build ID **`e2b157be-606b-46c2-b3fc-19a8fbbdb974`**. Note italiane pubblicate e rilette:
+**1.739 caratteri**, identiche al changelog Git. Hash IPA ricontrollato dopo l’upload e invariato.
+`release-manifest.json`, `asc-current.json`, `asc-localizations.json`, `whats-new-result.json` e `upload.log`
+conservano le verifiche sul Mac Studio. Nessuna installazione diretta sul telefono.
