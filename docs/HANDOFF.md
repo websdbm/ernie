@@ -10,6 +10,9 @@ Prima dell’upload l’utente ha chiesto anche la rifinitura dei promemoria: Mo
 azionabili come icone senza label, stato tramite colore e simbolo pieno/vuoto. Componente comune chat/raccolta,
 richiesta email mancante conservata, giorno non duplicato. **Ricompilazione della 117 in corso**: la prima IPA
 di Maximize (sorgenti `6db4934`) non è stata distribuita ed è superata dalla revisione UI.
+Richiesta aggiunta durante il rilascio: voce Drama **15% più veloce**, tramite `atempo=1.15` nel trattamento
+audio già esistente, prima della normalizzazione; tono e obiettivo di volume invariati. Nessun cambio del
+prompt vocale, del modello o della velocità iOS: evita doppia accelerazione. Vale anche per le build precedenti.
 
 Maximize: skill disponibile ma spenta per account; scelta modello/provider/sforzo per conversazione,
 congelata quando il messaggio entra in coda. Cataloghi reali, controllo dei permessi, nessun fallback silenzioso.

@@ -5,6 +5,12 @@
     "title": "Maximize e promemoria più compatti",
     "items": [
       {
+        "icon": "waveform",
+        "title": "Voce più scorrevole",
+        "detail": "La voce Drama di Ernie è più veloce del 15%, mantenendo il registro grave e la regolazione del volume. La modifica è nel servizio vocale e vale anche per le versioni già installate.",
+        "test": "Fai leggere una risposta a Ernie: stesso tono, ritmo più rapido."
+      },
+      {
         "icon": "alarm",
         "title": "Promemoria senza comandi ripetuti",
         "detail": "Modifica resta nel menu con i tre puntini. Sveglia ed Email si attivano dalla scheda con due icone: colorate e piene quando attive, neutre quando spente. Meno testo e spazi, sia in chat sia nella raccolta.",

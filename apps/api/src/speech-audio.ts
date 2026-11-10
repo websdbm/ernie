@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 
 const COMPRESSOR = 'acompressor=threshold=0.125:ratio=3:attack=10:release=150:makeup=1';
+// Accelera l'audio già sintetizzato mantenendo la frequenza della voce: niente nuova richiesta AI.
+const TEMPO = 'atempo=1.15';
 const MAX_BYTES = 4_000_000;
 let active = 0;
 
@@ -63,7 +65,7 @@ async function processAudio(input: Buffer, args: string[], signal: AbortSignal) 
   });
 }
 
-/** Livella ogni frase e limita i picchi, senza cambiare tono/velocità o il volume di sistema. */
+/** Voce 15% più rapida, stesso registro; livella ogni frase e limita i picchi, senza cambiare il volume di sistema. */
 export async function normalizeSpeechAudio(input: Buffer, signal?: AbortSignal): Promise<Buffer> {
   if (input.length > MAX_BYTES || active >= 4) throw new Error('Elaborazione audio occupata');
   const abort = AbortSignal.any([
@@ -74,7 +76,7 @@ export async function normalizeSpeechAudio(input: Buffer, signal?: AbortSignal):
   try {
     const measured = await processAudio(
       input,
-      ['-af', `${COMPRESSOR},volumedetect`, '-f', 'null', '-'],
+      ['-af', `${TEMPO},${COMPRESSOR},volumedetect`, '-f', 'null', '-'],
       abort,
     );
     const match = /mean_volume:\s*(-?[\d.]+) dB/.exec(measured.log);
@@ -87,7 +89,7 @@ export async function normalizeSpeechAudio(input: Buffer, signal?: AbortSignal):
       input,
       [
         '-af',
-        `${COMPRESSOR},volume=${gain.toFixed(2)}dB,aresample=176400,alimiter=limit=0.84:level=false:attack=5:release=80:latency=true`,
+        `${TEMPO},${COMPRESSOR},volume=${gain.toFixed(2)}dB,aresample=176400,alimiter=limit=0.84:level=false:attack=5:release=80:latency=true`,
         '-ar',
         '44100',
         '-c:a',

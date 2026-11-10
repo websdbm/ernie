@@ -43,17 +43,26 @@ function levels(mp3: Buffer) {
     mp3,
   );
   let energy = 0,
-    peak = 0;
+    peak = 0,
+    crossings = 0;
+  const start = Math.round(44100 * 0.25) * 4;
+  const end = pcm.length - start;
   for (let i = 0; i < pcm.length; i += 4) {
     const x = pcm.readFloatLE(i);
     energy += x * x;
     peak = Math.max(peak, Math.abs(x));
+    if (i >= start && i < end && x > 0 && pcm.readFloatLE(i - 4) <= 0) crossings++;
   }
-  return { db: 10 * Math.log10(energy / (pcm.length / 4)), peak, seconds: pcm.length / 4 / 44100 };
+  return {
+    db: 10 * Math.log10(energy / (pcm.length / 4)),
+    peak,
+    seconds: pcm.length / 4 / 44100,
+    frequency: crossings / ((end - start) / 4 / 44100),
+  };
 }
 
 describe.skipIf(!available)('speech audio with real FFmpeg', () => {
-  it('raises quiet speech, controls loud peaks and preserves the complete duration', async () => {
+  it('raises quiet speech, controls loud peaks and plays the full phrase 15 percent faster without raising pitch', async () => {
     for (const amplitude of [0.06, 0.8]) {
       const input = fixture(amplitude),
         before = levels(input);
@@ -62,7 +71,8 @@ describe.skipIf(!available)('speech audio with real FFmpeg', () => {
       expect(after.peak).toBeLessThan(0.98);
       expect(after.db).toBeGreaterThan(-16);
       expect(after.db).toBeLessThan(-11);
-      expect(Math.abs(after.seconds - before.seconds)).toBeLessThan(0.1);
+      expect(Math.abs(after.seconds - before.seconds / 1.15)).toBeLessThan(0.08);
+      expect(Math.abs(after.frequency - before.frequency)).toBeLessThan(2);
       if (amplitude === 0.06) expect(after.db - before.db).toBeGreaterThan(8);
     }
   });

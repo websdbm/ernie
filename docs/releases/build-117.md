@@ -6,6 +6,9 @@ i comandi compatti sui promemoria: ricompilazione in corso, prima IPA non distri
 
 - Promemoria: Modifica solo nel menu; Sveglia/Email azionabili direttamente, icone senza label e stato tramite
   colore e pieno/vuoto, aree 44 pt, VoiceOver conservato. Giorno non duplicato; stessa scheda in chat/raccolta.
+- Voce Drama 15% più rapida nel backend, con `atempo=1.15` prima del compressore/normalizzazione già presenti.
+  Registro, prompt, modello e volume obiettivo invariati; nessun costo AI aggiuntivo e nessuna doppia accelerazione iOS.
+  Vale anche per le app già installate; il ripiego vocale di iOS resta invariato.
 - Skill Maximize spenta inizialmente per account; selettore modello e sforzo sopra la barra di scrittura.
 - Scelta per conversazione, conservata localmente; nuovo task/conversazione in Automatico, snapshot nella coda.
 - Anthropic diretto e OpenRouter distinti, cataloghi reali, livelli compatibili e tariffe base visibili.
@@ -30,6 +33,12 @@ Evidenze temporanee: `/tmp/ernie-maximize-*.log`; Mac Studio
 `~/Library/Caches/ernie-checks/maximize-20261110/source/` (test, DerivedData e anteprime simulatore).
 Verifica finale dei sorgenti iOS: `~/Library/Caches/ernie-checks/reminder-controls-20261110/`,
 35 test superati e anteprime in `ernie-reminder-cards-117`.
+
+Voce: altri **12 test backend** superati, compresi tre con FFmpeg reale su audio sintetico (vocale armonico,
+livelli deboli/forti, frasi corte, silenzio, annullamento ed errori). La regressione sulla durata fallisce sul
+codice precedente e passa con la nuova accelerazione; frequenza conservata entro 2 Hz, picchi sotto 0,98,
+livello medio tra -16 e -11 dBFS. TypeScript e Biome superati. Riferimento del filtro:
+[documentazione FFmpeg](https://www.ffmpeg.org/ffmpeg-filters.html#atempo).
 
 ## Prima compilazione, superata prima della distribuzione
 
