@@ -109,7 +109,7 @@ describe('SSH REST and model-only planning boundary', () => {
         headers: { authorization: 'Bearer valid' },
       });
       expect(result.statusCode).toBe(200);
-      expect(fn).toHaveBeenCalledWith(userId, target);
+      expect(fn).toHaveBeenCalledWith(userId, target, undefined);
     }
     expect(
       (
@@ -131,6 +131,67 @@ describe('SSH REST and model-only planning boundary', () => {
       ).statusCode,
     ).toBe(403);
     expect(noScope.service.siteDelete).not.toHaveBeenCalled();
+  });
+  it('passes the validated frozen inventory to DELETE and rejects owner/command overrides', async () => {
+    const { app, service } = await setup();
+    const serverId = randomUUID(),
+      siteId = randomUUID();
+    const expected = {
+      server: { id: serverId, revision: 2 },
+      sites: [
+        {
+          id: siteId,
+          serverId,
+          name: 'Example',
+          url: 'https://example.test',
+          path: '/srv/site',
+          container: '',
+        },
+      ],
+    };
+    for (const [collection, target, fn] of [
+      ['servers', serverId, service.serverDelete],
+      ['sites', siteId, service.siteDelete],
+    ] as const) {
+      const result = await app.inject({
+        method: 'DELETE',
+        url: `/v1/ssh/${collection}/${target}`,
+        headers: { authorization: 'Bearer valid' },
+        payload: { expected },
+      });
+      expect(result.statusCode).toBe(200);
+      expect(fn).toHaveBeenCalledWith(userId, target, expected);
+    }
+    vi.mocked(service.serverDelete).mockClear();
+    for (const payload of [
+      { expected, userId: randomUUID() },
+      { expected, command: 'true' },
+      { expected: null },
+      { expected: { ...expected, sites: [{ ...expected.sites[0], userId }] } },
+    ]) {
+      const result = await app.inject({
+        method: 'DELETE',
+        url: `/v1/ssh/servers/${serverId}`,
+        headers: { authorization: 'Bearer valid' },
+        payload,
+      });
+      expect(result.statusCode).toBe(400);
+      expect(service.serverDelete).not.toHaveBeenCalled();
+    }
+    vi.mocked(service.serverDelete).mockRejectedValueOnce(
+      new SshError('inventory_changed', 'Aggiorna e conferma di nuovo.', 409),
+    );
+    const changed = await app.inject({
+      method: 'DELETE',
+      url: `/v1/ssh/servers/${serverId}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: { expected },
+    });
+    expect(changed.statusCode).toBe(409);
+    expect(changed.json()).toEqual({
+      error: 'inventory_changed',
+      message: 'Aggiorna e conferma di nuovo.',
+    });
   });
   it('exports no execute/approve tool and fails closed for a cheaper model or missing chat scope', async () => {
     const { service } = await setup();

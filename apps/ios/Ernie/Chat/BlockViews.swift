@@ -602,6 +602,7 @@ struct CitationsCard: View {
 struct HealthCard: View {
     let block: HealthBlock
     @State private var showAll = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private static let collapsedCount = 12
 
@@ -627,7 +628,9 @@ struct HealthCard: View {
                 if trendPoints.count >= 2 {
                     HealthTrendChart(points: trendPoints, title: block.title)
                 }
-                if isParameter { parameterTable } else { reportTable }
+                if dynamicTypeSize.isAccessibilitySize { accessibleRows }
+                else if isParameter { parameterTable }
+                else { reportTable }
                 if block.rows.count > Self.collapsedCount {
                     Button(showAll ? "Mostra meno" : "Mostra tutti (\(block.rows.count))") {
                         withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
@@ -663,6 +666,66 @@ struct HealthCard: View {
 
     // MARK: tabelle
 
+    /// A caratteri accessibili ogni risultato usa tutta la larghezza: nessuna colonna
+    /// stretta, riduzione del font o unità tagliata. Le tabelle compatte restano invariate.
+    private var accessibleRows: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(shownRows.enumerated()), id: \.offset) { index, row in
+                if index > 0 { Divider().overlay(Theme.hairline) }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(isParameter ? row.date.map(HealthFormat.shortDay) ?? "Data non disponibile" : row.label)
+                        .font(.headline).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if !isParameter, let date = row.date {
+                        accessibleField("Data", text: HealthFormat.shortDay(date))
+                    }
+                    accessibleField("Valore", text: amount(HealthFormat.display(row), unit: row.unit),
+                                    color: row.isOut ? row.tint : Theme.ink)
+                    accessibleField("Intervallo di riferimento",
+                                    text: HealthFormat.reference(row) == "—" ? "Non disponibile" : HealthFormat.reference(row))
+                    if let flag = HealthFormat.flagWord(row.flag) {
+                        accessibleField("Esito", text: flag, color: row.isOut ? row.tint : Theme.ink)
+                    }
+                    if !isParameter, let previous = row.previous {
+                        accessibleField("Valore precedente", text: amount(HealthFormat.number(previous.value), unit: row.unit))
+                        accessibleField("Data precedente", text: HealthFormat.shortDay(previous.date))
+                        if let trend = trendDescription(row.trend) {
+                            accessibleField("Confronto", text: trend)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(row.isOut ? 10 : 0)
+                .background(row.isOut ? row.tint.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func accessibleField(_ title: String, text: String, color: Color = Theme.ink) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
+            Text(text).font(.callout).foregroundStyle(color).monospacedDigit()
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func amount(_ value: String, unit: String?) -> String {
+        guard let unit, !unit.isEmpty else { return value }
+        return "\(value) \(unit)"
+    }
+
+    private func trendDescription(_ trend: String?) -> String? {
+        switch trend {
+        case "su": "In aumento"
+        case "giu": "In diminuzione"
+        case "stabile": "Stabile"
+        default: nil
+        }
+    }
+
     /// Storico: Data | Valore | Rif.
     private var parameterTable: some View {
         Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
@@ -673,7 +736,7 @@ struct HealthCard: View {
             }
             ForEach(Array(shownRows.enumerated()), id: \.offset) { _, row in
                 GridRow {
-                    cell(Text(HealthFormat.shortDay(row.date ?? row.label)).font(.callout).monospacedDigit(),
+                    cell(Text(row.date.map(HealthFormat.shortDay) ?? "Data non disponibile").font(.callout).monospacedDigit(),
                          highlight: row.isOut ? row.tint.opacity(0.10) : nil,
                          speak: spoken(row))
                     cell(valueView(row), highlight: row.isOut ? row.tint.opacity(0.10) : nil)
@@ -784,7 +847,7 @@ struct HealthCard: View {
         let value = row.value.map { HealthFormat.number($0) } ?? row.valueText ?? "non disponibile"
         let unit = row.unit.flatMap { $0.isEmpty ? nil : HealthFormat.unitWords($0) }
         let amount = unit.map { "\(value) \($0)" } ?? value
-        var parts = [isParameter ? "\(HealthFormat.shortDay(row.date ?? row.label)), \(amount)" : "\(row.label) \(amount)"]
+        var parts = [isParameter ? "\(row.date.map(HealthFormat.shortDay) ?? "Data non disponibile"), \(amount)" : "\(row.label) \(amount)"]
         if let flag = HealthFormat.flagWord(row.flag) { parts.append(flag) }
         if !isParameter, let previous = row.previous { parts.append("prima \(HealthFormat.number(previous.value))") }
         return parts.joined(separator: ", ")

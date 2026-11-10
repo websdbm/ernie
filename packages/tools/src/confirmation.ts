@@ -73,6 +73,14 @@ const labels: Readonly<Record<string, string>> = {
   offset: 'A partire dal risultato',
   documentId: 'Documento',
   scope: 'Ambito',
+  patch: 'Modifiche alla lista',
+  revision: 'Versione della lista',
+  status: 'Stato',
+  slots: 'Orari e avvisi',
+  startAt: 'Inizio',
+  endAt: 'Fine',
+  reminderMinutes: 'Avviso prima, in minuti',
+  changes: 'Campi da aggiornare',
 };
 const choices: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   on: { arrive: 'Quando arrivi', leave: 'Quando esci' },
@@ -104,6 +112,12 @@ export function confirmationPresentation(
   let confirmLabel = 'Conferma';
   let destructive = false;
   switch (toolId) {
+    case 'change_apply':
+      title = 'Aggiornare questa lista?';
+      summary =
+        'Applico le modifiche preparate alle attività indicate. Gli altri dati rimangono nella lista; se nel frattempo è cambiata, ti proporrò una nuova anteprima.';
+      confirmLabel = 'Aggiorna lista';
+      break;
     case 'recipe_save':
       title = 'Salvare questa ricetta?';
       summary = `${quoted('title')} verrà salvata nella tua raccolta. Se il titolo esiste già, la ricetta verrà aggiornata.`;
@@ -242,7 +256,7 @@ export function confirmationPresentation(
     return String(value);
   };
   let remaining = 90_000;
-  const entries = Object.entries(args);
+  const entries = Object.entries(args).filter(([key]) => key !== 'proof');
   if (entries.length > 32) incomplete = true;
   const details = entries.slice(0, 32).map(([key, value]) => {
     const full = render(value, key);

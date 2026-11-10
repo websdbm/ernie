@@ -12,6 +12,7 @@ final class SSHStore {
     struct Transport {
         var snapshot: () async throws -> SshSnapshot = { throw URLError(.userAuthenticationRequired) }
         var mutate: (SSHMutation) async throws -> SshSnapshot = { _ in throw URLError(.userAuthenticationRequired) }
+        var remove: (SSHDeletionTarget, SshDeletionPrecondition) async throws -> SshSnapshot = { _, _ in throw URLError(.userAuthenticationRequired) }
         var probe: (String) async throws -> String = { _ in throw URLError(.userAuthenticationRequired) }
         var diagnose: (SshDiagnosticInput) async throws -> String = { _ in throw URLError(.userAuthenticationRequired) }
         var instances: (SshProvider) async throws -> [SshProviderInstance] = { _ in throw URLError(.userAuthenticationRequired) }
@@ -34,6 +35,8 @@ final class SSHStore {
     private(set) var probing: Set<String> = []
     private(set) var previewLoading = false
     private(set) var attemptedDecisions: Set<String> = []
+    private(set) var deleting: SSHDeletionTarget?
+    private var attemptedDeletions: Set<UUID> = []
     private var uncertainDecisions: Set<String> = []
     private var transport: Transport?
     private var generation = UUID()
@@ -62,6 +65,7 @@ final class SSHStore {
                 }
             }
             t.probe = { try await api.sshProbe($0) }
+            t.remove = { try await api.sshRemove($0, expected: $1) }
             t.diagnose = { try await api.sshDiagnose($0) }
             t.instances = { try await api.sshProviderInstances($0) }
             t.preview = { try await api.sshImportPreview($0) }
@@ -79,9 +83,87 @@ final class SSHStore {
         fingerprints = [:]; diagnosticOutput = nil; diagnosticInput = nil; instances = [:]; importPreview = nil
         diagnosticLoading = false; instancesLoading = []; probing = []; previewLoading = false
         attemptedDecisions = []; uncertainDecisions = []
+        deleting = nil; attemptedDeletions = []
         providerTokens = [:]
     }
     func clearError() { error = nil }
+    func deletionRequest(for target: SSHDeletionTarget) -> SSHDeletionRequest? {
+        guard transport != nil, let snapshot else { return nil }
+        let site: SshSite?
+        let server: SshServer?
+        switch target {
+        case .server(let id):
+            site = nil; server = snapshot.servers.first { $0.id == id }
+        case .site(let id):
+            site = snapshot.sites.first { $0.id == id }
+            guard let site else { return nil }
+            server = snapshot.servers.first { $0.id == site.serverId }
+        }
+        guard let server else { return nil }
+        return SSHDeletionRequest(id: UUID(), accountGeneration: generation, target: target, server: server,
+                                  site: site, linkedSites: snapshot.sites.filter { $0.serverId == server.id })
+    }
+    /// Le rimozioni riducono gli accessi e il backend le permette anche a skill spenta.
+    /// L'account rimane invece vincolato alla stessa generazione della conferma.
+    func deletionProblem(_ request: SSHDeletionRequest) -> String? {
+        guard transport != nil, request.accountGeneration == generation else {
+            return "L’account è cambiato. Chiudi questa conferma e riapri l’inventario dell’account corretto."
+        }
+        guard let snapshot, let server = snapshot.servers.first(where: { $0.id == request.server.id }) else {
+            return "Il server non è più nell’inventario. Chiudi questa conferma e aggiorna l’elenco."
+        }
+        guard server.input == request.server.input, server.revision == request.server.revision else {
+            return "I dati del server sono cambiati. Chiudi questa conferma e controlla la scheda aggiornata."
+        }
+        if let site = request.site {
+            guard snapshot.sites.first(where: { $0.id == site.id }) == site else {
+                return "I dati del sito sono cambiati. Chiudi questa conferma e controlla la scheda aggiornata."
+            }
+        }
+        let current = snapshot.sites.filter { $0.serverId == server.id }.sorted { $0.id < $1.id }
+        guard current == request.linkedSites.sorted(by: { $0.id < $1.id }) else {
+            return "I siti collegati sono cambiati. Chiudi questa conferma e verifica il nuovo elenco prima della rimozione."
+        }
+        if snapshot.operations.contains(where: { $0.serverId == server.id && $0.status == .running }) {
+            return "Un intervento è in corso su questo server. Attendi l’esito prima di rimuoverlo o rimuovere un suo sito."
+        }
+        if probing.contains(server.id) || (diagnosticLoading && diagnosticInput?.serverId == server.id) {
+            return "È in corso una verifica di questo server. Attendi che termini prima della rimozione."
+        }
+        return nil
+    }
+    func canDelete(_ request: SSHDeletionRequest) -> Bool {
+        !busy && !loading && !attemptedDeletions.contains(request.id) && deletionProblem(request) == nil
+    }
+    @discardableResult func delete(_ request: SSHDeletionRequest) async -> Bool {
+        guard let transport, !Task.isCancelled, canDelete(request) else { return false }
+        let session = generation
+        attemptedDeletions.insert(request.id)
+        deleting = request.target
+        defer { if generation == session { deleting = nil } }
+        return await serialize({ [weak self] in
+            guard let self, self.generation == session else { throw CancellationError() }
+            if self.deletionProblem(request) != nil {
+                throw ApiError(status: 409, code: "inventory_changed", message: "Inventario cambiato.")
+            }
+            let result = try await transport.remove(request.target, request.precondition)
+            let remains = switch request.target {
+            case .server(let id): result.servers.contains { $0.id == id }
+            case .site(let id): result.sites.contains { $0.id == id }
+            }
+            guard !remains else { throw ApiError(status: 409, code: "deletion_unconfirmed", message: "Rimozione non confermata.") }
+            return result
+        }) { [weak self] result in
+            guard let self else { return }
+            self.accept(result)
+            if case .server(let id) = request.target { self.fingerprints[id] = nil }
+            if self.diagnosticInput?.serverId == request.server.id,
+               request.site == nil || self.diagnosticInput?.siteId == request.site?.id {
+                self.diagnosticToken = UUID(); self.diagnosticInput = nil; self.diagnosticOutput = nil; self.diagnosticLoading = false
+            }
+            self.clearImportPreview()
+        }
+    }
     func clearImportPreview() { previewToken = UUID(); importPreview = nil; previewLoading = false }
     func reportImportError() { error = "Non riesco a leggere il file. Usa un export JSON dell’inventario, senza chiavi o password." }
     func load() async {
@@ -97,6 +179,7 @@ final class SSHStore {
         } catch {
             guard generation == session, loadToken == request else { return }
             loading = false
+            guard revision == changeCounter else { return }
             if !(error is CancellationError) { self.error = Self.describe(error) }
         }
     }
@@ -120,7 +203,7 @@ final class SSHStore {
         }
     }
     func probe(_ serverId: String) async {
-        guard let transport, !probing.contains(serverId) else { return }
+        guard let transport, !probing.contains(serverId), deleting == nil else { return }
         let session = generation
         let revision = snapshot?.servers.first { $0.id == serverId }?.revision
         probing.insert(serverId); fingerprints[serverId] = nil
@@ -133,7 +216,7 @@ final class SSHStore {
         } catch { if generation == session, !Task.isCancelled { self.error = Self.describe(error) } }
     }
     func diagnose(_ input: SshDiagnosticInput) async {
-        guard let transport else { return }
+        guard let transport, deleting == nil else { return }
         let session = generation, request = UUID()
         diagnosticToken = request; diagnosticLoading = true; diagnosticOutput = nil; diagnosticInput = input
         do {
@@ -201,13 +284,14 @@ final class SSHStore {
     }
     func refreshOperation(_ id: String) async {
         guard let transport else { return }
-        let session = generation
+        let session = generation, revision = changeCounter
         do {
             let result = try await transport.operation(id)
-            guard generation == session, !Task.isCancelled else { return }
+            guard generation == session, revision == changeCounter, !Task.isCancelled else { return }
+            guard snapshot?.servers.contains(where: { $0.id == result.serverId }) == true else { return }
             acceptOperation(result)
             if result.status != .pending && result.status != .uncertain { error = nil }
-        } catch { if generation == session, !Task.isCancelled { self.error = Self.describe(error) } }
+        } catch { if generation == session, revision == changeCounter, !Task.isCancelled { self.error = Self.describe(error) } }
     }
     private func accept(_ incoming: SshSnapshot) {
         var copy = incoming
@@ -254,9 +338,19 @@ final class SSHStore {
     private static func describe(_ error: Error) -> String {
         // Provider errors must never echo the submitted credential fields.
         if let api = error as? ApiError {
+            if api.code == "inventory_changed" {
+                return "L’inventario è cambiato, anche da un altro dispositivo. Aggiorna l’elenco e apri una nuova conferma di rimozione."
+            }
+            if api.code == "operation_running" {
+                return "Un intervento è in corso su questo server. Attendi l’esito e aggiorna l’inventario prima di rimuoverlo o rimuovere un suo sito."
+            }
+            if api.code == "deletion_unconfirmed" {
+                return "La rimozione non è confermata. Aggiorna l’inventario prima di riprovare."
+            }
             switch api.status {
             case 401: return "Accesso non riuscito. Controlla le credenziali e i permessi del tuo account."
             case 403: return "Azione non consentita. Verifica che la skill SSH sia attiva e che l’account abbia i permessi necessari."
+            case 404: return "L’elemento non è più disponibile. Aggiorna l’inventario per verificare lo stato attuale."
             case 409: return "Lo stato è cambiato. Ricarica e controlla i dati prima di proporre un nuovo intervento."
             case 400, 422: return "Dati non validi. Controlla i campi e riprova."
             case 429: return "Il servizio ha ricevuto troppe richieste. Attendi prima di una nuova verifica."

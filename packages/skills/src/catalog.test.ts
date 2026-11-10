@@ -102,6 +102,7 @@ describe('catalogo delle skill', () => {
       'diario',
       'diario_personale',
       'documenti',
+      'maximize',
       'messaggi',
       'portami',
       'ricette',
@@ -116,6 +117,7 @@ describe('catalogo delle skill', () => {
     expect([
       ...availableSkillIds({
         skillsAvailable: {
+          maximize: false,
           chat_archive: false,
           ricette: false,
           documenti: false,

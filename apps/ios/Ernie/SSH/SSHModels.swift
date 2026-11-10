@@ -199,6 +199,51 @@ struct SshSnapshot: Codable, Sendable, Equatable {
     var operations: [SshOperation]
     static let empty = SshSnapshot(configured: false, key: nil, servers: [], sites: [], providers: [], operations: [])
 }
+
+enum SSHDeletionTarget: Sendable, Equatable {
+    case server(String), site(String)
+    var value: String { switch self { case .server(let id), .site(let id): id } }
+    var collection: String { switch self { case .server: "servers"; case .site: "sites" } }
+}
+
+/// Stato approvato dall'utente, confrontato atomicamente dal backend prima della rimozione.
+struct SshDeletionPrecondition: Codable, Sendable, Equatable {
+    struct Server: Codable, Sendable, Equatable { let id: String; let revision: Int }
+    let server: Server
+    let sites: [SshSite]
+}
+
+/// Anteprima immutabile: una conferma appartenente a un account o inventario precedente non può essere riusata.
+struct SSHDeletionRequest: Identifiable, Sendable, Equatable {
+    let id: UUID
+    let accountGeneration: UUID
+    let target: SSHDeletionTarget
+    let server: SshServer
+    let site: SshSite?
+    let linkedSites: [SshSite]
+
+    var precondition: SshDeletionPrecondition {
+        .init(server: .init(id: server.id, revision: server.revision), sites: linkedSites)
+    }
+
+    var name: String { site?.name ?? server.name }
+    var title: String { site == nil ? "Rimuovi server da Ernie?" : "Rimuovi sito da Ernie?" }
+    var location: String { site?.url ?? "\(server.username)@\(server.host):\(server.port)" }
+    var consequences: String {
+        if site != nil {
+            return "Verrà rimossa questa scheda dall’inventario del tuo account. Le proposte non ancora eseguite per il server «\(server.name)» saranno invalidate; il server, gli altri siti e lo storico delle operazioni rimangono."
+        }
+        let sites = linkedSites.isEmpty ? "" : linkedSites.count == 1
+            ? " Verrà rimossa anche la scheda del sito collegato."
+            : " Verranno rimosse anche le schede dei \(linkedSites.count) siti collegati."
+        return "Verrà rimosso questo server dall’inventario del tuo account, insieme alle relative proposte e allo storico delle operazioni.\(sites) Chiavi SSH e collegamenti ai provider restano configurati. La chiave pubblica già installata sul server non viene revocata."
+    }
+    var remoteImpact: String {
+        site == nil
+            ? "Il server e i siti online non verranno modificati, spenti o eliminati."
+            : "Il sito online non verrà modificato né eliminato."
+    }
+}
 struct SshImportInput: Codable, Sendable, Equatable {
     struct Server: Codable, Sendable, Equatable, Identifiable {
         var name: String

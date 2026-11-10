@@ -203,6 +203,48 @@ describe.skipIf(!ready)('repository delle automazioni (Postgres, ruolo applicati
     expect(await repo.getRun(userB, run.id)).toBeNull();
   });
 
+  it('conta le spese nel giorno locale dell’automazione, non nel giorno UTC', async () => {
+    const repo = createAutomationRepository(app);
+    const a = await repo.create(userA, {
+      key: 'local_day_budget',
+      title: 'Fuso del budget',
+      timezone: 'Pacific/Kiritimati',
+      trigger: { type: 'webhook' },
+      action: { type: 'skill', skillId: 's', input: 'test' },
+    });
+    // Pick a timestamp between UTC and local midnight: the old UTC predicate must disagree.
+    const boundary = await owner.query<{ local_start: Date; middle: Date; inside: boolean }>(`
+      WITH starts AS (SELECT date_trunc('day',now() AT TIME ZONE 'Pacific/Kiritimati') AT TIME ZONE 'Pacific/Kiritimati' AS local_start,
+        date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS utc_start)
+      SELECT local_start, LEAST(local_start,utc_start)+(GREATEST(local_start,utc_start)-LEAST(local_start,utc_start))/2 AS middle,
+        local_start < utc_start AS inside FROM starts`);
+    const at = boundary.rows[0];
+    if (!at) throw new Error('Missing boundary');
+    const run = await repo.claimRun({
+      userId: userA,
+      automationId: a.id,
+      scheduledAt: at.middle,
+      dedupeKey: 'budget-test',
+      triggerType: 'webhook',
+      attempt: 1,
+    });
+    if (!run) throw new Error('Missing run');
+    await repo.finishRun(userA, run.id, { status: 'succeeded', costUsd: 0.25 });
+    await owner.query('UPDATE automation_runs SET created_at=$2 WHERE id=$1', [run.id, at.middle]);
+    expect(await repo.spentTodayUsd(userA, a.id)).toBe(at.inside ? 0.25 : 0);
+    expect(await repo.spentTodayUsd(userB, a.id)).toBe(0);
+    await owner.query(
+      "UPDATE automation_runs SET created_at=$2::timestamptz+interval '1 second' WHERE id=$1",
+      [run.id, at.local_start],
+    );
+    expect(await repo.spentTodayUsd(userA, a.id)).toBe(0.25);
+    await owner.query(
+      "UPDATE automation_runs SET created_at=((($2::timestamptz AT TIME ZONE 'Pacific/Kiritimati') + interval '1 day') AT TIME ZONE 'Pacific/Kiritimati') WHERE id=$1",
+      [run.id, at.local_start],
+    );
+    expect(await repo.spentTodayUsd(userA, a.id)).toBe(0);
+  });
+
   it('decisioni concorrenti su due approvazioni non si sovrascrivono', async () => {
     const repo = createAutomationRepository(app);
     const a = await repo.create(userA, {

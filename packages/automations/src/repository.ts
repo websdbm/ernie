@@ -595,9 +595,11 @@ export function createAutomationRepository(pool: Pool): AutomationRepository {
     async spentTodayUsd(userId, automationId) {
       return withUser(pool, userId, async (client) => {
         const res = await client.query<{ spent: string }>(
-          `SELECT COALESCE(SUM(cost_usd), 0)::text AS spent FROM automation_runs
-            WHERE automation_id = $1 AND user_id = $2
-              AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`,
+          `SELECT COALESCE(SUM(r.cost_usd), 0)::text AS spent FROM automation_runs r
+            JOIN automations a ON a.id=r.automation_id AND a.user_id=r.user_id
+            WHERE r.automation_id = $1 AND r.user_id = $2
+              AND r.created_at >= date_trunc('day', now() AT TIME ZONE a.timezone) AT TIME ZONE a.timezone
+              AND r.created_at < (date_trunc('day', now() AT TIME ZONE a.timezone) + interval '1 day') AT TIME ZONE a.timezone`,
           [automationId, userId],
         );
         return Number(res.rows[0]?.spent ?? 0);

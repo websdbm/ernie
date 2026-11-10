@@ -11,7 +11,7 @@ type Flag = 'alto' | 'basso' | 'normale' | 'n/d';
 
 export interface HealthToolRow {
   readonly label: string;
-  readonly date?: string;
+  readonly date?: string | null;
   readonly value: number | null;
   readonly valueText: string | null;
   readonly unit: string | null;
@@ -26,7 +26,8 @@ export interface HealthToolRow {
 export interface HealthToolStore {
   overview(userId: string): Promise<{
     reports: Array<{
-      takenOn: string;
+      id: string;
+      takenOn: string | null;
       lab: string | null;
       kind: string;
       values: number;
@@ -44,9 +45,10 @@ export interface HealthToolStore {
   } | null>;
   report(
     userId: string,
-    q: { date?: string; against?: string },
+    q: { date?: string; against?: string; reportId?: string },
   ): Promise<{
-    takenOn: string;
+    id: string;
+    takenOn: string | null;
     lab: string | null;
     kind: string;
     againstDate: string | null;
@@ -58,7 +60,7 @@ export interface HealthToolStore {
   ): Promise<{
     ok: boolean;
     reason?: string;
-    takenOn?: string;
+    takenOn?: string | null;
     values?: number;
     outOfRange?: string[];
   }>;
@@ -67,7 +69,7 @@ export interface HealthToolStore {
 const Flag = z.enum(['alto', 'basso', 'normale', 'n/d']);
 const Row = z.object({
   label: z.string(),
-  date: z.string().optional(),
+  date: z.string().nullable().optional(),
   value: z.number().nullable(),
   valueText: z.string().nullable(),
   unit: z.string().nullable(),
@@ -86,19 +88,45 @@ const day = z
 
 const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 /** «2026-10-13» → «13 ott 2026». */
-export const shortDate = (iso: string) => {
+export const shortDate = (iso: string | null) => {
+  if (!iso) return 'data non disponibile';
   const [y, m, d] = iso.split('-').map(Number);
   return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
 };
 
 const outOfRangeSummary = (rows: readonly z.infer<typeof Row>[]) => {
   const out = rows.filter((r) => r.flag === 'alto' || r.flag === 'basso');
-  if (!out.length) return 'Tutti i valori con riferimento sono nell’intervallo.';
-  const list = out.map((r) => `${r.label} ${r.flag}`).join(', ');
-  return `${out.length === 1 ? '1 valore fuori intervallo' : `${out.length} valori fuori intervallo`}: ${list}.`.slice(
-    0,
-    400,
+  const unknown = rows.filter(
+    (r) =>
+      r.flag === 'n/d' ||
+      r.value === null ||
+      !Number.isFinite(r.value) ||
+      (r.refLow === null && r.refHigh === null) ||
+      (r.refLow !== null && r.refHigh !== null && r.refLow > r.refHigh),
   );
+  const count = unknown.length;
+  const missing = count
+    ? `Per ${count === 1 ? '1 valore' : `${count} valori`} il confronto non è determinabile: riferimento assente o non interpretabile, oppure risultato non numerico.`
+    : '';
+  if (!out.length) {
+    if (rows.length === 0) return 'Nessun valore disponibile per il confronto.';
+    if (count === rows.length) return missing;
+    if (count) {
+      const comparable = rows.length - count;
+      return `${comparable === 1 ? '1 valore confrontabile è' : `${comparable} valori confrontabili sono`} nell’intervallo riportato. ${missing}`;
+    }
+    return 'Tutti i valori sono nell’intervallo riportato nel referto.';
+  }
+  const list = out.map((r) => `${r.label} ${r.flag}`).join(', ');
+  return [
+    `${out.length === 1 ? '1 valore fuori intervallo' : `${out.length} valori fuori intervallo`}: ${list}.`.slice(
+      0,
+      180,
+    ),
+    missing,
+  ]
+    .filter(Boolean)
+    .join(' ');
 };
 
 const blockRows = (rows: readonly z.infer<typeof Row>[]) =>
@@ -129,7 +157,7 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
       version: '1',
       category: 'health',
       description:
-        "Storico di un parametro delle analisi dell'utente (es. «colesterolo», «GOT», «glicemia», «vitamina D»): tutte le misure con data, unità, intervallo di riferimento, fuori intervallo e andamento. L'app mostra la tabellina: nel testo commenta in due o tre frasi.",
+        "Storico di un parametro delle analisi dell'utente (es. «colesterolo», «GOT», «glicemia», «vitamina D»): valori e riferimenti riportati. Le misure senza data restano consultabili ma sono escluse dall'andamento. L'app mostra la tabellina: commenta brevemente senza inventare riferimenti.",
       risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false },
       timeoutMs: 15_000,
       inputSchema: z.object({ parameter: z.string().min(1).max(80) }),
@@ -167,12 +195,16 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
               kind: 'health',
               mode: 'parameter',
               title: out.label.slice(0, 120),
-              subtitle: `${out.rows.length === 1 ? '1 misura' : `${out.rows.length} misure`}${
+              subtitle: `${out.rows.length === 1 ? '1 misura' : `${out.rows.length} misure`}${out.rows.some((r) => !r.date) ? ` · ${out.rows.filter((r) => !r.date).length} senza data` : ''}${
                 out.trend
                   ? ` · ${out.trend === 'su' ? 'in salita' : out.trend === 'giu' ? 'in discesa' : 'stabile'}`
                   : ''
               }`,
-              rows: blockRows([...out.rows].reverse()),
+              rows: blockRows(
+                [...out.rows].sort((a, b) =>
+                  a.date && b.date ? b.date.localeCompare(a.date) : a.date ? -1 : b.date ? 1 : 0,
+                ),
+              ),
             }
           : null,
     }),
@@ -181,18 +213,28 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
       version: '1',
       category: 'health',
       description:
-        "Valori di un'analisi dell'utente con il confronto con l'analisi precedente (o con quella del giorno `against`). Senza date: l'ultima. Per «come sono le ultime analisi?», «confronta con quelle di marzo». L'app mostra la tabellina.",
+        "Valori di un'analisi con il confronto con quella precedente. Senza selezione restituisce solo l'ultima analisi con data nota. Per referti senza data usa reportId da health_overview: non vengono considerati recenti né confrontati nel tempo. L'app mostra la tabellina.",
       risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false },
       timeoutMs: 15_000,
       inputSchema: z.object({
-        date: day.optional().describe("Giorno dell'analisi (YYYY-MM-DD); senza, l'ultima"),
+        date: day
+          .optional()
+          .describe("Giorno dell'analisi (YYYY-MM-DD); senza selezione, l'ultima con data nota"),
+        reportId: z
+          .uuid()
+          .optional()
+          .describe(
+            'Identificativo da health_overview, anche per referti senza data; alternativo a date.',
+          ),
         against: day
           .optional()
           .describe("Giorno dell'analisi con cui confrontare; senza, la precedente"),
       }),
       outputSchema: z.object({
         found: z.boolean(),
-        takenOn: z.string().optional(),
+        id: z.string().optional(),
+        takenOn: z.string().nullable().optional(),
+        reason: z.string().optional(),
         lab: z.string().nullable().optional(),
         kind: z.string().optional(),
         againstDate: z.string().nullable().optional(),
@@ -205,10 +247,18 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
         const r = await store.report(ctx.userId, {
           ...(input.date ? { date: input.date } : {}),
           ...(input.against ? { against: input.against } : {}),
+          ...(input.reportId ? { reportId: input.reportId } : {}),
         });
-        if (!r) return { found: false, caution: CAUTION };
+        if (!r)
+          return {
+            found: false,
+            reason:
+              'Referto non trovato. Senza selezione vengono cercati solo referti con data nota; health_overview elenca anche quelli senza data.',
+            caution: CAUTION,
+          };
         return {
           found: true,
+          id: r.id,
           takenOn: r.takenOn,
           lab: r.lab,
           kind: r.kind,
@@ -220,12 +270,12 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
         };
       },
       present: (_i, out): ContentBlock | null =>
-        out.found && out.takenOn && out.rows?.length
+        out.found && out.rows?.length
           ? {
               kind: 'health',
               mode: 'report',
               title:
-                `${(out.kind ?? 'analisi').replace(/^./, (c) => c.toUpperCase())} del ${shortDate(out.takenOn)}`.slice(
+                `${(out.kind ?? 'analisi').replace(/^./, (c) => c.toUpperCase())}${out.takenOn ? ` del ${shortDate(out.takenOn)}` : ' · data non disponibile'}`.slice(
                   0,
                   120,
                 ),
@@ -253,7 +303,8 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
       outputSchema: z.object({
         reports: z.array(
           z.object({
-            takenOn: z.string(),
+            id: z.string(),
+            takenOn: z.string().nullable(),
             lab: z.string().nullable(),
             kind: z.string(),
             values: z.number(),
@@ -276,7 +327,7 @@ export function createHealthTools(store: HealthToolStore): ToolSpec[] {
       outputSchema: z.object({
         ok: z.boolean(),
         reason: z.string().optional(),
-        takenOn: z.string().optional(),
+        takenOn: z.string().nullable().optional(),
         values: z.number().optional(),
         outOfRange: z.array(z.string()).optional(),
       }),

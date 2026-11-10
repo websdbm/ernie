@@ -10,6 +10,7 @@ import {
   healthParameterPath,
   healthReportPath,
   healthReportTitle,
+  healthValueCoverage,
   isoDay,
   italianDay,
   looksLikeLabReport,
@@ -55,9 +56,6 @@ export interface HealthRuntime {
 
 type ImportResult = Awaited<ReturnType<HealthToolStore['importDocument']>>;
 
-const todayRome = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
-
 const pctTrend = (prev: number, cur: number): 'su' | 'giu' | 'stabile' => {
   const delta = cur - prev;
   if (Math.abs(delta) <= Math.abs(prev) * 0.03) return 'stabile';
@@ -85,9 +83,11 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
   const writeNotes = async (userId: string, reportId: string, values: readonly HealthValue[]) => {
     if (!deps.brain) return;
     const reports = await store.reports(userId, 200);
-    const r = reports.find((x) => x.id === reportId);
+    const r = await store.report(userId, reportId);
     if (!r) return;
     let title = healthReportTitle(r);
+    // Undated reports cannot share one generated-note path and overwrite each other.
+    if (!r.takenOn) title = `${title} (${r.id})`;
     const sameDay = reports.filter(
       (x) => x.id !== reportId && x.notePath === healthReportPath(title),
     );
@@ -100,7 +100,7 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
         type: 'salute',
         body: reportNoteBody(r, values),
         links: ['Salute'],
-        refersFrom: r.takenOn,
+        ...(r.takenOn ? { refersFrom: r.takenOn } : {}),
         source: 'pdf',
       },
     ];
@@ -163,7 +163,7 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
       );
       if (!values.length)
         return { ok: false, reason: 'nel documento non ho trovato valori di analisi' };
-      const takenOn = isoDay(ex.takenOn) ?? todayRome();
+      const takenOn = isoDay(ex.takenOn) ?? null;
       const kind = (ex.kind?.trim().toLowerCase() || 'analisi del sangue').slice(0, 60);
       const labRaw = ex.lab?.replace(/\s+/g, ' ').trim().slice(0, 120) || null;
       // «LABORATORIO SAN MARCO» → «Laboratorio San Marco».
@@ -178,11 +178,23 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
       const out = values.filter((v) => v.flag === 'alto' || v.flag === 'basso');
       // Avvisi: il riepilogo sempre; fuori intervallo e peggioramenti solo se è l'analisi più recente.
       const reports = await store.reports(userId, 200);
-      const latest = reports.every((r) => r.takenOn <= takenOn);
+      const latest =
+        takenOn !== null && reports.every((r) => r.takenOn === null || r.takenOn <= takenOn);
       const history = new Map<string, SeriesPoint[]>();
       if (latest)
         for (const v of values) history.set(v.parameter, await store.series(userId, v.parameter));
-      const summary = `Ho letto il referto «${title.slice(0, 80)}» (${kind} del ${italianDay(takenOn)}): ${values.length} valori salvati nella sezione Salute${out.length ? `, ${out.length} fuori intervallo` : ', tutti nell’intervallo'}.`;
+      const coverage = healthValueCoverage(values);
+      const rangeSummary = out.length
+        ? `, ${out.length} fuori intervallo`
+        : coverage.comparable === values.length
+          ? ', tutti nell’intervallo riportato nel referto'
+          : coverage.comparable > 0
+            ? `, ${coverage.comparable} nell’intervallo riportato nel referto`
+            : '';
+      const unknownSummary = coverage.unknown
+        ? ` Per ${coverage.unknown === 1 ? '1 valore' : `${coverage.unknown} valori`} il confronto non è determinabile: riferimento assente o non interpretabile, oppure risultato non numerico.`
+        : '';
+      const summary = `Ho letto il referto «${title.slice(0, 80)}» (${kind}${takenOn ? ` del ${italianDay(takenOn)}` : ', data non disponibile'}): ${values.length} valori salvati nella sezione Salute${rangeSummary}.${unknownSummary}`;
       await store.addNotices(userId, null, [summary]);
       if (latest) {
         await store.supersedeNotices(userId, reportId);
@@ -225,6 +237,7 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
       ]);
       return {
         reports: reports.map((r) => ({
+          id: r.id,
           takenOn: r.takenOn,
           lab: r.lab,
           kind: r.kind,
@@ -251,13 +264,19 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
 
     async report(userId, q) {
       const reports = await store.reports(userId, 200);
-      if (!reports.length) return null;
-      const idx = q.date ? reports.findIndex((r) => r.takenOn === q.date) : 0;
-      const cur = reports[idx];
+      const cur = q.reportId
+        ? await store.report(userId, q.reportId)
+        : q.date
+          ? reports.find((r) => r.takenOn === q.date)
+          : reports.find((r) => r.takenOn !== null);
       if (!cur) return null;
-      const against = q.against
-        ? reports.find((r) => r.takenOn === q.against && r.id !== cur.id)
-        : reports.slice(idx + 1).find((r) => r.takenOn < cur.takenOn);
+      const currentDate = cur.takenOn;
+      const against =
+        currentDate === null
+          ? undefined
+          : q.against
+            ? reports.find((r) => r.takenOn === q.against && r.id !== cur.id)
+            : reports.find((r) => r.takenOn !== null && r.takenOn < currentDate);
       const values = await store.reportValues(userId, cur.id);
       const prev = against ? await store.reportValues(userId, against.id) : [];
       const prevBy = new Map(prev.map((v) => [`${v.parameter}|${v.unit ?? ''}`, v]));
@@ -273,7 +292,7 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
           refHigh: v.refHigh,
           refText: v.refText,
           flag: v.flag,
-          ...(withPrev && p?.value != null && v.value !== null
+          ...(withPrev && p?.value != null && v.value !== null && against.takenOn
             ? {
                 previous: { value: p.value, date: against.takenOn },
                 trend: pctTrend(p.value, v.value),
@@ -282,6 +301,7 @@ export function createHealthRuntime(deps: HealthRuntimeDeps): HealthRuntime {
         };
       });
       return {
+        id: cur.id,
         takenOn: cur.takenOn,
         lab: cur.lab,
         kind: cur.kind,

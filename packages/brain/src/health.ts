@@ -1,5 +1,5 @@
 import { type Pool, withUser } from '@ernie/db';
-import { safeFileName } from './note.js';
+import { isoDay, safeFileName } from './note.js';
 
 /**
  * Sezione salute del second brain (richiesta dell'utente, 13 ott 2026): analisi del sangue e referti con i
@@ -30,6 +30,16 @@ export interface HealthValue {
   readonly refHigh: number | null;
   readonly refText: string | null;
   readonly flag: HealthFlag;
+}
+
+/** A missing/ambiguous reference or qualitative result is not evidence of normality. */
+export function healthValueCoverage(
+  values: readonly Pick<HealthValue, 'value' | 'refLow' | 'refHigh' | 'flag'>[],
+) {
+  const comparable = values.filter(
+    (value) => value.flag !== 'n/d' && flagFor(value.value, value.refLow, value.refHigh) !== 'n/d',
+  ).length;
+  return { comparable, unknown: values.length - comparable };
 }
 
 // ---------- nomi dei parametri ----------
@@ -151,19 +161,33 @@ export function parseRange(v: string | null | undefined): {
   low: number | null;
   high: number | null;
 } {
-  const t = (v ?? '').replace(/–|—/g, '-').toLowerCase();
+  const t = (v ?? '').replace(/–|—/g, '-').toLowerCase().trim();
   const num = '([+-]?\\d[\\d.,]*)';
-  const between = new RegExp(`${num}\\s*(?:-|a)\\s*${num}`).exec(t);
-  if (between) return { low: parseNumber(between[1]), high: parseNumber(between[2]) };
-  const below = new RegExp(`(?:<|≤|<=|inferiore a|fino a|minore di)\\s*${num}`).exec(t);
+  // Only unambiguous ranges: never choose the first of several sex/age-specific
+  // intervals or reinterpret an annotation as the laboratory's applicable range.
+  const between = new RegExp(`^(?:da\\s+)?${num}\\s*(?:-|a)\\s*${num}$`).exec(t);
+  if (between) {
+    const low = parseNumber(between[1]);
+    const high = parseNumber(between[2]);
+    return low !== null && high !== null && low <= high ? { low, high } : { low: null, high: null };
+  }
+  const below = new RegExp(`^(?:<=|<|≤|inferiore a|fino a|minore di)\\s*${num}$`).exec(t);
   if (below) return { low: null, high: parseNumber(below[1]) };
-  const above = new RegExp(`(?:>|≥|>=|superiore a|maggiore di)\\s*${num}`).exec(t);
+  const above = new RegExp(`^(?:>=|>|≥|superiore a|maggiore di)\\s*${num}$`).exec(t);
   if (above) return { low: parseNumber(above[1]), high: null };
   return { low: null, high: null };
 }
 
 export function flagFor(value: number | null, low: number | null, high: number | null): HealthFlag {
-  if (value === null || (low === null && high === null)) return 'n/d';
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    (low === null && high === null) ||
+    (low !== null && !Number.isFinite(low)) ||
+    (high !== null && !Number.isFinite(high)) ||
+    (low !== null && high !== null && low > high)
+  )
+    return 'n/d';
   if (high !== null && value > high) return 'alto';
   if (low !== null && value < low) return 'basso';
   return 'normale';
@@ -182,10 +206,22 @@ function strictFlag(
   high: number | null,
   ref: string | null | undefined,
 ): HealthFlag {
-  const t = (ref ?? '').trim();
-  if (flag === 'normale' && value !== null && high !== null && value === high && /^<(?!=)/.test(t))
+  const t = (ref ?? '').trim().toLowerCase();
+  if (
+    flag === 'normale' &&
+    value !== null &&
+    high !== null &&
+    value === high &&
+    /^(?:<(?!=)|inferiore a|minore di)/.test(t)
+  )
     return 'alto';
-  if (flag === 'normale' && value !== null && low !== null && value === low && /^>(?!=)/.test(t))
+  if (
+    flag === 'normale' &&
+    value !== null &&
+    low !== null &&
+    value === low &&
+    /^(?:>(?!=)|superiore a|maggiore di)/.test(t)
+  )
     return 'basso';
   return flag;
 }
@@ -236,7 +272,7 @@ export function looksLikeLabReport(text: string): boolean {
 // ---------- andamenti e avvisi ----------
 
 export interface SeriesPoint {
-  readonly date: string;
+  readonly date: string | null;
   readonly value: number | null;
   readonly valueText: string | null;
   readonly unit: string | null;
@@ -247,7 +283,9 @@ export interface SeriesPoint {
 
 /** Andamento tra le ultime due misure con la stessa unità: «su», «giù», «stabile» (entro il 3 %). */
 export function trendOf(points: readonly SeriesPoint[]): 'su' | 'giu' | 'stabile' | null {
-  const nums = points.filter((p) => p.value !== null);
+  const nums = points
+    .filter((p) => p.value !== null && isoDay(p.date))
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const last = nums.at(-1);
   const prev = nums.at(-2);
   if (!last || !prev || last.value === null || prev.value === null || last.unit !== prev.unit)
@@ -271,7 +309,7 @@ export function healthNotices(
   for (const v of current) {
     if (v.value === null) continue;
     const pts = (history.get(v.parameter) ?? []).filter(
-      (p) => p.value !== null && p.unit === v.unit,
+      (p) => p.value !== null && p.unit === v.unit && Boolean(isoDay(p.date)),
     );
     const before = pts.slice(-3, -1).map((p) => p.value as number);
     const unit = v.unit ? ` ${v.unit}` : '';
@@ -301,7 +339,9 @@ export function healthNotices(
 const arrow: Record<HealthFlag, string> = { alto: '⬆️', basso: '⬇️', normale: '', 'n/d': '' };
 
 /** «2026-10-13» → «13 ottobre 2026». */
-export const italianDay = (iso: string) => {
+export const italianDay = (iso: string | null) => {
+  if (!isoDay(iso)) return 'data non disponibile';
+  if (iso === null) return 'data non disponibile';
   const [y, m, d] = iso.split('-').map(Number);
   const months = [
     'gennaio',
@@ -322,7 +362,7 @@ export const italianDay = (iso: string) => {
 
 /** Corpo della nota di un referto: tabella con i fuori intervallo segnati e il rimando ai parametri. */
 export function reportNoteBody(
-  r: { takenOn: string; lab: string | null; kind: string },
+  r: { takenOn: string | null; lab: string | null; kind: string },
   values: readonly HealthValue[],
 ): string {
   const rows = values.map((v) => {
@@ -330,13 +370,21 @@ export function reportNoteBody(
     return `| [[${v.label}]] | ${val} ${arrow[v.flag]} | ${v.unit ?? ''} | ${v.refText ?? ''} |`;
   });
   const out = values.filter((v) => v.flag === 'alto' || v.flag === 'basso');
+  const coverage = healthValueCoverage(values);
   return [
-    `# ${r.kind.charAt(0).toUpperCase()}${r.kind.slice(1)} del ${italianDay(r.takenOn)}`,
+    `# ${healthReportTitle(r)}`,
     '',
     r.lab ? `Laboratorio: ${r.lab}` : '',
     out.length
       ? `Fuori intervallo: ${out.map((v) => v.label).join(', ')}.`
-      : 'Tutti i valori con riferimento sono nell’intervallo.',
+      : coverage.comparable === values.length && values.length > 0
+        ? 'Tutti i valori sono nell’intervallo riportato nel referto.'
+        : coverage.comparable > 0
+          ? `${coverage.comparable === 1 ? '1 valore confrontabile è' : `${coverage.comparable} valori confrontabili sono`} nell’intervallo riportato nel referto.`
+          : 'Non è possibile valutare gli intervalli dei valori riportati.',
+    coverage.unknown
+      ? `Per ${coverage.unknown === 1 ? '1 valore' : `${coverage.unknown} valori`} il confronto non è determinabile: riferimento assente o non interpretabile, oppure risultato non numerico.`
+      : '',
     '',
     '| Parametro | Valore | Unità | Riferimento |',
     '|---|---|---|---|',
@@ -350,7 +398,11 @@ export function reportNoteBody(
 
 /** Corpo della pagina di un parametro: storico in tabella dal più recente. */
 export function parameterNoteBody(label: string, points: readonly SeriesPoint[]): string {
-  const rows = [...points].reverse().map((p) => {
+  const dated = points
+    .filter((point) => isoDay(point.date))
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  const unknown = points.filter((point) => !isoDay(point.date));
+  const rows = [...dated, ...unknown].map((p) => {
     const val = p.value !== null ? fmt(p.value) : (p.valueText ?? '');
     const ref =
       p.refLow !== null || p.refHigh !== null
@@ -365,6 +417,9 @@ export function parameterNoteBody(label: string, points: readonly SeriesPoint[])
     t
       ? `Ultimo andamento: ${t === 'su' ? 'in salita' : t === 'giu' ? 'in discesa' : 'stabile'}.`
       : '',
+    unknown.length
+      ? `${unknown.length === 1 ? '1 misura senza data: conservata qui, esclusa' : `${unknown.length} misure senza data: conservate qui, escluse`} dall’andamento temporale.`
+      : '',
     '',
     '| Data | Valore | Unità | Riferimento |',
     '|---|---|---|---|',
@@ -378,8 +433,8 @@ export function parameterNoteBody(label: string, points: readonly SeriesPoint[])
 
 /** Cartella riservata della sezione nel vault. */
 export const HEALTH_FOLDER = 'Salute';
-export const healthReportTitle = (r: { takenOn: string; kind: string }) =>
-  `${r.kind.charAt(0).toUpperCase()}${r.kind.slice(1)} del ${italianDay(r.takenOn)}`;
+export const healthReportTitle = (r: { takenOn: string | null; kind: string }) =>
+  `${r.kind.charAt(0).toUpperCase()}${r.kind.slice(1)}${r.takenOn ? ` del ${italianDay(r.takenOn)}` : ' · data non disponibile'}`;
 export const healthReportPath = (title: string) =>
   `${HEALTH_FOLDER}/Analisi/${safeFileName(title)}.md`;
 export const healthParameterPath = (label: string) =>
@@ -421,7 +476,7 @@ export function healthIndexBody(
 
 export interface HealthReportSummary {
   readonly id: string;
-  readonly takenOn: string;
+  readonly takenOn: string | null;
   readonly lab: string | null;
   readonly kind: string;
   readonly notePath: string | null;
@@ -432,13 +487,14 @@ export interface HealthReportSummary {
 export interface HealthStore {
   saveReport(
     userId: string,
-    r: { takenOn: string; lab: string | null; kind: string; documentId?: string | null },
+    r: { takenOn: string | null; lab: string | null; kind: string; documentId?: string | null },
     values: readonly HealthValue[],
   ): Promise<string | null>;
   setNotePath(userId: string, reportId: string, path: string): Promise<void>;
   reports(userId: string, limit?: number): Promise<HealthReportSummary[]>;
+  report(userId: string, reportId: string): Promise<HealthReportSummary | null>;
   reportValues(userId: string, reportId: string): Promise<HealthValue[]>;
-  /** Storico di un parametro (per chiave), dal più vecchio. */
+  /** Misure senza data, poi storico datato dal più vecchio. I trend escludono le date ignote. */
   series(userId: string, parameter: string): Promise<SeriesPoint[]>;
   /** Parametri noti con etichetta e numero di misure. */
   parameters(userId: string): Promise<Array<{ parameter: string; label: string; count: number }>>;
@@ -494,7 +550,7 @@ export function createHealthStore(pool: Pool): HealthStore {
       return withUser(pool, userId, async (c) => {
         const r = await c.query<{
           id: string;
-          taken_on: string;
+          taken_on: string | null;
           lab: string | null;
           kind: string;
           note_path: string | null;
@@ -504,7 +560,7 @@ export function createHealthStore(pool: Pool): HealthStore {
           `SELECT r.id, to_char(r.taken_on,'YYYY-MM-DD') AS taken_on, r.lab, r.kind, r.note_path,
                   count(v.id)::text AS values, count(v.id) FILTER (WHERE v.flag IN ('alto','basso'))::text AS out
              FROM health_reports r LEFT JOIN health_values v ON v.report_id = r.id
-            GROUP BY r.id ORDER BY r.taken_on DESC, r.created_at DESC LIMIT $1`,
+            GROUP BY r.id ORDER BY r.taken_on DESC NULLS LAST, r.created_at DESC LIMIT $1`,
           [limit],
         );
         return r.rows.map((x) => ({
@@ -516,6 +572,37 @@ export function createHealthStore(pool: Pool): HealthStore {
           values: Number(x.values),
           outOfRange: Number(x.out),
         }));
+      });
+    },
+    async report(userId, reportId) {
+      return withUser(pool, userId, async (c) => {
+        const result = await c.query<{
+          id: string;
+          taken_on: string | null;
+          lab: string | null;
+          kind: string;
+          note_path: string | null;
+          values: string;
+          out: string;
+        }>(
+          `SELECT r.id, to_char(r.taken_on,'YYYY-MM-DD') AS taken_on, r.lab, r.kind, r.note_path,
+                  count(v.id)::text AS values, count(v.id) FILTER (WHERE v.flag IN ('alto','basso'))::text AS out
+             FROM health_reports r LEFT JOIN health_values v ON v.report_id = r.id
+            WHERE r.id = $1 GROUP BY r.id`,
+          [reportId],
+        );
+        const row = result.rows[0];
+        return row
+          ? {
+              id: row.id,
+              takenOn: row.taken_on,
+              lab: row.lab,
+              kind: row.kind,
+              notePath: row.note_path,
+              values: Number(row.values),
+              outOfRange: Number(row.out),
+            }
+          : null;
       });
     },
     async reportValues(userId, reportId) {
@@ -543,11 +630,11 @@ export function createHealthStore(pool: Pool): HealthStore {
         const r = await c.query<Record<string, unknown>>(
           `SELECT to_char(r.taken_on,'YYYY-MM-DD') AS date, v.value, v.value_text, v.unit, v.flag, v.ref_low, v.ref_high
              FROM health_values v JOIN health_reports r ON r.id = v.report_id
-            WHERE v.parameter = $1 ORDER BY r.taken_on, r.created_at`,
+            WHERE v.parameter = $1 ORDER BY r.taken_on ASC NULLS FIRST, r.created_at`,
           [parameter],
         );
         return r.rows.map((x) => ({
-          date: String(x.date),
+          date: x.date === null ? null : String(x.date),
           value: numOrNull(x.value),
           valueText: (x.value_text as string | null) ?? null,
           unit: (x.unit as string | null) ?? null,

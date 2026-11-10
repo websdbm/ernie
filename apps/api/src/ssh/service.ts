@@ -114,6 +114,38 @@ const siteOf = (r: SiteRow): SshSite =>
     path: r.path,
     container: r.container,
   });
+
+// Optimistic inventory precondition, not an authorization token. RLS and the authenticated
+// account still decide access; the comparison runs inside the same lock as the deletion.
+const inventoryId = z.uuid().transform((value) => value.toLowerCase());
+export const SshDeletePrecondition = z
+  .strictObject({
+    server: z.strictObject({ id: inventoryId, revision: z.number().int().min(1) }),
+    sites: z
+      .array(
+        z.strictObject({
+          id: inventoryId,
+          serverId: inventoryId,
+          name: z.string().min(1).max(200),
+          url: z.url(),
+          path: z.string().max(500),
+          container: z.string().max(100),
+        }),
+      )
+      .max(10000),
+  })
+  .superRefine((value, context) => {
+    const ids = new Set<string>();
+    for (const site of value.sites) {
+      if (site.serverId !== value.server.id || ids.has(site.id)) {
+        context.addIssue({ code: 'custom', message: 'Riferimenti inventario non coerenti.' });
+        return;
+      }
+      ids.add(site.id);
+    }
+  });
+export const SshDeleteRequest = z.strictObject({ expected: SshDeletePrecondition.optional() });
+
 function parse<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> {
   const r = schema.safeParse(input);
   if (!r.success)
@@ -378,6 +410,56 @@ export function createSshService(opts: SshServiceOptions) {
     if (!r || (serverId && r.server_id !== idOf(serverId)))
       throw new SshError('not_found', 'Sito non trovato per questo server.', 404);
     return r;
+  };
+  const inventoryChanged = () =>
+    new SshError(
+      'inventory_changed',
+      'L’inventario è cambiato. Aggiorna l’elenco e conferma di nuovo la rimozione.',
+      409,
+    );
+  const deletionTarget = async <T>(lookup: () => Promise<T>, expected: unknown): Promise<T> => {
+    try {
+      return await lookup();
+    } catch (error) {
+      if (expected !== undefined && error instanceof SshError && error.code === 'not_found') {
+        throw inventoryChanged();
+      }
+      throw error;
+    }
+  };
+  const checkDeletionInventory = async (
+    c: PoolClient,
+    u: string,
+    target: ServerRow,
+    expected: z.infer<typeof SshDeletePrecondition> | undefined,
+  ) => {
+    if (expected === undefined) return; // Older clients retain their existing deletion contract.
+    if (target.id !== expected.server.id || target.revision !== expected.server.revision) {
+      throw inventoryChanged();
+    }
+    const current = (
+      await c.query<SiteRow>(
+        'SELECT * FROM ssh_sites WHERE user_id=$1 AND server_id=$2 ORDER BY id',
+        [u, target.id],
+      )
+    ).rows.map(siteOf);
+    const approved = [...expected.sites].sort((a, b) => a.id.localeCompare(b.id));
+    if (
+      current.length !== approved.length ||
+      current.some((site, index) => {
+        const prior = approved[index];
+        return (
+          !prior ||
+          site.id !== prior.id ||
+          site.serverId !== prior.serverId ||
+          site.name !== prior.name ||
+          site.url !== prior.url ||
+          site.path !== prior.path ||
+          site.container !== prior.container
+        );
+      })
+    )
+      throw inventoryChanged();
   };
   const key = async (c: PoolClient, u: string) => {
     const r = (
@@ -772,11 +854,17 @@ export function createSshService(opts: SshServiceOptions) {
     },
     // Cancellazioni: tolgono accessi, quindi valgono anche a skill spenta. Con un intervento in corso
     // sul server si aspetta l'esito, per non perderlo insieme alla riga.
-    async serverDelete(u: string, id: string): Promise<SshSnapshot> {
+    async serverDelete(
+      u: string,
+      id: string,
+      input?: z.input<typeof SshDeletePrecondition>,
+    ): Promise<SshSnapshot> {
+      const expected = input === undefined ? undefined : parse(SshDeletePrecondition, input);
       await lock(
         u,
         async (c) => {
-          const target = await server(c, u, id);
+          const target = await deletionTarget(() => server(c, u, id), expected);
+          await checkDeletionInventory(c, u, target, expected);
           await runningOn(c, u, target.id);
           // Siti e piani del server se ne vanno in cascata (chiavi esterne della migrazione 0043).
           await c.query('DELETE FROM ssh_servers WHERE user_id=$1 AND id=$2', [u, target.id]);
@@ -786,11 +874,19 @@ export function createSshService(opts: SshServiceOptions) {
       );
       return readSnapshot(u);
     },
-    async siteDelete(u: string, id: string): Promise<SshSnapshot> {
+    async siteDelete(
+      u: string,
+      id: string,
+      input?: z.input<typeof SshDeletePrecondition>,
+    ): Promise<SshSnapshot> {
+      const expected = input === undefined ? undefined : parse(SshDeletePrecondition, input);
       await lock(
         u,
         async (c) => {
-          const target = await site(c, u, id);
+          const target = await deletionTarget(() => site(c, u, id), expected);
+          await checkDeletionInventory(c, u, await server(c, u, target.server_id), expected);
+          if (expected && !expected.sites.some((site) => site.id === target.id))
+            throw inventoryChanged();
           await runningOn(c, u, target.server_id);
           await c.query('DELETE FROM ssh_sites WHERE user_id=$1 AND id=$2', [u, target.id]);
           await invalidateRows(

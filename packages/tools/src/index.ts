@@ -1,5 +1,6 @@
 export * from './audit.js';
 export * from './builtins/brain.js';
+export * from './builtins/context-tools.js';
 export * from './builtins/documents.js';
 export * from './builtins/health.js';
 export * from './builtins/memory.js';

@@ -4,6 +4,23 @@ import { describe, expect, it } from 'vitest';
 import { confirmationPresentation, confirmationReason } from './confirmation.js';
 
 describe('conferme leggibili', () => {
+  it('presenta la modifica Todo senza mostrare la firma interna', () => {
+    const p = confirmationPresentation('change_apply', {
+      kind: 'todo',
+      id: 'lista',
+      revision: 3,
+      patch: {
+        name: 'Pomeriggio',
+        items: [{ id: 'attività', changes: { title: 'Preparare impasto' } }],
+      },
+      proof: { signature: 'internal-proof', before: 'internal-state' },
+    });
+    expect(p.title).toBe('Aggiornare questa lista?');
+    expect(p.confirmLabel).toBe('Aggiorna lista');
+    expect(JSON.stringify(p)).toContain('Preparare impasto');
+    expect(JSON.stringify(p)).not.toContain('internal-proof');
+    expect(JSON.stringify(p)).not.toContain('internal-state');
+  });
   it('mostra la ricetta intera, senza JSON, conservando ingredienti, ordine e quantità', () => {
     const steps = ['Taglia il tempeh.', 'Cuoci con le spezie e distribuisci nelle tortillas.'];
     const args = {

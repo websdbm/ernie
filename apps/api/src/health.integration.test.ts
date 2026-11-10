@@ -11,7 +11,16 @@ import { createHealthRuntime } from './health.js';
 
 const OWNER_URL = process.env.MIGRATIONS_DATABASE_URL ?? process.env.DATABASE_URL;
 const APP_PASSWORD = process.env.APP_DB_PASSWORD;
-const ready = Boolean(OWNER_URL && APP_PASSWORD);
+const localTestDatabase = (() => {
+  if (!OWNER_URL) return false;
+  try {
+    const url = new URL(OWNER_URL);
+    return ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) && /test/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+})();
+const ready = Boolean(localTestDatabase && APP_PASSWORD);
 
 const silent = { info: () => {}, warn: () => {} };
 
@@ -168,6 +177,159 @@ describe.skipIf(!ready)('sezione salute (Postgres + vault, estrattore finto)', (
       [user],
     );
     expect(await health.takeNotices(user)).toBeNull();
+  });
+
+  it('unknown/invalid dates stay null, remain readable by report id, and never replace the latest dated report or its notices', async () => {
+    const isolated = randomUUID();
+    await owner.query(
+      `INSERT INTO users (id, display_name) VALUES ($1, 'Synthetic undated reports')`,
+      [isolated],
+    );
+    try {
+      const documents = createDocumentRepository(app);
+      const health = createHealthRuntime({
+        isEnabled: async () => true,
+        pool: app,
+        extractor: async (text) => ({
+          isLabReport: true,
+          takenOn:
+            text === 'earlier'
+              ? '2026-03-02'
+              : text === 'recent'
+                ? '2026-10-10'
+                : text === 'invalid date'
+                  ? '2026-02-30'
+                  : null,
+          kind: 'analisi',
+          lab: 'Laboratorio sintetico',
+          items: [
+            {
+              name: 'Glicemia',
+              value: text === 'earlier' ? '90' : text === 'recent' ? '118' : '999',
+              unit: 'mg/dL',
+              ref: '70-110',
+            },
+          ],
+        }),
+        brain: createBrainService({ baseDir: dir, index: createBrainIndex(app, null) }),
+        documents,
+        logger: silent,
+      });
+      const ingest = async (label: string) => {
+        const doc = await documents.create(isolated, {
+          title: label,
+          source: 'pdf',
+          pageTexts: [label],
+        });
+        return health.tools.importDocument(isolated, doc.id);
+      };
+      expect(await ingest('unknown date')).toMatchObject({ ok: true, takenOn: null });
+      expect(await health.tools.report(isolated, {})).toBeNull();
+      const first = (await health.tools.overview(isolated)).reports[0];
+      expect(first?.takenOn).toBeNull();
+      if (!first) throw Error('Missing undated report');
+      const undated = await health.tools.report(isolated, { reportId: first.id });
+      expect(undated).toMatchObject({ takenOn: null, againstDate: null, rows: [{ value: 999 }] });
+      expect(undated?.rows[0]).not.toHaveProperty('previous');
+      expect(await health.tools.report(other, { reportId: first.id })).toBeNull();
+      expect((await health.tools.parameter(isolated, 'Glicemia'))?.trend).toBeNull();
+
+      await ingest('earlier');
+      await ingest('recent');
+      const before = await health.tools.report(isolated, {});
+      expect(before).toMatchObject({ takenOn: '2026-10-10', againstDate: '2026-03-02' });
+      expect(await ingest('invalid date')).toMatchObject({ ok: true, takenOn: null });
+      const after = await health.tools.report(isolated, {});
+      expect(after).toEqual(before);
+      const datedNotices = await owner.query(
+        `SELECT notified_at FROM health_notices WHERE report_id = $1`,
+        [before?.id],
+      );
+      expect(datedNotices.rows.length).toBeGreaterThan(0);
+      expect(datedNotices.rows.every((row) => row.notified_at === null)).toBe(true);
+      const overview = await health.tools.overview(isolated);
+      expect(overview.reports.map((report) => report.takenOn)).toEqual([
+        '2026-10-10',
+        '2026-03-02',
+        null,
+        null,
+      ]);
+      const series = await health.tools.parameter(isolated, 'Glicemia');
+      expect(series?.rows.filter((row) => row.date === null).map((row) => row.value)).toEqual([
+        999, 999,
+      ]);
+      expect(series?.trend).toBe('su');
+      const explicitUnknown = await health.tools.report(isolated, {
+        reportId: first.id,
+        against: '2026-10-10',
+      });
+      expect(explicitUnknown?.againstDate).toBeNull();
+      expect(explicitUnknown?.rows[0]).not.toHaveProperty('trend');
+      const rows = await owner.query(
+        `SELECT taken_on, note_path FROM health_reports WHERE user_id = $1 AND taken_on IS NULL`,
+        [isolated],
+      );
+      expect(rows.rows).toHaveLength(2);
+      expect(new Set(rows.rows.map((row) => row.note_path)).size).toBe(2);
+      for (const row of rows.rows) {
+        const body = await readFile(join(dir, isolated, row.note_path), 'utf8');
+        expect(body).toContain('data non disponibile');
+        expect(body).not.toContain('riguarda:');
+      }
+    } finally {
+      await owner.query('DELETE FROM users WHERE id = $1', [isolated]);
+    }
+  });
+
+  it('import notices retain qualitative and unreferenced values without asserting normality', async () => {
+    const isolated = randomUUID();
+    await owner.query(
+      `INSERT INTO users (id, display_name) VALUES ($1, 'Synthetic missing references')`,
+      [isolated],
+    );
+    try {
+      const documents = createDocumentRepository(app);
+      const health = createHealthRuntime({
+        isEnabled: async () => true,
+        pool: app,
+        extractor: async () => ({
+          isLabReport: true,
+          takenOn: null,
+          kind: 'analisi',
+          lab: null,
+          items: [
+            { name: 'Glicemia', value: '90', unit: 'mg/dL', ref: '70-110' },
+            { name: 'Ferritina', value: '20', unit: 'ng/mL', ref: null },
+            { name: 'Parametro sintetico', value: '80', ref: 'adulti: 70-110; bambini: 60-100' },
+            { name: 'Esito qualitativo sintetico', value: 'negativo', ref: null },
+          ],
+        }),
+        brain: null,
+        documents,
+        logger: silent,
+      });
+      const doc = await documents.create(isolated, {
+        title: 'Riferimenti parziali',
+        source: 'pdf',
+        pageTexts: ['Synthetic fixture'],
+      });
+      expect(await health.tools.importDocument(isolated, doc.id)).toMatchObject({
+        ok: true,
+        takenOn: null,
+        values: 4,
+      });
+      const notices = await health.takeNotices(isolated);
+      expect(notices).toContain('3 valori il confronto non è determinabile');
+      expect(notices).not.toMatch(/tutti.*intervallo/i);
+      const summary = (await health.tools.overview(isolated)).reports[0];
+      if (!summary) throw Error('missing report');
+      const report = await health.tools.report(isolated, { reportId: summary.id });
+      expect(report?.rows).toHaveLength(4);
+      expect(report?.rows.filter((row) => row.flag === 'n/d')).toHaveLength(3);
+      expect(report?.rows.find((row) => row.valueText === 'negativo')).toBeDefined();
+    } finally {
+      await owner.query('DELETE FROM users WHERE id = $1', [isolated]);
+    }
   });
 
   it('al caricamento legge solo ciò che sembra un referto', async () => {

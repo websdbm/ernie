@@ -12,20 +12,26 @@ Una funzione non è chiusa perché esiste soltanto la sua specifica o un pulsant
 
 | ID | Area | Stato | Criterio di chiusura |
 |---|---|---|---|
-| R1 | Ricerca online | In sviluppo | Passaggi pertinenti alla domanda, letture batch limitate, fonte/copertura/freschezza esplicite, cache isolata e aggiornamento; test su pagine lunghe, errori e timeout; integrazione agente verificata. |
-| R2 | Strumenti comuni | In sviluppo | Quadro giornata, risoluzione destinatari/oggetti, lettura fonti e verifica esito; modifiche versionate e idempotenti con anteprima; meno chiamate sul corpus reale, senza aggirare skill/approvazioni. |
-| R3 | SSH, comandi mancanti | In sviluppo | Eliminazione server/siti dall'app con conferma, refresh e stato errore; isolamento account e nessuna cancellazione dei siti sul server remoto. |
-| R4 | Salute, accuratezza e protezione | Pianificato | Date ignote non inventate; riferimenti mancanti dichiarati; cifratura di dati/originali/derivati e migrazione reversibile; consenso AI continuativo revocabile, cancellazione e accessi verificati. |
+| R1 | Ricerca online | Implementata e testata; rilascio 118 da autorizzare | Passaggi pertinenti, letture batch limitate, copertura/freschezza, cache per account. Test e integrazione verdi; resta verifica del provider e misura su traffico reale dopo rilascio. |
+| R2 | Strumenti comuni | Prima versione implementata; misure reali aperte | `day_snapshot`, `resolve_target`, `read_sources`; anteprima/applicazione/verifica limitate ai Todo esistenti, revisioni e retry provati su PostgreSQL. Budget e revoche verificati; riduzione chiamate/token da misurare sul corpus reale. |
+| R3 | SSH, comandi mancanti | Implementati e testati; rilascio 118 da autorizzare | Rimozione inventario dall'app con conferma, refresh, errori e precondizione atomica contro modifiche da altri dispositivi. Test account isolati; nessuna modifica agli host remoti. |
+| R4 | Salute, accuratezza e protezione | Accuratezza pronta per 118; protezione ancora aperta | Date ignote e riferimenti ambigui corretti, migrazione 0051 solo nullable. Cifratura, consenso revocabile e cancellazione coordinata ancora da implementare dopo inventario completo delle copie; dettagli ricerca 25. |
 | R5 | Skill Abitudini | Pianificato | Visite iOS, storico personale cifrato, luoghi/relazioni, fatti-ipotesi-conferme distinti, domande proattive entro budget; disattivazione ferma raccolta/job/contesto; prova su dispositivo. |
 | R6 | Apple Salute | Pianificato, dipende da R4 | HealthKit sola lettura, permessi per categoria, sincronizzazione incrementale/deduplicazione/cancellazioni, ultimo aggiornamento e profilo leggibile; prova con permessi reali su iPhone. |
 | R7 | Skill Analisi immagini | Pianificato | Foto/ritagli al classificatore visivo quando utile, domande e follow-up sull'immagine corretta, lettura LLM con fonti/incertezza; batch multipli e isolamento verificati. |
-| R8 | Nove foto ricetta | Da verificare e completare | Recupero originali, trascrizione fedele, normalizzazione senza inventare quantità, controllo duplicati e ricevuta di importazione nell'account corretto. |
+| R8 | Nove foto ricetta | Originali non reperiti nei percorsi verificati | File e conversioni temporanee non trovati nei percorsi noti dei due Mac. Servono originali per trascrizione fedele e verifica duplicati/importazione; non attestata una precedente importazione. |
 | R9 | Collegamenti esterni | Prerequisiti esterni | Contabo: password API valida, inventario e associazioni provati in sola lettura. YouTube: chiave Data API dedicata/restrizioni e video normali verificati. Non memorizzare credenziali in Git. |
-| R10 | Rifiniture e misure | Pianificato | Riesame dei residui storici (Todo/Redis, vecchi titoli dei luoghi, budget automazioni, connessioni WS); misure latenza/errori dopo rilascio e prove native su iPhone. |
+| R10 | Rifiniture e misure | Budget giornaliero corretto; altri residui aperti | Budget automazioni ora nel fuso locale, test PostgreSQL verde; richiede nuovo worker. Restano Todo/Redis, vecchi titoli dei luoghi, connessioni WS, misure latenza/errori e prove native su iPhone. |
 
 Ordine: R1/R2/R3 separabili; R4 prima della raccolta R5/R6; R7 riusa Media e i controlli del dominio;
 R8 indipendente; R9 avanza fino al punto in cui serve l'autenticazione dell'utente. Non dichiarare chiusi
 HealthKit/background e qualità della mobilità con soli test del simulatore.
+
+Primo gruppo in [build 118](docs/releases/build-118.md) e [dettagli/verifiche](docs/research/25-open-features-wave1.md).
+**117 resta la versione pubblicata** finché non è autorizzato e verificato il nuovo rilascio.
+Per R4 la sequenza è: collegare originali e derivati; chiudere tutte le vie di invio AI e cancellazione;
+progettare compatibilità Obsidian e recupero chiavi; migrare copie attuali e revisioni/backup; solo dopo,
+abilitare nuova raccolta Abitudini/HealthKit. Nessuna nuova raccolta sensibile avviata in questo incremento.
 
 ### Già pubblicato
 

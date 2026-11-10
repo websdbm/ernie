@@ -6,6 +6,7 @@ import {
   healthNotices,
   healthReportPath,
   healthReportTitle,
+  healthValueCoverage,
   looksLikeLabReport,
   parameterNoteBody,
   parseNumber,
@@ -120,7 +121,7 @@ Emoglobina 14,2 g/dL 13-17`;
   });
 });
 
-const pt = (date: string, value: number, unit = 'mg/dL'): SeriesPoint => ({
+const pt = (date: string | null, value: number, unit = 'mg/dL'): SeriesPoint => ({
   date,
   value,
   valueText: null,
@@ -131,6 +132,21 @@ const pt = (date: string, value: number, unit = 'mg/dL'): SeriesPoint => ({
 });
 
 describe('sezione salute: andamenti e avvisi', () => {
+  it('unknown and invalid dates never influence the dated trend or worsening notices', () => {
+    expect(
+      trendOf([pt(null, 1000), pt('2026-01-10', 90), pt('2026-03-10', 92), pt(null, 900)]),
+    ).toBe('stabile');
+    expect(trendOf([pt(null, 1000), pt('2026-01-10', 90)])).toBeNull();
+    expect(trendOf([pt('2026-02-30', 1000), pt('2026-03-10', 90)])).toBeNull();
+    const current = toHealthValue({ name: 'Glicemia', value: '108', unit: 'mg/dL', ref: '70-110' });
+    if (!current) throw Error('test value');
+    expect(
+      healthNotices(
+        [current],
+        new Map([['glicemia', [pt(null, 90), pt(null, 100), pt('2026-10-10', 108)]]]),
+      ),
+    ).toEqual([]);
+  });
   it('andamento tra le ultime due misure con la stessa unità', () => {
     expect(trendOf([pt('2026-01-10', 90), pt('2026-05-10', 100)])).toBe('su');
     expect(trendOf([pt('2026-01-10', 100), pt('2026-05-10', 90)])).toBe('giu');
@@ -172,6 +188,52 @@ describe('sezione salute: andamenti e avvisi', () => {
     expect(
       healthNotices([v], new Map([['glicemia', [pt('2026-01-01', 91), pt('2026-10-01', 90)]]])),
     ).toEqual([]);
+  });
+});
+
+describe('health coverage and unknown date notes', () => {
+  it('does not interpret an age/sex-qualified or inverted range as a simple interval', () => {
+    for (const ref of [
+      'uomini 70-110; donne 60-100',
+      '70-110 (adulti)',
+      '110 - 70',
+      'vedi nota',
+      '',
+    ]) {
+      const value = toHealthValue({ name: 'Glicemia', value: '90', ref });
+      expect(value).toMatchObject({ refLow: null, refHigh: null, flag: 'n/d' });
+    }
+    expect(toHealthValue({ name: 'Glicemia', value: '110', ref: 'inferiore a 110' })?.flag).toBe(
+      'alto',
+    );
+  });
+
+  it('retains values without pretending that missing references are normal', () => {
+    const normal = toHealthValue({ name: 'Glicemia', value: '90', ref: '70-110' });
+    const unknown = toHealthValue({ name: 'Ferritina', value: '20' });
+    if (!normal || !unknown) throw Error('test values');
+    expect(healthValueCoverage([normal, unknown])).toEqual({ comparable: 1, unknown: 1 });
+    const body = reportNoteBody({ takenOn: null, lab: null, kind: 'analisi' }, [normal, unknown]);
+    expect(body).toContain('# Analisi · data non disponibile');
+    expect(body).toContain('1 valore confrontabile');
+    expect(body).toContain('confronto non è determinabile');
+    expect(body).not.toMatch(/Tutti.*intervallo/);
+    expect(body).toContain('[[Ferritina]]');
+  });
+
+  it('renders unknown dates explicitly after the dated history and excludes them from trend', () => {
+    const body = parameterNoteBody('Glicemia', [
+      pt(null, 999),
+      pt('2026-01-01', 90),
+      pt('2026-02-01', 91),
+    ]);
+    expect(body).toContain('Ultimo andamento: stabile.');
+    expect(body).toContain('1 misura senza data');
+    expect(body.indexOf('1 febbraio 2026')).toBeLessThan(body.indexOf('| data non disponibile |'));
+    expect(body).toContain('| data non disponibile | 999');
+    expect(healthReportTitle({ takenOn: null, kind: 'analisi' })).toBe(
+      'Analisi · data non disponibile',
+    );
   });
 });
 

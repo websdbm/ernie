@@ -185,13 +185,14 @@ private struct SSHSearchField: View {
 }
 
 struct SSHNotice: View {
+    @Environment(\.chatPalette) private var palette
     let text: String
     var symbol = "info.circle"
     init(_ text: String, symbol: String = "info.circle") { self.text = text; self.symbol = symbol }
     var body: some View {
-        Label(text, systemImage: symbol).font(.callout).foregroundStyle(Theme.inkSecondary)
+        Label(text, systemImage: symbol).font(.callout).foregroundStyle(palette.inkSecondary)
             .fixedSize(horizontal: false, vertical: true).padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
+            .background(palette.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

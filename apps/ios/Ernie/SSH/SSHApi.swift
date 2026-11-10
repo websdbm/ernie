@@ -9,6 +9,14 @@ extension ApiClient {
     func sshRevokeKey() async throws -> SshSnapshot { try await request("DELETE", "/v1/ssh/key") }
     func sshSaveServer(_ input: SshServerInput) async throws -> SshSnapshot { try await request("POST", "/v1/ssh/servers", body: input) }
     func sshSaveSite(_ input: SshSiteInput) async throws -> SshSnapshot { try await request("POST", "/v1/ssh/sites", body: input) }
+    /// Solo inventario Ernie: non esegue comandi SSH né azioni sul provider.
+    func sshRemove(_ target: SSHDeletionTarget, expected: SshDeletionPrecondition) async throws -> SshSnapshot {
+        guard UUID(uuidString: target.value) != nil else {
+            throw ApiError(status: 400, code: "invalid_id", message: "Identificativo non valido.")
+        }
+        struct Body: Encodable, Sendable { let expected: SshDeletionPrecondition }
+        return try await request("DELETE", "/v1/ssh/\(target.collection)/\(target.value)", body: Body(expected: expected))
+    }
     func sshProbe(_ serverId: String) async throws -> String {
         struct Response: Decodable { var fingerprint: String }
         let response: Response = try await request("POST", "/v1/ssh/servers/\(serverId)/probe", body: [String: String]())

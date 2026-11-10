@@ -347,6 +347,14 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
           memorySnapshot +=
             '\n\nAnticipa i controlli utili alla richiesta: per organizzare orari leggi gli impegni pertinenti con gli strumenti autorizzati e usa time_windows per verificare sovrapposizioni e intervalli liberi. Il calcolo vale solo per i dati forniti: non certifica un calendario completo. Durate, spostamenti e margini mancanti vanno chiesti o presentati come ipotesi da confermare, mai inventati. Proponi il prossimo passo quando serve; non attivare notifiche, modifiche o invii non richiesti e non consultare diario o archivi chat fuori dal loro ambito esplicito.';
         }
+        if (specs.some((tool) => tool.id === 'day_snapshot')) {
+          memorySnapshot +=
+            '\n\nStrumenti deterministici: per la giornata usa day_snapshot e rispetta la copertura dichiarata (il calendario iOS non è letto dal vivo). Per riferimenti incerti usa resolve_target: resolved è un nome esatto univoco, choose richiede una scelta con present_choices, anche con un solo suggerimento. Per modificare solo alcuni campi di una lista Todo già letta usa change_preview e change_apply con la stessa patch/prova; non sono una conferma dell’utente. Dopo un salvataggio dubbio usa check_result e non dichiarare «fatto» se lo stato è parziale. Nessuno di questi strumenti legge diario o archivi chat.';
+        }
+        if (specs.some((tool) => tool.id === 'read_sources')) {
+          memorySnapshot +=
+            '\n\nRicerca web: web_search seleziona passaggi pertinenti; usa read_sources per leggere più URL indipendenti insieme, con query sui dettagli cercati. Per approfondire una pagina usa web_fetch con query oppure offset=coverage.nextOffset e source.contentId, senza ricominciare sempre dall’inizio. Se servono dati attuali usa refresh; retrievedAt indica recupero, non pubblicazione, e freshness è solo un filtro di ricerca. Cita i link delle fonti effettivamente lette, segnala copertura incompleta o errori; non dedurre dettagli da un titolo o snippet.';
+        }
         tools = buildSessionTools(specs, deps.tools.executor, ctxRef);
         toolContexts.set(session.id, ctxRef);
       }

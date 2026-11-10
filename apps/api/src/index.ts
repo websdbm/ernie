@@ -98,6 +98,7 @@ import {
 import { createSoulRepository, styleNote } from '@ernie/soul';
 import {
   createBrainTools,
+  createContextTools,
   createDocumentTools,
   createFirecrawlClient,
   createHealthTools,
@@ -676,6 +677,33 @@ async function main(): Promise<void> {
     logger,
   });
   for (const t of createHealthTools(health.tools)) registry.register(t);
+  for (const t of createContextTools({
+    canUse: async (userId, domain) => {
+      const settings = await loadUserSettings(userId);
+      const skill = {
+        todo: 'todo',
+        shopping: 'shopping_list',
+        reminders: 'ricordami',
+        brain: 'second_brain',
+        ssh: 'ssh',
+      }[domain];
+      return settings.killSwitch !== true && enabledSkillIds(settings).has(skill);
+    },
+    todo,
+    shopping,
+    reminders,
+    brain: brain.tools,
+    sites: async (userId) => {
+      const inventory = await ssh.snapshot(userId);
+      return inventory.sites.map((site) => ({
+        id: site.id,
+        domain: new URL(site.url).hostname,
+        serverName:
+          inventory.servers.find((server) => server.id === site.serverId)?.name ?? 'Server',
+      }));
+    },
+  }))
+    registry.register(t);
   // Firecrawl: ricerca e lettura web per i tool, e lettura dei link condivisi nel second brain (B3).
   const firecrawl = config.providers.firecrawlApiKey
     ? createFirecrawlClient({ apiKey: config.providers.firecrawlApiKey })
@@ -767,6 +795,11 @@ async function main(): Promise<void> {
         'operating_preference_remove',
         'get_time',
         'time_windows',
+        'day_snapshot',
+        'resolve_target',
+        'change_preview',
+        'change_apply',
+        'check_result',
         'present_recipes',
         'present_choices',
         'todo_lists',

@@ -1,5 +1,42 @@
 [
   {
+    "build": 118,
+    "date": "2026-11-10",
+    "title": "Ricerca mirata e modifiche più affidabili",
+    "items": [
+      {
+        "icon": "magnifyingglass",
+        "title": "Fonti più pertinenti",
+        "detail": "Ernie cerca i passaggi utili anche nelle pagine lunghe e legge più fonti insieme. Può aggiornare una pagina e continuare la lettura, distinguendo testo disponibile e parti mancanti.",
+        "test": "Chiedi un confronto fra più pagine e poi approfondisci un dettaglio."
+      },
+      {
+        "icon": "calendar",
+        "title": "Una vista più completa della giornata",
+        "detail": "Attività, prossimi avvisi e routine salvate vengono consultati insieme, con indicazione delle informazioni mancanti. Il calendario iOS non viene letto dal vivo.",
+        "test": "Chiedi di organizzare la giornata con le attività già salvate."
+      },
+      {
+        "icon": "checklist",
+        "title": "Correzioni alle liste senza perdere il resto",
+        "detail": "Le modifiche a singole attività conservano gli altri dati e vengono verificate. Se un altro dispositivo aggiorna la lista nel frattempo, Ernie la rilegge prima di procedere.",
+        "test": "Rinomina un’attività e verifica che orari, note e completamenti rimangano."
+      },
+      {
+        "icon": "server.rack",
+        "title": "Rimuovi i riferimenti che non servono",
+        "detail": "Dal menu di server e siti puoi rimuovere i riferimenti da Ernie, con conferma dei siti coinvolti. Nessun comando viene eseguito sul server remoto.",
+        "test": "Apri il menu di un sito, leggi la conferma e annulla senza rimuoverlo."
+      },
+      {
+        "icon": "heart.text.square",
+        "title": "Referti più precisi",
+        "detail": "Date mancanti restano sconosciute; valori senza riferimenti affidabili non vengono dichiarati nella norma. I referti senza data sono consultabili ma esclusi dagli andamenti temporali.",
+        "test": "Apri un parametro con una misura senza data e verifica l’indicazione esplicita."
+      }
+    ]
+  },
+  {
     "build": 117,
     "date": "2026-11-10",
     "title": "Maximize e promemoria più compatti",

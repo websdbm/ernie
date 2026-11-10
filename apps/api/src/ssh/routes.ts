@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Authenticator } from '../auth.js';
 import { createAuthHook } from '../ws/plugin.js';
-import type { SshService } from './service.js';
+import { SshDeleteRequest, type SshService } from './service.js';
 import { SshError } from './types.js';
 
 export interface SshRoutesOptions {
@@ -38,6 +38,11 @@ const empty = (body: unknown) => {
       'Questa richiesta non accetta comandi o parametri aggiuntivi.',
     );
 };
+const deletion = (body: unknown) => {
+  const parsed = SshDeleteRequest.safeParse(body === undefined ? {} : body);
+  if (!parsed.success) throw new SshError('invalid_input', 'Conferma di rimozione non valida.');
+  return parsed.data.expected;
+};
 export async function sshRoutes(app: FastifyInstance, opts: SshRoutesOptions): Promise<void> {
   if (!app.hasRequestDecorator('auth')) app.decorateRequest('auth', null);
   await app.register(async (api) => {
@@ -71,8 +76,12 @@ export async function sshRoutes(app: FastifyInstance, opts: SshRoutesOptions): P
     );
     api.post('/v1/ssh/sites', async (req) => opts.service.siteSave(user(req), req.body as never));
     // Cancellazioni dell'inventario dell'account (RLS): valgono anche a skill spenta.
-    api.delete('/v1/ssh/servers/:id', async (req) => opts.service.serverDelete(user(req), id(req)));
-    api.delete('/v1/ssh/sites/:id', async (req) => opts.service.siteDelete(user(req), id(req)));
+    api.delete('/v1/ssh/servers/:id', async (req) =>
+      opts.service.serverDelete(user(req), id(req), deletion(req.body)),
+    );
+    api.delete('/v1/ssh/sites/:id', async (req) =>
+      opts.service.siteDelete(user(req), id(req), deletion(req.body)),
+    );
     api.post('/v1/ssh/servers/:id/probe', async (req) => {
       empty(req.body);
       return opts.service.hostProbe(user(req), id(req));

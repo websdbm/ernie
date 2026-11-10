@@ -34,9 +34,15 @@ Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261
 ### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
 
 L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. Stato corrente e criteri di
-chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. Avviati ricerca web, strumenti comuni
-e comandi SSH; Abitudini/HealthKit richiedono prima i contratti di protezione e revoca. Nessun nuovo rilascio
-oltre la 117 ancora preparato/pubblicato. Sospensioni Instagram/rete VPS conservate.
+chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 in preparazione, non pubblicata**:
+ricerca web, strumenti comuni, comandi SSH, accuratezza referti e budget automazioni implementati.
+Dettagli in [ricerca 25](research/25-open-features-wave1.md), verifiche e ricevute in
+[build 118](releases/build-118.md). Abitudini/HealthKit richiedono prima i contratti di protezione e revoca.
+Sospensioni Instagram/rete VPS conservate. La 117 rimane distribuita; nessuna migrazione 0051 o modifica
+di produzione effettuata per questo gruppo. Nuovo rilascio richiederà API **e worker** prima del client.
+Verifiche: **191 test backend, 42 iOS**, TypeScript/Biome verdi; database temporaneo con RLS,
+render chiaro/scuro/caratteri accessibili e revisione indipendente. Sorgenti 118 pronti per commit/archivio;
+nessuna nuova raccolta sensibile o prova su iPhone fisico.
 
 Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
 funzione sviluppata o impostazione cambiata durante la ricognizione precedente all'autorizzazione.
@@ -44,15 +50,17 @@ funzione sviluppata o impostazione cambiata durante la ricognizione precedente a
 - **Abitudini**: specifica definita, manca la skill con visite in background, archivio cifrato, apprendimento
   dei luoghi, domande attive e contesto pertinente. La posizione occasionale già esistente non equivale allo storico.
 - **Salute**: importazione referti presente; mancano HealthKit, sincronizzazione, protezione applicativa completa
-  dei dati/derivati e consenso continuativo revocabile della nuova estensione. Da correggere date ignote e
-  riepiloghi quando mancano intervalli di riferimento, come già descritto nella ricerca 22.
+  dei dati/derivati e consenso continuativo revocabile della nuova estensione. Date ignote e riepiloghi
+  quando mancano riferimenti corretti e testati per la 118; non equivale alla cifratura completa.
 - **Analisi immagini**: catalogazione visiva/OCR e ricette presenti; manca il percorso generale Jev multimodale
   più domande/analisi dell'immagine della ricerca 24.
-- **Ricerca online**: Firecrawl presente, ancora taglio a 3.000 caratteri; selezione dei passaggi pertinenti,
-  approfondimento con letture parallele, freschezza/cache applicativa e misure comparative restano proposti.
-- **Strumenti e prestazioni**: task paralleli/precisazioni e `time_windows` pubblicati. Mancano gli strumenti
-  `day_snapshot`, `resolve_target`, `change_preview/change_apply`, `read_sources`, `check_result` della ricerca 21;
-  il miglioramento di latenza generale dopo il rilascio non è ancora quantificato su un campione adeguato.
+- **Ricerca online**: per la 118 implementati passaggi pertinenti, letture parallele limitate, copertura,
+  freschezza e cache per account. Verifiche simulate verdi; nessuna nuova chiamata Firecrawl reale o misura
+  generale di latenza. La produzione 117 mantiene il comportamento precedente.
+- **Strumenti e prestazioni**: task paralleli/precisazioni e `time_windows` pubblicati. Per la 118 implementati
+  gli strumenti comuni mancanti nella 117: `day_snapshot`, `resolve_target`,
+  `change_preview/change_apply`, `read_sources`, `check_result`. Patch/verifica limitate ai Todo esistenti;
+  budget e prove versionate non sostituiscono i permessi. Il miglioramento generale non è quantificato.
 - **Configurazioni**: nell'account owner con inventario SSH e chiave attiva più recente risultano 5 server,
   staging3 incluso, e 38 siti. Vultr configurato (`connected=true`, ultima verifica registrata 23 ottobre);
   nessuna credenziale Contabo registrata. Nessuna nuova prova verso i provider o i server gestiti.
@@ -62,7 +70,9 @@ funzione sviluppata o impostazione cambiata durante la ricognizione precedente a
   Non trovata qui una ricevuta di importazione; stato da verificare sui contenuti, senza dichiararlo completato.
 
 La sezione storica «Aperto» più sotto non è tutta corrente: salvataggio chat fuori dal main risolto nella 115;
-paginazione Vultr presente nel codice. Mancano ancora i comandi iOS di cancellazione server/siti.
+paginazione Vultr presente. Comandi iOS di rimozione server/siti pronti per la 118, con revisione/snapshot
+confrontati atomicamente dal backend. API da pubblicare prima del client; nessun host remoto modificato.
+Budget giornaliero automazioni corretto nel fuso della singola automazione, provato su PostgreSQL.
 
 Stato del rilascio precedente: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
