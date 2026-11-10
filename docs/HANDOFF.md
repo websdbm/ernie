@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 120 — Abitudini verificata, archivio in preparazione
+### Build 120 — Abitudini compilata e firmata, pubblicazione in attesa
 
 10 novembre 2026. Due implementazioni Copilot su copie isolate integrate e verificate da Codex.
 124 test backend in nove suite, 46 iOS in due suite; TypeScript/Biome e render chiaro/scuro accessibile passati.
@@ -13,10 +13,14 @@ Correzioni di revoca/pausa e avvio background, lease locale, coda protetta, visi
 limiti delle domande anche dopo clear, manutenzione isolata per account. AppDelegate e SwiftUI condividono
 lo stesso AppModel; nessun opt-in implicito e nessun prompt di permesso al riavvio.
 
-Numero/changelog 120 aggiornati. Pubblicazione ancora da autorizzare: **server resta API fe3a60f,
+Numero/changelog 120 aggiornati; sorgenti GitHub **62f097c17f52fef696d98e4e685b56b655336544**.
+Archivio pulito Xcode 27.2 ufficio, export Apple Xcode 27.0 Mac Studio: quattro bundle 120 firmati
+e verificati, gruppo diario privato solo nell’app; 318 input iOS verificati. IPA/manifest sul Mac Studio
+in `~/Library/Caches/ernie-builds/build-120-20261110-habits/`. Pubblicazione ancora da autorizzare: **server resta API fe3a60f,
 worker 119, TestFlight 119**; migrazione 0054 e chiave Abitudini non applicate al server.
 L’iPhone collegato è stato riletto alla 119 dopo l’aggiornamento dell’utente, non alterato dai test.
-Restano firma/export 120 e prova hardware con visite reali; Apple Salute resta successiva.
+Restano pubblicazione API/worker, chiave dedicata e migrazione 0054 dopo backup, upload 120,
+smoke runtime e prova hardware con visite reali; Apple Salute resta successiva.
 Note e protocollo di verifica in [build 120](releases/build-120.md); limiti/costi Copilot nella
 [ricerca 28](research/28-habits-implementation.md). Modifiche estranee a backup/configurazione/assets preservate.
 
