@@ -33,8 +33,13 @@ Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261
 
 ### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
 
+L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. Stato corrente e criteri di
+chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. Avviati ricerca web, strumenti comuni
+e comandi SSH; Abitudini/HealthKit richiedono prima i contratti di protezione e revoca. Nessun nuovo rilascio
+oltre la 117 ancora preparato/pubblicato. Sospensioni Instagram/rete VPS conservate.
+
 Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
-funzione sviluppata o impostazione cambiata durante questa ricognizione.
+funzione sviluppata o impostazione cambiata durante la ricognizione precedente all'autorizzazione.
 
 - **Abitudini**: specifica definita, manca la skill con visite in background, archivio cifrato, apprendimento
   dei luoghi, domande attive e contesto pertinente. La posizione occasionale già esistente non equivale allo storico.

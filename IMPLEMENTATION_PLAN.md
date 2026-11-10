@@ -1,26 +1,63 @@
 # Ernie — Piano di implementazione
 
-> Stato aggiornato al 10 ottobre 2026 (allineato ad ARCHITECTURE.md v0.2: le voci A.x/B.x/C.x rimandano a `docs/research/03-revisione.md` §5). Ogni milestone ha criteri di accettazione verificabili; non si passa alla successiva finché la corrente non è verificata (lint, typecheck, test, e dove previsto Docker e smoke test).
+> Roadmap aggiornata al **10 novembre 2026**, dopo la build **117**. Stato pubblicato e ricevute in
+> [HANDOFF](docs/HANDOFF.md) e [rilasci](docs/releases/). Le milestone di ottobre sotto sono uno storico:
+> il lavoro corrente è la tabella seguente, che sostituisce le vecchie ipotesi superate (in particolare avatar 3D).
 
-Scenario guida e golden set: `docs/USE_CASES.md` (UC-1, lista della spesa → abitudini → ricette).
+## Roadmap corrente
 
-Legenda: ✅ completata · 🔧 in corso · ⏳ pianificata · ⚠️ bloccata/da chiarire
+L'utente ha autorizzato aggiornamento della roadmap e chiusura dei punti aperti. Si procede per incrementi
+verificabili, distinguendo **implementato**, **verificato**, **pubblicato** e **bloccato da un prerequisito**.
+Una funzione non è chiusa perché esiste soltanto la sua specifica o un pulsante.
 
-## Riepilogo
+| ID | Area | Stato | Criterio di chiusura |
+|---|---|---|---|
+| R1 | Ricerca online | In sviluppo | Passaggi pertinenti alla domanda, letture batch limitate, fonte/copertura/freschezza esplicite, cache isolata e aggiornamento; test su pagine lunghe, errori e timeout; integrazione agente verificata. |
+| R2 | Strumenti comuni | In sviluppo | Quadro giornata, risoluzione destinatari/oggetti, lettura fonti e verifica esito; modifiche versionate e idempotenti con anteprima; meno chiamate sul corpus reale, senza aggirare skill/approvazioni. |
+| R3 | SSH, comandi mancanti | In sviluppo | Eliminazione server/siti dall'app con conferma, refresh e stato errore; isolamento account e nessuna cancellazione dei siti sul server remoto. |
+| R4 | Salute, accuratezza e protezione | Pianificato | Date ignote non inventate; riferimenti mancanti dichiarati; cifratura di dati/originali/derivati e migrazione reversibile; consenso AI continuativo revocabile, cancellazione e accessi verificati. |
+| R5 | Skill Abitudini | Pianificato | Visite iOS, storico personale cifrato, luoghi/relazioni, fatti-ipotesi-conferme distinti, domande proattive entro budget; disattivazione ferma raccolta/job/contesto; prova su dispositivo. |
+| R6 | Apple Salute | Pianificato, dipende da R4 | HealthKit sola lettura, permessi per categoria, sincronizzazione incrementale/deduplicazione/cancellazioni, ultimo aggiornamento e profilo leggibile; prova con permessi reali su iPhone. |
+| R7 | Skill Analisi immagini | Pianificato | Foto/ritagli al classificatore visivo quando utile, domande e follow-up sull'immagine corretta, lettura LLM con fonti/incertezza; batch multipli e isolamento verificati. |
+| R8 | Nove foto ricetta | Da verificare e completare | Recupero originali, trascrizione fedele, normalizzazione senza inventare quantità, controllo duplicati e ricevuta di importazione nell'account corretto. |
+| R9 | Collegamenti esterni | Prerequisiti esterni | Contabo: password API valida, inventario e associazioni provati in sola lettura. YouTube: chiave Data API dedicata/restrizioni e video normali verificati. Non memorizzare credenziali in Git. |
+| R10 | Rifiniture e misure | Pianificato | Riesame dei residui storici (Todo/Redis, vecchi titoli dei luoghi, budget automazioni, connessioni WS); misure latenza/errori dopo rilascio e prove native su iPhone. |
 
-| Milestone | Obiettivo | Stato |
-|---|---|---|
-| M1 | Fondamenta: monorepo, TypeScript, Fastify, PostgreSQL, Docker Compose, health check, test, CI | ✅ |
-| M2 | Agente minimo: Mastra, Soul per utente, sessioni, OpenRouter, streaming WS, persistenza, costi, RLS | ✅ |
-| M3 | JEV Router: adapter, soglie calibrate, comandi deterministici, Policy Engine con taint e approvazioni, isteresi di classe, loop detector | ✅ |
-| M4 | Memoria: semantica ed episodica, ricerca ibrida RRF, snapshot + memory_search, consolidamento asincrono, export/oblio | ✅ |
-| M5 | Tool e skill: registry, executor con policy e approvazioni, Firecrawl, lista della spesa deterministica, skill apprese, test di sicurezza | ✅ |
-| M6 | Automazioni: BullMQ, scheduler, trigger, storico, notifiche | ✅ |
-| M7 | App iOS: SwiftUI, autenticazione, chat, push-to-talk, STT/TTS, streaming | ✅ |
-| M8 | Voce avanzata: conversazione continua con fine turno automatica, sintesi incrementale, barge-in con `spokenThroughIndex`, errori audio | ✅ |
-| M9 | Ottimizzazione: benchmark token, cache, profilazione, latenza, e2e, hardening | ⏳ |
-| M10 | Avatar 3D: three.js + TalkingHead in WKWebView, modulo italiano, lip-sync on-device, integrazione | ⏳ |
-| R | Ricerca bibliografica (3 ricercatori + revisore) e integrazione nei documenti | ✅ |
+Ordine: R1/R2/R3 separabili; R4 prima della raccolta R5/R6; R7 riusa Media e i controlli del dominio;
+R8 indipendente; R9 avanza fino al punto in cui serve l'autenticazione dell'utente. Non dichiarare chiusi
+HealthKit/background e qualità della mobilità con soli test del simulatore.
+
+### Già pubblicato
+
+- **117**: Maximize per conversazione e sforzo, promemoria compatti con canali interattivi, voce Drama +15%.
+- **115–116**: fino a tre compiti, precisazioni durante il lavoro, risolutore dei messaggi, `time_windows`,
+  persistenza iOS fuori dal main, componenti UI uniformi e nuove schede promemoria.
+- **114**: Archivio chat backend per account/conversazione, import incrementale e fonti; Brain separato.
+- Già presenti: Todo gerarchici/timeline e reminder, Second Brain fattuale e consolidamenti, ricette/media,
+  SSH con inventario e procedure, consumi, diario personale cifrato, suoni, avatar pixel art e palette.
+
+### Vincoli conservati
+
+- Instagram e modifica della rete VPS Contabo: **sospesi dall'utente**, nessuna riattivazione automatica.
+- Revisione globale Brain massimo ogni 24 ore; consolidamento dell'area dopo aggiunte.
+- Skill e consensi per account; nessuna lettura automatica del diario o degli archivi chat.
+- Salute: consenso AI continuativo revocabile; Diario: sblocco e consenso esplicito; Abitudini: storico anche
+  sul backend cifrato e contesto pertinente consentito ai modelli, senza confondere privacy e isolamento account.
+- Nuova pubblicazione API/TestFlight solo dopo risultato verificato e via libera richiesto da HANDOFF;
+  ogni build da sorgenti pubblicati su GitHub, con manifest e controlli della distribuzione.
+
+### Verifiche e coordinamento
+
+Prima ondata: lead su roadmap/contratti/strumenti, agente engine su web, agente ui sui comandi SSH.
+Proprietà dei file separate, nessun deploy delegato; integrazione e verifica finale del lead.
+Documentazione preesistente modificata fuori ambito conservata. La chiusura aggiorna questa tabella e HANDOFF
+con test, commit, eventuale migrazione e stato effettivo del rilascio.
+
+## Milestone storiche M1–M10
+
+Conservate come evidenza del percorso di ottobre. Le ipotesi di avatar 3D e i blocchi sui provider descritti
+in quel periodo non costituiscono nuove attività autorizzate: il prodotto attuale usa gli avatar pixel art
+approvati e dispone di Anthropic diretto e OpenRouter.
 
 ## M1 — Fondamenta ✅
 
