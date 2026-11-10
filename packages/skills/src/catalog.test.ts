@@ -191,10 +191,7 @@ describe('catalogo delle skill', () => {
     );
     // Salute e SSH richiedono attivazione esplicita.
     expect([...disabledToolIds(undefined)].sort()).toEqual([
-      'health_import',
-      'health_overview',
-      'health_parameter',
-      'health_report',
+      'health_open',
       'ssh_diagnose',
       'ssh_inventory',
       'ssh_investigate',

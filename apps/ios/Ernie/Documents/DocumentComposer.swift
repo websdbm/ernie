@@ -51,6 +51,7 @@ final class DocumentComposer {
 
     /// Predefinito: riconosci il contenuto; studio solo quando viene scelto o richiesto.
     var schemaChoice: SchemaChoice = .auto
+    private(set) var healthDraft: HealthVaultDraft?
     private(set) var phase: Phase = .idle
     private(set) var mediaSavedCount = 0
     private var api: ApiClient?
@@ -83,6 +84,18 @@ final class DocumentComposer {
         phase = .idle
         mediaSavedCount = 0
         schemaChoice = .auto
+        healthDraft = nil
+    }
+
+    func suspendSensitiveReading() {
+        if case .reading = phase {
+            clear()
+            phase = .failed("Lettura interrotta quando l’app è passata in background. Riapri l’allegato per continuare.")
+        } else if healthDraft != nil { clear() }
+    }
+
+    func takeHealthDraft() -> HealthVaultDraft? {
+        let result = healthDraft; healthDraft = nil; return result
     }
 
     /// Conserva la richiesta scritta; una scelta di studio vale solo quando non c'è testo.
@@ -94,7 +107,7 @@ final class DocumentComposer {
     }
 
     func importPDF(_ url: URL) {
-        start { progress in
+        start(healthPDF: url.pathExtension.lowercased() == "pdf" ? url : nil) { progress in
             let ext = url.pathExtension.lowercased()
             if ext == "txt" || ext == "md" { return try DocumentReader.read(text: url) }
             return try await DocumentReader.read(pdf: url, progress: progress)
@@ -148,10 +161,6 @@ final class DocumentComposer {
                         try Task.checkCancellation()
                         guard generation == token else { return }
                         let upload = MediaUpload(data: jpeg, source: source == "scan" ? "scan" : "photo", autoOrganize: automatic, location: photo.location)
-                        if api.usesBackgroundMedia {
-                            let id = try MediaUploadQueue.shared.stage(upload.data, id: upload.clientId, source: upload.source, autoOrganize: automatic, credentials: api.credentials, location: upload.location)
-                            mediaTransfers.append(MediaUploadQueue.shared.handle(id))
-                        }
                         uploads.append(upload)
                     } catch { failures += 1 }
                 }
@@ -164,14 +173,19 @@ final class DocumentComposer {
                 catch { if Task.isCancelled { throw error }; failures += 1 }
                 try Task.checkCancellation()
                 guard generation == token else { return }
+                if let doc, HealthImportGuard.recognizes(doc) {
+                    do { healthDraft = try HealthVaultImporter.draft(document: doc, images: uploads.map(\.data)); phase = .idle }
+                    catch { phase = .failed(HealthVaultError.invalidImport.message) }
+                    return
+                }
                 phase = .uploading
                 var transfers: [MediaUploadHandle] = []
                 for (index, var upload) in uploads.enumerated() {
-                    upload.ocrText = doc?.pages[index] ?? ""
+                    upload.ocrText = doc.flatMap { $0.pages.indices.contains(index) ? $0.pages[index] : nil } ?? ""
                     do {
                         let transfer = try api.beginMediaUpload(upload)
                         transfers.append(transfer)
-                        if !api.usesBackgroundMedia { mediaTransfers.append(transfer) }
+                        mediaTransfers.append(transfer)
                     } catch { failures += 1 }
                 }
                 // Tutti i trasferimenti sono già in URLSession. Attenderne uno non
@@ -203,7 +217,7 @@ final class DocumentComposer {
         }
     }
 
-    func start(_ read: @escaping @Sendable (@escaping @Sendable (Int, Int) -> Void) async throws -> ImportedDocument) {
+    func start(healthPDF: URL? = nil, _ read: @escaping @Sendable (@escaping @Sendable (Int, Int) -> Void) async throws -> ImportedDocument) {
         clear()
         guard let api else { phase = .failed("Accedi prima di allegare un documento."); return }
         let token = generation
@@ -220,6 +234,11 @@ final class DocumentComposer {
                 let doc = try await read(progress)
                 try Task.checkCancellation()
                 guard generation == token else { return }
+                if HealthImportGuard.recognizes(doc) {
+                    do { healthDraft = try HealthVaultImporter.draft(document: doc, pdf: healthPDF); phase = .idle }
+                    catch { phase = .failed(HealthVaultError.invalidImport.message) }
+                    return
+                }
                 phase = .uploading
                 let ref = try await api.createDocument(doc)
                 try Task.checkCancellation()
@@ -229,8 +248,7 @@ final class DocumentComposer {
             } catch is CancellationError {
             } catch {
                 guard generation == token, !Task.isCancelled else { return }
-                phase = .failed(AppModel.describe(error))
-                Log.chat.error("lettura documento fallita: \(error.localizedDescription, privacy: .public)")
+                phase = .failed("Impossibile completare la lettura. Per documenti personali o referti usa la sezione Salute.")
             }
         }
     }

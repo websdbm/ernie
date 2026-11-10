@@ -222,9 +222,7 @@ struct SidePanel: View {
             if showsBrain {
                 sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)
             }
-            if isHealthActive {
-                sectionRow("Salute", icon: "heart.text.square.fill", tint: .health, locked: true, destination: .health)
-            }
+            sectionRow("Salute", icon: "heart.text.square.fill", tint: .health, locked: true, destination: .health)
             sectionRow("ErnieTRIX", icon: "gamecontroller.fill", tint: .brain, destination: .ernietrix)
             sectionRow("Skill", icon: "bolt.shield.fill", tint: .neutral, destination: .skills)
             sectionRow("Famiglia", icon: "person.2.fill", tint: .neutral, destination: .family)

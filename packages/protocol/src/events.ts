@@ -675,6 +675,12 @@ export const DirectionsBlock = z.object({
   mode: z.enum(['driving', 'walking', 'bicycling', 'transit']),
   url: z.url().max(2000),
 });
+export const HealthAccessBlock = z.object({
+  kind: z.literal('health_access'),
+  title: z.string(),
+  message: z.string(),
+});
+
 export const ContentBlock = z.discriminatedUnion('kind', [
   WebResultsBlock,
   ListBlock,
@@ -688,6 +694,7 @@ export const ContentBlock = z.discriminatedUnion('kind', [
   RemindersBlock,
   CitationsBlock,
   HealthBlock,
+  HealthAccessBlock,
   ChoicesBlock,
   FamilyMessageBlock,
   InterpretationBlock,

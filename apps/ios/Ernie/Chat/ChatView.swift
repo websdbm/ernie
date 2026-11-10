@@ -20,6 +20,8 @@ struct ChatView: View {
     @State private var showUsage = false
     @State private var showUsageAdmin = false
     @State private var showBrain = false
+    @State private var showHealth = false
+    @State private var healthStore = HealthVaultStore()
     @State private var showSSH = false
     @State private var showGame = false
     @State private var diaryLaunch: DiaryLaunch?
@@ -67,7 +69,17 @@ struct ChatView: View {
             if let previous { taskDrafts[previous] = draft }
             draft = next.flatMap { taskDrafts[$0] } ?? ""
         }
-        .onChange(of: model.credentials) { taskDrafts = [:]; draft = "" }
+        .onChange(of: model.credentials) { taskDrafts = [:]; draft = ""; healthStore.scrub(); showHealth = false }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                healthStore.scrub(); showHealth = false
+                // Any OCR in flight can still contain health data not yet classified.
+                model.documents.suspendSensitiveReading()
+            }
+        }
+        .onChange(of: model.documents.healthDraft?.id) { _, id in
+            if id != nil, let incoming = model.documents.takeHealthDraft() { openHealth(draft: incoming) }
+        }
         .onChange(of: model.conversation?.lastAvatarEmotion) { appearanceIdleSince = .now; appearanceDate = .now }
         .environment(\.bearContext, BearContext.latest(in: model.conversation?.items ?? []))
         .animation(.spring(duration: 0.35), value: model.voice.map { Self.showsListening($0.phase) } ?? false)
@@ -79,6 +91,9 @@ struct ChatView: View {
         .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
         .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
         .sheet(isPresented: $showBrain, onDismiss: sheetDidDismiss) { SecondBrainView() }
+        .sheet(isPresented: $showHealth, onDismiss: { healthStore.scrub(); sheetDidDismiss() }) {
+            HealthVaultView(store: healthStore).chatAppearance(costume: resolvedCostume)
+        }
         .fullScreenCover(isPresented: $showGame, onDismiss: sheetDidDismiss) {
             if let conversation = model.conversation {
                 ErnieTRIXView(storageID: conversation.gameStorageID, costume: resolvedCostume)
@@ -217,6 +232,7 @@ struct ChatView: View {
         if hasPresentedSheet {
             dismissingForLink = true
             showSettings = false; showUsage = false; showUsageAdmin = false
+            showHealth = false; healthStore.scrub()
             showBrain = false; showSSH = false; showGame = false; diaryLaunch = nil; listSheet = nil
             archiveReference = nil; showChatArchives = false; showRecipes = false; showMedia = false; showReminders = false
             showAutomations = false; showSkills = false; showFamily = false
@@ -235,6 +251,8 @@ struct ChatView: View {
             if voice.isActive { voice.cancelListening() }
             composing = false
             if link == .reminders { showReminders = true } else { showAutomations = true }
+        case .health:
+            openHealth()
         case .family:
             if voice.isActive { voice.cancelListening() }
             composing = false
@@ -242,9 +260,16 @@ struct ChatView: View {
     }
 
     private var hasPresentedSheet: Bool {
-        showSettings || showUsage || showUsageAdmin || showBrain || showSSH || listSheet != nil
+        showSettings || showUsage || showUsageAdmin || showBrain || showHealth || showSSH || listSheet != nil
         || archiveReference != nil || showChatArchives || showRecipes || showMedia || showReminders || showAutomations || showSkills
         || showFamily || showProfile || whatsNew != nil || debugIcons || showGame || diaryLaunch != nil
+    }
+
+    private func openHealth(draft incoming: HealthVaultDraft? = nil) {
+        panelOpen = false; composing = false
+        model.voice?.cancelListening(); model.conversation?.muteSpeech()
+        healthStore.activate(client: model.api.map { HealthVaultClient(credentials: $0.credentials) }, draft: incoming)
+        showHealth = true
     }
 
     private func sheetDidDismiss() {
@@ -271,7 +296,8 @@ struct ChatView: View {
         case .shoppingList(let id): listSheet = .shopping(id)
         case .reminders: showReminders = true
         case .automations: showAutomations = true
-        case .brain, .health: showBrain = true
+        case .brain: showBrain = true
+        case .health: openHealth()
         case .chatArchives: showChatArchives = true
         case .recipes: showRecipes = true
         case .media: showMedia = true

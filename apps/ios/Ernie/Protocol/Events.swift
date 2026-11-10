@@ -639,6 +639,9 @@ struct HealthBlock: Codable, Sendable, Equatable {
     var summary: String?
 }
 
+/// Invito neutro: nessun referto o valore clinico nella chat persistita.
+struct HealthAccessBlock: Codable, Sendable, Equatable { var title: String; var message: String }
+
 /// Contenuti con schema chiuso resi come schede native; i tipi sconosciuti vengono ignorati.
 enum ContentBlock: Sendable, Equatable, Codable {
     case webResults(query: String, results: [WebResultItem])
@@ -653,6 +656,7 @@ enum ContentBlock: Sendable, Equatable, Codable {
     case reminders(RemindersBlock)
     case citations(CitationsBlock)
     case health(HealthBlock)
+    case healthAccess(HealthAccessBlock)
     case choices(ChoicesBlock)
     case familyMessage(FamilyMessageBlock)
     case interpretation(InterpretationBlock)
@@ -687,6 +691,8 @@ enum ContentBlock: Sendable, Equatable, Codable {
             self = .reminders(try RemindersBlock(from: decoder))
         case "citations":
             self = .citations(try CitationsBlock(from: decoder))
+        case "health_access":
+            self = .healthAccess(try HealthAccessBlock(from: decoder))
         case "health":
             self = .health(try HealthBlock(from: decoder))
         case "choices":
@@ -739,6 +745,9 @@ enum ContentBlock: Sendable, Equatable, Codable {
             try block.encode(to: encoder)
         case .citations(let block):
             try c.encode("citations", forKey: .kind)
+            try block.encode(to: encoder)
+        case .healthAccess(let block):
+            try c.encode("health_access", forKey: .kind)
             try block.encode(to: encoder)
         case .health(let block):
             try c.encode("health", forKey: .kind)

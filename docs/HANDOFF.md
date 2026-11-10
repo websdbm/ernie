@@ -5,36 +5,29 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Lavoro successivo alla 118 — protezione Salute, in corso
+### Build 119 in preparazione — integrazione Salute
 
-10 novembre 2026. L'utente ha scelto **solo Ernie ed esportazione esplicita**, eliminando il requisito di
-sincronizzare referti leggibili in Obsidian. Priorità confermata: cifratura/consenso Salute, poi Abitudini,
-poi Apple Salute. Decisioni e sequenza in [ricerca 26](research/26-health-protection.md).
+10 novembre 2026. L'utente ha autorizzato integrazione nell'app e migrazione dei dati esistenti;
+Salute va completata prima di Abitudini e Apple Salute. **Produzione/TestFlight restano 118**.
+La scelta è archivio in Ernie con esportazione esplicita, senza copie leggibili in Obsidian.
+[Contratti e recupero](research/27-health-vault-integration.md), [rilascio 119](releases/build-119.md).
 
-Componenti sviluppati e verificati ma **non collegati al runtime pubblicato**:
-- `apps/api/src/health-protection/`: crypto autenticata per account/risorsa/revisione, store cifrato per
-  referti e avvisi, consenso versionato e revocabile con eventi non riscrivibili. Lettura manuale separata
-  dall'AI; ticket scaduti/revocati non riutilizzabili, compresa riattivazione successiva del consenso.
-- Migrazione strutturale `0052_health_protection.sql`, quattro tabelle con RLS; **non applicata su staging3**.
-  Nessun consenso attivato e nessuna chiave nuova configurata. Il backend può decifrare: non dichiarare E2EE.
-- Cancellazione documenti ripulisce anche indici/prodotti/schemi/titoli; risultati AI tardivi non ricreano
-  contenuti eliminati. Isolamento account e ricerche con vecchi indici residui verificati.
+- API `/v1/health/*`, originali/OCR/valori cifrati, UI dedicata Documenti/Valori/Chiedi, consenso AI
+  continuativo revocabile. Manuale indipendente da skill/AI; main chat apre solo la sezione, niente valori
+  clinici nei tool, contesto o memoria ordinari. Diario separato. Backend decifra: non dichiarare E2EE.
+- Keyring `HEALTH_ENCRYPTION_KEYS` dedicato; mancante = Salute indisponibile, nessun fallback. Migrazioni
+  0052 e 0053 da applicare con backup/vecchi writer fermi. CLI migrate-health inventario default,
+  applicazione esplicita e blocco copie esterne/ambigue. Consenso mai abilitato dalla migrazione.
+- Controllo locale prima della coda Media e guardie API su referti riconoscibili; non è riconoscimento
+  infallibile di ogni immagine. Usare importazione Salute. Chat libera segue le regole della chat.
+- **117 test backend/16 suite verdi**, TypeScript/Biome verificati. Review ha corretto log sanitari
+  in errori provider, scadenza durante lock e indice Salute.md. Dati sintetici, zero provider reali.
+- Inventario staging3 read-only: zero referti/valori/avvisi legacy, note/candidati OCR sanitari o chiamate
+  ai tool clinici. 21 vault, nessuna cartella Salute corrente/storica. Ripetere dopo stop writer.
 
-**49 test backend in otto suite superati**, PostgreSQL sintetico isolato e nessun provider AI. Quattro
-regressioni falliscono sul codice precedente in 330 ms e passano con la correzione. Migrazioni 1–52 provate
-anche da zero, seconda esecuzione senza modifiche; privilegi degli eventi verificati. Review indipendente
-ha trovato/corretto scadenza durante attesa DB e avvisi superati tramite un riferimento non proprio.
-TypeScript/Biome e controllo whitespace verificati. Evidenze locali temporanee:
-`/tmp/ernie-health-protection-final-tests.log`, `typecheck-final.log` con lo stesso prefisso,
-`/tmp/ernie-health-deletion-red-final.log`. Nessuna build iOS o pubblicazione nuova.
-Sorgenti `65357097597d00e4685341722d4ffa4b31032a8d` pubblicati su GitHub e SHA remoto verificato.
-Container/database sintetici e relative credenziali temporanee rimossi dopo i test.
-
-**R4 non è completato**: restano collegamento documenti/media/referti, caricamento cifrato dall'ingresso,
-API/UI e guardie su tutti i percorsi AI, copie in chat/replay/cache e migrazione di dati/vault/cronologia.
-Non usare il nuovo store come fallback silenzioso e non dichiarare cifrati i dati reali dalla sola presenza
-della libreria. Esportazioni leggibili soltanto esplicite. Abitudini e HealthKit restano non attivati.
-Non è stata toccata la documentazione/backup preesistente modificata fuori ambito.
+Resta da completare la verifica nativa/firma della 119 e il rilascio con verifica runtime. Non dichiarare
+cifrati i dati reali dalla sola presenza dei sorgenti. Chiave e migrazioni non ancora configurate in produzione.
+Le modifiche preesistenti fuori ambito a docs/CONFIGURATION, docs/DEPLOY, ricerca12 e backup restano escluse.
 
 ### Ultimo rilascio effettivamente pubblicato
 

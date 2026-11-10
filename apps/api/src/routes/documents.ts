@@ -2,6 +2,10 @@ import type { DocumentRepository } from '@ernie/documents';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
+import {
+  isPrivateHealthDocument,
+  PRIVATE_HEALTH_UPLOAD,
+} from '../health-protection/classification.js';
 import { createAuthHook } from '../ws/plugin.js';
 
 export interface DocumentsRoutesOptions {
@@ -55,6 +59,10 @@ export async function documentsRoutes(
           error: 'invalid_body',
           message: b.error.issues[0]?.message ?? 'corpo non valido',
         });
+      if (isPrivateHealthDocument(b.data.pages.join('\n'), b.data.title)) {
+        req.body = undefined;
+        return reply.code(422).send(PRIVATE_HEALTH_UPLOAD);
+      }
       const meta = await opts.repo.create(auth.userId, {
         source: b.data.source,
         pageTexts: b.data.pages,

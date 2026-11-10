@@ -16,6 +16,7 @@ import {
 } from './routes/family-messages.js';
 import { type GuardianRoutesOptions, guardianRoutes } from './routes/guardian.js';
 import { type HealthCheck, healthRoutes } from './routes/health.js';
+import { type HealthVaultRoutesOptions, healthVaultRoutes } from './routes/health-vault.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { type MediaRoutesOptions, mediaRoutes } from './routes/media.js';
 import { type ModelsRoutesOptions, modelsRoutes } from './routes/models.js';
@@ -40,6 +41,7 @@ import { type SshRoutesOptions, sshRoutes } from './ssh/routes.js';
 import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
+  readonly healthVault?: HealthVaultRoutesOptions;
   readonly privateDiary?: PrivateDiaryRoutesOptions;
   readonly operatingPreferences?: OperatingPreferenceRoutesOptions;
   readonly config: AppConfig;
@@ -163,6 +165,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.models) await app.register(modelsRoutes, opts.models);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);
+  if (opts.healthVault) await app.register(healthVaultRoutes, opts.healthVault);
   if (opts.privateDiary) await app.register(privateDiaryRoutes, opts.privateDiary);
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
   if (opts.todo) await app.register(todoRoutes, opts.todo);

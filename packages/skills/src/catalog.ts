@@ -338,15 +338,9 @@ export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
     summary:
       'Analisi del sangue ed esami: valori, confronti e andamenti, in una sezione riservata.',
     description:
-      "Carica il referto delle analisi come documento: Ernie legge i valori e li salva nella sezione Salute del second brain, riservata. Chiedi «com'è il colesterolo?», «confronta le ultime analisi con quelle di marzo», «la glicemia sta salendo?»: arriva la tabellina con valori, intervalli di riferimento, fuori intervallo e andamento, con una spiegazione prudente. Ernie non è un medico: per i dubbi, il tuo medico.",
+      'Archivio Salute cifrato per account: referti, valori e confronti. Importazione e consultazione nella sezione dedicata; analisi AI solo con skill attiva e consenso revocabile. Esportazione leggibile solo su richiesta, nessuna sincronizzazione Obsidian.',
     kind: 'guided',
-    tools: [
-      'health_parameter',
-      'health_report',
-      'health_overview',
-      'health_import',
-      'document_list',
-    ],
+    tools: ['health_open'],
     examples: [
       'com’è il colesterolo nelle mie analisi?',
       'confronta le ultime analisi del sangue con le precedenti',
@@ -440,12 +434,10 @@ export const SECOND_BRAIN_SKILL_INSTRUCTIONS = [
 
 /** Skill guidata «Salute» (sezione salute del second brain, 13 ott 2026). */
 export const HEALTH_SKILL_INSTRUCTIONS = [
-  'Procedura «Salute» (analisi ed esami dell’utente: dati sensibili).',
-  "1) Domanda su un valore o un parametro («com'è il colesterolo?», «la ferritina?», «GOT»): health_parameter con il nome come lo dice l'utente. Su un'analisi intera o un confronto («le ultime analisi», «rispetto a marzo»): health_report (date/against se l'utente indica i giorni; se non conosci le date chiama prima health_overview). L'app mostra la tabellina: nel testo NON ripetere la tabella, commenta in due-quattro frasi.",
-  '2) Spiegazioni prudenti: cosa misura il parametro in parole semplici, se il valore è dentro o fuori dall’intervallo del laboratorio e come si è mosso rispetto a prima. Niente diagnosi, niente terapie o dosaggi, niente allarmismi; per valori fuori intervallo o andamenti che peggiorano suggerisci con calma di parlarne con il medico. Usa i riferimenti del referto, non intervalli tuoi.',
-  "3) Se l'utente dice di aver caricato un referto che non risulta: document_list per trovarlo e health_import con il suo id. Se un parametro non c'è, dillo e cita quelli disponibili.",
-  "4) I valori sono letti dal documento: se l'utente segnala un errore, dì che fa fede il referto originale.",
-  '5) Non riportare questi dati in altre note, messaggi o email senza una richiesta esplicita.',
+  'Procedura Salute: i referti e i dati clinici archiviati si consultano nella sezione protetta.',
+  'Per importare, consultare o confrontare referti, chiama health_open: mostra il collegamento alla sezione dedicata. Non cercare copie nel Second Brain, nei documenti o nei media generici.',
+  'Le elaborazioni si avviano da Salute con skill attiva e consenso AI continuativo revocabile. Non affermare di aver letto valori o compiuto analisi dalla sola apertura della scheda.',
+  'Non trascrivere dati sanitari in altre note, messaggi o email. Il diario personale resta separato.',
 ].join('\n');
 
 export function createHealthSkill(): GuidedSkill {

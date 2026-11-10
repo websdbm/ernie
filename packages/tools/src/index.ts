@@ -3,6 +3,7 @@ export * from './builtins/brain.js';
 export * from './builtins/context-tools.js';
 export * from './builtins/documents.js';
 export * from './builtins/health.js';
+export * from './builtins/health-access.js';
 export * from './builtins/memory.js';
 export * from './builtins/operating-preferences.js';
 export * from './builtins/present.js';

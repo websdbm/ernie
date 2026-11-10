@@ -4,6 +4,7 @@ import {
   createBrainReviewer,
   createClarifyQuestioner,
   createConversationMemory,
+  createHealthAnswerer,
   createHealthExtractor,
   createMastraStorage,
   createPgApprovalStore,
@@ -101,7 +102,7 @@ import {
   createContextTools,
   createDocumentTools,
   createFirecrawlClient,
-  createHealthTools,
+  createHealthAccessTool,
   createMemoryFocusStore,
   createMemorySearchSpec,
   createOperatingPreferenceSpecs,
@@ -145,7 +146,8 @@ import {
   toFamilyMessageBlock,
 } from './family-messages.js';
 import { createGuardianStore, guardianSettings } from './guardian.js';
-import { createHealthRuntime } from './health.js';
+import { healthCipherFromEnvironment } from './health-protection/config.js';
+import { createHealthVaultService } from './health-protection/service.js';
 import { createPostgres } from './infra/postgres.js';
 import { createRedis } from './infra/redis.js';
 import { createIntentStore } from './intents.js';
@@ -664,19 +666,18 @@ async function main(): Promise<void> {
           ).rows[0]?.settings ?? {},
       ),
     );
-  // Sezione salute: valori dei referti letti al caricamento, storico e confronti, note riservate nel vault.
-  // Tutto dietro la skill «Salute»: spenta, niente tool, niente lettura dei referti, niente avvisi.
-  const health = createHealthRuntime({
-    isEnabled: async (userId) => enabledSkillIds(await loadUserSettings(userId)).has('salute'),
+  const health = createHealthVaultService({
     pool: postgres.pool,
+    cipher: healthCipherFromEnvironment(process.env.HEALTH_ENCRYPTION_KEYS),
     extractor: gateway
       ? createHealthExtractor({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger) })
       : null,
-    brain: brain.service,
-    documents: documentsRepo,
-    logger,
+    answerer: gateway
+      ? createHealthAnswerer({ gateway, recorder: createLlmCallRecorder(postgres.pool, logger) })
+      : null,
+    checkBudget: checkUserBudget,
   });
-  for (const t of createHealthTools(health.tools)) registry.register(t);
+  registry.register(createHealthAccessTool());
   for (const t of createContextTools({
     canUse: async (userId, domain) => {
       const settings = await loadUserSettings(userId);
@@ -1077,6 +1078,7 @@ async function main(): Promise<void> {
       // decadono soltanto allora, non a ogni modifica delle impostazioni.
       onSettingsChanged: async (userId) => {
         companions.invalidateUser(userId);
+        await health.consent.revoke(userId);
         await ssh.invalidate(userId);
       },
       onStyleChanged: (userId) => companions.invalidateUser(userId),
@@ -1106,6 +1108,8 @@ async function main(): Promise<void> {
       applyGuardian,
       onChanged: async (userId, skillId, before) => {
         companions.invalidateUser(userId);
+        if (skillId === 'salute' && !enabledSkillIds(await loadUserSettings(userId)).has('salute'))
+          await health.consent.revoke(userId);
         // Solo se il permesso SSH effettivo cambia (senza lo stato precedente si invalida comunque).
         if (
           skillId === 'ssh' &&
@@ -1119,8 +1123,7 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       repo: documentsRepo,
-      onCreated: (userId, documentId, pages, title) => {
-        health.onDocumentCreated(userId, documentId, title, pages);
+      onCreated: (userId, documentId, pages) => {
         void chunkStore
           .index(userId, documentId, pages)
           .catch((err: unknown) =>
@@ -1152,6 +1155,7 @@ async function main(): Promise<void> {
     },
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
+    healthVault: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: health },
     privateDiary: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -1196,7 +1200,10 @@ async function main(): Promise<void> {
       store: guardian,
       onChanged: (userId) => companions.invalidateUser(userId),
       // Permessi del genitore cambiati o controllo tolto: i piani SSH del figlio decadono.
-      onSkillsChanged: (userId) => ssh.invalidate(userId),
+      onSkillsChanged: async (userId) => {
+        await health.consent.revoke(userId);
+        await ssh.invalidate(userId);
+      },
       lexicon,
     },
     profile: {
@@ -1327,7 +1334,7 @@ async function main(): Promise<void> {
             );
           return { text: blocks.filter(Boolean).join('\n\n'), untrusted };
         },
-        healthNotices: (userId) => health.takeNotices(userId),
+
         recordLocalTurn: async (userId, sessionId, userText, reply, route) => {
           if (!(await memory.getThreadById({ threadId: sessionId })))
             await memory.createThread({ threadId: sessionId, resourceId: userId });

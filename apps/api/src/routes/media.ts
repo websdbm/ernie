@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthContext, Authenticator } from '../auth.js';
+import {
+  isPrivateHealthDocument,
+  PRIVATE_HEALTH_UPLOAD,
+} from '../health-protection/classification.js';
 import type { MediaLabels, MediaRepository } from '../media.js';
 import { mediaThumbnail } from '../media-image.js';
 import { createAuthHook } from '../ws/plugin.js';
@@ -83,6 +87,10 @@ export async function mediaRoutes(app: FastifyInstance, opts: MediaRoutesOptions
       if (!parsed.success)
         return reply.code(400).send({ error: 'invalid_body', message: 'Foto o dati non validi.' });
       const body = parsed.data;
+      if (isPrivateHealthDocument(body.ocrText, body.title)) {
+        req.body = undefined;
+        return reply.code(422).send(PRIVATE_HEALTH_UPLOAD);
+      }
       const image = Buffer.from(body.data, 'base64');
       if (!image.length || image.length > 3_000_000 || image.toString('base64') !== body.data)
         return reply

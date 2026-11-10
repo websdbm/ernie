@@ -1,5 +1,6 @@
 import { type LlmCallRecorder, type ModelGateway, normalizeUsage } from '@ernie/model-gateway';
 import { Agent } from '@mastra/core/agent';
+import { noopLogger } from '@mastra/core/logger';
 import { z } from 'zod';
 
 /**
@@ -29,7 +30,7 @@ export type HealthExtraction = z.infer<typeof HealthExtraction>;
 
 export type HealthExtractor = (
   text: string,
-  ctx: { userId: string; documentTitle?: string },
+  ctx: { userId: string; documentTitle?: string; signal?: AbortSignal },
 ) => Promise<HealthExtraction | null>;
 
 const INSTRUCTIONS = `Leggi il testo di un documento sanitario italiano (referto di laboratorio, analisi del sangue o delle urine) e
@@ -60,20 +61,23 @@ export function createHealthExtractor(
     instructions: INSTRUCTIONS,
     model: resolved.model,
   });
+  agent.__setLogger(noopLogger);
   return async (text, ctx) => {
+    if (ctx.signal?.aborted) return null;
     const t0 = Date.now();
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
       const prompt = `${ctx.documentTitle ? `Titolo del documento: «${ctx.documentTitle.slice(0, 160)}»\n\n` : ''}Testo:\n${text.slice(0, MAX_CHARS)}`;
       const result = (await agent.generate(prompt, {
+        tracingOptions: { hideInput: true, hideOutput: true },
         structuredOutput: {
           schema: HealthExtraction,
           errorStrategy: 'fallback',
           fallbackValue: null,
         },
         modelSettings: { maxOutputTokens: 12_000, maxRetries: 0 },
-        abortSignal: ac.signal,
+        abortSignal: ctx.signal ? AbortSignal.any([ac.signal, ctx.signal]) : ac.signal,
       } as never)) as unknown as {
         object?: unknown;
         usage?: unknown;

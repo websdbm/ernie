@@ -4,7 +4,7 @@ import Testing
 
 struct WidgetLinkTests {
     @Test func destinazioniDistinteConContrattoCondiviso() throws {
-        #expect(Set(AppLink.allCases.map(\.url)).count == 5)
+        #expect(Set(AppLink.allCases.map(\.url)).count == 6)
         for link in AppLink.allCases { #expect(AppLink(url: link.url) == link) }
         #expect(AppLink(url: URL(string: "ernie://reminders")!) == .reminders)
         #expect(AppLink(url: URL(string: "ernie://automations")!) == .automations)

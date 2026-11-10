@@ -1,5 +1,30 @@
 [
   {
+    "build": 119,
+    "date": "2026-11-10",
+    "title": "Salute, in uno spazio protetto",
+    "items": [
+      {
+        "icon": "lock.shield",
+        "title": "Referti nella sezione Salute",
+        "detail": "Documenti, originali e valori sono conservati cifrati nel backend del tuo account. Puoi consultarli da Salute ed esportarli esplicitamente; non vengono sincronizzati in Obsidian.",
+        "test": "Apri Salute dal pannello laterale e importa un documento."
+      },
+      {
+        "icon": "hand.raised",
+        "title": "Decidi tu quando usare l’AI",
+        "detail": "Lettura e importazione funzionano senza AI. Per analisi e domande servono la skill Salute e un consenso continuativo revocabile. Revocandolo vengono scartati anche i risultati delle elaborazioni in corso.",
+        "test": "Leggi il consenso nella sezione Salute; puoi revocarlo durante un’elaborazione."
+      },
+      {
+        "icon": "doc.text.magnifyingglass",
+        "title": "Valori, confronti e domande",
+        "detail": "Consulta gli originali e le analisi, cerca un parametro e scegli i referti su cui fare una domanda. Le risposte rimangono nella sezione e scompaiono quando la chiudi.",
+        "test": "Scegli un documento e usa “Fai una domanda”."
+      }
+    ]
+  },
+  {
     "build": 118,
     "date": "2026-11-10",
     "title": "Ricerca mirata e modifiche più affidabili",

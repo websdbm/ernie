@@ -6,6 +6,7 @@ export * from './clarify.js';
 export * from './commands.js';
 export * from './compact.js';
 export * from './emotion.js';
+export * from './health-answer.js';
 export * from './health-extract.js';
 export * from './loop.js';
 export * from './policy.js';

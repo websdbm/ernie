@@ -23,6 +23,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   read_sources: 'Lettura delle fonti',
   health_parameter: 'Lettura dei valori degli esami',
   health_report: 'Lettura del referto',
+  health_open: 'Apertura di Salute',
   health_overview: 'Riepilogo della salute',
   health_import: 'Acquisizione del referto',
   memory_search: 'Ricerca nei ricordi',

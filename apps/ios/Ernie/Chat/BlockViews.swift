@@ -31,6 +31,8 @@ struct BlockView: View {
             RemindersCard(block: block)
         case .citations(let block):
             CitationsCard(block: block)
+        case .healthAccess(let block):
+            HealthAccessCard(block: block)
         case .health(let block):
             HealthCard(block: block)
         case .choices(let block):
@@ -43,6 +45,18 @@ struct BlockView: View {
             DirectionsCard(block: block)
         case .unknown:
             EmptyView()
+        }
+    }
+}
+
+struct HealthAccessCard: View {
+    let block: HealthAccessBlock
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        ErnieCard(icon: "lock.shield", tint: .health, eyebrow: "Salute", title: block.title) {
+            Text(block.message).fixedSize(horizontal: false, vertical: true)
+            Button("Apri Salute", systemImage: "heart.text.square") { model.pendingLink = .health }
+                .buttonStyle(ErnieButtonStyle(emphasis: .primary, fillsWidth: true))
         }
     }
 }
