@@ -30,6 +30,14 @@ Prova guidata rinviata alla disponibilità 120, nessuna raccolta attivata.
 Dettagli e protocollo: [build 120](releases/build-120.md); limiti/costi Copilot:
 [ricerca 28](research/28-habits-implementation.md). Modifiche estranee preservate.
 
+Diagnosi Abitudini in chat (10 novembre, sola lettura): l’attivazione della skill e il consenso alla raccolta
+su iPhone sono separati. La build 120 raccoglie soste e permette di descrivere i luoghi dal pannello dedicato,
+ma non offre alla chat un’operazione per acquisire routine dichiarate. Il contesto AI è in sola lettura e
+richiede consenso, parole chiave e un luogo confermato pertinente. Una precisazione esplicita sulle abitudini
+dopo un turno promemoria è stata instradata di nuovo a `ricordami` da Jev; il resolver ha chiesto conferma
+prima del turno principale, senza salvare alcuna abitudine. Da coprire con una regressione a due turni e un
+flusso di acquisizione che separi la routine dichiarata dall’eccezione datata. Nessuna modifica applicativa.
+
 ### Storico Abitudini e revisore Copilot — base precedente alla build 120
 
 10 novembre 2026. Copilot CLI aggiornato 0.0.335 → **1.0.108** e verificato con due revisioni reali
