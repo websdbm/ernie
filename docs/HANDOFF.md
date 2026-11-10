@@ -5,7 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — API **pubblicata e sana**, build **117 disponibile su TestFlight**,
+Ultimo aggiornamento: **10 novembre 2026**, Codex — **API e worker 118 pubblicati e sani**, migrazione **0051**
+applicata dopo backup e date esistenti invariate. Immagine `b7d5e6e8…`, sorgenti `a56ea55`; 17 moduli compilati
+identici ai test. Smoke sintetico HTTPS/DB passato, zero LLM e operazioni su host gestiti; fixture rimosse.
+Prova Firecrawl su due pagine pubbliche e cache passata. Postgres/Redis e configurazioni invariati.
+**Build 118 caricata senza errori, in attesa di validazione Apple**; ricevuta
+`21ea7472-c461-4a85-b530-673699a853d3`, stessa IPA firmata/verificata. Pubblicazione autorizzata dall'utente.
+Backup/recupero `ernie-pre-118-20261110`; ricevute e confini in [build 118](releases/build-118.md).
+
+Rilascio precedente: **10 novembre 2026**, Codex — API **pubblicata e sana**, build **117 disponibile su TestFlight**,
 gruppo **Interni**, **VALID / IN_BETA_TESTING**. Build ID `e2b157be-606b-46c2-b3fc-19a8fbbdb974`;
 note italiane rilette e identiche al changelog (1.739 caratteri). Pubblicazione autorizzata esplicitamente dall’utente.
 
@@ -34,18 +42,18 @@ Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261
 ### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
 
 L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. Stato corrente e criteri di
-chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 compilata, firmata e verificata, non pubblicata**:
+chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 compilata, firmata e verificata, caricata su Apple**:
 ricerca web, strumenti comuni, comandi SSH, accuratezza referti e budget automazioni implementati.
 Dettagli in [ricerca 25](research/25-open-features-wave1.md), verifiche e ricevute in
 [build 118](releases/build-118.md). Abitudini/HealthKit richiedono prima i contratti di protezione e revoca.
-Sospensioni Instagram/rete VPS conservate. La 117 rimane distribuita; nessuna migrazione 0051 o modifica
-di produzione effettuata per questo gruppo. Nuovo rilascio richiederà API **e worker** prima del client.
+Sospensioni Instagram/rete VPS conservate. API **e worker** pubblicati prima del client, migrazione 0051
+applicata e verificata. La distribuzione iOS attende la validazione Apple della 118.
 Verifiche: **191 test backend, 42 iOS**, TypeScript/Biome verdi; database temporaneo con RLS,
 render chiaro/scuro/caratteri accessibili e revisione indipendente. Sorgenti 118
 **`a56ea5533247fc7dea8e0de8ea334b356de2bb88`** su GitHub, verificati prima dell'archivio Mac Studio.
 306 input iOS identici a Git e ai test; quattro firme Apple Distribution/entitlement verificati,
 isolamento diario conservato. IPA SHA-256 `451e6049e1086d34b508ae4003bf56782df6e5d8e52b21a21591b13e99ced423`.
-Nessuna nuova raccolta sensibile o prova su iPhone fisico. Nessun upload 118, API/worker invariati.
+Nessuna nuova raccolta sensibile o prova su iPhone fisico. Upload 118 concluso; verifica TestFlight in corso.
 
 Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
 funzione sviluppata o impostazione cambiata durante la ricognizione precedente all'autorizzazione.
@@ -57,9 +65,8 @@ funzione sviluppata o impostazione cambiata durante la ricognizione precedente a
   quando mancano riferimenti corretti e testati per la 118; non equivale alla cifratura completa.
 - **Analisi immagini**: catalogazione visiva/OCR e ricette presenti; manca il percorso generale Jev multimodale
   più domande/analisi dell'immagine della ricerca 24.
-- **Ricerca online**: per la 118 implementati passaggi pertinenti, letture parallele limitate, copertura,
-  freschezza e cache per account. Verifiche simulate verdi; nessuna nuova chiamata Firecrawl reale o misura
-  generale di latenza. La produzione 117 mantiene il comportamento precedente.
+- **Ricerca online**: pubblicati passaggi pertinenti, letture parallele limitate, copertura, freschezza e cache
+  per account. Verifiche simulate e prova Firecrawl su due pagine pubbliche verdi; nessuna misura generale di latenza.
 - **Strumenti e prestazioni**: task paralleli/precisazioni e `time_windows` pubblicati. Per la 118 implementati
   gli strumenti comuni mancanti nella 117: `day_snapshot`, `resolve_target`,
   `change_preview/change_apply`, `read_sources`, `check_result`. Patch/verifica limitate ai Todo esistenti;
@@ -478,10 +485,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **117**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `6b5a9bb` |
+| App su TestFlight | **118 caricata**, validazione in corso; ultima disponibile **117**, `VALID`, `IN_BETA_TESTING`, gruppo Interni |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **6b5a9bb** (10 nov, Maximize e voce +15%), immagine `b4101522…`, healthy; worker invariato. Recupero API `ernie-app:pre-maximize-20261110` |
-| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 117 |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API/worker **a56ea55** (10 nov), immagine `b7d5e6e8…`; API healthy, worker pronto. Recupero separato `ernie-app:pre-118-api-20261110` / `ernie-app:pre-118-worker-20261110` |
+| Migrazioni | fino alla **0051**, applicata e verificata; date dei referti esistenti invariate |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
@@ -492,6 +499,11 @@ Si pubblica **da git**: copia di sicurezza della cartella, `git fetch` + `git re
 mano. `docker-compose.override.yml` e `.env` esistono solo sul server e non vanno toccati. Pubblicazione in produzione
 e scritture sul database di produzione richiedono il via libera esplicito dell'utente. L'API non risponde su
 `127.0.0.1:3000` dall'host: verificare da `https://ernie.staging3.eklettica.it/health`.
+
+Usare `umask 022` durante il checkout Git: Docker rootless deve poter leggere i sorgenti. La directory
+dei backup resta invece privata. Non estendere permessi a `.env` o override; verificare separatamente i loro
+hash. In script passati a SSH via stdin, eseguire `compose run ... < /dev/null` perché il comando interattivo
+non consumi il resto dello script. Controllare migrazione, attivazione e runtime come passi distinti.
 
 Copie di sicurezza del 25 ott: `/srv/staging3/backups/ernie-pre-git-sync-20261025/`, immagine `ernie-app:pre-104`.
 

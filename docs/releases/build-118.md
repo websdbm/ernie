@@ -1,6 +1,7 @@
 # Build 118 — ricerca e modifiche affidabili
 
-10 novembre 2026. **Compilata, firmata e verificata; non pubblicata**. Build attualmente distribuita: 117.
+10 novembre 2026. Pubblicazione autorizzata esplicitamente dall'utente. **API e worker pubblicati e sani;
+build 118 caricata senza errori, in attesa di validazione Apple**. Ultima build validata da Apple: 117.
 
 Ambito: ricerca web con passaggi pertinenti/cache/letture batch, strumenti di contesto e patch Todo,
 rimozioni inventario SSH con precondizione concorrente, date/riferimenti dei referti più precisi,
@@ -28,12 +29,13 @@ Test nativi e cinque render: `/tmp/ernie-open-features-118-20261110-r2/`; sul Ma
 `~/Library/Caches/ernie-checks/open-features-118-20261110-r2/Build118.xcresult`.
 Manifest test SHA-256 `28904afaea9cf2495870eb3739e58d016bde35c8c67fb555455999524089a3eb`.
 
-## Archivio verificato, in attesa di autorizzazione
+## Archivio verificato
 
 Archivio Release ed export Apple riusciti sul Mac Studio. Quattro firme **Apple Distribution** verificate
 con `codesign --verify --deep --strict`, build 118 ed entitlement conformi ai sorgenti. Il gruppo privato
 del diario rimane soltanto nell'app principale. Changelog nell'IPA identico a Git; nessuna chiave privata
-copiata e nessuna modifica al Portachiavi. Export locale con `destination=export`, nessun upload.
+copiata e nessuna modifica al Portachiavi. Export locale con `destination=export`; upload separato dopo
+autorizzazione e verifiche sul backend.
 
 IPA **82.132.756 byte**, SHA-256
 `451e6049e1086d34b508ae4003bf56782df6e5d8e52b21a21591b13e99ced423`.
@@ -43,9 +45,34 @@ Artefatti sul Mac Studio: `~/Library/Caches/ernie-builds/build-118-20261110-open
 Preparazione firma tramite script versionato `apps/ios/scripts/prepare-cloud-signing.py`, profili validi
 del precedente archivio 117, poi export Apple e verifica delle quattro componenti.
 
-API/worker ancora alla versione pubblicata; migrazione 0051 non eseguita. Serve il via libera esplicito
-per pubblicazione e scritture sul database, come richiesto in HANDOFF, sezione Server.
 Database sintetico locale dei test eliminato dopo le verifiche; nessun dato reale toccato.
+
+## Backend pubblicato e verificato
+
+API e worker dalla revisione sorgenti `a56ea5533247fc7dea8e0de8ea334b356de2bb88`, immagine comune
+`sha256:b7d5e6e81c5f5c704d7ba1e176e2f121122294ee3cd689284401ad8caa1dfea2`.
+**17 moduli compilati** confrontati con quelli testati e identici. Nuovi sei strumenti registrati in API;
+worker memoria/automazioni pronti, nessun errore nei log dopo l'avvio. `/health` e `/ready` HTTPS rispondono;
+API healthy, dipendenze Postgres/Redis sane. Il campo versione descrittivo mantiene l'etichetta storica
+dell'ambiente: per identificare questo rilascio usare commit e hash immagine, non quel testo.
+
+Backup progetto completo e database custom PostgreSQL in `/srv/staging3/backups/ernie-pre-118-20261110/`;
+dump con SHA-256 e indice letto da `pg_restore --list`. Non è stata eseguita una prova di ripristino completo.
+Recupero immagini distinto: `ernie-app:pre-118-api-20261110` e `ernie-app:pre-118-worker-20261110`.
+Prima compilazione fermata per permessi dei file Git recuperati con umask restrittiva; ripristinati i modi
+dei soli file versionati e ricompilato con successo. Configurazioni riservate invariate.
+
+Applicata **solo la migrazione 0051**, 50 precedenti già presenti; impronta e numero delle date dei referti
+uguali prima/dopo. API e worker ricreati; ID/avvio di Postgres e Redis e hash `.env`/override identici.
+Lo smoke in produzione ha usato due account temporanei: HTTPS Todo con isolamento, patch, retry e rilettura;
+conferme SSH obsolete rifiutate con 409 e rimozione dell'inventario sintetico; referto senza data e RLS.
+Zero chiamate LLM e zero operazioni SSH/provider. Account, chiavi e dati sintetici eliminati e assenza verificata.
+
+Prova Firecrawl dal nuovo runtime con due sole pagine pubbliche (`example.com` e IANA): entrambe lette,
+1.715 caratteri entro il budget 2.000; primo batch 907 ms, seconda lettura dalla cache 20 ms, hash contenuti
+identici. Nessun dato personale o chiamata LLM. È una singola misura di lettura/cache, non una stima della
+velocità generale dell'agente. Evidenze locali: `/tmp/ernie118-runtime-smoke-result.json`,
+`/tmp/ernie118-web-smoke-result.json`, `/tmp/ernie118-image-verification.json`; ricevute server nel backup.
 
 ## Ordine e compatibilità
 
@@ -58,7 +85,13 @@ Database sintetico locale dei test eliminato dopo le verifiche; nessun dato real
 Migrazione additive/nullable: vecchie date intatte. Prima di un eventuale rollback dell'API, verificare
 se sono stati importati referti con data NULL: il vecchio codice non li gestisce. Non inventare date
 per permettere un rollback; conservare i dati e correggere avanti o predisporre un recupero mirato.
-Non eseguire `SET NOT NULL` con referti non datati. Nessuna migrazione applicata alla produzione in questa fase.
+Non eseguire `SET NOT NULL` con referti non datati. La migrazione 0051 è ora applicata in produzione.
+
+## Caricamento Apple
+
+Upload riuscito senza errori il 10 novembre, ricevuta `21ea7472-c461-4a85-b530-673699a853d3`;
+trasferiti esattamente 82.132.756 byte. Validazione e disponibilità TestFlight da verificare prima di
+dichiarare distribuita la 118. Le note italiane vengono pubblicate dal changelog versionato.
 
 ## Lavori non inclusi
 
