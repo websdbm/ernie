@@ -1,7 +1,7 @@
 # Build 119 — Salute protetta
 
-10 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker119 pubblicati e sani;
-migrazioni0052/0053 e passaggio dati completati. Build119 caricata su Apple, elaborazione in corso.**
+10 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker 119 pubblicati e sani;
+migrazioni 0052/0053 e passaggio dati completati. Build 119 disponibile su TestFlight, gruppo Interni.**
 
 Archivio Salute dedicato: documenti/OCR/originali/valori cifrati per account, consultazione manuale indipendente
 dall'AI, consenso continuativo revocabile, elaborazioni isolate dalla chat e dal Second Brain, esportazione
@@ -15,9 +15,9 @@ revoca durante provider in corso, cancellazione durante elaborazione, selezione 
 assenza di scritture negli archivi generici e rifiuto di ingressi sanitari prima dell'indicizzazione.
 TypeScript e Biome verificati. Nessun provider AI reale o referto personale usato nei test.
 
-**48 test iOS in 7 suite superati** su Mac Studio/Xcode27.0. Verificati UI completa, consenso,
+**48 test iOS in 7 suite superati** su Mac Studio / Xcode 27.0. Verificati UI completa, consenso,
 revoca in corso, upload manuale senza AI, export/cleanup, deep link e decodifica eventi. Render chiaro,
-scuro, Borg e accessibility3 a375pt, con scorrimento e titoli multilinea. Manifest r10
+scuro, Borg e accessibility3 a 375 pt, con scorrimento e titoli multilinea. Manifest r10
 `328e05e5b77add87333a9dfa6eb3293ac1b736ef8cee1a887e5b4277c5d3c9d0`; rispetto al test,
 release differisce solo per numeri build/progetto generato, changelog e label italiana health_open.
 
@@ -26,20 +26,20 @@ Review indipendente: corretto possibile log del prompt sanitario nelle eccezioni
 attesa del lock; indice legacy Salute.md incluso nella barriera di migrazione.
 Migrazione 0053 provata da zero con le precedenti; trasferimento/idempotenza e conservazione copie
 incerte testati. Inventario reale in sola lettura: nessun referto/valore/avviso legacy, candidato nei
-documenti/Media/Brain o cartella Salute nella storia dei 21 vault. Ripetere dopo stop writer al cutover.
+documenti/Media/Brain o cartella Salute nella storia dei 21 vault. Inventario ripetuto a writer fermi al cutover, con lo stesso esito.
 
 Evidenze temporanee: `/tmp/ernie-health-final-tests.log`, `typecheck-final.log` con lo stesso prefisso,
 `/tmp/ernie-health-vault-20261110/`. Nessuna prova su iPhone fisico; la protezione hardware iOS dei
 file esportati non è dimostrabile dal solo simulatore.
 
-## Artefatti pronti
+## Artefatti distribuiti
 
 Sorgenti finali **`203542a5753092c6a641e45a03f4ddb014484ef6`**, pubblicati su GitHub e SHA remoto
 verificato prima dell'archivio. Tutti i 313 input iOS corrispondono al commit; 14 overlay dei test nativi
 identici ai sorgenti pubblicati. Il precedente archivio 56b9d2b è superato e non è stato distribuito.
 
 Archivio Release ed export Apple completati sul Mac Studio. Quattro firme Apple Distribution verificate
-con `codesign --verify --deep --strict`; build119/entitlement corretti e gruppo Diario soltanto nell'app.
+con `codesign --verify --deep --strict`; build 119 / entitlement corretti e gruppo Diario soltanto nell'app.
 Changelog nell'IPA identico a Git. Nessuna modifica al Portachiavi o copia di chiavi private.
 IPA **82.588.585 byte**, SHA-256 `3424070bb0c113930a0f293127500504a3b145ff874d1c2e241409b17ef59121`.
 Artefatti: `~/Library/Caches/ernie-builds/build-119-20261110-health/`, `source/`, `source-sha.txt`,
@@ -61,7 +61,7 @@ recupero sul Mac dell'ufficio fuori dal repository; checksum delle copie verific
 
 Vecchi API/worker fermati durante il cutover. Backup aggiornato `database-cutover.dump` e indice
 `pg_restore --list` verificati in `/srv/staging3/backups/ernie-pre-119-20261110/`.
-Applicate **0052_health_protection.sql e0053_health_sources.sql**, 51 migrazioni precedenti riconosciute.
+Applicate **0052_health_protection.sql e 0053_health_sources.sql**, 51 migrazioni precedenti riconosciute.
 Inventario ripetuto a writer fermi: nessun referto/valore/avviso legacy o candidato documentale/Media;
 21 vault, nessun percorso Salute corrente/storico. CLI `--apply --writers-stopped`: ready, zero record
 trasferiti perché non presenti, zero consensi attivati. Nessuna cancellazione di dati personali richiesta.
@@ -71,17 +71,22 @@ valori senza data e ricerca parametro, isolamento tra due account, ciphertext se
 chiaro, guardie Media/documenti generici, consenso versionato/revoca/disattivazione skill, cancellazione
 di fonte/allegati/analisi. Zero chiamate LLM, zero operazioni SSH/provider. Fixture/account/API key rimossi.
 Nessun testo sanitario sintetico nei log API/worker e nessun errore; health/ready HTTPS verdi.
+Verificate nel database pubblicato sette tabelle con RLS forzata e gli eventi consenso non modificabili
+né eliminabili dal ruolo applicativo.
 Il proxy aggiunge anch'esso no-store: verifica delle direttive HTTP, senza richiedere stringa identica.
 
 Evidenze: `/tmp/ernie119-runtime-smoke-result.json`, copia nel backup server; `activation-verification.json`,
 `health-inventory-final.json`, `vault-inventory-final.json`, `health-migration-result.json` nel backup.
-Non eseguita prova di ripristino integrale. Immagini pre119 conservate per recupero controllato;
+Non eseguita prova di ripristino integrale. Immagini pre-119 conservate per recupero controllato;
 non riattivare il vecchio writer Salute dopo nuovi caricamenti.
 
 ## TestFlight
 
-Upload riuscito senza errori, ricevuta **3ad9737e-c595-4a05-bbf1-cebffe82e90a**, trasferiti82.588.585byte.
-Hash IPA ricontrollato dopo upload e invariato. Elaborazione Apple e lettura delle note italiane in corso.
+Upload riuscito senza errori, ricevuta e Build ID **3ad9737e-c595-4a05-bbf1-cebffe82e90a**,
+trasferiti 82.588.585 byte. Hash IPA ricontrollato dopo upload e invariato.
+Lettura finale App Store Connect: **VALID / IN_BETA_TESTING**, gruppo interno **Interni**
+(`74194a82-f705-40b5-8535-6bd269b75c41`). Note italiane rilette e identiche al changelog approvato,
+927 caratteri. Nessun nuovo gruppo o tester aggiunto.
 
 ## Sequenza di rilascio
 

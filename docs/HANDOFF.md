@@ -5,10 +5,10 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build119 — backend pubblicato, elaborazione TestFlight in corso
+### Build 119 — Salute pubblicata e verificata
 
-10 novembre2026. Pubblicazione autorizzata dall'utente. **API e worker119 attivi e sani**, immagine
-f317e2d6…, sorgenti203542a5753092c6a641e45a03f4ddb014484ef6 su GitHub. **0052/0053 applicate** dopo
+10 novembre 2026. Pubblicazione autorizzata dall'utente. **API e worker 119 attivi e sani**, immagine
+f317e2d6…, sorgenti `203542a5753092c6a641e45a03f4ddb014484ef6` su GitHub. **0052/0053 applicate** dopo
 backup aggiornato a writer fermi. Chiave Salute dedicata configurata, copia di recupero privata separata
 anche fuori dal server; non pubblicare o trasferire la chiave nei sorgenti/log.
 
@@ -17,20 +17,26 @@ CLI migrazione ready, zero record trasferiti e zero consensi attivati. Consultaz
 indipendente da AI; analisi richiede skill e consenso esplicito revocabile. Nessuna sync Obsidian o copia
 nella chat principale. Backend capace di decifrare: non dichiarare E2EE. Diario separato.
 
-**117 test backend,48 iOS** e render chiaro/scuro/Borg/accessibility3 passati. Smoke HTTPS reale con
+**117 test backend, 48 iOS** e render chiaro/scuro/Borg/accessibility3 passati. Smoke HTTPS reale con
 fixture sintetiche passato: isolamento, cifratura, export, consenso/revoca, cancellazione; fixture rimosse,
 zero LLM/operazioni SSH/provider. Postgres/Redis e configurazioni precedenti invariati, solo nuova chiave
-a .env. Recupero e limiti in [rilascio119](releases/build-119.md) e [ricerca27](research/27-health-vault-integration.md).
+a .env. Recupero e limiti in [rilascio 119](releases/build-119.md) e [ricerca 27](research/27-health-vault-integration.md).
 
-**119 firmata/verificata e caricata su Apple**, ricevuta3ad9737e-c595-4a05-bbf1-cebffe82e90a;
-elaborazione in corso, disponibilità TestFlight non ancora confermata. IPA e manifest Mac Studio in
+**119 disponibile su TestFlight Interni**, stato Apple **VALID / IN_BETA_TESTING**, Build ID
+`3ad9737e-c595-4a05-bbf1-cebffe82e90a`. Note italiane rilette e identiche al changelog (927 caratteri).
+IPA e manifest Mac Studio in
 `~/Library/Caches/ernie-builds/build-119-20261110-health/`. Non ricaricare un duplicato.
 Backup operativo `ernie-pre-119-20261110`; non riattivare vecchi writer Salute automaticamente.
 Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito preservate.
 
 ### Ultimo rilascio effettivamente pubblicato
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — **API e worker 118 pubblicati e sani**, migrazione **0051**
+**119**, 10 novembre 2026: API/worker, migrazioni 0052/0053 e TestFlight Interni verificati,
+come descritto sopra. Sorgenti della build `203542a`; i successivi commit aggiornano la documentazione.
+
+### Rilasci precedenti
+
+**10 novembre 2026**, Codex — **API e worker 118 pubblicati e sani**, migrazione **0051**
 applicata dopo backup e date esistenti invariate. Immagine `b7d5e6e8…`, sorgenti `a56ea55`; 17 moduli compilati
 identici ai test. Smoke sintetico HTTPS/DB passato, zero LLM e operazioni su host gestiti; fixture rimosse.
 Prova Firecrawl su due pagine pubbliche e cache passata. Postgres/Redis e configurazioni invariati.
@@ -71,7 +77,8 @@ L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. 
 chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 pubblicata e verificata**:
 ricerca web, strumenti comuni, comandi SSH, accuratezza referti e budget automazioni implementati.
 Dettagli in [ricerca 25](research/25-open-features-wave1.md), verifiche e ricevute in
-[build 118](releases/build-118.md). Abitudini/HealthKit richiedono prima i contratti di protezione e revoca.
+[build 118](releases/build-118.md). La protezione e il consenso Salute sono ora pubblicati nella 119;
+Abitudini e HealthKit restano da implementare e provare su dispositivo.
 Sospensioni Instagram/rete VPS conservate. API **e worker** pubblicati prima del client, migrazione 0051
 applicata e verificata. La 118 è ora disponibile al gruppo TestFlight Interni.
 Verifiche: **191 test backend, 42 iOS**, TypeScript/Biome verdi; database temporaneo con RLS,
@@ -86,9 +93,9 @@ funzione sviluppata o impostazione cambiata durante la ricognizione precedente a
 
 - **Abitudini**: specifica definita, manca la skill con visite in background, archivio cifrato, apprendimento
   dei luoghi, domande attive e contesto pertinente. La posizione occasionale già esistente non equivale allo storico.
-- **Salute**: importazione referti presente; mancano HealthKit, sincronizzazione, protezione applicativa completa
-  dei dati/derivati e consenso continuativo revocabile della nuova estensione. Date ignote e riepiloghi
-  quando mancano riferimenti corretti e testati per la 118; non equivale alla cifratura completa.
+- **Salute**: archivio dedicato cifrato, consenso revocabile, consultazione/importazione manuale ed export
+  esplicito pubblicati e verificati nella 119. Migrazione completata, nessun referto legacy trovato da trasferire.
+  Restano HealthKit/sincronizzazione e verifica hardware su iPhone; backend capace di decifrare, non E2EE.
 - **Analisi immagini**: catalogazione visiva/OCR e ricette presenti; manca il percorso generale Jev multimodale
   più domande/analisi dell'immagine della ricerca 24.
 - **Ricerca online**: pubblicati passaggi pertinenti, letture parallele limitate, copertura, freschezza e cache
@@ -511,10 +518,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **118**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `a56ea55` |
+| App su TestFlight | build **119**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `203542a` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API/worker **a56ea55** (10 nov), immagine `b7d5e6e8…`; API healthy, worker pronto. Recupero separato `ernie-app:pre-118-api-20261110` / `ernie-app:pre-118-worker-20261110` |
-| Migrazioni | fino alla **0051**, applicata e verificata; date dei referti esistenti invariate |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API/worker **203542a** (10 nov), immagine `f317e2d6…`; API healthy, worker pronto. Immagini pre-119 conservate: nessun rollback automatico dei writer Salute dopo nuovi import |
+| Migrazioni | fino alla **0053**, applicate e verificate; migrazione Salute completata con zero referti preesistenti da trasferire, nessun consenso attivato |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server

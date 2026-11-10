@@ -1,6 +1,6 @@
 # Ernie — Piano di implementazione
 
-> Roadmap aggiornata al **10 novembre 2026**, dopo la build **118**. Stato pubblicato e ricevute in
+> Roadmap aggiornata al **10 novembre 2026**, dopo la build **119**. Stato pubblicato e ricevute in
 > [HANDOFF](docs/HANDOFF.md) e [rilasci](docs/releases/). Le milestone di ottobre sotto sono uno storico:
 > il lavoro corrente è la tabella seguente, che sostituisce le vecchie ipotesi superate (in particolare avatar 3D).
 
@@ -15,9 +15,9 @@ Una funzione non è chiusa perché esiste soltanto la sua specifica o un pulsant
 | R1 | Ricerca online | Pubblicata e verificata | Passaggi pertinenti, letture batch limitate, copertura/freschezza, cache per account. Test e prova reale Firecrawl su due fonti/cache verdi; misure generali di latenza restano in R10. |
 | R2 | Strumenti comuni | Prima versione pubblicata; misure reali aperte | `day_snapshot`, `resolve_target`, `read_sources`; anteprima/applicazione/verifica limitate ai Todo esistenti, revisioni e retry provati su PostgreSQL e nel runtime pubblicato. Budget e revoche verificati; riduzione chiamate/token da misurare sul corpus reale. |
 | R3 | SSH, comandi mancanti | Pubblicati e verificati nella 118 | Rimozione inventario dall'app con conferma, refresh, errori e precondizione atomica contro modifiche da altri dispositivi. Test e smoke HTTPS isolati; nessuna operazione della skill sugli host remoti. |
-| R4 | Salute, accuratezza e protezione | Accuratezza pubblicata nella 118; integrazione protetta pronta nella119 non pubblicata | UI dedicata, API cifrate, consenso revocabile, guardie ingresso/AI e migratore implementati. Inventario reale senza referti legacy; 119 firmata e verificata, restano pubblicazione, migrazioni e verifica runtime; [stato e sequenza](docs/research/26-health-protection.md). |
+| R4 | Salute, accuratezza e protezione | Pubblicata e verificata nella 119; verifica hardware iPhone residua | UI dedicata, API cifrate, consenso revocabile, guardie ingresso/AI ed export esplicito. Migrazioni 0052/0053 e passaggio dati completati: zero referti legacy trovati. Smoke HTTPS cifratura/isolamento/revoca e test iOS superati; non E2EE. Nessuna prova di ripristino integrale o su iPhone fisico; [evidenze e limiti](docs/releases/build-119.md). |
 | R5 | Skill Abitudini | Pianificato | Visite iOS, storico personale cifrato, luoghi/relazioni, fatti-ipotesi-conferme distinti, domande proattive entro budget; disattivazione ferma raccolta/job/contesto; prova su dispositivo. |
-| R6 | Apple Salute | Pianificato, dipende da R4 | HealthKit sola lettura, permessi per categoria, sincronizzazione incrementale/deduplicazione/cancellazioni, ultimo aggiornamento e profilo leggibile; prova con permessi reali su iPhone. |
+| R6 | Apple Salute | Pianificato; base R4 pubblicata | HealthKit sola lettura, permessi per categoria, sincronizzazione incrementale/deduplicazione/cancellazioni, ultimo aggiornamento e profilo leggibile; prova con permessi reali su iPhone. |
 | R7 | Skill Analisi immagini | Pianificato | Foto/ritagli al classificatore visivo quando utile, domande e follow-up sull'immagine corretta, lettura LLM con fonti/incertezza; batch multipli e isolamento verificati. |
 | R8 | Nove foto ricetta | Originali non reperiti nei percorsi verificati | File e conversioni temporanee non trovati nei percorsi noti dei due Mac. Servono originali per trascrizione fedele e verifica duplicati/importazione; non attestata una precedente importazione. |
 | R9 | Collegamenti esterni | Prerequisiti esterni | Contabo: password API valida, inventario e associazioni provati in sola lettura. YouTube: chiave Data API dedicata/restrizioni e video normali verificati. Non memorizzare credenziali in Git. |
@@ -29,12 +29,15 @@ HealthKit/background e qualità della mobilità con soli test del simulatore.
 
 Primo gruppo in [build 118](docs/releases/build-118.md) e [dettagli/verifiche](docs/research/25-open-features-wave1.md).
 **118 disponibile su TestFlight Interni**, API e worker pubblicati; non chiude le aree personali ancora aperte.
-Per R4 la sequenza è: collegare originali e derivati; chiudere tutte le vie di invio AI e cancellazione;
-usare solo Ernie ed export esplicito (scelta utente, niente Obsidian leggibile), predisporre recupero chiavi; migrare copie attuali e revisioni/backup; solo dopo,
-abilitare nuova raccolta Abitudini/HealthKit. Nessuna nuova raccolta sensibile avviata in questo incremento.
+**119 disponibile su TestFlight Interni**: integrazione Salute, chiave dedicata con recupero, migrazioni e
+verifica runtime completate. Inventario finale a writer fermi senza referti legacy o percorsi Salute nei
+21 vault; nessun dato preesistente da trasferire. Consultazione in Ernie ed export esplicito, niente Obsidian
+leggibile. Prossime aree: Abitudini e Apple Salute, con verifiche reali su iPhone; nessuna raccolta
+background o HealthKit avviata dalla 119.
 
 ### Già pubblicato
 
+- **119**: archivio Salute cifrato, UI dedicata, consenso AI continuativo revocabile, importazione/lettura manuale ed export esplicito; migrazioni completate e runtime verificato.
 - **118**: ricerca mirata/cache/batch, strumenti comuni e patch Todo, gestione inventario SSH, accuratezza referti e budget automazioni per fuso.
 - **117**: Maximize per conversazione e sforzo, promemoria compatti con canali interattivi, voce Drama +15%.
 - **115–116**: fino a tre compiti, precisazioni durante il lavoro, risolutore dei messaggi, `time_windows`,

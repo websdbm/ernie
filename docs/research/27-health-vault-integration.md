@@ -4,6 +4,11 @@
 esportazione leggibile solo esplicita, consenso AI continuativo revocabile; nessuna nuova sincronizzazione
 Obsidian. Abitudini e Apple Salute restano successive.
 
+**Pubblicata e verificata nella 119**: API/worker sani, TestFlight Interni `VALID / IN_BETA_TESTING`,
+chiave dedicata configurata con copie private di recupero, migrazioni 0052/0053 applicate dopo backup.
+117 test backend e 48 iOS superati; smoke HTTPS su account sintetici completato e fixture rimosse.
+[Evidenze e limiti del rilascio](../releases/build-119.md).
+
 ## Percorso nell'app
 
 Salute è raggiungibile dal pannello laterale anche con skill disattivata. Documenti e valori hanno viste
@@ -59,7 +64,9 @@ non dichiarare conclusa una migrazione dalla sola riuscita delle tabelle SQL.
 Ricognizione **in sola lettura** su staging3: zero referti/valori/avvisi legacy, zero note Salute e zero chiamate
 ai vecchi tool sanitari. Nessun candidato sanitario riconosciuto nei documenti, OCR Media o estratti Brain.
 21 vault controllati: nessuna cartella Salute corrente o nella cronologia Git. L'inventario non equivale a
-una ricerca semantica di ogni conversazione/testo libero. Va ripetuto dopo lo stop dei writer al rilascio.
+una ricerca semantica di ogni conversazione/testo libero. Ripetuto dopo lo stop dei writer al rilascio,
+con lo stesso esito. Migratore eseguito in modalità applicazione: ready, zero record trasferiti perché
+assenti, zero consensi attivati.
 Non eliminare backup storici indiscriminatamente; eventuali copie pregresse vanno trattate separatamente.
 
 Dopo il passaggio, evitare rollback alla vecchia API: riabiliterebbe importazioni in chiaro e nasconderebbe

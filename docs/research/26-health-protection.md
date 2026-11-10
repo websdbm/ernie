@@ -1,7 +1,10 @@
 # Salute — protezione, consenso e migrazione
 
-10 novembre 2026. **Lavoro in corso, non pubblicato.** La build/API attiva resta la 118.
-Questo incremento prepara componenti verificati; non dichiara cifrati i dati reali esistenti.
+10 novembre 2026. **Nota storica della prima fase**, conservata per documentare le decisioni.
+La successiva integrazione è ora pubblicata: **build/API/worker 119**, migrazioni 0052/0053 e passaggio dati
+verificati, nessun referto legacy trovato da trasferire. Le diciture «non pubblicato» e i passi futuri qui
+sotto descrivono la fase iniziale. Stato definitivo e limiti in [integrazione 27](27-health-vault-integration.md)
+e [rilascio 119](../releases/build-119.md), inclusa l’assenza di una prova di ripristino integrale e su iPhone fisico.
 
 ## Decisioni confermate
 
