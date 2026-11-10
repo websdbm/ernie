@@ -31,6 +31,34 @@ verificati, account e chiave temporanei eliminati; zero chiamate LLM. Account re
 Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261110`.
 [Manifest, verifiche e stato distribuzione](releases/build-117.md).
 
+### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
+
+Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
+funzione sviluppata o impostazione cambiata durante questa ricognizione.
+
+- **Abitudini**: specifica definita, manca la skill con visite in background, archivio cifrato, apprendimento
+  dei luoghi, domande attive e contesto pertinente. La posizione occasionale già esistente non equivale allo storico.
+- **Salute**: importazione referti presente; mancano HealthKit, sincronizzazione, protezione applicativa completa
+  dei dati/derivati e consenso continuativo revocabile della nuova estensione. Da correggere date ignote e
+  riepiloghi quando mancano intervalli di riferimento, come già descritto nella ricerca 22.
+- **Analisi immagini**: catalogazione visiva/OCR e ricette presenti; manca il percorso generale Jev multimodale
+  più domande/analisi dell'immagine della ricerca 24.
+- **Ricerca online**: Firecrawl presente, ancora taglio a 3.000 caratteri; selezione dei passaggi pertinenti,
+  approfondimento con letture parallele, freschezza/cache applicativa e misure comparative restano proposti.
+- **Strumenti e prestazioni**: task paralleli/precisazioni e `time_windows` pubblicati. Mancano gli strumenti
+  `day_snapshot`, `resolve_target`, `change_preview/change_apply`, `read_sources`, `check_result` della ricerca 21;
+  il miglioramento di latenza generale dopo il rilascio non è ancora quantificato su un campione adeguato.
+- **Configurazioni**: nell'account owner con inventario SSH e chiave attiva più recente risultano 5 server,
+  staging3 incluso, e 38 siti. Vultr configurato (`connected=true`, ultima verifica registrata 23 ottobre);
+  nessuna credenziale Contabo registrata. Nessuna nuova prova verso i provider o i server gestiti.
+  `YOUTUBE_API_KEY` assente nel container API: codice Data API predisposto, configurazione ancora mancante.
+- **Sospesi per scelta dell'utente**: Instagram e modifica di rete del VPS Contabo; non riaprirli automaticamente.
+- **Importazione delle nove foto ricetta**: la precedente nota operativa riportava solo conversione HEIC.
+  Non trovata qui una ricevuta di importazione; stato da verificare sui contenuti, senza dichiararlo completato.
+
+La sezione storica «Aperto» più sotto non è tutta corrente: salvataggio chat fuori dal main risolto nella 115;
+paginazione Vultr presente nel codice. Mancano ancora i comandi iOS di cancellazione server/siti.
+
 Stato del rilascio precedente: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
 confermato, editor comune con interruttori dei canali, palette avatar e testo accessibile. **18 test nativi
