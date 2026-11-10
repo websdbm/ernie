@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 119 in preparazione — integrazione Salute
+### Build 119 pronta, non pubblicata — integrazione Salute
 
 10 novembre 2026. L'utente ha autorizzato integrazione nell'app e migrazione dei dati esistenti;
 Salute va completata prima di Abitudini e Apple Salute. **Produzione/TestFlight restano 118**.
@@ -25,9 +25,14 @@ La scelta è archivio in Ernie con esportazione esplicita, senza copie leggibili
 - Inventario staging3 read-only: zero referti/valori/avvisi legacy, note/candidati OCR sanitari o chiamate
   ai tool clinici. 21 vault, nessuna cartella Salute corrente/storica. Ripetere dopo stop writer.
 
-**48 test iOS/7 suite verdi**, render chiaro/scuro/Borg/accessibility3 verificati. Rimangono firma
-e rilascio119 con verifica runtime. Backup preliminare privato `ernie-pre-119-20261110` creato;
-dump/indice verificati, nessun runtime o configurazione modificato. Non dichiarare
+**48 test iOS/7 suite verdi**, render chiaro/scuro/Borg/accessibility3 verificati. **119 compilata,
+firmata/verificata**, sorgenti203542a5753092c6a641e45a03f4ddb014484ef6 su GitHub, 313 input iOS identici.
+Quattro firme Apple Distribution/entitlement verificati, Diario isolato. Manifest e IPA nel percorso
+Mac Studio `~/Library/Caches/ernie-builds/build-119-20261110-health/`; dettagli nel rilascio119.
+Immagine backend f317e2d6… costruita e verificata (20 moduli identici, smoke crypto senza rete), **non attivata**.
+Server checkout203542a ma container ancora118: non ricrearli prima di chiave/migrazioni52–53/passaggio dati.
+Backup preliminare privato `ernie-pre-119-20261110` creato; dump/indice verificati, nessun runtime o
+configurazione modificato. Rinnovare dump dopo stop writer. Pubblicazione in attesa del via libera esplicito. Non dichiarare
 cifrati i dati reali dalla sola presenza dei sorgenti. Chiave e migrazioni non ancora configurate in produzione.
 Le modifiche preesistenti fuori ambito a docs/CONFIGURATION, docs/DEPLOY, ricerca12 e backup restano escluse.
 

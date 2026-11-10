@@ -1,6 +1,6 @@
 # Build 119 — Salute protetta
 
-10 novembre 2026. **In preparazione, non pubblicata**. API/build effettivamente pubblicate restano 118.
+10 novembre 2026. **Compilata, firmata e verificata; non pubblicata**. API/build effettivamente pubblicate restano 118.
 
 Archivio Salute dedicato: documenti/OCR/originali/valori cifrati per account, consultazione manuale indipendente
 dall'AI, consenso continuativo revocabile, elaborazioni isolate dalla chat e dal Second Brain, esportazione
@@ -30,6 +30,30 @@ documenti/Media/Brain o cartella Salute nella storia dei 21 vault. Ripetere dopo
 Evidenze temporanee: `/tmp/ernie-health-final-tests.log`, `typecheck-final.log` con lo stesso prefisso,
 `/tmp/ernie-health-vault-20261110/`. Nessuna prova su iPhone fisico; la protezione hardware iOS dei
 file esportati non è dimostrabile dal solo simulatore.
+
+## Artefatti pronti
+
+Sorgenti finali **`203542a5753092c6a641e45a03f4ddb014484ef6`**, pubblicati su GitHub e SHA remoto
+verificato prima dell'archivio. Tutti i 313 input iOS corrispondono al commit; 14 overlay dei test nativi
+identici ai sorgenti pubblicati. Il precedente archivio 56b9d2b è superato e non è stato distribuito.
+
+Archivio Release ed export Apple completati sul Mac Studio. Quattro firme Apple Distribution verificate
+con `codesign --verify --deep --strict`; build119/entitlement corretti e gruppo Diario soltanto nell'app.
+Changelog nell'IPA identico a Git. Nessuna modifica al Portachiavi o copia di chiavi private.
+IPA **82.588.585 byte**, SHA-256 `3424070bb0c113930a0f293127500504a3b145ff874d1c2e241409b17ef59121`.
+Artefatti: `~/Library/Caches/ernie-builds/build-119-20261110-health/`, `source/`, `source-sha.txt`,
+`ios-inputs.json`, `Ernie-final-unsigned.xcarchive`, `Ernie-profile.xcarchive`,
+`export-profile-api/Ernie.ipa`, `release-manifest.json`, log archive-final/export.
+
+Immagine backend **`sha256:f317e2d6e25834df1fa4ef68a199de87bde9dbe1b087dd5b617bb8ae4305a92b`**
+costruita sul server dallo stesso commit recuperato da Git. 20 moduli compilati identici ai test;
+smoke cifratura nell'immagine con rete disabilitata superato. **Non attivata**: quattro container
+API/worker/Postgres/Redis, avvii e hash configurazione sono rimasti identici. Repository server ora
+al commit203542a: non ricreare API/worker prima di chiave/migrazioni/passaggio dati.
+
+Database locale sintetico e relative credenziali temporanee rimossi dopo i test. Sul server nessuna
+migrazione52/53 applicata, nessuna chiave Salute configurata, nessun consenso modificato.
+La pubblicazione API/worker e TestFlight resta in attesa del via libera esplicito previsto da HANDOFF.
 
 ## Sequenza di rilascio
 
