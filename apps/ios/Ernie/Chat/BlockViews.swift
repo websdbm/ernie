@@ -239,7 +239,7 @@ struct ErnieFlow<Content: View>: View {
 struct RemindersCard: View {
     let block: RemindersBlock
     @Environment(AppModel.self) private var model
-    @State private var editing: String?
+    @State private var editing: ReminderItem?
 
     /// Righe aggiornate: un promemoria modificato ha un id nuovo, la scheda lo segue.
     private var rows: [ReminderItem] {
@@ -262,116 +262,18 @@ struct RemindersCard: View {
     }
 
     var body: some View {
-        ErnieCard(icon: "bell.fill", tint: .reminders, eyebrow: "Promemoria", title: block.title) {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(rows) { r in
-                    reminderRow(r)
-                }
-                if let err = model.reminders.lastError {
-                    Text(err).font(.caption).foregroundStyle(.red)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(rows) { r in
+                ReminderCardView(item: r, defaultAlarm: ReminderAlarms.enabled,
+                                 onEdit: { editing = r },
+                                 onCancel: { Task { await model.reminders.cancel(r) } })
+            }
+            if let err = model.reminders.lastError {
+                Text(err).font(.caption).foregroundStyle(.red)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: editing)
+        .sheet(item: $editing) { r in ReminderEditorSheet(item: r) }
         .task { await model.reminders.refreshIfStale() }
-    }
-
-    /// Una riga: riquadro data a sinistra, testo e dettagli; sotto canali e comandi, poi il form di modifica se aperto.
-    @ViewBuilder
-    private func reminderRow(_ r: ReminderItem) -> some View {
-        let scheduled = r.status == "scheduled"
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                if let place = r.place {
-                    ReminderPlaceTile(place: place)
-                } else {
-                    ReminderDateTile(date: ReminderStore.date(r.at))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(r.text)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(scheduled ? Theme.ink : Theme.inkSecondary)
-                        .strikethrough(r.status == "cancelled", color: Theme.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(Self.when(r) + Self.who(r))
-                        .font(.caption)
-                        .foregroundStyle(Theme.inkSecondary)
-                    if let other = r.forLabel { ReminderForBadge(label: other) }
-                    if let event = Self.eventLine(r) {
-                        Label(event, systemImage: "calendar.badge.clock")
-                            .font(.caption)
-                            .foregroundStyle(Theme.inkSecondary)
-                    }
-                    if scheduled, let rep = r.repeatInfo {
-                        Label(rep.label, systemImage: "repeat")
-                            .font(.caption)
-                            .foregroundStyle(Theme.inkSecondary)
-                    }
-                    if scheduled, let place = r.place, let line = Self.placeLine(place) {
-                        Label(line.text, systemImage: line.symbol)
-                            .font(.caption)
-                            .foregroundStyle(line.warning ? Color.orange : Theme.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            ReminderDetailsView(item: r)
-            if scheduled {
-                // Con i testi grandi la riga non ci sta: i chip vanno sopra e i comandi sotto, senza spezzare le parole.
-                if r.place != nil {
-                    // Legato a un luogo: lo fa scattare il telefono, niente sveglia né email.
-                    HStack(spacing: 8) {
-                        Spacer(minLength: 0)
-                        actions(r)
-                    }
-                } else {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 8) {
-                            ReminderChannelChips(item: r)
-                            Spacer(minLength: 8)
-                            actions(r)
-                        }
-                        VStack(alignment: .leading, spacing: 10) {
-                            ReminderChannelChips(item: r)
-                            HStack(spacing: 8) {
-                                Spacer(minLength: 0)
-                                actions(r)
-                            }
-                        }
-                    }
-                }
-            }
-            if editing == r.id {
-                ReminderEditForm(item: r) { editing = nil }
-                    .padding(12)
-                    .background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-        .opacity(scheduled ? 1 : 0.7)
-    }
-
-    /// Matita (modifica) e «Annulla»: stessi comandi in entrambe le disposizioni.
-    @ViewBuilder
-    private func actions(_ r: ReminderItem) -> some View {
-        Button(editing == r.id ? "Chiudi" : "Modifica", systemImage: editing == r.id ? "xmark" : "pencil") {
-            editing = editing == r.id ? nil : r.id
-        }.buttonStyle(ErnieButtonStyle())
-        Button("Annulla", role: .destructive) { Task { await model.reminders.cancel(r) } }
-            .buttonStyle(ErnieButtonStyle(emphasis: .destructive))
-    }
-
-    /// Preavviso di un appuntamento: «Appuntamento alle 19:00, avviso un'ora prima».
-    static func eventLine(_ r: ReminderItem) -> String? {
-        guard let raw = r.eventAt, let event = ReminderStore.date(raw), let at = ReminderStore.date(r.at) else { return nil }
-        let time = event.formatted(.dateTime.hour().minute().locale(Locale(identifier: "it_IT")))
-        let minutes = max(1, Int((event.timeIntervalSince(at) / 60).rounded()))
-        let lead: String
-        if minutes < 60 { lead = "\(minutes) minuti" }
-        else if minutes == 60 { lead = "un'ora" }
-        else if minutes % 60 == 0 { lead = minutes == 1440 ? "un giorno" : "\(minutes / 60) ore" }
-        else { lead = "\(minutes / 60) ore e \(minutes % 60) minuti" }
-        return "Appuntamento alle \(time), avviso \(lead) prima"
     }
 
     /// Sotto un promemoria per luogo: l'indirizzo, oppure cosa manca perché possa scattare.
@@ -406,84 +308,10 @@ struct RemindersCard: View {
     }
 }
 
-/// Riquadro a sinistra dei promemoria legati a un luogo: spillo e nome del luogo, nello stile del riquadro della data.
-private struct ReminderPlaceTile: View {
-    let place: ReminderPlaceInfo
-
-    var body: some View {
-        let tint = SkillTint.reminders
-        VStack(spacing: 4) {
-            Image(systemName: place.leaving ? "figure.walk.departure" : "mappin.circle.fill")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(tint.color)
-            Text(place.label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(width: 64)
-        .padding(.vertical, 10)
-        .background(tint.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(tint.color.opacity(0.25), lineWidth: 1)
-        )
-        .accessibilityHidden(true)
-    }
-}
-
-/// Riquadro della data a sinistra di ogni promemoria: giorno della settimana, numero del giorno e ora, in italiano.
-private struct ReminderDateTile: View {
-    let date: Date?
-
-    var body: some View {
-        let tint = SkillTint.reminders
-        VStack(spacing: 2) {
-            Text(weekday)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(tint.color)
-            Text(day)
-                .font(Theme.title(26))
-                .foregroundStyle(Theme.ink)
-            Text(time)
-                .font(.caption)
-                .foregroundStyle(Theme.inkSecondary)
-        }
-        .frame(width: 64)
-        .padding(.vertical, 8)
-        .background(tint.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(tint.color.opacity(0.25), lineWidth: 1)
-        )
-        // Il testo della riga dice già giorno e ora: il riquadro è solo un colpo d'occhio.
-        .accessibilityHidden(true)
-    }
-
-    /// «VEN» (senza punto finale dell'abbreviazione).
-    private var weekday: String {
-        guard let date else { return "—" }
-        return date.formatted(.dateTime.weekday(.abbreviated).locale(HealthFormat.italian))
-            .replacingOccurrences(of: ".", with: "")
-            .uppercased()
-    }
-
-    private var day: String {
-        guard let date else { return "" }
-        return date.formatted(.dateTime.day().locale(HealthFormat.italian))
-    }
-
-    /// «09:00».
-    private var time: String {
-        guard let date else { return "" }
-        return date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(HealthFormat.italian))
-    }
-}
-
 /// Dettagli disponibili anche senza permessi di posizione; il link apre solo http/https.
 struct ReminderDetailsView: View {
     let item: ReminderItem
+    @Environment(\.chatPalette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -498,27 +326,27 @@ struct ReminderDetailsView: View {
                     Label(location, systemImage: "mappin.and.ellipse")
                 }
                 if let address = item.locationAddress, address != location {
-                    Text(address).foregroundStyle(Theme.inkSecondary)
+                    Text(address).foregroundStyle(palette.inkSecondary)
                 }
             }
             if let url = item.meetingURL {
                 Link(destination: url) {
                     Label("Apri link · \(url.host ?? "meeting")", systemImage: "video")
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityLabel("Apri il link dell’appuntamento")
             }
             if let notes = item.notes {
                 DisclosureGroup("Note") {
                     Text(notes)
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                 }
             }
         }
         .font(.subheadline)
-        .tint(Theme.accentText)
+        .tint(palette.accentText)
     }
 }
 
@@ -527,6 +355,7 @@ struct ReminderEditForm: View {
     let item: ReminderItem
     var onDone: () -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.chatPalette) private var palette
     @State private var draftText: String
     @State private var draftDate: Date
     @State private var draftLocation: String
@@ -546,15 +375,16 @@ struct ReminderEditForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Cosa ti ricordo", text: $draftText)
+            TextField("Cosa ti ricordo", text: $draftText, axis: .vertical)
+                .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
             if let place = item.place {
                 // Il luogo si cambia dalla scheda (Luoghi): qui solo il testo.
                 Label(place.phrase.prefix(1).uppercased() + place.phrase.dropFirst(), systemImage: "mappin.and.ellipse")
                     .font(.caption)
-                    .foregroundStyle(Theme.inkSecondary)
+                    .foregroundStyle(palette.inkSecondary)
             } else {
-                DatePicker("Quando", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                DatePicker("Avvisami", selection: $draftDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
                     .environment(\.locale, Locale(identifier: "it_IT"))
             }
@@ -573,7 +403,7 @@ struct ReminderEditForm: View {
                 .lineLimit(3...8)
                 .textFieldStyle(.roundedBorder)
             Text("Puoi completare o cancellare questi dettagli anche in seguito.")
-                .font(.caption).foregroundStyle(Theme.inkSecondary)
+                .font(.caption).foregroundStyle(palette.inkSecondary)
             FlowLayout(spacing: 8) {
                 Button("Salva") { Task { await save() } }
                     .buttonStyle(ErnieButtonStyle(emphasis: .primary))
@@ -611,11 +441,13 @@ struct ReminderEditForm: View {
 }
 
 /// Interruttori «Sveglia» ed «Email» di un promemoria in programma (valori dallo store, invio solo del campo cambiato).
-struct ReminderChannelChips: View {
+struct ReminderChannelSettings: View {
     let item: ReminderItem
     @Environment(AppModel.self) private var model
     /// Indirizzo digitato nell'invito «Qual è la tua email?».
     @State private var emailDraft = ""
+    @State private var updating = false
+    @Environment(\.chatPalette) private var palette
 
     /// Predefinito: l'impostazione generale della sveglia.
     private var alarmOn: Bool { item.channels?.alarm ?? ReminderAlarms.enabled }
@@ -632,17 +464,15 @@ struct ReminderChannelChips: View {
     private var draftLooksLikeEmail: Bool { emailDraft.contains("@") && emailDraft.contains(".") }
 
     var body: some View {
-        FlowLayout(spacing: 6) {
-            // Ai promemoria messi a un familiare la sveglia non serve: suona sul suo telefono.
+        VStack(alignment: .leading, spacing: 12) {
             if item.forLabel == nil {
-                ReminderChannelChip(title: "Sveglia", symbol: "alarm.fill", on: alarmOn) {
-                    Task { _ = await model.reminders.setChannels(item, email: nil, alarm: !alarmOn) }
-                }
+                Toggle("Sveglia", isOn: Binding(get: { alarmOn }, set: { change(email: nil, alarm: $0) }))
             }
-            ReminderChannelChip(title: "Email", symbol: "envelope.fill", on: emailOn) {
-                Task { _ = await model.reminders.setChannels(item, email: !emailOn, alarm: nil) }
-            }
+            Toggle("Email", isOn: Binding(get: { emailOn }, set: { change(email: $0, alarm: nil) }))
         }
+        .toggleStyle(.switch)
+        .tint(palette.accent)
+        .disabled(updating)
         .alert("Qual è la tua email?", isPresented: askingEmail) {
             TextField("nome@esempio.it", text: $emailDraft)
                 .keyboardType(.emailAddress)
@@ -661,27 +491,14 @@ struct ReminderChannelChips: View {
             Text("La salvo nella tua scheda e la uso per le email dei promemoria.")
         }
     }
-}
 
-/// Canale selezionato riconoscibile dalla spunta, oltre che dal colore.
-private struct ReminderChannelChip: View {
-    let title: String
-    let symbol: String
-    let on: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: symbol)
-                Text(title)
-                if on {
-                    Image(systemName: "checkmark")
-                }
-            }
+    private func change(email: Bool?, alarm: Bool?) {
+        guard !updating else { return }
+        updating = true
+        Task {
+            defer { updating = false }
+            _ = await model.reminders.setChannels(item, email: email, alarm: alarm)
         }
-        .buttonStyle(ErnieButtonStyle(emphasis: on ? .primary : .secondary))
-        .accessibilityValue(on ? "attiva" : "spenta")
     }
 }
 

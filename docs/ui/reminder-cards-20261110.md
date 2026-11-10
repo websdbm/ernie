@@ -27,4 +27,7 @@ A/B/C chiaro e A scuro/Borg; nessuno scorrimento orizzontale a 320/390/406/1280 
 modifica canali e annullamento confermato/non confermato. Nessuna verifica nativa iOS di questi nuovi layout.
 
 PNG in `reminder-cards-20261110/`. Render e controlli locali in
-`~/Library/Caches/ernie-design/reminders-20261110/`. Resta da scegliere la direzione visiva con l’utente.
+`~/Library/Caches/ernie-design/reminders-20261110/`.
+
+Approvata il 10 novembre: implementata A, con C soltanto quando esistono due istanti strutturati coerenti.
+La B resta una proposta alternativa. Stato implementazione e distribuzione in [build 116](../releases/build-116.md).

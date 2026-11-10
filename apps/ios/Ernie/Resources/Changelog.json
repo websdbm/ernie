@@ -1,5 +1,30 @@
 [
   {
+    "build": 116,
+    "date": "2026-11-10",
+    "title": "Promemoria, con più chiarezza",
+    "items": [
+      {
+        "icon": "bell",
+        "title": "Schede più essenziali",
+        "detail": "Titolo unico, orario evidente e stato dei canali leggibile. Lo stesso stile in chat e nella raccolta Promemoria, con i colori del tuo orso.",
+        "test": "Apri un promemoria in chat e nella raccolta; confronta tema chiaro, scuro e Borg."
+      },
+      {
+        "icon": "calendar.badge.clock",
+        "title": "Avviso e appuntamento distinti",
+        "detail": "Quando sono disponibili due orari espliciti, una piccola timeline mostra quando ricevi l’avviso e quando inizia l’appuntamento.",
+        "test": "Crea un promemoria con anticipo per un appuntamento e verifica entrambi gli orari."
+      },
+      {
+        "icon": "slider.horizontal.3",
+        "title": "Comandi più ordinati",
+        "detail": "Modifica apre testo, orario, dettagli e interruttori Sveglia/Email. Annulla promemoria è nel menu secondario, con conferma.",
+        "test": "Prova Modifica e apri il menu con i tre punti; Mantieni lascia il promemoria attivo."
+      }
+    ]
+  },
+  {
     "build": 115,
     "date": "2026-11-09",
     "title": "Più compiti, meno attese",

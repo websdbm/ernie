@@ -5,11 +5,17 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — proposte visive per le schede promemoria.
-Preparati tre layout (Essenziale, Compatta, Due momenti), con anteprima offline e PNG chiaro/scuro/Borg.
-Solo proposta richiesta dall’utente: app, API, promemoria reali e build invariati. Raccomandata Essenziale,
-con distinzione avviso/attività nei casi pertinenti. Verificati rendering responsive e interazioni simulate;
-la scelta del layout e l’implementazione nativa restano aperte. [Proposte e limiti](ui/reminder-cards-20261110.md).
+Ultimo aggiornamento: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
+Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
+confermato, editor comune con interruttori dei canali, palette avatar e testo accessibile. **18 test nativi
+verdi** in tre suite, rendering reale di 11 schede e due editor. Build **116 in preparazione**, distribuita
+ancora la 115; backend e promemoria reali invariati. [Verifiche e rilascio](releases/build-116.md).
+
+Richieste aggiuntive in analisi: migliorare ricerca web e protocollo di apprendimento delle abitudini.
+L’utente ha scelto storico spostamenti anche nel backend personale cifrato e chiarito che permette il
+contesto pertinente ai modelli esterni: non richiede isolamento totale sul dispositivo. Account e chat
+restano separati; osservazioni non equivalgono a fatti confermati. Nessuna nuova raccolta/permissione
+di posizione attivata e nessun cambiamento alla ricerca web in questa sessione.
 
 Ultimo rilascio: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
 **Build 115 disponibile su TestFlight**, gruppo **Interni**, Apple **VALID / IN_BETA_TESTING**;

@@ -5,6 +5,7 @@ import SwiftUI
 struct RemindersView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.chatPalette) private var palette
     @State private var editing: ReminderItem?
 
     private var scheduled: [ReminderItem] {
@@ -53,6 +54,9 @@ struct RemindersView: View {
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(palette.ground)
             .overlay {
                 if scheduled.isEmpty {
                     ContentUnavailableView {
@@ -81,63 +85,16 @@ struct RemindersView: View {
             }
             .refreshable { await model.reminders.refresh() }
             .task { await model.reminders.refresh() }
-            .sheet(item: $editing) { r in
-                NavigationStack {
-                    ScrollView {
-                        ReminderEditForm(item: r) { editing = nil }
-                            .padding()
-                    }
-                        .navigationTitle("Modifica")
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-                .presentationDetents([.medium, .large])
-            }
+            .sheet(item: $editing) { r in ReminderEditorSheet(item: r) }
         }
     }
 
     private func row(_ r: ReminderItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button { editing = r } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(r.text)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                        Text(RemindersCard.when(r) + RemindersCard.who(r))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let other = r.forLabel { ReminderForBadge(label: other) }
-                        if let rep = r.repeatInfo {
-                            Label(rep.label, systemImage: "repeat")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let place = r.place, let line = RemindersCard.placeLine(place) {
-                            Label(line.text, systemImage: line.symbol)
-                                .font(.caption)
-                                .foregroundStyle(line.warning ? Color.orange : .secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "pencil")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.accentText)
-                        .frame(width: 44, height: 44)
-                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.actionRadius))
-                        .accessibilityHidden(true)
-                }
-                .frame(minHeight: Theme.actionHeight)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Tocca per modificare")
-            ReminderDetailsView(item: r)
-            if r.place == nil { ReminderChannelChips(item: r) }
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button("Annulla", systemImage: "xmark.circle", role: .destructive) {
-                Task { await model.reminders.cancel(r) }
-            }
-        }
+        ReminderCardView(item: r, defaultAlarm: ReminderAlarms.enabled,
+                         onEdit: { editing = r },
+                         onCancel: { Task { await model.reminders.cancel(r) } })
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
     }
 }
