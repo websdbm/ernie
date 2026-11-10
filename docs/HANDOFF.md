@@ -5,7 +5,13 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
+Ultimo aggiornamento: **10 novembre 2026**, Codex — proposte visive per le schede promemoria.
+Preparati tre layout (Essenziale, Compatta, Due momenti), con anteprima offline e PNG chiaro/scuro/Borg.
+Solo proposta richiesta dall’utente: app, API, promemoria reali e build invariati. Raccomandata Essenziale,
+con distinzione avviso/attività nei casi pertinenti. Verificati rendering responsive e interazioni simulate;
+la scelta del layout e l’implementazione nativa restano aperte. [Proposte e limiti](ui/reminder-cards-20261110.md).
+
+Ultimo rilascio: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
 **Build 115 disponibile su TestFlight**, gruppo **Interni**, Apple **VALID / IN_BETA_TESTING**;
 **API pubblicata e sana**. Build ID `dcd20e25-2552-4815-9356-7c4b61c4824b`, note italiane verificate
 identiche al changelog (1.179 caratteri).
