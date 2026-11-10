@@ -1312,6 +1312,7 @@ async function main(): Promise<void> {
       connections,
       connection: {
         habitsContext: (userId, text) => habits.context(userId, text),
+        habitsChat: habits,
         logger,
         recordPerformance,
         refreshAuth: authenticator.refresh,

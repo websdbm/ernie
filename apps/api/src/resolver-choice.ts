@@ -10,6 +10,7 @@ export const ResolverChoice = z.object({
     .min(2)
     .max(4),
   createdAt: z.number(),
+  habitTimezone: z.string().max(80).optional(),
 });
 export type ResolverChoice = z.infer<typeof ResolverChoice>;
 

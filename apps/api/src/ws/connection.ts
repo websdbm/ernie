@@ -52,6 +52,7 @@ import {
 } from '@ernie/protocol';
 import {
   type DeterministicSkill,
+  enabledSkillIds,
   formatFiredIntents,
   type IntentStore,
   requiresSshModel,
@@ -70,8 +71,19 @@ import {
   parseDocumentRequest,
   parseSchemaCommand,
 } from '../documents-flow.js';
+import {
+  HABIT_OFFER,
+  HABIT_SAVE,
+  habitChatIntent,
+  habitLabelKey,
+  habitScheduleQuestion,
+  habitTimezone,
+  parseHabitTeaching,
+  referencesHabitDraft,
+} from '../habits/chat.js';
+import { HabitsError, type HabitsService } from '../habits/service.js';
 import { type PerformanceObservation, ServerTurnTrace } from '../performance.js';
-import { isExplicitReminderStart, resolveChoice } from '../resolver-choice.js';
+import { isExplicitReminderStart, type ResolverChoice, resolveChoice } from '../resolver-choice.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 import { videoContentInstructions } from '../video-flow.js';
@@ -123,6 +135,7 @@ export interface TurnOutcomeInfo {
 
 export interface ConnectionDeps {
   readonly habitsContext?: (userId: string, text: string) => Promise<string | null>;
+  readonly habitsChat?: Pick<HabitsService, 'learnSchedule' | 'declaredToday'>;
   readonly logger: Logger;
   readonly recordPerformance?: (userId: string, observation: PerformanceObservation) => void;
   readonly store: SessionStore;
@@ -696,6 +709,11 @@ export class ClientConnection {
     // A choice belongs to the preceding request, including after reconnect/server restart.
     // Any other new input consumes/discards it; never attach an old answer to a later task.
     const pendingChoice = await this.deps.store.takeResolverChoice(this.auth.userId, sessionId);
+    if (
+      !attachments.length &&
+      (await this.tryHabitChat(event, sessionId, t0, pendingChoice, ac.signal))
+    )
+      return;
     const selectedChoice = attachments.length ? undefined : resolveChoice(pendingChoice, text);
     const choice =
       selectedChoice &&
@@ -1507,6 +1525,133 @@ export class ClientConnection {
     }
   }
 
+  private async tryHabitChat(
+    event: Extract<ClientEvent, { type: 'user.message' }>,
+    sessionId: string,
+    startedAt: number,
+    pendingChoice: ResolverChoice | null,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    const habits = this.deps.habitsChat;
+    if (!habits || !this.auth.scopes.includes('chat')) return false;
+    const { text, device } = event.payload;
+    const pending =
+      pendingChoice && Date.now() - pendingChoice.createdAt <= 10 * 60_000 ? pendingChoice : null;
+    const ownOffer = pending?.question === HABIT_OFFER;
+    const intent = habitChatIntent(text, ownOffer);
+    if (!intent) return false;
+    const enabled = enabledSkillIds(this.auth.settings).has('abitudini');
+    if ((intent === 'offer' || intent === 'readSchedule') && !enabled) return false;
+    const offeredTeaching = intent === 'offer' ? parseHabitTeaching(text) : null;
+    if (intent === 'offer' && !offeredTeaching) return false;
+
+    const userId = this.auth.userId;
+    const blocks: ContentBlock[] = [];
+    const clarify =
+      'Quale attività vuoi salvare in Abitudini, e a che ora la fai di solito? Se l’orario cambia per un giorno, dimmi anche quale.';
+    let reply: string;
+    signal.throwIfAborted();
+    try {
+      if (intent === 'decline') reply = 'Va bene, lascio stare.';
+      else if (!enabled) reply = 'Attiva la skill Abitudini e poi dimmi cosa vuoi registrare.';
+      else if (intent === 'read') {
+        const entries = await habits.declaredToday(userId);
+        reply = entries.length
+          ? `Abitudini che mi hai insegnato:\n${entries.map((h) => `- ${h.label}${h.usualTime ? ` · di solito alle ${h.usualTime}` : ''}${h.exception ? ` · oggi alle ${h.exception.time}` : ''}`).join('\n')}`
+          : 'Non ho ancora orari abituali o eccezioni di oggi che mi hai insegnato in chat.';
+      } else if (intent === 'readSchedule') {
+        const query = habitScheduleQuestion(text);
+        const entry = (await habits.declaredToday(userId)).find(
+          (h) => habitLabelKey(h.label) === query?.key,
+        );
+        if (!entry) return false;
+        if (!query?.usual && entry.exception) {
+          reply = `Oggi «${entry.label}» è alle ${entry.exception.time}.`;
+        } else {
+          reply = entry.usualTime
+            ? `L’orario abituale di «${entry.label}» è alle ${entry.usualTime}.`
+            : `Per «${entry.label}» ho solo un’eccezione, alle ${entry.exception?.time} di oggi.`;
+        }
+      } else if (intent === 'offer') {
+        reply = HABIT_OFFER;
+        const options = [
+          { label: HABIT_SAVE, value: 'abitudini' },
+          { label: 'Non salvare', value: 'none' },
+        ];
+        await this.deps.store.saveResolverChoice(userId, sessionId, {
+          message: text,
+          question: HABIT_OFFER,
+          kind: 'capability',
+          options,
+          createdAt: Date.now(),
+          habitTimezone: habitTimezone(device?.timezone),
+        });
+        blocks.push({
+          kind: 'choices',
+          question: reply,
+          options: options.map((o) => ({ id: o.value, label: o.label })),
+        });
+      } else {
+        const fromCurrent = intent === 'teach' ? parseHabitTeaching(text) : null;
+        const fromPrevious =
+          !fromCurrent && pending && (intent === 'confirm' || referencesHabitDraft(text))
+            ? parseHabitTeaching(pending.message)
+            : null;
+        const teaching = fromCurrent ?? fromPrevious;
+        if (!teaching) reply = clarify;
+        else {
+          const saved = await habits.learnSchedule(
+            userId,
+            teaching,
+            (fromPrevious ? pending?.habitTimezone : undefined) ?? device?.timezone,
+            fromPrevious && pending ? new Date(pending.createdAt) : undefined,
+          );
+          const date = saved.exception?.date.split('-').reverse().join('/');
+          const parts = [
+            teaching.usualTime ? `orario abituale alle ${saved.usualTime}` : null,
+            saved.exception ? `eccezione per il ${date} alle ${saved.exception.time}` : null,
+          ].filter(Boolean);
+          reply = `Ho salvato in Abitudini «${saved.label}»: ${parts.join(' ed ')}.`;
+        }
+      }
+    } catch (error) {
+      if (intent === 'readSchedule') return false;
+      reply =
+        error instanceof HabitsError && error.code === 'habits_disabled'
+          ? 'La skill Abitudini è spenta. Riattivala per usare questa funzione.'
+          : 'Non sono riuscito a completare l’operazione in Abitudini. Riprova tra poco.';
+    }
+    this.pendingFollowUp = null;
+    await this.deps.decisions.record(
+      userId,
+      sessionId,
+      event.correlationId,
+      localDecision(
+        'skill',
+        this.session?.modelClass ?? 'standard',
+        Date.now() - startedAt,
+        'abitudini',
+      ),
+    );
+    await this.replyLocally(
+      'skill',
+      reply,
+      event.correlationId,
+      startedAt,
+      text,
+      blocks,
+      undefined,
+      {
+        costUsd: 0,
+        inputTokens: 0,
+        llmCalls: 0,
+        signal,
+        privateTurn: true,
+      },
+    );
+    return true;
+  }
+
   private async replyLocally(
     route: 'deterministic' | 'skill',
     reply: string,
@@ -1520,11 +1665,12 @@ export class ClientConnection {
       inputTokens: number;
       llmCalls: number;
       signal: AbortSignal | undefined;
+      privateTurn?: boolean;
     },
   ): Promise<void> {
     const sid = this.sessionId;
     // Il tap può arrivare subito: la richiesta e la domanda devono già essere nella memoria del thread.
-    if (internalUsage && sid && this.deps.recordLocalTurn)
+    if (internalUsage && !internalUsage.privateTurn && sid && this.deps.recordLocalTurn)
       await this.deps.recordLocalTurn(this.auth.userId, sid, userText, reply, route);
     internalUsage?.signal?.throwIfAborted();
     await this.send(
@@ -1556,8 +1702,10 @@ export class ClientConnection {
       },
       correlationId,
     );
-    this.remember('utente', userText);
-    this.remember('assistente', reply);
+    if (!internalUsage?.privateTurn) {
+      this.remember('utente', userText);
+      this.remember('assistente', reply);
+    }
     if (!internalUsage && sid && this.deps.recordLocalTurn)
       void this.deps
         .recordLocalTurn(this.auth.userId, sid, userText, reply, route)

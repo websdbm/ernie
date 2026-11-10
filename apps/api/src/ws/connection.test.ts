@@ -239,6 +239,99 @@ const tick = () => new Promise((r) => setTimeout(r, 10));
 const field = <T>(e: AgentEvent | undefined, key: string): T | undefined =>
   (e?.payload as Record<string, T> | undefined)?.[key];
 
+describe('ClientConnection: apprendimento in Abitudini', () => {
+  it('riprende la frase dopo riconnessione e salva i due orari prima del resolver promemoria', async () => {
+    const session = client(randomUUID());
+    const active = { ...auth, settings: { skills: { abitudini: true } } };
+    const learnSchedule = vi.fn<NonNullable<ConnectionDeps['habitsChat']>['learnSchedule']>(
+      async () => ({
+        label: 'Uscita dal lavoro',
+        usualTime: '16:35',
+        exception: { date: '2026-11-10', time: '17:10', timezone: 'Europe/Rome' },
+      }),
+    );
+    const runTurn = vi.fn();
+    const fire = vi.fn(async () => []);
+    const recordLocalTurn = vi.fn();
+    const d = deps(
+      {
+        habitsChat: {
+          learnSchedule,
+          declaredToday: async () => [
+            {
+              label: 'Uscita dal lavoro',
+              usualTime: '16:35',
+              exception: { date: '2026-11-10', time: '17:10', timezone: 'Europe/Rome' },
+            },
+          ],
+        },
+        intents: { fire } as unknown as NonNullable<ConnectionDeps['intents']>,
+        recordLocalTurn,
+        runTurn,
+      },
+      undefined,
+      fakeRouter({ skillId: 'ricordami', operationalIntent: 0.95 }),
+    );
+    const first = fakeSocket();
+    const initial = new ClientConnection(first.socket, active, d);
+    await initial.handleRaw(session.start());
+    await initial.handleRaw(
+      session.message(
+        'Oggi rimango al lavoro fino alle 17:10 anche se di solito il mio orario prevede che esco alle 16:35. Oggi è una variazione.',
+        randomUUID(),
+        { device: { timezone: 'Europe/Rome' } },
+      ),
+    );
+    expect(learnSchedule).not.toHaveBeenCalled();
+    expect(first.sent.find((e) => e.type === 'assistant.block')?.payload).toMatchObject({
+      block: {
+        kind: 'choices',
+        options: [{ label: 'Salva in Abitudini' }, { label: 'Non salvare' }],
+      },
+    });
+
+    const second = fakeSocket();
+    const reconnected = new ClientConnection(second.socket, active, d);
+    await reconnected.handleRaw(session.start());
+    await reconnected.handleRaw(session.message('Te lo dico per farti conoscere le mie abitudini'));
+    expect(learnSchedule).toHaveBeenCalledExactlyOnceWith(
+      active.userId,
+      {
+        label: 'Uscita dal lavoro',
+        usualTime: '16:35',
+        exception: { time: '17:10', offset: 0 },
+      },
+      'Europe/Rome',
+      expect.any(Date),
+    );
+    const confirmation = second.sent.findLast((e) => e.type === 'assistant.text.completed');
+    expect(field(confirmation, 'text')).toContain(
+      'orario abituale alle 16:35 ed eccezione per il 10/11/2026 alle 17:10',
+    );
+    expect(second.sent.findLast((e) => e.type === 'assistant.completed')?.payload).toMatchObject({
+      usage: { toolCalls: 0, llmCalls: 0 },
+    });
+    await reconnected.handleRaw(session.message('A che ora esco dal lavoro oggi?'));
+    expect(
+      field(
+        second.sent.findLast((e) => e.type === 'assistant.text.completed'),
+        'text',
+      ),
+    ).toContain('17:10');
+    await reconnected.handleRaw(session.message('A che ora esco dal lavoro di solito?'));
+    expect(
+      field(
+        second.sent.findLast((e) => e.type === 'assistant.text.completed'),
+        'text',
+      ),
+    ).toContain('16:35');
+    expect(d.router.calls).toBe(0);
+    expect(fire).not.toHaveBeenCalled();
+    expect(runTurn).not.toHaveBeenCalled();
+    expect(recordLocalTurn).not.toHaveBeenCalled();
+  });
+});
+
 describe('ClientConnection: programma personale e scheda Todo', () => {
   it('il resolver risolto prosegue senza mostrare la propria analisi come una domanda', async () => {
     const registry = new SkillRegistry().register(createSecondBrainSkill());

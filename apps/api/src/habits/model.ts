@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { HabitLabel, HabitTime, habitLocalDate, habitTimezone } from './chat.js';
 
 const Instant = z.iso.datetime({ offset: true });
 export const Visit = z
@@ -46,6 +47,13 @@ export const Place = z.object({
 });
 export type HabitPlace = z.infer<typeof Place>;
 const Digest = z.string().regex(/^[a-f0-9]{64}$/);
+export const DeclaredHabit = z.object({
+  label: HabitLabel,
+  usualTime: HabitTime.nullable(),
+  exceptions: z
+    .array(z.object({ date: z.iso.date(), timezone: z.string().max(80), time: HabitTime }))
+    .max(96),
+});
 export const HabitState = z.object({
   epoch: z.uuid(),
   collecting: z.boolean(),
@@ -66,6 +74,7 @@ export const HabitState = z.object({
   retainedSince: Instant.nullable().default(null),
   lastReviewDay: z.string().nullable(),
   lastQuestionDay: z.string().nullable(),
+  declared: z.array(DeclaredHabit).max(100).default([]),
   patterns: z
     .array(
       z.object({
@@ -96,6 +105,7 @@ export const initialHabits = (): HabitState => ({
   retainedSince: null,
   lastReviewDay: null,
   lastQuestionDay: null,
+  declared: [],
   patterns: [],
 });
 export const distanceM = (
@@ -177,6 +187,18 @@ export function pruneHabits(s: HabitState, now: Date) {
     s.retainedSince ? Date.parse(s.retainedSince) : -Infinity,
   );
   s.retainedSince = new Date(cutoff).toISOString();
+  const cutoffDays = new Map<string, string>();
+  for (const habit of s.declared) {
+    habit.exceptions = habit.exceptions.filter((e) => {
+      let cutoffDay = cutoffDays.get(e.timezone);
+      if (!cutoffDay) {
+        cutoffDay = habitLocalDate(new Date(cutoff), habitTimezone(e.timezone));
+        cutoffDays.set(e.timezone, cutoffDay);
+      }
+      return e.date >= cutoffDay;
+    });
+  }
+  s.declared = s.declared.filter((h) => h.usualTime !== null || h.exceptions.length > 0);
   const count = s.visits.length;
   s.visits = s.visits.filter((v) => Date.parse(v.departure ?? v.observedAt) >= cutoff);
   if (s.visits.length !== count) s.patterns = [];

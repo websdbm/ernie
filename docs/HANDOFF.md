@@ -5,6 +5,28 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Abitudini — orari insegnati in chat, backend pronto per la pubblicazione
+
+10 novembre 2026. La chat riconosce l’insegnamento esplicito di un orario. Se la persona descrive un
+orario abituale e un’eccezione senza chiedere di salvarli, propone un solo passaggio di conferma, valido
+anche dopo riconnessione. La continuazione usa la scelta a scadenza della sessione già esistente.
+Il salvataggio avviene prima di Jev e degli strumenti di promemoria. Orario abituale ed eccezioni con
+data e fuso sono registrati separatamente nello stato cifrato Abitudini. Le eccezioni valgono soltanto
+nel giorno indicato e seguono la retention; il comando di cancellazione della sezione elimina anche gli
+orari dichiarati. Raccolta localizzazione e invio al modello esterno non sono prerequisiti. Il percorso
+locale non copia gli orari dichiarati nella memoria o nel contesto del modello.
+
+Rilettura in chat con «Cosa hai imparato sulle mie abitudini?» o con una domanda sull’orario di una
+routine riconosciuta. Il percorso copre orari espliciti di un’attività alla volta e deroghe per oggi,
+domani o ieri; una frase ambigua richiede dettagli. Nessuna nuova schermata o migrazione SQL. Il
+contratto HTTP aggiunge il campo `declared`, ignorato dai client iOS attuali. Dopo che il backend
+scrive il nuovo campo, evitare il rollback a un writer precedente che lo scarterebbe durante una riscrittura.
+
+Verifica locale su WebSocket e PostgreSQL isolato (116 test, TypeScript e Biome): due turni, riconnessione,
+rilettura nello stesso giorno e il giorno seguente, isolamento, cifratura e zero promemoria/automazioni. Test nel repo
+con dati sintetici. Pubblicazione API e verifica sul servizio in attesa di via libera. Nessun dato
+personale importato in produzione.
+
 ### Build 120 — API/worker pubblicati; TestFlight in elaborazione
 
 10 novembre 2026. Pubblicazione autorizzata esplicitamente dall’utente. API e worker attivi e sani,
@@ -35,8 +57,7 @@ su iPhone sono separati. La build 120 raccoglie soste e permette di descrivere i
 ma non offre alla chat un’operazione per acquisire routine dichiarate. Il contesto AI è in sola lettura e
 richiede consenso, parole chiave e un luogo confermato pertinente. Una precisazione esplicita sulle abitudini
 dopo un turno promemoria è stata instradata di nuovo a `ricordami` da Jev; il resolver ha chiesto conferma
-prima del turno principale, senza salvare alcuna abitudine. Da coprire con una regressione a due turni e un
-flusso di acquisizione che separi la routine dichiarata dall’eccezione datata. Nessuna modifica applicativa.
+prima del turno principale, senza salvare alcuna abitudine. Correzione e regressione descritte nella sezione sopra.
 
 ### Storico Abitudini e revisore Copilot — base precedente alla build 120
 

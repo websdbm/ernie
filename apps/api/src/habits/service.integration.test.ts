@@ -3,6 +3,7 @@ import { createPool, type Pool, withUser } from '@ernie/db';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHealthCipher } from '../health-protection/crypto.js';
+import { parseHabitTeaching } from './chat.js';
 import { forgottenObservation, HabitState } from './model.js';
 import { habitsRoutes } from './routes.js';
 import { createHabitsService } from './service.js';
@@ -128,6 +129,47 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     await expect(configure(s, id)).rejects.toMatchObject({ code: 'habits_disabled' });
     const unavailable = createHabitsService({ pool: app, cipher: null, places: async () => [] });
     await expect(unavailable.get(id)).rejects.toMatchObject({ code: 'habits_unavailable' });
+  });
+  it('persists a taught routine and a local-date exception in the encrypted archive without reminders', async () => {
+    const id = await user();
+    const other = await user();
+    let time = new Date('2026-11-10T23:01:00Z');
+    const s = setup(() => time);
+    const teaching = parseHabitTeaching(
+      'Di solito esco dal lavoro alle 16:35, ma oggi esco alle 17:10',
+    );
+    if (!teaching) throw new Error('teaching fixture did not parse');
+    const anchor = new Date('2026-11-10T22:59:00Z');
+    const saved = await s.learnSchedule(id, teaching, 'Europe/Rome', anchor);
+    expect(saved).toEqual({
+      label: 'Uscita dal lavoro',
+      usualTime: '16:35',
+      exception: {
+        date: '2026-11-10',
+        time: '17:10',
+        timezone: 'Europe/Rome',
+      },
+    });
+    await s.learnSchedule(id, teaching, 'Europe/Rome', anchor);
+    expect((await stored(id)).state.declared).toEqual([
+      { label: saved.label, usualTime: '16:35', exceptions: [saved.exception] },
+    ]);
+    expect(await s.get(id)).toMatchObject({ collecting: false, aiAllowed: false, visits: [] });
+    expect(await s.declaredToday(id)).toEqual([{ label: saved.label, usualTime: '16:35' }]);
+    time = anchor;
+    expect(await s.declaredToday(id)).toEqual([saved]);
+    expect(await s.declaredToday(other)).toEqual([]);
+    const checks = (
+      await owner.query(
+        `SELECT
+      (SELECT count(*)::int FROM automations WHERE user_id=$1) AS reminders,
+      (SELECT envelope::text LIKE '%16:35%' OR envelope::text LIKE '%17:10%' FROM habits_state WHERE user_id=$1) AS plaintext`,
+        [id],
+      )
+    ).rows[0];
+    expect(checks).toEqual({ reminders: 0, plaintext: false });
+    await s.act(id, { action: 'clear' });
+    expect(await s.declaredToday(id)).toEqual([]);
   });
   it('encrypts all mobility data and isolates user reads including raw SQL', async () => {
     const { id, s, a } = await seed();

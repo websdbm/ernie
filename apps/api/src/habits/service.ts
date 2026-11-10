@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Supervisable } from '../family.js';
 import { guardianSettings } from '../guardian.js';
 import type { HealthCipher } from '../health-protection/crypto.js';
+import { type HabitTeaching, habitLabelKey, habitLocalDate, habitTimezone } from './chat.js';
 import {
   distanceM,
   forgottenObservation,
@@ -151,9 +152,62 @@ export function createHabitsService(opts: HabitsOptions) {
       .sort((a, b) => b.observedAt.localeCompare(a.observedAt)),
     places: s.places,
     patterns: s.patterns,
+    declared: s.declared,
     lastReviewDay: s.lastReviewDay,
   });
   return {
+    async learnSchedule(userId: string, teaching: HabitTeaching, timezone?: string, anchor?: Date) {
+      const zone = habitTimezone(timezone);
+      const exception = teaching.exception && {
+        date: habitLocalDate(anchor ?? now(), zone, teaching.exception.offset),
+        time: teaching.exception.time,
+        timezone: zone,
+      };
+      return transaction(userId, async (s, _revision, settings) => {
+        requireEnabled(settings);
+        const key = habitLabelKey(teaching.label);
+        let item = s.declared.find((h) => habitLabelKey(h.label) === key);
+        if (!item) {
+          if (s.declared.length >= 100) fail('habits_capacity');
+          item = { label: teaching.label, usualTime: null, exceptions: [] };
+          s.declared.push(item);
+        }
+        if (teaching.usualTime) item.usualTime = teaching.usualTime;
+        if (exception) {
+          const i = item.exceptions.findIndex((e) => e.date === exception.date);
+          if (i >= 0) item.exceptions[i] = exception;
+          else {
+            if (item.exceptions.length >= 96) fail('habits_capacity');
+            item.exceptions.push(exception);
+          }
+        }
+        return { label: item.label, usualTime: item.usualTime, exception };
+      });
+    },
+    async declaredToday(userId: string) {
+      return transaction(
+        userId,
+        async (s, _revision, settings) => {
+          requireEnabled(settings);
+          const instant = now();
+          const days = new Map<string, string>();
+          return s.declared.flatMap((h) => {
+            const exception = h.exceptions.find((e) => {
+              let day = days.get(e.timezone);
+              if (!day) {
+                day = habitLocalDate(instant, e.timezone);
+                days.set(e.timezone, day);
+              }
+              return e.date === day;
+            });
+            return h.usualTime || exception
+              ? [{ label: h.label, usualTime: h.usualTime, ...(exception ? { exception } : {}) }]
+              : [];
+          });
+        },
+        false,
+      );
+    },
     async get(userId: string) {
       return transaction(userId, async (s, r, settings) => view(s, r, settings), false);
     },
