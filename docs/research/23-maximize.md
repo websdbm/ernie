@@ -45,6 +45,39 @@ Catalogo pubblico OpenRouter letto il 10 novembre tramite `GET /api/v1/models`: 
 La verifica è di catalogo/documentazione, **non una chiamata di inferenza sul conto Ernie**. Non sono stati
 spesi token né importati modelli/configurazioni. I nomi di Codex non diventano ID validi senza questa verifica.
 
+### Anthropic diretto: verifica autenticata su staging3
+
+Il 10 novembre, su richiesta dell'utente, verificati configurazione effettiva e `GET /v1/models` usando la
+chiave già nel container API, senza stamparla o copiarla. Risposta **HTTP 200**, 15 modelli, paginazione
+esaurita. Nessuna generazione a pagamento, modifica del provider o verifica del credito residuo.
+
+Configurazione corrente: `LLM_PROVIDER=auto`, chiavi Anthropic/OpenRouter presenti. La via principale è
+Anthropic diretto; OpenRouter è il fallback previsto dal gateway per errori iniziali.
+
+| Classe di Ernie | Modello configurato | Impostazione corrente |
+| --- | --- | --- |
+| light | Claude Haiku 5.5 | default del provider |
+| standard | Claude Sonnet 5.5 | `standardReasoning=off` |
+| heavy | Claude Opus 5.5 | `high` |
+
+Il catalogo autenticato include anche **Claude Fable 5.2**, Fable 5.1 e precedenti. Fable 5.2 risulta
+attivo e accessibile al catalogo della chiave, ma non è fra le tre classi configurate e non è stato
+provato in inferenza. I quattro modelli recenti dichiarano input immagini/PDF e output strutturati;
+livelli `low`, `medium`, `high`, `xhigh`, `max`. Ernie deve estendere il tipo e la validazione per offrire
+gli ultimi due in Maximize; la versione precedente non li rende selezionabili.
+
+Nota di compatibilità da verificare con una prova sintetica prima di modificare il runtime: il catalogo
+attuale dichiara `thinking.disabled.supported=false` per Sonnet 5.5, Opus 5.5 e Fable 5.2; l'impostazione
+standard esistente manda invece `thinking=disabled` a Sonnet. Non conclude da sola che le richieste
+stiano fallendo: non sono stati consultati i log né effettuata una generazione in questa verifica.
+Maximize deve distinguere predefinito, spento e minimo secondo capacità/provider, senza ereditare
+il workaround specifico OpenRouter. Conservare l'impostazione corrente finché non verificata.
+
+**Il catalogo Maximize comprende entrambi i servizi**, non solo OpenRouter. Preferenza proposta per
+Claude: API Anthropic già collegata; per Sol e altri autori: OpenRouter compatibile. Mostrare il servizio
+effettivo, disponibilità e prezzi separati, con fallback coerente con consensi e scelta dell'utente.
+Il catalogo pubblico o autenticato non prova che il conto abbia credito per una nuova generazione.
+
 ## Catalogo e compatibilità
 
 Catalogo letto dal backend, cache con data/aggiorna e filtro per modelli chat realmente utilizzabili dal
@@ -98,3 +131,6 @@ Fonti ufficiali:
 - [Catalogo modelli](https://openrouter.ai/docs/api/api-reference/models/get-models)
 - [Reasoning e livelli per modello](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
 - [GPT-6.1 Sol](https://openrouter.ai/openai/gpt-6.1-sol)
+- [Catalogo Anthropic e capacità](https://platform.claude.com/docs/en/api/models/list)
+- [Modelli Claude](https://platform.claude.com/docs/en/models/overview)
+- [Claude Fable 5.2](https://platform.claude.com/docs/en/models/fable-5-2/overview)

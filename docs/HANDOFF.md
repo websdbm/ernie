@@ -28,6 +28,10 @@ Richieste aggiuntive **in specifica, non implementate nella 116**:
 - [Maximize](research/23-maximize.md): skill per selettore di modello principale/sforzo per conversazione,
   Automatico iniziale, catalogo reale dei provider e livelli compatibili. Sol 6.1 presente nel catalogo
   pubblico OpenRouter; nessuna inferenza di prova. Serve resolver provider-specifico prima degli override.
+  Verificata anche la chiave **Anthropic diretta** su staging3: catalogo autenticato HTTP 200 (15 modelli),
+  Haiku/Sonnet/Opus 5.5 configurati, Fable 5.2 disponibile in catalogo ma non attivato. Maximize deve includere
+  entrambi i provider. Livelli xhigh/max da aggiungere; compatibilità Sonnet `thinking=disabled` da verificare
+  rispetto alle capacità attuali. Nessuna inferenza a pagamento, verifica credito o modifica runtime.
 - [Analisi immagini](research/24-image-analysis.md): nuova skill proposta, Jev multimodale per domande
   strutturate e modello visivo per dettagli/risposte; riuso Media/ricette/Brain, niente analisi reali nuove.
   Il percorso allegati corrente passa a Jev solo i metadati; la catalogazione Media già usa un LLM visivo.
