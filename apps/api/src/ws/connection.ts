@@ -122,6 +122,7 @@ export interface TurnOutcomeInfo {
 }
 
 export interface ConnectionDeps {
+  readonly habitsContext?: (userId: string, text: string) => Promise<string | null>;
   readonly logger: Logger;
   readonly recordPerformance?: (userId: string, observation: PerformanceObservation) => void;
   readonly store: SessionStore;
@@ -1263,6 +1264,18 @@ export class ClientConnection {
       },
       'preparazione contesto turno',
     );
+    if (this.deps.habitsContext) {
+      try {
+        const block = await this.deps.habitsContext(this.auth.userId, text);
+        if (block) {
+          contextBlocks.push(block);
+          privateContext.add('habits');
+          untrustedContext.add('habits');
+        }
+      } catch {
+        /* Optional private context fails closed, without logging its contents. */
+      }
+    }
     const memoryContext = contextBlocks.length ? contextBlocks.join('\n\n') : undefined;
     this.performanceTrace?.phase('contextMs', performance.now() - contextStartedAt);
 

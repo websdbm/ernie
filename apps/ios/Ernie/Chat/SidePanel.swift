@@ -16,6 +16,7 @@ enum PanelDestination: Hashable {
     case media
     case brain
     case health
+    case habits
     case family
     case profile
     case skills
@@ -222,6 +223,7 @@ struct SidePanel: View {
             if showsBrain {
                 sectionRow("Second brain", icon: "brain.head.profile", tint: .brain, destination: .brain)
             }
+            sectionRow("Abitudini", icon: "figure.walk", tint: .brain, locked: true, destination: .habits)
             sectionRow("Salute", icon: "heart.text.square.fill", tint: .health, locked: true, destination: .health)
             sectionRow("ErnieTRIX", icon: "gamecontroller.fill", tint: .brain, destination: .ernietrix)
             sectionRow("Skill", icon: "bolt.shield.fill", tint: .neutral, destination: .skills)

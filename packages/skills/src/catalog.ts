@@ -28,6 +28,20 @@ export interface SkillCatalogEntry {
 
 export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
+    id: 'abitudini',
+    title: 'Abitudini',
+    icon: 'figure.walk',
+    tint: 'teal',
+    summary: 'Conosci i tuoi luoghi e le tue abitudini, con il tuo aiuto.',
+    description:
+      'Raccoglie le soste rilevate da iOS dopo la tua attivazione nella sezione Abitudini. Archivio cifrato personale, durata dello storico configurabile, luoghi e routine da confermare. Puoi mettere in pausa, escludere luoghi e cancellare i dati. Spegnere la skill interrompe raccolta, domande e contesto; lo storico resta consultabile.',
+    kind: 'guided',
+    tools: [],
+    examples: [],
+    defaultAvailable: true,
+    defaultEnabled: false,
+  },
+  {
     id: 'maximize',
     title: 'Maximize',
     icon: 'slider.horizontal.3',

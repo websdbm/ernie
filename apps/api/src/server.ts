@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { AppConfig } from '@ernie/config';
 import { type Logger, newId } from '@ernie/observability';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import { type HabitsRoutesOptions, habitsRoutes } from './habits/routes.js';
 import { type AutomationRoutesOptions, automationRoutes } from './routes/automations.js';
 import { type BrainRoutesOptions, brainRoutes } from './routes/brain.js';
 import { type ChatArchiveRoutesOptions, chatArchiveRoutes } from './routes/chat-archives.js';
@@ -42,6 +43,7 @@ import { registerWs, type WsPluginOptions } from './ws/plugin.js';
 
 export interface BuildServerOptions {
   readonly healthVault?: HealthVaultRoutesOptions;
+  readonly habits?: HabitsRoutesOptions;
   readonly privateDiary?: PrivateDiaryRoutesOptions;
   readonly operatingPreferences?: OperatingPreferenceRoutesOptions;
   readonly config: AppConfig;
@@ -166,6 +168,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);
   if (opts.healthVault) await app.register(healthVaultRoutes, opts.healthVault);
+  if (opts.habits) await app.register(habitsRoutes, opts.habits);
   if (opts.privateDiary) await app.register(privateDiaryRoutes, opts.privateDiary);
   if (opts.documents) await app.register(documentsRoutes, opts.documents);
   if (opts.todo) await app.register(todoRoutes, opts.todo);

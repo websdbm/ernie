@@ -50,8 +50,10 @@
 	<string>Sblocca il diario personale e conferma le azioni sensibili.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Per raggiungere il tuo server Ernie quando è sulla stessa rete Wi-Fi.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Solo se attivi Abitudini su questo iPhone, Ernie rileva le soste anche quando l’app è chiusa per aiutarti a conoscere luoghi e routine. Puoi sospendere la raccolta in qualsiasi momento.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ernie usa la tua posizione approssimata, solo mentre usi l'app, per rispondere su meteo, luoghi vicini e orari senza chiederti dove sei.</string>
+	<string>Ernie usa la posizione per meteo e luoghi vicini. Se attivi Abitudini, ti chiederà separatamente il permesso per le soste in background.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Ernie ascolta la tua voce quando tocchi il microfono; nella conversazione continua resta in ascolto finché non chiudi.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

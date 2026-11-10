@@ -146,6 +146,7 @@ import {
   toFamilyMessageBlock,
 } from './family-messages.js';
 import { createGuardianStore, guardianSettings } from './guardian.js';
+import { createHabitsService } from './habits/service.js';
 import { healthCipherFromEnvironment } from './health-protection/config.js';
 import { createHealthVaultService } from './health-protection/service.js';
 import { createPostgres } from './infra/postgres.js';
@@ -666,6 +667,23 @@ async function main(): Promise<void> {
           ).rows[0]?.settings ?? {},
       ),
     );
+  const habits = createHabitsService({
+    pool: postgres.pool,
+    cipher: healthCipherFromEnvironment(process.env.HABITS_ENCRYPTION_KEYS),
+    places: async (userId) => (await profiles.get(userId)).places,
+  });
+  let habitsMaintaining = false;
+  const habitsTimer = setInterval(() => {
+    if (habitsMaintaining) return;
+    habitsMaintaining = true;
+    void habits
+      .maintainAll()
+      .catch(() => logger.warn('manutenzione Abitudini non disponibile'))
+      .finally(() => {
+        habitsMaintaining = false;
+      });
+  }, 60 * 60_000);
+  habitsTimer.unref();
   const health = createHealthVaultService({
     pool: postgres.pool,
     cipher: healthCipherFromEnvironment(process.env.HEALTH_ENCRYPTION_KEYS),
@@ -1108,6 +1126,11 @@ async function main(): Promise<void> {
       applyGuardian,
       onChanged: async (userId, skillId, before) => {
         companions.invalidateUser(userId);
+        if (
+          skillId === 'abitudini' &&
+          !enabledSkillIds(await loadUserSettings(userId)).has('abitudini')
+        )
+          await habits.pause(userId);
         if (skillId === 'salute' && !enabledSkillIds(await loadUserSettings(userId)).has('salute'))
           await health.consent.revoke(userId);
         // Solo se il permesso SSH effettivo cambia (senza lo stato precedente si invalida comunque).
@@ -1156,6 +1179,7 @@ async function main(): Promise<void> {
     shopping: { authenticator, allowedOrigins: config.ws.allowedOrigins, repo: shopping },
     reminders: { authenticator, allowedOrigins: config.ws.allowedOrigins, store: reminders },
     healthVault: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: health },
+    habits: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: habits },
     privateDiary: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -1287,6 +1311,7 @@ async function main(): Promise<void> {
       allowedOrigins: config.ws.allowedOrigins,
       connections,
       connection: {
+        habitsContext: (userId, text) => habits.context(userId, text),
         logger,
         recordPerformance,
         refreshAuth: authenticator.refresh,
@@ -1464,6 +1489,7 @@ async function main(): Promise<void> {
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     clearInterval(todoTimer);
+    clearInterval(habitsTimer);
     if (shuttingDown) return;
     shuttingDown = true;
     brain.stop();

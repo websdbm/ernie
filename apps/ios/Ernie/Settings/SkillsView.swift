@@ -187,6 +187,7 @@ struct SkillsView: View {
     private func toggle(_ skill: SkillInfo, _ value: Bool) async {
         // Skill scelta dal genitore: il server la rifiuterebbe (403), qui non si chiama nemmeno.
         guard skill.locked != true, let api = model.api else { return }
+        if skill.id == "abitudini", !value { model.habits.stopLocally() }
         busy.insert(skill.id)
         defer { busy.remove(skill.id) }
         do {
@@ -194,6 +195,7 @@ struct SkillsView: View {
                 ? try await api.setSkill(id: skill.id, available: value)
                 : try await api.setSkill(id: skill.id, enabled: value)
             error = nil
+            if skill.id == "abitudini" { await model.habits.refresh() }
         } catch {
             self.error = AppModel.describe(error)
         }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01853D7E24F1E7BFC3DE7B7D /* HabitsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9384E7853B9C89AE84FA35C4 /* HabitsModels.swift */; };
 		021DA7D80B355A958EF13E44 /* BlockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D938C458270FB5964436CBF8 /* BlockViews.swift */; };
 		022C84D91F5F5C1FB9E5CF35 /* ErnieWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4494C8724520CBF3960A6E4 /* ErnieWidgets.swift */; };
 		064BA644DFD42668E74976B1 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F71764273FF93B42753C6E1 /* Theme.swift */; };
@@ -28,6 +29,7 @@
 		1124F7AC9B4AC333E8B5EC54 /* SecondBrainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509057173DB9F00B0AA9AD3 /* SecondBrainView.swift */; };
 		14EC76FF04AD1E9CA8821C30 /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
 		1533C33230952774ECF262A4 /* TodoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ED4B2043A7966ACD2D7F9A7 /* TodoStore.swift */; };
+		163801116EF484F5FD581802 /* HabitsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF86D5438B7D364DCA0719F /* HabitsTests.swift */; };
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
 		1A654130D63927DC48E6AB94 /* HealthVaultStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571C1719665A52748811EEC9 /* HealthVaultStore.swift */; };
 		1AD7B1A4F74390207ABDC6CA /* ernie-bear-v3-fallback.png in Resources */ = {isa = PBXBuildFile; fileRef = 567C3C7EEA2BAEEFD1AE5176 /* ernie-bear-v3-fallback.png */; };
@@ -39,6 +41,7 @@
 		24A95C8605017621BC54120B /* DocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957834F4A9047230E5195B26 /* DocumentsTests.swift */; };
 		25AD8C039D97C5B7C4E33A08 /* ernie-bear-v3-classic.png in Resources */ = {isa = PBXBuildFile; fileRef = 1183B47F868369335880B88E /* ernie-bear-v3-classic.png */; };
 		25C5286BEF7115B1202854D5 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD07317404B3BEF77505FA3 /* ConversationStore.swift */; };
+		28B6CB771D439253BDDCF3E8 /* HabitsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D2F3A916ABA945A88A70BE /* HabitsStore.swift */; };
 		28C4C45071833A65D8042BC7 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FF043456831431801189D0 /* InputBar.swift */; };
 		2A5E6AF978D040998A7842E2 /* ReminderAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */; };
 		2A75EAED43459370467478A9 /* AvatarStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */; };
@@ -122,6 +125,7 @@
 		86FE43261E5FB26079403599 /* SSHDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59645683D7C5596714DCB9F1 /* SSHDeletionTests.swift */; };
 		8777C9A391ACA22F019D794D /* ernie-bear-v3-mono.png in Resources */ = {isa = PBXBuildFile; fileRef = DBB93D8A0DC5980EA1653897 /* ernie-bear-v3-mono.png */; };
 		877B4A3387CAC68161550748 /* WidgetLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95077EE0D59B17CE3E41099E /* WidgetLinkTests.swift */; };
+		895DAD5955B290F04FA3229E /* HabitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6847712F08CD10A99DACECAC /* HabitsView.swift */; };
 		896501B81A339C83B037EE05 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C98000DE6D12B55CB9A3223 /* HomeView.swift */; };
 		8993BBC876C8034C122833D9 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		8C4779BD313E375D6EF22B31 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6A663AAF174530467149DD /* OnboardingView.swift */; };
@@ -167,6 +171,7 @@
 		B11EC2252AE06CD8D2BB1294 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D05B4674194F94566A5561 /* Log.swift */; };
 		B2731FAE282BAC9E65F37857 /* UsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF9C574E0EAF58A5AA418A /* UsageTests.swift */; };
 		B28E1A3D2D62EFFA16DB6953 /* MediaUploadQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD09F97518CE26791D89C46 /* MediaUploadQueueTests.swift */; };
+		B4F6FACC774AB8A9018069A4 /* HabitsQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DCEB0A78FCF1F3E4CEDCD0 /* HabitsQueue.swift */; };
 		B7606F408A80151242918AF5 /* LifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4FDC5D430FCAC2E1E3AB13 /* LifecycleTests.swift */; };
 		B97D35C0A50FFFDA8F981585 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA2FF63BFF2CB0C2696ED81 /* ApiClient.swift */; };
 		BA5B531E45C27B0D36A2C8E8 /* ernie-bear-v3-astronaut.png in Resources */ = {isa = PBXBuildFile; fileRef = 1D7C6B9C58D4D9DA8B1F404E /* ernie-bear-v3-astronaut.png */; };
@@ -390,6 +395,7 @@
 		63C63EF0E9CACDE23645FA4D /* ContentReadersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentReadersTests.swift; sourceTree = "<group>"; };
 		66E2A693DF1F51BBED01476A /* ernie-bear-v3-engineer.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-engineer.png"; sourceTree = "<group>"; };
 		67D01A54F963F34DF905AEFF /* DiagnosticsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsReporter.swift; sourceTree = "<group>"; };
+		6847712F08CD10A99DACECAC /* HabitsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsView.swift; sourceTree = "<group>"; };
 		68C311ACF6BEA9C3926C2004 /* ErnieTRIXView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErnieTRIXView.swift; sourceTree = "<group>"; };
 		6A13D22DE0CA5713C69F155F /* ReminderCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderCardTests.swift; sourceTree = "<group>"; };
 		6A7367F1397707A3FE394CBC /* ernie-bear-v3-explorer.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-explorer.png"; sourceTree = "<group>"; };
@@ -406,6 +412,7 @@
 		76416F1739622AD37E503DA1 /* DiaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViews.swift; sourceTree = "<group>"; };
 		776746702F34B36435BC04EA /* MediaImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaImportCoordinator.swift; sourceTree = "<group>"; };
 		7834712467189E8358BF5C1B /* Ernie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ernie.entitlements; sourceTree = "<group>"; };
+		79DCEB0A78FCF1F3E4CEDCD0 /* HabitsQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsQueue.swift; sourceTree = "<group>"; };
 		7A04F7AC1E243E495725298C /* ConfirmationCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationCopy.swift; sourceTree = "<group>"; };
 		7A5DD5E654850582A7832ED1 /* ernie-bear-v3-halloween.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-halloween.png"; sourceTree = "<group>"; };
 		7A602BA56D38EFD9F3306D65 /* SSHStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHStore.swift; sourceTree = "<group>"; };
@@ -436,6 +443,7 @@
 		900E913C3BBDBCE175CC60F2 /* ErnieWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ErnieWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		911A4F9BD9D2717A244FE250 /* SSHEditors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHEditors.swift; sourceTree = "<group>"; };
 		93601195399529EB7C586024 /* ChatArchiveBrainExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveBrainExportView.swift; sourceTree = "<group>"; };
+		9384E7853B9C89AE84FA35C4 /* HabitsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsModels.swift; sourceTree = "<group>"; };
 		94BF9C574E0EAF58A5AA418A /* UsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTests.swift; sourceTree = "<group>"; };
 		95077EE0D59B17CE3E41099E /* WidgetLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLinkTests.swift; sourceTree = "<group>"; };
 		9539D37ECC6A21D3554A8833 /* RecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesView.swift; sourceTree = "<group>"; };
@@ -467,6 +475,7 @@
 		C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		C5700506AF1CE47020C9191C /* StyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleView.swift; sourceTree = "<group>"; };
 		C61EA0E65EB3D092518177BB /* DeviceContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceContextProvider.swift; sourceTree = "<group>"; };
+		C8D2F3A916ABA945A88A70BE /* HabitsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsStore.swift; sourceTree = "<group>"; };
 		C8EC370EC9D4A35FBB27F875 /* ErnieWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ErnieWidgets.entitlements; sourceTree = "<group>"; };
 		CA51C9304F13805F093E4E6E /* ConcurrentTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentTask.swift; sourceTree = "<group>"; };
 		CB75FC36D23A4E6A620C55E5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -507,6 +516,7 @@
 		FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStage.swift; sourceTree = "<group>"; };
 		FAF6CDC1B803582982A064C0 /* DiaryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryStore.swift; sourceTree = "<group>"; };
 		FFADBB8C959380C87F836E68 /* PerformanceObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceObservationTests.swift; sourceTree = "<group>"; };
+		FFF86D5438B7D364DCA0719F /* HabitsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -569,6 +579,7 @@
 				F4FEC958643F49BCFA9F6F98 /* ErnieTRIXTests.swift */,
 				D2589F13E371B721791902AA /* EventsCodingTests.swift */,
 				F73AEB0AE202B3FA98948CB6 /* FamilyMessageCardTests.swift */,
+				FFF86D5438B7D364DCA0719F /* HabitsTests.swift */,
 				3D29F28B5ECE14A76F4BE546 /* HealthCardTests.swift */,
 				AD9A4E4617CE0FD0B6C27093 /* HealthVaultTests.swift */,
 				5C4FDC5D430FCAC2E1E3AB13 /* LifecycleTests.swift */,
@@ -661,6 +672,7 @@
 				BD53059C99FB8FB8A5A6C405 /* Documents */,
 				8DBDB79A8F256B8D3C4D8031 /* Family */,
 				67403FD03A1D510F9F547173 /* Games */,
+				872E29A34960DDA5F3BEF8D0 /* Habits */,
 				36E23BDD590261C5BE906DB6 /* Health */,
 				D079FB610D8C39CC4171ED91 /* Media */,
 				69AED0D3939374F32691BBEB /* Protocol */,
@@ -793,6 +805,17 @@
 				250E7AAC1BB9DD5AC2E500AF /* ernie-bear-v3-paws.png */,
 			);
 			path = BearV3;
+			sourceTree = "<group>";
+		};
+		872E29A34960DDA5F3BEF8D0 /* Habits */ = {
+			isa = PBXGroup;
+			children = (
+				9384E7853B9C89AE84FA35C4 /* HabitsModels.swift */,
+				79DCEB0A78FCF1F3E4CEDCD0 /* HabitsQueue.swift */,
+				C8D2F3A916ABA945A88A70BE /* HabitsStore.swift */,
+				6847712F08CD10A99DACECAC /* HabitsView.swift */,
+			);
+			path = Habits;
 			sourceTree = "<group>";
 		};
 		8CDE19C05534E51D68489807 /* Chat */ = {
@@ -1211,6 +1234,7 @@
 				3C5BB0FFE2AA6BED00F8CFEA /* ErnieTRIXTests.swift in Sources */,
 				4F14D88AC2451671828A022F /* EventsCodingTests.swift in Sources */,
 				2E979824E4D38D37447FEFCF /* FamilyMessageCardTests.swift in Sources */,
+				163801116EF484F5FD581802 /* HabitsTests.swift in Sources */,
 				65D1978266CEBCB607268251 /* HealthCardTests.swift in Sources */,
 				54864AE5EFEDAE54CC7BD48B /* HealthVaultTests.swift in Sources */,
 				B7606F408A80151242918AF5 /* LifecycleTests.swift in Sources */,
@@ -1341,6 +1365,10 @@
 				08E6402FAF1BDEB99D25F429 /* FamilyUrgent.swift in Sources */,
 				3E5FBFA31CB25D3405E81FB9 /* FamilyView.swift in Sources */,
 				107F63A095751E9B80C155FE /* FloatingAvatar.swift in Sources */,
+				01853D7E24F1E7BFC3DE7B7D /* HabitsModels.swift in Sources */,
+				B4F6FACC774AB8A9018069A4 /* HabitsQueue.swift in Sources */,
+				28B6CB771D439253BDDCF3E8 /* HabitsStore.swift in Sources */,
+				895DAD5955B290F04FA3229E /* HabitsView.swift in Sources */,
 				FE0D4FB2E53B7F1F29667615 /* HealthVaultClient.swift in Sources */,
 				52A8127175A907F95939F7A4 /* HealthVaultImporter.swift in Sources */,
 				A934555991DB0D65468E5920 /* HealthVaultModels.swift in Sources */,

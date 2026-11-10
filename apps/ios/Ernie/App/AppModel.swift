@@ -18,6 +18,7 @@ final class AppModel {
     private(set) var conversation: ConversationStore?
     private(set) var voice: VoiceController?
     let inbox = InboxStore()
+    let habits = HabitsStore()
     /// Messaggi urgenti da confermare («super snooze»): a tutto schermo finché non si conferma.
     let urgent = FamilyUrgentStore()
     private(set) var speaker = Speaker()
@@ -152,6 +153,7 @@ final class AppModel {
     /// All'uscita non resta niente dell'account sul telefono (revisione del 16 ott 2026: le sveglie suonavano ancora,
     /// chi entrava dopo vedeva le chat precedenti e un urgente del vecchio account non si chiudeva più).
     private func resetLocalState() {
+        habits.deactivate()
         UserDefaults.standard.removeObject(forKey: "ernie.parallelSessions")
         PendingTaskInput.clearSaved()
         mediaImports.reset()
@@ -530,12 +532,21 @@ final class AppModel {
         speaker.configure(credentials: creds, engine: settings.speechEngine, style: settings.speechStyle)
         let api = ApiClient(credentials: creds)
         if profile == nil {
+            // A background visit launch must restore an existing device lease even before /me can respond.
+            Task { [weak self] in
+                guard let self, token == self.lifecycle else { return }
+                await self.habits.activate(credentials: creds, userID: nil)
+            }
             let fetched = try? await api.me()
             guard token == lifecycle, !Task.isCancelled else { return }
             profile = fetched
         }
         // Lo scope del diario si ricorda per queste credenziali: senza rete il diario locale si apre lo stesso.
         if let userID = profile?.userId { _ = DiaryIdentity.scope(for: creds, userID: userID) }
+        Task { [weak self] in
+            guard let self, token == self.lifecycle else { return }
+            await self.habits.activate(credentials: creds, userID: self.profile?.userId)
+        }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings, observeInbox: false)
         inbox.onCards = { [weak self] cards in self?.conversation?.receiveNotifications(cards) }

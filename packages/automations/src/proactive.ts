@@ -18,7 +18,7 @@ import type { AutomationRepository } from './repository.js';
  * Il registro `proactive_messages` è anche il lock d'invio: una chiave per motivo, un solo consegnatario.
  * Non passano di qui i promemoria e le automazioni: li ha chiesti l'utente, a un'ora da lui scelta.
  */
-export const ProactiveKind = z.enum(['approval_expiring', 'family_reminder']);
+export const ProactiveKind = z.enum(['approval_expiring', 'family_reminder', 'habit_learning']);
 export type ProactiveKind = z.infer<typeof ProactiveKind>;
 
 export interface ProactiveCandidate {

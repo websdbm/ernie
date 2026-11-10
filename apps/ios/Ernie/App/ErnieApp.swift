@@ -54,10 +54,12 @@ struct RootView: View {
                 Task { await model.reminders.refresh() }
                 // Le schede delle automazioni (approvazioni, esiti) arrivate mentre l'app era in background.
                 Task { await model.inbox.refresh() }
+                Task { await model.habits.refresh() }
                 Task { await model.syncFamilyMessages() }
             }
             // In uscita: i widget dell'orso rileggono impegni e automazioni dal server.
             if phase == .background {
+                model.habits.scrubPresentation()
                 model.voice?.cancelListening()
                 WidgetCenter.shared.reloadTimelines(ofKind: "ErnieBear")
             }

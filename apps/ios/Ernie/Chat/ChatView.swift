@@ -21,6 +21,7 @@ struct ChatView: View {
     @State private var showUsageAdmin = false
     @State private var showBrain = false
     @State private var showHealth = false
+    @State private var showHabits = false
     @State private var healthStore = HealthVaultStore()
     @State private var showSSH = false
     @State private var showGame = false
@@ -69,10 +70,10 @@ struct ChatView: View {
             if let previous { taskDrafts[previous] = draft }
             draft = next.flatMap { taskDrafts[$0] } ?? ""
         }
-        .onChange(of: model.credentials) { taskDrafts = [:]; draft = ""; healthStore.scrub(); showHealth = false }
+        .onChange(of: model.credentials) { taskDrafts = [:]; draft = ""; healthStore.scrub(); showHealth = false; showHabits = false }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
-                healthStore.scrub(); showHealth = false
+                healthStore.scrub(); showHealth = false; showHabits = false
                 // Any OCR in flight can still contain health data not yet classified.
                 model.documents.suspendSensitiveReading()
             }
@@ -91,6 +92,9 @@ struct ChatView: View {
         .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
         .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
         .sheet(isPresented: $showBrain, onDismiss: sheetDidDismiss) { SecondBrainView() }
+        .sheet(isPresented: $showHabits, onDismiss: { model.habits.scrubPresentation(); sheetDidDismiss() }) {
+            HabitsView(store: model.habits).chatAppearance(costume: resolvedCostume)
+        }
         .sheet(isPresented: $showHealth, onDismiss: { healthStore.scrub(); sheetDidDismiss() }) {
             HealthVaultView(store: healthStore).chatAppearance(costume: resolvedCostume)
         }
@@ -166,6 +170,13 @@ struct ChatView: View {
         VStack(spacing: 0) {
             topBar(conversation)
             ConcurrentTasksBar()
+            if model.habits.question != nil && !composing {
+                Button { showHabits = true } label: {
+                    Label("Un luogo da conoscere", systemImage: "mappin.and.ellipse")
+                        .font(.subheadline).padding(.vertical, 10).frame(maxWidth: .infinity)
+                }.buttonStyle(.bordered).padding(.horizontal)
+                    .accessibilityHint("Apri Abitudini per descrivere una sosta")
+            }
             if let notice = model.taskNotice {
                 Text(notice).font(.footnote).foregroundStyle(palette.inkSecondary).padding(.horizontal)
             }
@@ -232,7 +243,7 @@ struct ChatView: View {
         if hasPresentedSheet {
             dismissingForLink = true
             showSettings = false; showUsage = false; showUsageAdmin = false
-            showHealth = false; healthStore.scrub()
+            showHealth = false; showHabits = false; healthStore.scrub()
             showBrain = false; showSSH = false; showGame = false; diaryLaunch = nil; listSheet = nil
             archiveReference = nil; showChatArchives = false; showRecipes = false; showMedia = false; showReminders = false
             showAutomations = false; showSkills = false; showFamily = false
@@ -260,7 +271,7 @@ struct ChatView: View {
     }
 
     private var hasPresentedSheet: Bool {
-        showSettings || showUsage || showUsageAdmin || showBrain || showHealth || showSSH || listSheet != nil
+        showSettings || showUsage || showUsageAdmin || showBrain || showHealth || showHabits || showSSH || listSheet != nil
         || archiveReference != nil || showChatArchives || showRecipes || showMedia || showReminders || showAutomations || showSkills
         || showFamily || showProfile || whatsNew != nil || debugIcons || showGame || diaryLaunch != nil
     }
@@ -298,6 +309,7 @@ struct ChatView: View {
         case .automations: showAutomations = true
         case .brain: showBrain = true
         case .health: openHealth()
+        case .habits: showHabits = true
         case .chatArchives: showChatArchives = true
         case .recipes: showRecipes = true
         case .media: showMedia = true

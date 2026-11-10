@@ -5,7 +5,37 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Correzione resolver promemoria — pronta, non pubblicata
+### Abitudini e revisore Copilot — prima implementazione verificata, non pubblicata
+
+10 novembre 2026. Copilot CLI aggiornato 0.0.335 → **1.0.108** e verificato con due revisioni reali
+sul provider GitHub Copilot, Auto → GPT-6.1 Sol. Circa **8,32 crediti Copilot** complessivi; nessun
+trasferimento di quota a Codex. Snapshot dei soli sorgenti, tool di lettura/scrittura/esecuzione e MCP
+indisponibili, nessun dato privato o credenziale inviato. Riscontri riprodotti e corretti.
+
+Prima implementazione Abitudini: skill per account spenta, consenso sul singolo dispositivo,
+visite Core Location/coda cifrata, archivio backend cifrato e RLS (nuova **0054**, soltanto locale),
+retention/pausa/cancellazione, luoghi confermati distinti dalle routine inferite, domande entro budget,
+sezione nell'app e invito discreto in chat, contesto AI pertinente con consenso revocabile.
+Ripresa offline entro lease di 24 ore usando soltanto impronte di identità account; niente chiavi API
+nel registro locale. Default senza chiave backend: indisponibile, mai archiviazione in chiaro.
+
+Revisione: invalidazione richieste al cambio account/pausa; consenso mai ereditato da un altro iPhone;
+revoca localizzazione ferma anche gli invii; blocco locale persistente prima della cancellazione;
+alias delle visite e retry dopo eliminazione; retention non può resuscitare dati scaduti; inferenza
+ordinata e con fuso giornaliero stabile, pruning prima delle domande. Dettagli e limiti in
+[ricerca 28](research/28-habits-implementation.md).
+
+**106 test backend** in nove suite superati (21 Abitudini, PostgreSQL isolato/RLS e HTTP reali),
+TypeScript/Biome/diff verdi. **9 test iOS** superati sul Mac dell'ufficio, Xcode 27.2 dopo accettazione
+licenza da parte dell'utente: account/consenso/pausa concorrente, coda cifrata e contratto upload;
+render chiaro/scuro a caratteri accessibili con verifica OCR e visiva. Nessun dato personale nei test.
+
+Nessuna nuova build distribuita, nessuna migrazione/chiave/servizio modificato in produzione.
+TestFlight resta **119**, API pubblicata resta **fe3a60f**. Prima del rilascio: verifica dispositivo reale
+(Core Location/permessi/background/batteria), archivio riproducibile, chiave dedicata e backup,
+via libera alla pubblicazione/migrazione. Apple Salute ancora non implementata.
+
+### Correzione resolver promemoria — API pubblicata
 
 10 novembre 2026. Diagnosi in sola lettura delle interazioni segnalate: il resolver ha riproposto
 la stessa scelta di funzione tre volte. Il client inviava la sola etichetta del pulsante; mancava una
@@ -21,8 +51,12 @@ argomento e indicazioni, mai descrizioni/esempi troncati. Compatibile con la bui
 
 **81 test in sei suite superati**, inclusi riconnessione e Redis reale (consumo concorrente, scadenza,
 isolamento account/sessione); TypeScript e Biome verificati. Nessun modello reale o promemoria personale
-modificato nei test. Pubblicazione API ancora da autorizzare; API/worker e TestFlight restano alla 119.
-Prossimo lavoro autorizzato: Abitudini, poi Apple Salute; entrambe ancora spente/non implementate.
+modificato nei test. Pubblicazione API autorizzata ed eseguita da Git `fe3a60f`, immagine `a50890ae…`; worker e TestFlight
+restano alla 119. Smoke sui moduli pubblicati con sessione/Redis reali e account sintetico: richiesta
+originale conservata dopo riconnessione, scelta consumata una volta, comando esplicito senza resolver;
+zero chiamate provider/creazioni promemoria, fixture rimosse. Salute HTTPS ancora cifrata e disponibile.
+Backup `ernie-pre-resolver-20261110`; configurazione/worker/Postgres/Redis invariati.
+Abitudini in implementazione come descritto sopra; Apple Salute successiva. Nessuna delle due attivata.
 
 ### Build 119 — Salute pubblicata e verificata
 
@@ -539,7 +573,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 |---|---|
 | App su TestFlight | build **119**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `203542a` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API/worker **203542a** (10 nov), immagine `f317e2d6…`; API healthy, worker pronto. Immagini pre-119 conservate: nessun rollback automatico dei writer Salute dopo nuovi import |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **fe3a60f**, immagine `a50890ae…`; worker **203542a**, immagine `f317e2d6…` (10 nov). API healthy, worker pronto. Recupero API `ernie-app:pre-resolver-20261110`; nessun rollback a writer Salute precedenti alla 119 |
 | Migrazioni | fino alla **0053**, applicate e verificate; migrazione Salute completata con zero referti preesistenti da trasferire, nessun consenso attivato |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
