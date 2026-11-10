@@ -196,7 +196,7 @@ export function createDocumentRepository(pool: Pool): DocumentRepository {
              SET products = $3::jsonb,
                  schemas = CASE WHEN $4::text IS NULL THEN schemas ELSE schemas || jsonb_build_object($4::text, $5::jsonb) END,
                  status = 'summarized', updated_at = now()
-           WHERE user_id = $1 AND id = $2::uuid`,
+           WHERE user_id = $1 AND id = $2::uuid AND status <> 'deleted'`,
           [
             userId,
             id,
@@ -211,19 +211,28 @@ export function createDocumentRepository(pool: Pool): DocumentRepository {
       await withUser(pool, userId, async (client) => {
         await client.query(
           `UPDATE documents SET schemas = schemas || jsonb_build_object($3::text, $4::jsonb), updated_at = now()
-           WHERE user_id = $1 AND id = $2::uuid`,
+           WHERE user_id = $1 AND id = $2::uuid AND status <> 'deleted'`,
           [userId, id, type, JSON.stringify(diagram)],
         );
       });
     },
     async remove(userId, id) {
       return withUser(pool, userId, async (client) => {
-        const res = await client.query(
-          `UPDATE documents SET status = 'deleted', body = '', page_texts = '[]'::jsonb, updated_at = now()
-           WHERE user_id = $1 AND id = $2::uuid AND status <> 'deleted'`,
+        // Serialize with late indexing and clear derivatives even for old soft-deleted records.
+        const previous = await client.query<{ status: string }>(
+          `SELECT status FROM documents WHERE user_id=$1 AND id=$2::uuid FOR UPDATE`,
           [userId, id],
         );
-        return (res.rowCount ?? 0) > 0;
+        await client.query(
+          `UPDATE documents SET status = 'deleted', title = 'Documento eliminato', language = NULL, chars = 0, body = '', page_texts = '[]'::jsonb, products = NULL, schemas = '{}'::jsonb, updated_at = now()
+           WHERE user_id = $1 AND id = $2::uuid`,
+          [userId, id],
+        );
+        await client.query(
+          `DELETE FROM document_chunks WHERE user_id=$1 AND document_id=$2::uuid`,
+          [userId, id],
+        );
+        return Boolean(previous.rows[0] && previous.rows[0].status !== 'deleted');
       });
     },
   };

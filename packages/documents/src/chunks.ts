@@ -116,10 +116,26 @@ export function createChunkStore(pool: Pool, embedder: ChunkEmbedder | null): Ch
   };
   return {
     async index(userId, documentId, pageTexts) {
+      const active = await withUser(
+        pool,
+        userId,
+        async (c) =>
+          (
+            await c.query(`SELECT 1 FROM documents WHERE id=$1 AND status <> 'deleted'`, [
+              documentId,
+            ])
+          ).rowCount === 1,
+      );
+      if (!active) return 0;
       const chunks = chunkDocument(pageTexts);
       const texts = chunks.map((c) => `${c.heading ? `${c.heading}. ` : ''}${c.content}`);
       const vectors = await embed(texts);
-      await withUser(pool, userId, async (c) => {
+      return withUser(pool, userId, async (c) => {
+        const active = await c.query(
+          `SELECT 1 FROM documents WHERE id=$1 AND status <> 'deleted' FOR UPDATE`,
+          [documentId],
+        );
+        if (active.rowCount !== 1) return 0;
         await c.query(`DELETE FROM document_chunks WHERE document_id = $1`, [documentId]);
         for (const [i, ch] of chunks.entries()) {
           const v = vectors?.[i];
@@ -140,21 +156,22 @@ export function createChunkStore(pool: Pool, embedder: ChunkEmbedder | null): Ch
             ],
           );
         }
+        return chunks.length;
       });
-      return chunks.length;
     },
     async hasChunks(userId, documentId) {
       return withUser(pool, userId, async (c) => {
-        const r = await c.query(`SELECT 1 FROM document_chunks WHERE document_id = $1 LIMIT 1`, [
-          documentId,
-        ]);
+        const r = await c.query(
+          `SELECT 1 FROM document_chunks k JOIN documents d ON d.id=k.document_id WHERE document_id = $1 AND d.status <> 'deleted' LIMIT 1`,
+          [documentId],
+        );
         return (r.rowCount ?? 0) > 0;
       });
     },
     async search(userId, q) {
       const limit = Math.min(Math.max(q.limit ?? 6, 1), 12);
       const v = (await embed([q.query]))?.[0];
-      const filters: string[] = [];
+      const filters: string[] = ["d.status <> 'deleted'"];
       const params: unknown[] = [q.query];
       if (q.documentId) {
         params.push(q.documentId);
@@ -227,6 +244,11 @@ export function createChunkStore(pool: Pool, embedder: ChunkEmbedder | null): Ch
     },
     async sectionPages(userId, documentId, section) {
       return withUser(pool, userId, async (c) => {
+        const active = await c.query(
+          `SELECT 1 FROM documents WHERE id=$1 AND status <> 'deleted'`,
+          [documentId],
+        );
+        if (active.rowCount !== 1) return null;
         const s = section.trim();
         const num = /^(?:capitolo|cap\.?|paragrafo|lezione|unità|parte)?\s*(\d+(?:\.\d+)*)$/iu.exec(
           s,

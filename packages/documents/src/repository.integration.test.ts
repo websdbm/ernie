@@ -68,6 +68,42 @@ run('repository dei documenti (Postgres, RLS)', async () => {
 
     expect(await repo.remove(userA, meta.id)).toBe(true);
     expect(await repo.get(userA, meta.id)).toBeNull();
+    await repo.saveProducts(userA, meta.id, {
+      abstract: 'Risultato tardivo',
+      keyPoints: [],
+      glossary: [],
+      questions: [],
+      suggestedSchema: 'mindmap',
+    });
+    await repo.saveSchema(userA, meta.id, 'mindmap', {
+      type: 'mindmap',
+      root: { label: 'Tardivo' },
+    });
+    const removed = (
+      await owner.query(
+        `SELECT status,title,body,page_texts,products,schemas,chars,language
+      FROM documents WHERE id=$1`,
+        [meta.id],
+      )
+    ).rows[0];
+    expect(removed).toEqual({
+      status: 'deleted',
+      title: 'Documento eliminato',
+      body: '',
+      page_texts: [],
+      products: null,
+      schemas: {},
+      chars: 0,
+      language: null,
+    });
+    expect(await repo.get(userA, meta.id)).toBeNull();
+    await owner.query(
+      "UPDATE documents SET title='Titolo residuo',body='Testo residuo' WHERE id=$1",
+      [meta.id],
+    );
     expect(await repo.remove(userA, meta.id)).toBe(false);
+    expect(
+      (await owner.query('SELECT title,body FROM documents WHERE id=$1', [meta.id])).rows[0],
+    ).toEqual({ title: 'Documento eliminato', body: '' });
   });
 });

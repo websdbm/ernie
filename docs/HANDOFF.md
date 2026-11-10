@@ -5,6 +5,37 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Lavoro successivo alla 118 — protezione Salute, in corso
+
+10 novembre 2026. L'utente ha scelto **solo Ernie ed esportazione esplicita**, eliminando il requisito di
+sincronizzare referti leggibili in Obsidian. Priorità confermata: cifratura/consenso Salute, poi Abitudini,
+poi Apple Salute. Decisioni e sequenza in [ricerca 26](research/26-health-protection.md).
+
+Componenti sviluppati e verificati ma **non collegati al runtime pubblicato**:
+- `apps/api/src/health-protection/`: crypto autenticata per account/risorsa/revisione, store cifrato per
+  referti e avvisi, consenso versionato e revocabile con eventi non riscrivibili. Lettura manuale separata
+  dall'AI; ticket scaduti/revocati non riutilizzabili, compresa riattivazione successiva del consenso.
+- Migrazione strutturale `0052_health_protection.sql`, quattro tabelle con RLS; **non applicata su staging3**.
+  Nessun consenso attivato e nessuna chiave nuova configurata. Il backend può decifrare: non dichiarare E2EE.
+- Cancellazione documenti ripulisce anche indici/prodotti/schemi/titoli; risultati AI tardivi non ricreano
+  contenuti eliminati. Isolamento account e ricerche con vecchi indici residui verificati.
+
+**49 test backend in otto suite superati**, PostgreSQL sintetico isolato e nessun provider AI. Quattro
+regressioni falliscono sul codice precedente in 330 ms e passano con la correzione. Migrazioni 1–52 provate
+anche da zero, seconda esecuzione senza modifiche; privilegi degli eventi verificati. Review indipendente
+ha trovato/corretto scadenza durante attesa DB e avvisi superati tramite un riferimento non proprio.
+TypeScript/Biome e controllo whitespace verificati. Evidenze locali temporanee:
+`/tmp/ernie-health-protection-final-tests.log`, `typecheck-final.log` con lo stesso prefisso,
+`/tmp/ernie-health-deletion-red-final.log`. Nessuna build iOS o pubblicazione nuova.
+
+**R4 non è completato**: restano collegamento documenti/media/referti, caricamento cifrato dall'ingresso,
+API/UI e guardie su tutti i percorsi AI, copie in chat/replay/cache e migrazione di dati/vault/cronologia.
+Non usare il nuovo store come fallback silenzioso e non dichiarare cifrati i dati reali dalla sola presenza
+della libreria. Esportazioni leggibili soltanto esplicite. Abitudini e HealthKit restano non attivati.
+Non è stata toccata la documentazione/backup preesistente modificata fuori ambito.
+
+### Ultimo rilascio effettivamente pubblicato
+
 Ultimo aggiornamento: **10 novembre 2026**, Codex — **API e worker 118 pubblicati e sani**, migrazione **0051**
 applicata dopo backup e date esistenti invariate. Immagine `b7d5e6e8…`, sorgenti `a56ea55`; 17 moduli compilati
 identici ai test. Smoke sintetico HTTPS/DB passato, zero LLM e operazioni su host gestiti; fixture rimosse.

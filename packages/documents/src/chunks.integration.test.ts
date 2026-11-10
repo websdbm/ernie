@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createPool, type Pool } from '@ernie/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createChunkStore } from './chunks.js';
 import { createDocumentRepository } from './repository.js';
 
@@ -95,5 +95,103 @@ describe.skipIf(!ready)('pezzi dei documenti (Postgres, full-text italiano, RLS)
       toPage: 1,
     });
     expect(ranged.map((h) => h.page)).toEqual([1]);
+  });
+  it('elimina i derivati, nasconde anche indici preesistenti e non tocca altri documenti', async () => {
+    const repo = createDocumentRepository(app);
+    const pages = ['Capitolo 1\nSegretissimo risultato sintetico conservato nel documento.'];
+    const doc = await repo.create(user, { source: 'scan', pageTexts: pages });
+    const survivor = await repo.create(other, { source: 'scan', pageTexts: pages });
+    const embedder = {
+      model: 'fake',
+      embed: async (texts: string[]) => ({
+        vectors: texts.map(() => Array(1536).fill(0.01)),
+      }),
+    };
+    const store = createChunkStore(app, embedder);
+    await store.index(user, doc.id, pages);
+    await store.index(other, survivor.id, pages);
+    const original = (
+      await owner.query('SELECT * FROM document_chunks WHERE document_id=$1', [doc.id])
+    ).rows[0];
+    expect(await repo.remove(other, doc.id)).toBe(false);
+    expect(await store.hasChunks(user, doc.id)).toBe(true);
+    expect(await repo.remove(user, doc.id)).toBe(true);
+    expect(
+      (
+        await owner.query('SELECT count(*)::int AS n FROM document_chunks WHERE document_id=$1', [
+          doc.id,
+        ])
+      ).rows[0].n,
+    ).toBe(0);
+    // Simula un vecchio documento cancellato prima della bonifica degli indici.
+    await owner.query(
+      `INSERT INTO document_chunks (user_id,document_id,page,ordinal,heading,content,content_hash,embedding)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        user,
+        doc.id,
+        original.page,
+        original.ordinal,
+        original.heading,
+        original.content,
+        original.content_hash,
+        original.embedding,
+      ],
+    );
+    expect(await store.hasChunks(user, doc.id)).toBe(false);
+    expect(await store.search(user, { query: 'Segretissimo', documentId: doc.id })).toEqual([]);
+    expect(await store.sectionPages(user, doc.id, 'capitolo 1')).toBeNull();
+    expect(await repo.list(user, 'Segretissimo')).toEqual([]);
+    expect(await store.hasChunks(other, survivor.id)).toBe(true);
+    expect(await repo.remove(user, doc.id)).toBe(false);
+    expect(
+      (
+        await owner.query('SELECT count(*)::int AS n FROM document_chunks WHERE document_id=$1', [
+          doc.id,
+        ])
+      ).rows[0].n,
+    ).toBe(0);
+  });
+
+  it('scarta gli embedding in volo dopo eliminazione', async () => {
+    const repo = createDocumentRepository(app);
+    const pages = ['Questo testo sintetico deve essere rimosso anche durante la indicizzazione.'];
+    const doc = await repo.create(user, { source: 'scan', pageTexts: pages });
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<{ vectors: number[][] }>();
+    const embed = vi.fn(async () => {
+      started.resolve();
+      return pending.promise;
+    });
+    const store = createChunkStore(app, { model: 'fake', embed });
+    const indexing = store.index(user, doc.id, pages);
+    await started.promise;
+    await repo.remove(user, doc.id);
+    pending.resolve({ vectors: [Array(1536).fill(0.01)] });
+    expect(await indexing).toBe(0);
+    expect(await store.hasChunks(user, doc.id)).toBe(false);
+    expect(await store.index(user, doc.id, pages)).toBe(0);
+    expect(embed).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await owner.query('SELECT count(*)::int AS n FROM document_chunks WHERE document_id=$1', [
+          doc.id,
+        ])
+      ).rows[0].n,
+    ).toBe(0);
+  });
+  it('non invia al provider un documento eliminato o appartenente a un altro utente', async () => {
+    const repo = createDocumentRepository(app);
+    const pages = ['Un testo privato sintetico da non inviare.'];
+    const doc = await repo.create(user, { source: 'scan', pageTexts: pages });
+    const embed = vi.fn(async (texts: string[]) => ({
+      vectors: texts.map(() => Array(1536).fill(0.01)),
+    }));
+    const store = createChunkStore(app, { model: 'fake', embed });
+    await expect(store.index(other, doc.id, pages)).resolves.toBe(0);
+    expect(embed).not.toHaveBeenCalled();
+    await repo.remove(user, doc.id);
+    expect(await store.index(user, doc.id, pages)).toBe(0);
+    expect(embed).not.toHaveBeenCalled();
   });
 });
