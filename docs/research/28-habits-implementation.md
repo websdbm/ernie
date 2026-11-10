@@ -1,7 +1,8 @@
 # Abitudini — implementazione e revisione
 
-10 novembre 2026. Skill separata, inizialmente spenta. Sorgenti in lavorazione; nessuna pubblicazione
-API, migrazione remota o build distribuita per questa funzione. Apple Salute resta un passo successivo.
+10 novembre 2026. Skill separata, inizialmente spenta. Backend e migrazione 0054 pubblicati con
+autorizzazione esplicita; build 120 firmata e in caricamento su TestFlight. [Rilascio](../releases/build-120.md).
+Apple Salute resta un passo successivo.
 
 ## Flusso
 
@@ -16,7 +17,7 @@ La revoca offline sugli altri dispositivi viene recepita alla sincronizzazione: 
 Backend: archivio per account cifrato con chiave **HABITS_ENCRYPTION_KEYS**, distinta da Salute,
 formato keyring uguale a HEALTH_ENCRYPTION_KEYS. Non generare o versionare chiavi nei sorgenti.
 AES-256-GCM/HKDF, AAD account/risorsa/revisione, RLS forzata e transazioni serializzate per account.
-Migrazione **0054_habits.sql**, ancora solo locale. Il backend può decifrare: **non è E2EE**.
+Migrazione **0054_habits.sql**, applicata e verificata sul server. Il backend può decifrare: **non è E2EE**.
 Retention selezionabile 7/30/90 giorni; manutenzione oraria e inferenza deterministica al massimo una
 volta al giorno (giorno stabile Europe/Rome). Visite scadute e luoghi non confermati orfani vengono rimossi;
 le descrizioni confermate rimangono finché eliminate. Le aree escluse mantengono coordinate per poterle
@@ -93,7 +94,7 @@ Le domande non risposte sono conservate solo in memoria fino alla chiusura del p
 
 ## Limiti di rilascio
 
-Prima di pubblicare: verifiche native e backend finali, revisione delle modifiche, chiave dedicata e backup,
-migrazione 0054 autorizzata, runtime sintetico su server e successiva build riproducibile da GitHub.
+Completati: verifiche native e backend, revisione delle modifiche, chiave dedicata e backup,
+migrazione 0054 autorizzata, runtime sintetico su server e build riproducibile da GitHub.
 Su iPhone reale verificare autorizzazioni, precisione ridotta, arrivo/partenza, revoca, offline e riavvio;
 misurare batteria. Il simulatore non dimostra la consegna delle visite in background da parte di iOS.

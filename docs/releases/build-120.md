@@ -1,6 +1,7 @@
-# Build 120 — Abitudini (firmata, non pubblicata)
+# Build 120 — Abitudini
 
-10 novembre 2026. **Non pubblicata**. API e migrazione 0054 ancora da attivare; TestFlight resta 119.
+10 novembre 2026. **API/worker pubblicati e verificati, migrazione 0054 applicata** dopo autorizzazione
+esplicita dell’utente. Build 120 caricata su TestFlight; elaborazione e disponibilità ancora da verificare.
 La skill è inizialmente spenta e richiede consenso esplicito anche su ciascun iPhone.
 
 ## Contenuto
@@ -33,13 +34,33 @@ su copie isolate; Codex ha corretto compilazione e integrazione dell’avvio bac
   descrizione permesso posizione Sempre e changelog incorporati e verificati.
 - Artefatti e manifest privati: Mac Studio `~/Library/Caches/ernie-builds/build-120-20261110-habits/`,
   `release-manifest.json`, `source-inputs.json`, `export/Ernie.ipa`. Non in Git.
-- **Nessun upload TestFlight, deployment o scrittura DB di produzione eseguiti**.
+- Pubblicazione autorizzata dall’utente dopo firma e verifiche.
 
-## Passi di rilascio ancora da completare
+## Backend pubblicato e verificato
 
-- Backup aggiornato server, chiave HABITS_ENCRYPTION_KEYS separata da Salute e copia privata di recupero,
-  migrazione 0054 e runtime dal Git pubblicato, smoke sintetico cifratura/revoca/isolamento.
-- Pubblicazione e scritture in produzione soltanto dopo il via libera esplicito richiesto da HANDOFF.
+Checkout server da Git `1e4092339a7d45eff4d82ed4b91139935d431ff1` (sorgenti applicativi `62f097c`),
+immagine API/worker `sha256:f533f499e3132b561f8a3eb802056ba3bbf9e60cd01f6d1ce96e5b5f7a835c18`.
+Otto moduli compilati identici per SHA-256 a quelli dei test. Migrazione 0054 applicata, 53 precedenti
+riconosciute; API/worker sani, health/ready HTTPS verdi. Postgres e Redis non ricreati.
+
+Backup progetto/configurazione e dump preliminare/cutover con indice pg_restore verificato in
+`/srv/staging3/backups/ernie-pre-120-20261110/`. Chiave HABITS_ENCRYPTION_KEYS casuale dedicata,
+copia riservata `/srv/staging3/secrets/ernie-habits/keyring-20261110-v1.json` e recupero sul Mac ufficio
+fuori Git, checksum corrispondenti senza esposizione del segreto. Configurazione precedente preservata,
+sola aggiunta della chiave; override invariato. Nessuna prova integrale di ripristino del backup.
+
+Smoke HTTPS nel runtime reale: autenticazione, default spento, attivazione esplicita, deduplica,
+archivio senza coordinate/etichette in chiaro, RLS forzata tra due account, consenso AI versionato e
+revocabile, contesto privo di coordinate/storico grezzo, rifiuto vecchi epoch dopo disattivazione,
+cancellazione e retry con ID sconosciuto. Zero chiamate LLM/SSH/provider e zero scritture Brain/documenti/Media.
+Account sintetici/API key/dati rimossi. Nessun contenuto privato delle fixture nei log né errori API/worker.
+Evidenze `runtime-smoke.json`, `migration-0054.log`, `containers-before.txt`, `containers-after.txt` nel backup,
+copia locale `/tmp/ernie120-runtime-smoke-result.json`. Nessun consenso attivato agli account esistenti.
+
+## TestFlight
+
+Upload riuscito senza errori, ricevuta `2e08b05d-86cb-4919-9278-2c2ec8903e65`, 82.870.043 byte.
+Stato Apple e gruppo Interni da rileggere prima di dichiarare disponibile la build.
 
 ## Prova su iPhone
 
