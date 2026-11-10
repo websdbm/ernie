@@ -20,11 +20,13 @@ gruppo diario privato solo nell’app, 318 input iOS verificati. Artefatti e man
 rileggere in Apple. iPhone del titolare verificato alla 119, non sovrascritto durante i test.
 Restano elaborazione/TestFlight e prova hardware con soste reali; Apple Salute successiva.
 Controllo automatico limitato avviato sul Mac Studio: leggere `release-watcher-result.json` nella cartella
-della build; su VALID completa note/Interni e aggiorna manifest/`asc-final.json`. Ultimo esito visto:
-`processing_pending`; non ripetere upload. Aggiornare questa nota quando la disponibilità è verificata.
-Ricontrollo 10 novembre, ore 16:31–16:33 CET: API Apple ancora senza build 120, ultima 119/VALID;
-watcher `processing_pending`, nessun errore di upload. iPhone non interrogabile via CoreDevice: versione
-installata non riconfermata. Prova guidata rinviata alla disponibilità 120, nessuna raccolta attivata.
+della build. Il monitor ha terminato alle 16:44 CET con `processing_pending`; quando la build diventa VALID,
+riprendere note italiane e assegnazione a Interni dal monitor, quindi verificare il manifest e TestFlight.
+Ricontrollo 10 novembre, ore 16:55 CET: App Store Connect e API `buildUploads` confermano `PROCESSING`;
+i tre file caricati risultano `COMPLETE`, senza errori o avvisi. Upload ricevuto alle 16:15:57 CET.
+120 ancora assente dalle build TestFlight, ultima 119. Nessuna diagnosi ulteriore esposta da Apple.
+Se ancora in elaborazione dopo 24 ore, seguire la procedura di supporto Apple descritta nella nota di rilascio.
+Prova guidata rinviata alla disponibilità 120, nessuna raccolta attivata.
 Dettagli e protocollo: [build 120](releases/build-120.md); limiti/costi Copilot:
 [ricerca 28](research/28-habits-implementation.md). Modifiche estranee preservate.
 

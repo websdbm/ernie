@@ -64,11 +64,14 @@ Stato Apple e gruppo Interni da rileggere prima di dichiarare disponibile la bui
 Controllo avviato sul Mac Studio (`release-watcher.mjs`, massimo 40 tentativi ogni 25 s): solo dopo
 VALID scrive/rilegge note italiane, assegna il gruppo Interni esistente e verifica entrambi. Esiti in
 `release-watcher-result.json`, `asc-final.json`, `release-manifest.json`; non ripete upload e non aggiunge tester.
-Ultima lettura in sessione: `processing_pending`, build ancora assente dalla lista Apple. Non confondere
-la ricevuta di upload con disponibilità TestFlight. Alla ripresa leggere prima questi file.
+Il monitor ha terminato alle 16:44 CET con `processing_pending`. Alla ripresa leggere prima questi file e,
+quando la build diventa VALID, completare note, gruppo Interni e verifica finale.
 
-Ricontrollo ore 16:31–16:33 CET del 10 novembre: 120 ancora assente dall’elenco Apple,
-119 ultima VALID; watcher ancora `processing_pending`. Nessuna ripetizione dell’upload.
+Ricontrollo 10 novembre, ore 16:55 CET: App Store Connect e API `buildUploads` riportano `PROCESSING`.
+Upload ricevuto alle 16:15:57 CET. IPA e due file accessori tutti `COMPLETE`; Apple non espone errori,
+avvisi o altri dettagli. 120 ancora assente dall’elenco TestFlight, 119 ultima disponibile agli Interni.
+Nessuna ripetizione dell’upload. Se resta in elaborazione oltre 24 ore dal caricamento, consultare
+la [procedura di supporto Apple](https://developer.apple.com/help/app-store-connect/manage-builds/view-builds-and-metadata#view-build-upload-status).
 
 ## Prova su iPhone
 
