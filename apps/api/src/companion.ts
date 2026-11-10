@@ -11,7 +11,14 @@ import {
   type ProfileStore,
   renderProfile,
 } from '@ernie/memory';
-import type { ModelGateway } from '@ernie/model-gateway';
+import {
+  eligibleForSSH,
+  type ModelCatalog,
+  type ModelGateway,
+  type ModelSelection,
+  ModelSelectionError,
+  selectionProfile,
+} from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
   disabledToolIds,
@@ -32,6 +39,7 @@ import type { SessionRecord } from './sessions/store.js';
 
 export interface CompanionFactoryDeps {
   readonly gateway: ModelGateway | null;
+  readonly modelCatalog?: { get(): Promise<ModelCatalog> };
   readonly memory: Memory;
   readonly souls: SoulRepository;
   readonly logger: Logger;
@@ -84,6 +92,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     string,
     { settings: Readonly<Record<string, unknown>>; at: number }
   >();
+  const modelKeys = new Map<string, string>();
   const sessionsByUser = new Map<string, Set<string>>();
   // A shared cold read per account: independent tasks need separate agents, not duplicate settings queries.
   const settingsLoads = new Map<string, Promise<Readonly<Record<string, unknown>>>>();
@@ -186,8 +195,45 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
     },
     /** Registry delle skill per utente: integrate + apprese attive, filtrate dagli interruttori (cache 5 minuti). */
     skillsFor,
-    async getCompanion(auth: AuthContext, session: SessionRecord): Promise<CompanionAgent | null> {
+    async getCompanion(
+      auth: AuthContext,
+      session: SessionRecord,
+      selection?: ModelSelection,
+    ): Promise<CompanionAgent | null> {
       if (!deps.gateway) return null;
+      // Check fresh effective permissions even on a cache hit and after queued requests.
+      const selectionSettings = selection
+        ? deps.loadSettings
+          ? await deps.loadSettings(auth.userId)
+          : auth.settings
+        : undefined;
+      if (
+        selectionSettings &&
+        (selectionSettings.killSwitch === true ||
+          (Array.isArray(selectionSettings.guardianAllowed) &&
+            !selectionSettings.guardianAllowed.includes('maximize')) ||
+          !enabledSkillIds(selectionSettings).has('maximize'))
+      ) {
+        throw new ModelSelectionError(
+          'Maximize è disattivato. Seleziona Automatico e invia di nuovo.',
+        );
+      }
+      const modelOverride =
+        selection && deps.modelCatalog
+          ? {
+              selection,
+              profile: selectionProfile(
+                selection,
+                await deps.modelCatalog.get(),
+                deps.gateway.profiles[session.modelClass],
+              ),
+            }
+          : undefined;
+      if (selection && !modelOverride)
+        throw new ModelSelectionError('Il catalogo Maximize non è disponibile.');
+      const modelKey = JSON.stringify([auth.userId, session.modelClass, modelOverride]);
+      if (modelKeys.get(session.id) !== modelKey) cache.delete(session.id);
+      modelKeys.set(session.id, modelKey);
       const cached = cache.get(session.id);
       if (cached) return cached;
       const coldStartedAt = performance.now();
@@ -292,7 +338,11 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
             scopes: auth.scopes,
             core: deps.tools.core,
           })
-          .filter((t) => !off.has(t.id));
+          .filter(
+            (t) =>
+              !off.has(t.id) &&
+              (!selection || eligibleForSSH(selection.modelId) || !t.id.startsWith('ssh_')),
+          );
         if (specs.some((tool) => tool.id === 'time_windows')) {
           memorySnapshot +=
             '\n\nAnticipa i controlli utili alla richiesta: per organizzare orari leggi gli impegni pertinenti con gli strumenti autorizzati e usa time_windows per verificare sovrapposizioni e intervalli liberi. Il calcolo vale solo per i dati forniti: non certifica un calendario completo. Durate, spostamenti e margini mancanti vanno chiesti o presentati come ipotesi da confermare, mai inventati. Proponi il prossimo passo quando serve; non attivare notifiche, modifiche o invii non richiesti e non consultare diario o archivi chat fuori dal loro ambito esplicito.';
@@ -308,6 +358,7 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         soul,
         modelClass: session.modelClass,
         gateway: deps.gateway,
+        ...(modelOverride ? { modelOverride } : {}),
         memory: deps.memory,
         ...(memorySnapshot ? { memorySnapshot } : {}),
         ...(tools ? { tools } : {}),

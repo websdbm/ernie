@@ -1,4 +1,4 @@
-import type { ClassProfile, ModelGateway } from '@ernie/model-gateway';
+import type { ClassProfile, ModelGateway, ModelSelection } from '@ernie/model-gateway';
 import type { AssembledSoul } from '@ernie/soul';
 import { Agent } from '@mastra/core/agent';
 import type { Memory } from '@mastra/memory';
@@ -14,6 +14,7 @@ export interface CompanionAgentInput {
   readonly soul: AssembledSoul;
   readonly modelClass: ClassProfile['modelClass'];
   readonly gateway: ModelGateway;
+  readonly modelOverride?: { selection: ModelSelection; profile: ClassProfile };
   readonly memory: Memory;
   /** Snapshot congelato della memoria (entra nel prefisso stabile, dopo il Soul). */
   readonly memorySnapshot?: string;
@@ -38,7 +39,7 @@ export interface CompanionAgent {
  * Le parti variabili (memorie recuperate, orario, modalità vocale) viaggiano nel turno utente.
  */
 export function createCompanionAgent(input: CompanionAgentInput): CompanionAgent {
-  const resolved = input.gateway.resolve(input.modelClass, input.sessionId);
+  const resolved = input.gateway.resolve(input.modelClass, input.sessionId, input.modelOverride);
   const instructions = input.memorySnapshot
     ? `${input.soul.instructions}\n\n${input.memorySnapshot}`
     : input.soul.instructions;

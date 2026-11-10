@@ -1,7 +1,8 @@
 # Maximize — scelta del modello e dello sforzo
 
 10 novembre 2026. Richiesta dell'utente durante la preparazione della build 116.
-**Specifica e verifica del codice/catalogo; nessuna implementazione o impostazione utente cambiata.**
+**Implementato per la build 117, rilascio in preparazione. Nessuna impostazione utente cambiata.**
+La sezione finale registra l’implementazione; le sezioni precedenti conservano analisi e decisioni.
 
 ## Comportamento richiesto
 
@@ -134,3 +135,32 @@ Fonti ufficiali:
 - [Catalogo Anthropic e capacità](https://platform.claude.com/docs/en/api/models/list)
 - [Modelli Claude](https://platform.claude.com/docs/en/models/overview)
 - [Claude Fable 5.2](https://platform.claude.com/docs/en/models/fable-5-2/overview)
+
+
+## Implementazione del 10 novembre — build 117
+
+Catalogo `GET /v1/models` solo per skill attiva, con modello/provider/sforzi e tariffe base; refresh condiviso,
+TTL 15 minuti, retry catalogo guasto dopo 30 secondi. Solo modelli testuali con strumenti e almeno 64k contesto;
+Anthropic diretto richiede capacità adaptive/structured e tariffa nota (Haiku/Sonnet/Opus 5.5, Fable 5.2).
+Gli altri modelli compatibili entrano dal catalogo OpenRouter. Disponibilità nel catalogo non certifica credito.
+
+Scelta salvata nella cronologia locale della conversazione, insieme ai messaggi; nessun valore globale che
+contamini altri task. Il payload opzionale `modelSelection` fotografa la scelta prima della coda. Il server
+rilegge i permessi effettivi e valida modello/sforzo; una richiesta manuale già in coda dopo revoca viene
+rifiutata con istruzione di tornare ad Automatico, senza consumo del modello scelto. Nessuna sincronizzazione
+nuova delle conversazioni fra telefoni introdotta qui.
+
+Override limitato al companion principale. Niente cambio silenzioso di provider/model ID, limite output
+16k o 32k secondo sforzo (entro il limite del catalogo); limiti passi e budget esistenti conservati.
+Solo Opus 5.5/Fable 5.2 espliciti sono ammessi agli strumenti SSH, sempre con classe heavy e autorizzazioni.
+Gli altri override non ricevono tool SSH; l'intento SSH riconosciuto chiede di cambiare selezione. La cronologia
+inviata conserva testo e risultati/tool call, esclude blocchi di ragionamento opachi legati a provider/modello.
+Una risposta manuale senza testo né strumenti non viene dichiarata riuscita, né rilanciata automaticamente.
+
+Verifica reale: il vecchio gateway Sonnet risponde `OK` (1.963 ms, 22 token, zero reasoning), mentre il corpo
+HTTP grezzo `thinking=disabled` riceve 400: è l'SDK 4.0.79 a convertirlo in `between_tools`. Mapping ora
+esplicito. Smoke con nuovo adattatore in memoria, nessun deploy: Fable 5.2 diretto 2 step/1 tool/risposta 7
+(6.461 ms, 1.022 token); Sol 6.1 OpenRouter 2 step/1 tool/risposta 7 (4.033 ms, 209 token).
+Sono prove sintetiche di compatibilità, non benchmark di qualità/velocità. Catalogo: 292 opzioni compatibili,
+4 Anthropic dirette. Fable 5.2 cache-read corretto $0,20/M; informazione sulla conservazione 30 giorni visibile
+nel selettore. Fonte: https://platform.claude.com/docs/en/models/fable-5-2/overview .

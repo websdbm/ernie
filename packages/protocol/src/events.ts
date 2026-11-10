@@ -86,11 +86,20 @@ export const DeviceContext = z.object({
 });
 export type DeviceContext = z.infer<typeof DeviceContext>;
 
+export const ChatModelSelection = z
+  .object({
+    provider: z.enum(['anthropic', 'openrouter']),
+    modelId: z.string().min(1).max(160),
+    effort: z.enum(['default', 'off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
+  })
+  .strict();
+
 export const UserMessage = event(
   'user.message',
   z.object({
     text: z.string().min(1).max(32_000),
     inputMode: z.enum(['text', 'voice']).default('text'),
+    modelSelection: ChatModelSelection.optional(),
     locale: z.string().max(16).optional(),
     /** v1.3: documenti allegati, già caricati con `POST /v1/documents` (solo testo estratto sul telefono). */
     attachments: z

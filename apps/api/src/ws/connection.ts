@@ -28,7 +28,14 @@ import {
   type MemoryRepository,
   type ProfileStore,
 } from '@ernie/memory';
-import { BudgetExceededError, type BudgetGuard, type LlmCallRecorder } from '@ernie/model-gateway';
+import {
+  BudgetExceededError,
+  type BudgetGuard,
+  eligibleForSSH,
+  type LlmCallRecorder,
+  type ModelSelection,
+  ModelSelectionError,
+} from '@ernie/model-gateway';
 import type { Logger } from '@ernie/observability';
 import {
   type AgentEvent,
@@ -125,6 +132,7 @@ export interface ConnectionDeps {
   readonly getCompanion: (
     auth: AuthContext,
     session: SessionRecord,
+    selection?: ModelSelection,
   ) => Promise<CompanionAgent | null>;
   /** Invalida l'agente in cache (cambio di classe o di contesto). */
   readonly invalidateCompanion: (sessionId: string) => void;
@@ -326,7 +334,9 @@ export class ClientConnection {
     } catch (err) {
       if (event.type === 'session.start') this.replaying = false;
       this.deps.logger.error({ err, type: event.type }, "errore nella gestione dell'evento");
-      await this.sendError('internal_error', 'Errore interno', true, event.correlationId);
+      if (err instanceof ModelSelectionError)
+        await this.sendError('model_selection', err.message, false, event.correlationId);
+      else await this.sendError('internal_error', 'Errore interno', true, event.correlationId);
     }
   }
 
@@ -949,9 +959,24 @@ export class ClientConnection {
     }
 
     const companionStartedAt = performance.now();
-    const companionRead = this.deps.getCompanion(this.auth, this.session).finally(() => {
-      this.performanceTrace?.phase('companionMs', performance.now() - companionStartedAt);
-    });
+    if (
+      effectiveSkillId === 'ssh' &&
+      event.payload.modelSelection &&
+      !eligibleForSSH(event.payload.modelSelection.modelId)
+    ) {
+      await this.sendError(
+        'model_not_suitable',
+        'Per operare sui server scegli Automatico, Opus 5.5 o Fable 5.2 in Maximize.',
+        false,
+        correlationId,
+      );
+      return;
+    }
+    const companionRead = this.deps
+      .getCompanion(this.auth, this.session, event.payload.modelSelection)
+      .finally(() => {
+        this.performanceTrace?.phase('companionMs', performance.now() - companionStartedAt);
+      });
 
     // Contesto del turno (fuori dal prefisso): memorie pertinenti e, se Jev indica una skill guidata, la sua procedura.
     const contextStartedAt = performance.now();

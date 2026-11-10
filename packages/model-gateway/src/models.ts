@@ -7,7 +7,15 @@ export type ModelClass = z.infer<typeof ModelClass>;
  * `none` lascia il ragionamento al provider (sui modelli 5.x a volte ragionano lo stesso); `off` lo spegne davvero
  * (16 ott 2026: nei turni standard la prima risposta passava da 2,2 a 5,7 s quando il modello ragionava).
  */
-export type ReasoningEffort = 'off' | 'none' | 'low' | 'medium' | 'high';
+export type ReasoningEffort =
+  | 'off'
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 
 export interface ClassProfile {
   readonly modelClass: ModelClass;
@@ -17,6 +25,7 @@ export interface ClassProfile {
   /** Configurazione di ragionamento fissa per sessione: cambiarla invalida la cache. */
   readonly reasoning: ReasoningEffort;
   readonly maxSteps: number;
+  readonly price?: ModelPrice;
 }
 
 export interface ModelPrice {

@@ -18,6 +18,7 @@ import { type GuardianRoutesOptions, guardianRoutes } from './routes/guardian.js
 import { type HealthCheck, healthRoutes } from './routes/health.js';
 import { type MeRoutesOptions, meRoutes } from './routes/me.js';
 import { type MediaRoutesOptions, mediaRoutes } from './routes/media.js';
+import { type ModelsRoutesOptions, modelsRoutes } from './routes/models.js';
 import {
   type OperatingPreferenceRoutesOptions,
   operatingPreferenceRoutes,
@@ -57,6 +58,7 @@ export interface BuildServerOptions {
   readonly contentReaders?: ContentReaderRoutesOptions;
   /** Catalogo delle skill con interruttori per utente. */
   readonly skills?: SkillsRoutesOptions;
+  readonly models?: ModelsRoutesOptions;
   readonly speech?: SpeechRoutesOptions;
   readonly documents?: DocumentsRoutesOptions;
   readonly shopping?: ShoppingRoutesOptions;
@@ -158,6 +160,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   if (opts.performance) await app.register(performanceRoutes, opts.performance);
   if (opts.taskIntent) await app.register(taskIntentRoutes, opts.taskIntent);
   if (opts.contentReaders) await app.register(contentReaderRoutes, opts.contentReaders);
+  if (opts.models) await app.register(modelsRoutes, opts.models);
   if (opts.skills) await app.register(skillsRoutes, opts.skills);
   if (opts.speech) await app.register(speechRoutes, opts.speech);
   if (opts.privateDiary) await app.register(privateDiaryRoutes, opts.privateDiary);

@@ -28,6 +28,20 @@ export interface SkillCatalogEntry {
 
 export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
   {
+    id: 'maximize',
+    title: 'Maximize',
+    icon: 'slider.horizontal.3',
+    tint: 'indigo',
+    summary: 'Scegli modello e sforzo per questa conversazione.',
+    description:
+      'Mostra il selettore sopra la barra di scrittura. Automatico mantiene la scelta di Ernie; la scelta manuale vale dal prossimo messaggio. Modelli e sforzi più elevati possono aumentare tempi e costi. Spegnendo la skill torna Automatico.',
+    kind: 'guided',
+    tools: [],
+    examples: [],
+    defaultAvailable: true,
+    defaultEnabled: false,
+  },
+  {
     id: 'chat_archive',
     title: 'Archivio chat',
     icon: 'bubble.left.and.text.bubble.right',

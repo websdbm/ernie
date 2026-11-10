@@ -5,7 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
+Ultimo aggiornamento: **10 novembre 2026**, Codex — **Maximize implementato**, build **117 in preparazione**.
+Skill disponibile ma spenta per account; scelta modello/provider/sforzo per conversazione, congelata nel
+messaggio quando entra in coda. Cataloghi Anthropic/OpenRouter reali e cached, consenso delle skill e controllo
+genitori riletti prima degli override, permessi/SSH invariati. Automatico conserva il routing ordinario.
+Nessun fallback di servizio per scelta manuale; tariffe del modello applicate anche alle stime dei consumi.
+Backend senza migrazioni. **API non ancora pubblicata; TestFlight resta alla 116**. Dettagli e verifiche:
+[build 117](releases/build-117.md). Per la pubblicazione API serve il via libera previsto nella sezione Server.
+
+Stato del rilascio precedente: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
 confermato, editor comune con interruttori dei canali, palette avatar e testo accessibile. **18 test nativi
 verdi** in tre suite, rendering reale di 11 schede e due editor. Build **116 disponibile su TestFlight**,
@@ -14,7 +22,7 @@ Sorgenti `603cf6e8316db29b90f31c207b295ae8fce58fc2` pubblicati prima dell'archiv
 a Git e ai test sul Mac Studio. Quattro firme Apple Distribution/entitlement verificati e note italiane
 rilette (823 caratteri). Backend e promemoria reali invariati. [Verifiche e rilascio](releases/build-116.md).
 
-Richieste aggiuntive **in specifica, non implementate nella 116**:
+Altre richieste e stato delle specifiche (non incluse nella 116):
 - [Ricerca web, abitudini e salute](research/22-web-and-habits.md): Firecrawl funzionante, attuale taglio
   ai primi 3.000 caratteri da migliorare. Storico spostamenti nel backend personale cifrato e contesto
   pertinente consentito ai modelli esterni. Domande attive per dare significato a visite/luoghi/clienti,
@@ -25,19 +33,16 @@ Richieste aggiuntive **in specifica, non implementate nella 116**:
   le copie/derivati esistenti alla cifratura prevista; note “private” non equivalgono a contenuto cifrato.
   Salute e Abitudini hanno interruttori indipendenti per account. Nessun accesso implicito al diario o agli
   archivi chat. Domande proattive in un'unica coda/budget, senza attribuire diagnosi da pattern indiretti.
-- [Maximize](research/23-maximize.md): skill per selettore di modello principale/sforzo per conversazione,
-  Automatico iniziale, catalogo reale dei provider e livelli compatibili. Sol 6.1 presente nel catalogo
-  pubblico OpenRouter; nessuna inferenza di prova. Serve resolver provider-specifico prima degli override.
-  Verificata anche la chiave **Anthropic diretta** su staging3: catalogo autenticato HTTP 200 (15 modelli),
-  Haiku/Sonnet/Opus 5.5 configurati, Fable 5.2 disponibile in catalogo ma non attivato. Maximize deve includere
-  entrambi i provider. Livelli xhigh/max da aggiungere; compatibilità Sonnet `thinking=disabled` da verificare
-  rispetto alle capacità attuali. Nessuna inferenza a pagamento, verifica credito o modifica runtime.
+- [Maximize](research/23-maximize.md): implementato per la 117, con Anthropic diretto e OpenRouter.
+  Verificati dal vivo catalogo e due turni sintetici con strumento (Fable 5.2 e Sol 6.1); nessun dato personale.
+  Il test del gateway precedente conferma Sonnet funzionante: SDK converte `disabled` in `between_tools`;
+  ora la conversione è esplicita. Nessuna modifica del modello automatico configurato sugli account.
 - [Analisi immagini](research/24-image-analysis.md): nuova skill proposta, Jev multimodale per domande
   strutturate e modello visivo per dettagli/risposte; riuso Media/ricette/Brain, niente analisi reali nuove.
   Il percorso allegati corrente passa a Jev solo i metadati; la catalogazione Media già usa un LLM visivo.
 
 Nessuna nuova raccolta/permissione di posizione o Salute attivata, né nuove preferenze/modelli sugli account.
-Le specifiche includono prove, confini e sequenza degli incrementi; questa sessione pubblica solo la UI promemoria.
+Abitudini/HealthKit/analisi immagini restano in specifica. Maximize è un incremento separato dalla UI promemoria.
 
 Rilascio precedente: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
 **Build 115 disponibile su TestFlight**, gruppo **Interni**, Apple **VALID / IN_BETA_TESTING**;

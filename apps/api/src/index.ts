@@ -66,6 +66,7 @@ import {
 import {
   buildProfiles,
   createBudgetGuard,
+  createChatModelCatalog,
   createLlmCallRecorder,
   createMediaLabeler,
   createModelGateway,
@@ -192,6 +193,7 @@ async function main(): Promise<void> {
   const postgres = createPostgres(config, logger);
   const redis = createRedis(config.redis.url, logger);
 
+  const modelCatalog = createChatModelCatalog(config.providers);
   const gateway =
     config.providers.openrouterApiKey || config.providers.anthropicApiKey
       ? createModelGateway({
@@ -734,6 +736,7 @@ async function main(): Promise<void> {
   const learnedSkills = createLearnedSkillRepository(postgres.pool, registry);
 
   const companions = createCompanionFactory({
+    modelCatalog,
     gateway,
     memory,
     souls: createSoulRepository(postgres.pool),
@@ -1056,6 +1059,12 @@ async function main(): Promise<void> {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
       store: performanceStore,
+    },
+    models: {
+      authenticator,
+      allowedOrigins: config.ws.allowedOrigins,
+      catalog: modelCatalog,
+      loadSettings: loadUserSettings,
     },
     skills: {
       authenticator,

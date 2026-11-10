@@ -13,6 +13,11 @@ final class ConversationStore {
     private(set) var agentState: AgentState = .idle
     private(set) var sessionId: String
     private(set) var lastError: String?
+    private(set) var modelSelection: ChatModelSelection?
+    func selectModel(_ selection: ChatModelSelection?) {
+        modelSelection = selection
+        persist()
+    }
     private(set) var latencyHistory: [LatencyTrace] = []
     private(set) var lastAvatarEmotion = "neutral"
     /// Espressione temporanea (M10): torna neutra dopo il parlato e la durata indicata dal server.
@@ -87,6 +92,7 @@ final class ConversationStore {
         var loadedItems: [ChatItem] = []
         var loadedSeq = -1
         if let file = store.load(sid) {
+            modelSelection = file.modelSelection
             loadedItems = file.items.map { item in
                 if case .message(var m) = item, m.isStreaming {
                     m.isStreaming = false
@@ -165,6 +171,7 @@ final class ConversationStore {
     private func adoptNewSession(keepingHistory: Bool) {
         lastSeq = -1
         sessionId = Ids.new()
+        modelSelection = nil
         transcript.setCurrent(sessionId)
         if !keepingHistory { items = []; hiddenItemIds = [] }
         persist()
@@ -189,6 +196,7 @@ final class ConversationStore {
         hiddenItemIds = []
         lastSeq = -1
         sessionId = Ids.new()
+        modelSelection = nil
         transcript.setCurrent(sessionId)
         persist()
         let sid = sessionId
@@ -231,6 +239,7 @@ final class ConversationStore {
         hiddenItemIds = (file.hiddenItemIds ?? []).intersection(items.map(\.id))
         lastSeq = file.lastSeq
         sessionId = target
+        modelSelection = file.modelSelection
         transcript.setCurrent(target)
         outbox = Self.pendingOutbox(items)
         restoreRequest(items)
@@ -326,7 +335,7 @@ final class ConversationStore {
         }
         let payload = UserMessagePayload(text: text, inputMode: inputMode, locale: "it-IT",
             attachments: attachments.isEmpty ? nil : attachments.map { DocumentAttachment(id: $0.id) },
-            device: deviceContext())
+            device: deviceContext(), modelSelection: modelSelection)
         let info = attachments.map { AttachmentInfo(id: $0.id, title: $0.title, pages: $0.pages) }
         let messageId = Ids.new()
         let queued = activeCorrelationId != nil
@@ -348,7 +357,7 @@ final class ConversationStore {
         let correlationId = Ids.new()
         let payload = out.payload ?? UserMessagePayload(text: out.text, inputMode: out.inputMode, locale: "it-IT",
             attachments: out.attachments.isEmpty ? nil : out.attachments.map { DocumentAttachment(id: $0.id) },
-            device: deviceContext())
+            device: deviceContext(), modelSelection: modelSelection)
         activeRequest = ChatRequestRecovery(messageId: out.messageId, correlationId: correlationId, payload: payload)
         recoveryStatus = nil
         if let i = items.firstIndex(where: { $0.id == "m:\(out.messageId)" }), case .message(var m) = items[i] {
@@ -1020,6 +1029,6 @@ final class ConversationStore {
         if items.count > 400 { items.removeFirst(items.count - 400) }
         hiddenItemIds.formIntersection(items.map(\.id))
         transcript.saveInBackground(.init(sessionId: sessionId, lastSeq: lastSeq, items: items, updatedAt: .now,
-                              hiddenItemIds: hiddenItemIds.isEmpty ? nil : hiddenItemIds))
+                              hiddenItemIds: hiddenItemIds.isEmpty ? nil : hiddenItemIds, modelSelection: modelSelection))
     }
 }

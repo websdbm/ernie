@@ -1,6 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { wrapLanguageModel } from 'ai';
+import type { ModelSelection } from './catalog.js';
 import type { ClassProfile, ModelClass, ReasoningEffort } from './models.js';
 import { createProviderCircuit } from './provider-circuit.js';
 import { retryModelCall } from './retry.js';
@@ -104,18 +105,20 @@ export function createModelGateway(opts: GatewayOptions) {
 
   const circuits = new Map<string, ReturnType<typeof createProviderCircuit>>();
 
-  const viaOpenRouter = (profile: ClassProfile, sessionId: string) =>
+  const viaOpenRouter = (profile: ClassProfile, sessionId: string, explicit = false) =>
     openrouter?.chat(profile.modelId, {
       usage: { include: true },
       extraBody: {
         cache_control: { type: 'ephemeral' },
         session_id: sessionId,
-        ...reasoningBody(profile.reasoning),
+        ...(explicit && profile.reasoning === 'off'
+          ? { reasoning: { effort: 'none' } }
+          : reasoningBody(profile.reasoning)),
       },
     }) ?? null;
 
   const viaAnthropic = (profile: ClassProfile, fallback: ReturnType<typeof viaOpenRouter>) => {
-    if (!anthropic) return null;
+    if (!anthropic || !/^(anthropic\/)?claude-/.test(profile.modelId)) return null;
     const base = anthropic(anthropicModelId(profile.modelId));
     const circuit = circuits.get(profile.modelId) ?? createProviderCircuit();
     circuits.set(profile.modelId, circuit);
@@ -135,10 +138,17 @@ export function createModelGateway(opts: GatewayOptions) {
               ...(params.providerOptions?.anthropic ?? {}),
               cacheControl: { type: 'ephemeral' },
               ...(profile.reasoning === 'off'
-                ? { thinking: { type: 'disabled' } }
+                ? {
+                    thinking: {
+                      type:
+                        anthropicModelId(profile.modelId) === 'claude-sonnet-5-5'
+                          ? 'between_tools'
+                          : 'disabled',
+                    },
+                  }
                 : profile.reasoning === 'none'
                   ? {}
-                  : { effort: profile.reasoning }),
+                  : { thinking: { type: 'adaptive' }, effort: profile.reasoning }),
             },
           },
         }),
@@ -168,16 +178,47 @@ export function createModelGateway(opts: GatewayOptions) {
     profiles: opts.profiles,
     provider: (anthropic ? 'anthropic' : 'openrouter') as GatewayProvider,
     /** Risolve il modello di una classe per una sessione (session_id = sessione Ernie, solo per OpenRouter). */
-    resolve(modelClass: ModelClass, sessionId: string): ResolvedModel {
-      const profile = opts.profiles[modelClass];
-      const fallback = viaOpenRouter(profile, sessionId);
-      const direct = viaAnthropic(profile, fallback);
+    resolve(
+      modelClass: ModelClass,
+      sessionId: string,
+      override?: { selection: ModelSelection; profile: ClassProfile },
+    ): ResolvedModel {
+      const profile = override?.profile ?? opts.profiles[modelClass];
+      const fallback =
+        override?.selection.provider === 'anthropic'
+          ? null
+          : viaOpenRouter(profile, sessionId, !!override);
+      const direct =
+        override?.selection.provider === 'openrouter'
+          ? null
+          : viaAnthropic(profile, override ? null : fallback);
       const selected = direct ?? fallback;
       if (!selected) throw new Error('Model Gateway: nessun provider disponibile');
       const model = wrapLanguageModel({
         model: selected,
         middleware: {
           specificationVersion: 'v4',
+          // Manual switches carry conversation text/tool results, never opaque reasoning signatures
+          // bound to a different model/provider. Text and tool calls/results are retained.
+          ...(override
+            ? {
+                transformParams: async ({
+                  params,
+                }: {
+                  params: Parameters<ResolvedModel['model']['doGenerate']>[0];
+                }) => ({
+                  ...params,
+                  prompt: params.prompt.map((m) =>
+                    m.role === 'assistant'
+                      ? {
+                          ...m,
+                          content: m.content.filter((part) => part.type !== 'reasoning'),
+                        }
+                      : m,
+                  ),
+                }),
+              }
+            : {}),
           wrapStream: ({ doStream, params }) => retryModelCall(doStream, params.abortSignal),
           wrapGenerate: ({ doGenerate, params }) => retryModelCall(doGenerate, params.abortSignal),
         },

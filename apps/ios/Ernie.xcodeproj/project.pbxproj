@@ -52,6 +52,7 @@
 		3383E54C8EE818E4EE28F64A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B910048AA5B7CF4CF88553 /* AppDelegate.swift */; };
 		38E2C77CCB80711FEAD2236F /* DiaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B884361CA064C58A61AD27F0 /* DiaryTests.swift */; };
 		39AA7E9D4F45C1331F2469C4 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A991AEDB4D6C4FA58B0F63BA /* ShareView.swift */; };
+		3BDA3B09CCD2072405F2237A /* MaximizeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1535E0FF0B34CE1A9EB388 /* MaximizeView.swift */; };
 		3C5BB0FFE2AA6BED00F8CFEA /* ErnieTRIXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FEC958643F49BCFA9F6F98 /* ErnieTRIXTests.swift */; };
 		3C977B24C48B8296D9129DB9 /* UsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 098A7CA1392994E9472FCEE3 /* UsageView.swift */; };
 		3DDF8BEB444D9A400C6DD512 /* SSHEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A4F9BD9D2717A244FE250 /* SSHEditors.swift */; };
@@ -148,6 +149,7 @@
 		A36E1423BE378890A7324F0F /* FamilyMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35F871845638AB7AFEDC916C /* FamilyMessages.swift */; };
 		A480317E96A46068FBA81142 /* ErnieTRIXEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E301AE358A7D2CC27A3EF958 /* ErnieTRIXEngine.swift */; };
 		A525AF6B03592F73930C696C /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2624B7BB9094F84D5AD5A6 /* Credentials.swift */; };
+		A62C665240921CA5A1D06CCD /* MaximizeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5893F6BF36BEC8B5B7D94F /* MaximizeTests.swift */; };
 		A93C1F25009D68617118B48F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF1DE8EE6CC7925597FD316 /* SettingsView.swift */; };
 		AAFB6F63017C44351B5B9422 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2BB9EC2D73383C332B042 /* SecurityView.swift */; };
 		AB71A44F9F5D3FC78ED5ABBA /* ChatAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E97819581F2B938AE812A5E /* ChatAppearance.swift */; };
@@ -340,6 +342,7 @@
 		392BDC4D0B612F4A89A72523 /* MediaLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryView.swift; sourceTree = "<group>"; };
 		3B5A05A74A82D7EAD93D989E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3BEC6F53575D7E7F9605D081 /* BearAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BearAnimationTests.swift; sourceTree = "<group>"; };
+		3E1535E0FF0B34CE1A9EB388 /* MaximizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximizeView.swift; sourceTree = "<group>"; };
 		3EADF393879F54D4F4B1EF7B /* ChatArchiveCatalogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatArchiveCatalogRow.swift; sourceTree = "<group>"; };
 		3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningOverlay.swift; sourceTree = "<group>"; };
 		4361E7F7124014F0D94B4EA2 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -383,6 +386,7 @@
 		6B489B112C1F00ED00928355 /* RemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersView.swift; sourceTree = "<group>"; };
 		6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		6DD07317404B3BEF77505FA3 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
+		6E5893F6BF36BEC8B5B7D94F /* MaximizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaximizeTests.swift; sourceTree = "<group>"; };
 		71178C9C6E93612A047E0457 /* ernie-ui-done.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "ernie-ui-done.wav"; sourceTree = "<group>"; };
 		74EAED8097FB2EF14E6B4514 /* ReadabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadabilityTests.swift; sourceTree = "<group>"; };
 		76416F1739622AD37E503DA1 /* DiaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViews.swift; sourceTree = "<group>"; };
@@ -548,6 +552,7 @@
 				F73AEB0AE202B3FA98948CB6 /* FamilyMessageCardTests.swift */,
 				5C4FDC5D430FCAC2E1E3AB13 /* LifecycleTests.swift */,
 				C055337B537CA9312E68AB0A /* MainThreadWorkTests.swift */,
+				6E5893F6BF36BEC8B5B7D94F /* MaximizeTests.swift */,
 				088F8B730F08811F3C0B89B6 /* MediaTests.swift */,
 				1BD09F97518CE26791D89C46 /* MediaUploadQueueTests.swift */,
 				4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */,
@@ -773,6 +778,7 @@
 				52FF043456831431801189D0 /* InputBar.swift */,
 				3F62CF2D3F1111A52E03B1DE /* ListeningOverlay.swift */,
 				1964BA5CB9FA63960ECCA089 /* ListShortcuts.swift */,
+				3E1535E0FF0B34CE1A9EB388 /* MaximizeView.swift */,
 				B6180F22A3BA425DF037A25C /* OutlineDiagram.swift */,
 				CBB0B75A9ECFEC7207BF38F5 /* ShoppingStore.swift */,
 				85F58EACDFBE9E63C81E0664 /* SidePanel.swift */,
@@ -1171,6 +1177,7 @@
 				2E979824E4D38D37447FEFCF /* FamilyMessageCardTests.swift in Sources */,
 				B7606F408A80151242918AF5 /* LifecycleTests.swift in Sources */,
 				D2F79F225FFDACCCE834456A /* MainThreadWorkTests.swift in Sources */,
+				A62C665240921CA5A1D06CCD /* MaximizeTests.swift in Sources */,
 				EC0D6880111D9F41D4807840 /* MediaTests.swift in Sources */,
 				B28E1A3D2D62EFFA16DB6953 /* MediaUploadQueueTests.swift in Sources */,
 				A02A1568DB1590CF531ACD2D /* OperatingPreferencesTests.swift in Sources */,
@@ -1306,6 +1313,7 @@
 				6590EC7D53515010D1ECD772 /* ListeningOverlay.swift in Sources */,
 				B11EC2252AE06CD8D2BB1294 /* Log.swift in Sources */,
 				CB9E5DB1F0E5520712E8A09D /* Markdown.swift in Sources */,
+				3BDA3B09CCD2072405F2237A /* MaximizeView.swift in Sources */,
 				5E3CEA619D4AC55422BB60A7 /* MediaDetailView.swift in Sources */,
 				F22C678B4583C06C681CAF95 /* MediaImportCoordinator.swift in Sources */,
 				48125CBA37A2FB47533D6A69 /* MediaLibraryView.swift in Sources */,
@@ -1399,7 +1407,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1454,7 +1462,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1545,7 +1553,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1566,7 +1574,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1590,7 +1598,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1673,7 +1681,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1694,7 +1702,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1718,7 +1726,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 117;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

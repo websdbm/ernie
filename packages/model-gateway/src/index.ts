@@ -1,4 +1,5 @@
 export * from './budget.js';
+export * from './catalog.js';
 export { createMediaLabeler } from './media-labels.js';
 export * from './models.js';
 export * from './provider.js';

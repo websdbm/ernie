@@ -1,5 +1,30 @@
 [
   {
+    "build": 117,
+    "date": "2026-11-10",
+    "title": "Maximize: scegli come ragiona Ernie",
+    "items": [
+      {
+        "icon": "slider.horizontal.3",
+        "title": "Il modello giusto per la conversazione",
+        "detail": "Attiva Maximize nel pannello Skill: sopra la barra di scrittura puoi lasciare Automatico oppure scegliere un modello Anthropic o OpenRouter. Ogni conversazione conserva la propria scelta.",
+        "test": "Attiva Maximize, scegli un modello e apri una nuova conversazione: la nuova parte in Automatico."
+      },
+      {
+        "icon": "brain",
+        "title": "Sforzo su misura",
+        "detail": "Scegli solo fra i livelli supportati dal modello, con tariffe base visibili. La scelta vale dal prossimo messaggio, senza interrompere la risposta in corso. I modelli più impegnativi possono richiedere più tempo e costare di più.",
+        "test": "Cambia lo sforzo mentre Ernie risponde e verifica che valga per il messaggio successivo."
+      },
+      {
+        "icon": "checkmark.shield",
+        "title": "Scelta esplicita e controlli invariati",
+        "detail": "Se il servizio scelto non risponde, Ernie non passa silenziosamente a un altro. Restano attivi i permessi delle skill, i limiti di spesa e il requisito di un modello avanzato per SSH.",
+        "test": "Disattiva Maximize: il selettore scompare e la conversazione torna in Automatico."
+      }
+    ]
+  },
+  {
     "build": 116,
     "date": "2026-11-10",
     "title": "Promemoria, con più chiarezza",

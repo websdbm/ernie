@@ -425,6 +425,7 @@ struct ApiClient: Sendable {
         struct Body: Encodable { var enabled: Bool?; var available: Bool? }
         struct Out: Decodable { var skills: [SkillInfo] }
         let out: Out = try await request("PATCH", "/v1/skills/\(id)", body: Body(enabled: enabled, available: available))
+        await MainActor.run { NotificationCenter.default.post(name: .ernieSkillsChanged, object: nil) }
         return out.skills
     }
 

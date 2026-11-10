@@ -32,6 +32,7 @@ struct UserMessagePayload: Codable, Sendable, Equatable {
     var attachments: [DocumentAttachment]?
     /// v1.10: ora locale, fuso e (con permesso) posizione approssimata del telefono.
     var device: DeviceContextPayload? = nil
+    var modelSelection: ChatModelSelection? = nil
 }
 
 struct DeviceContextPayload: Codable, Sendable, Equatable {

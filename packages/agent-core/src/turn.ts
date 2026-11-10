@@ -1,5 +1,6 @@
 import {
   callCostUsd,
+  estimateCostUsd,
   type LlmCallRecorder,
   modelFailure,
   normalizeUsage,
@@ -209,7 +210,13 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
           break;
         case 'step': {
           const usage = normalizeUsage(signal.usage, signal.providerMetadata);
-          costUsd += callCostUsd(usage, companion.profile.modelId);
+          const estimatedCostUsd = companion.profile.price
+            ? estimateCostUsd(usage, companion.profile.price)
+            : undefined;
+          costUsd +=
+            usage.costReportedUsd ??
+            estimatedCostUsd ??
+            callCostUsd(usage, companion.profile.modelId);
           totals.inputTokens += usage.inputTokens;
           totals.outputTokens += usage.outputTokens;
           totals.cachedInputTokens += usage.cacheReadTokens;
@@ -225,6 +232,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
             modelClass: companion.profile.modelClass,
             generationId: signal.responseId ?? null,
             usage,
+            ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
             ttftMs: stepIndex === 0 && firstTokenAt ? firstTokenAt - t0 : null,
             latencyMs: Date.now() - t0,
             finishReason: signal.finishReason ?? null,
@@ -269,10 +277,19 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
   }
   if (loopDetected) return finishWithLoop();
 
+  const emptyManualAnswer =
+    companion.profile.price !== undefined && !text.trim() && toolCalls === 0;
+  if (emptyManualAnswer)
+    await emit('error', {
+      code: 'model_no_answer',
+      message:
+        'Il modello non ha prodotto una risposta nel limite disponibile. Riduci lo sforzo in Maximize o scegli un altro modello. Non ho ripetuto la richiesta.',
+      retryable: false,
+    });
   const latencyMs = Date.now() - t0;
   await emit('assistant.text.completed', { text });
   await emit('assistant.completed', {
-    finishReason: mapFinishReason(lastFinish),
+    finishReason: emptyManualAnswer ? 'error' : mapFinishReason(lastFinish),
     usage: {
       inputTokens: totals.inputTokens,
       outputTokens: totals.outputTokens,

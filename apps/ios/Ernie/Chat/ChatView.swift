@@ -190,6 +190,7 @@ struct ChatView: View {
             if let pending = model.pendingTaskInput {
                 TaskInputChoiceView(input: pending)
             }
+            MaximizeBar(conversation: conversation, palette: palette)
             InputBar(draft: $draft, composing: $composing, conversation: conversation, voice: voice, documents: model.documents,
                      onCommand: { if let destination = $0.destination { open(destination) } })
                 .onChange(of: conversation.editRequest) { _, request in

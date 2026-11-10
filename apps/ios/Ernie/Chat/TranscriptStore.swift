@@ -10,6 +10,7 @@ struct TranscriptStore {
         var updatedAt: Date
         /// Solo presentazione locale; opzionale per leggere i file delle versioni precedenti.
         var hiddenItemIds: Set<String>? = nil
+        var modelSelection: ChatModelSelection? = nil
     }
 
     private static let currentKey = "ernie.currentSessionId"

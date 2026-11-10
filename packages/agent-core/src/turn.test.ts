@@ -353,3 +353,36 @@ it('spiega il limite temporaneo del provider e non mostra soltanto turno incompl
   });
   expect(companion.agent.stream).toHaveBeenCalledTimes(1);
 });
+
+it('reports a bounded empty manual answer without retrying or marking success', async () => {
+  const base = fakeCompanion([{ type: 'finish', payload: { finishReason: 'length' } }]);
+  const companion = {
+    ...base,
+    profile: {
+      ...base.profile,
+      price: { inputPerM: 2, outputPerM: 10, cacheReadPerM: 0.1, cacheWritePerM: 2.5 },
+    },
+  };
+  const { events, emit } = collector();
+  await runTurn({
+    userId: 'u',
+    sessionId: 's',
+    correlationId: 'c',
+    text: 'test',
+    inputMode: 'text',
+    companion,
+    abortSignal: new AbortController().signal,
+    recorder: { record: vi.fn(async () => {}) },
+    logger,
+    emit,
+  });
+  expect(companion.agent.stream).toHaveBeenCalledTimes(1);
+  expect(events).toContainEqual({
+    type: 'error',
+    payload: expect.objectContaining({ code: 'model_no_answer', retryable: false }),
+  });
+  expect(events.at(-1)).toMatchObject({
+    type: 'assistant.completed',
+    payload: { finishReason: 'error' },
+  });
+});
