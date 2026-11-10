@@ -60,6 +60,13 @@ final class AppModel {
 
     init() {}
 
+    /// Core Location may relaunch the process before SwiftUI creates a foreground view.
+    func resumeHabitsInBackground() async {
+        guard let saved = Credentials.load(),
+              HabitsQueue.identity(credentials: saved, userID: nil) != nil else { return }
+        await habits.activate(credentials: saved, userID: nil)
+    }
+
     #if DEBUG
     /// Offline integration tests exercise the same coordinator without live accounts or sockets.
     init(testTasks: [ConcurrentTask], credentials: Credentials, transcript: TranscriptStore,
@@ -531,11 +538,14 @@ final class AppModel {
         mediaUploads.configure(creds)
         speaker.configure(credentials: creds, engine: settings.speechEngine, style: settings.speechStyle)
         let api = ApiClient(credentials: creds)
+        let restoreHabitsEarly = profile == nil && HabitsQueue.identity(credentials: creds, userID: nil) != nil
         if profile == nil {
             // A background visit launch must restore an existing device lease even before /me can respond.
-            Task { [weak self] in
-                guard let self, token == self.lifecycle else { return }
-                await self.habits.activate(credentials: creds, userID: nil)
+            if restoreHabitsEarly {
+                Task { [weak self] in
+                    guard let self, token == self.lifecycle else { return }
+                    await self.habits.activate(credentials: creds, userID: nil)
+                }
             }
             let fetched = try? await api.me()
             guard token == lifecycle, !Task.isCancelled else { return }
@@ -543,9 +553,11 @@ final class AppModel {
         }
         // Lo scope del diario si ricorda per queste credenziali: senza rete il diario locale si apre lo stesso.
         if let userID = profile?.userId { _ = DiaryIdentity.scope(for: creds, userID: userID) }
-        Task { [weak self] in
-            guard let self, token == self.lifecycle else { return }
-            await self.habits.activate(credentials: creds, userID: self.profile?.userId)
+        if !restoreHabitsEarly {
+            Task { [weak self] in
+                guard let self, token == self.lifecycle else { return }
+                await self.habits.activate(credentials: creds, userID: self.profile?.userId)
+            }
         }
         inbox.configure(api: api)
         let store = ConversationStore(credentials: creds, speaker: speaker, inbox: inbox, settings: settings, observeInbox: false)

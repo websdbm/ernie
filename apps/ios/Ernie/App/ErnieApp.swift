@@ -4,14 +4,13 @@ import WidgetKit
 @main
 struct ErnieApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var model = AppModel()
+    private var model: AppModel { appDelegate.rootModel }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
                 .task {
-                    appDelegate.model = model
                     await model.start()
                 }
         }

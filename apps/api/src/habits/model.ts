@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 const Instant = z.iso.datetime({ offset: true });
@@ -45,6 +45,7 @@ export const Place = z.object({
   snoozeUntil: Instant.nullable().default(null),
 });
 export type HabitPlace = z.infer<typeof Place>;
+const Digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const HabitState = z.object({
   epoch: z.uuid(),
   collecting: z.boolean(),
@@ -55,6 +56,14 @@ export const HabitState = z.object({
   places: z.array(Place).max(300),
   ignoredVisitIds: z.array(z.object({ id: z.uuid(), expiresAt: Instant })).max(5000),
   visitAliases: z.record(z.string(), z.array(z.uuid()).max(20)).default({}),
+  observationKey: Digest.default(() => randomBytes(32).toString('hex')),
+  forgottenObservations: z
+    .array(
+      z.object({ arrival: Digest.nullable(), departure: Digest.nullable(), expiresAt: Instant }),
+    )
+    .max(5000)
+    .default([]),
+  retainedSince: Instant.nullable().default(null),
   lastReviewDay: z.string().nullable(),
   lastQuestionDay: z.string().nullable(),
   patterns: z
@@ -82,6 +91,9 @@ export const initialHabits = (): HabitState => ({
   places: [],
   ignoredVisitIds: [],
   visitAliases: {},
+  observationKey: randomBytes(32).toString('hex'),
+  forgottenObservations: [],
+  retainedSince: null,
   lastReviewDay: null,
   lastQuestionDay: null,
   patterns: [],
@@ -107,8 +119,64 @@ export function credibleVisit(v: Visit) {
     Date.parse(v.departure) - Date.parse(v.arrival) >= 10 * 60_000
   );
 }
+export class HabitsModelError extends Error {
+  constructor(readonly code: 'invalid_visit_time' | 'visit_identity_changed' | 'habits_capacity') {
+    super(code);
+  }
+}
+function observationCell(v: Visit) {
+  const lat = (v.latitude * Math.PI) / 180;
+  const lon = (v.longitude * Math.PI) / 180;
+  return [
+    Math.floor((6371000 * Math.cos(lat) * Math.cos(lon)) / 15),
+    Math.floor((6371000 * Math.cos(lat) * Math.sin(lon)) / 15),
+    Math.floor((6371000 * Math.sin(lat)) / 15),
+  ] as const;
+}
+function observationDigest(s: HabitState, x: number, y: number, z: number, minute: number) {
+  return createHmac('sha256', Buffer.from(s.observationKey, 'hex'))
+    .update(JSON.stringify(['habits-observation-v1', x, y, z, minute]))
+    .digest('hex');
+}
+export function forgottenObservation(s: HabitState, v: Visit, expiresAt: string) {
+  const [x, y, z] = observationCell(v);
+  const digest = (instant: string | null) =>
+    instant ? observationDigest(s, x, y, z, Math.floor(Date.parse(instant) / 60000)) : null;
+  return { arrival: digest(v.arrival), departure: digest(v.departure), expiresAt };
+}
+function suppressedObservation(s: HabitState, v: Visit) {
+  if (!s.forgottenObservations.length) return false;
+  const [x, y, z] = observationCell(v);
+  const nearby = (instant: string | null) => {
+    const digests = new Set<string>();
+    if (instant) {
+      const minute = Math.floor(Date.parse(instant) / 60000);
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++)
+            for (let dt = -1; dt <= 1; dt++)
+              digests.add(observationDigest(s, x + dx, y + dy, z + dz, minute + dt));
+    }
+    return digests;
+  };
+  // Account-local HMACs remain encrypted, with no tombstone coordinates. Neighboring
+  // 15 m ECEF cells/minutes cover small jitter, not arbitrary equivalent inputs.
+  // Matches span less than 52 m and 120 s; other visits here remain eligible.
+  const arrivals = nearby(v.arrival);
+  const departures = nearby(v.departure);
+  return s.forgottenObservations.some(
+    (f) =>
+      (f.arrival !== null && arrivals.has(f.arrival)) ||
+      ((!v.arrival || !f.arrival) && f.departure !== null && departures.has(f.departure)),
+  );
+}
 export function pruneHabits(s: HabitState, now: Date) {
-  const cutoff = now.getTime() - s.retentionDays * 86400000;
+  // Increasing retention cannot reopen a time range already purged under a shorter policy.
+  const cutoff = Math.max(
+    now.getTime() - s.retentionDays * 86400000,
+    s.retainedSince ? Date.parse(s.retainedSince) : -Infinity,
+  );
+  s.retainedSince = new Date(cutoff).toISOString();
   const count = s.visits.length;
   s.visits = s.visits.filter((v) => Date.parse(v.departure ?? v.observedAt) >= cutoff);
   if (s.visits.length !== count) s.patterns = [];
@@ -116,6 +184,9 @@ export function pruneHabits(s: HabitState, now: Date) {
     (p) => p.confirmedAt || p.excluded || s.visits.some((v) => distanceM(p, v) <= 100),
   );
   s.ignoredVisitIds = s.ignoredVisitIds.filter((v) => Date.parse(v.expiresAt) > now.getTime());
+  s.forgottenObservations = s.forgottenObservations.filter(
+    (v) => Date.parse(v.expiresAt) > now.getTime(),
+  );
   for (const id of Object.keys(s.visitAliases))
     if (!s.visits.some((v) => v.id === id)) delete s.visitAliases[id];
 }
@@ -127,64 +198,92 @@ export function ingestVisits(s: HabitState, incoming: Visit[], now: Date) {
       (v.arrival && Date.parse(v.arrival) > Date.parse(v.observedAt) + 300_000) ||
       (v.departure && Date.parse(v.departure) > Date.parse(v.observedAt) + 300_000)
     )
-      throw new Error('invalid_visit_time');
+      throw new HabitsModelError('invalid_visit_time');
     const start = Date.parse(v.arrival ?? v.departure ?? v.observedAt);
     if (
       start < Date.parse(s.enabledAt ?? now.toISOString()) ||
-      start < now.getTime() - s.retentionDays * 86400000
+      start < Date.parse(s.retainedSince ?? now.toISOString())
     )
       continue;
     if (
       s.ignoredVisitIds.some((ignored) => ignored.id === v.id) ||
-      s.places.some((p) => p.excluded && distanceM(p, v) <= 150)
+      s.places.some((p) => p.excluded && distanceM(p, v) <= 150) ||
+      suppressedObservation(s, v)
     )
       continue;
     // Same arrival from another device is one observation, not evidence of two distinct visits.
-    const index = s.visits.findIndex(
-      (old) =>
-        old.id === v.id ||
-        s.visitAliases[old.id]?.includes(v.id) ||
-        (old.arrival &&
-          v.arrival &&
-          Math.abs(Date.parse(old.arrival) - Date.parse(v.arrival)) < 120000 &&
-          distanceM(old, v) < 50),
+    const identityIndex = s.visits.findIndex(
+      (old) => old.id === v.id || s.visitAliases[old.id]?.includes(v.id),
     );
+    const index =
+      identityIndex >= 0
+        ? identityIndex
+        : s.visits.findIndex(
+            (old) =>
+              old.arrival &&
+              v.arrival &&
+              Math.abs(Date.parse(old.arrival) - Date.parse(v.arrival)) < 120000 &&
+              distanceM(old, v) < 50,
+          );
     if (index >= 0) {
       const old = s.visits[index];
       if (!old) continue;
       if (
-        old.id === v.id &&
-        (distanceM(old, v) > 500 || (old.arrival && v.arrival && old.arrival !== v.arrival))
+        identityIndex >= 0 &&
+        (distanceM(old, v) > 500 ||
+          (old.arrival &&
+            v.arrival &&
+            Math.abs(Date.parse(old.arrival) - Date.parse(v.arrival)) >=
+              (old.id === v.id ? 1 : 120000)) ||
+          (!old.arrival &&
+            old.departure &&
+            v.departure &&
+            Math.abs(Date.parse(old.departure) - Date.parse(v.departure)) >=
+              (old.id === v.id ? 1 : 120000)))
       )
-        throw new Error('visit_identity_changed');
-      if (old.id !== v.id) {
-        const aliases = s.visitAliases[old.id] ?? [];
-        if (!aliases.includes(v.id)) {
-          if (aliases.length >= 20) throw new Error('habits_capacity');
-          s.visitAliases[old.id] = [...aliases, v.id];
-        }
-      }
-      s.visits[index] = {
+        throw new HabitsModelError('visit_identity_changed');
+      const merged = {
         ...v,
         id: old.id,
         arrival: old.arrival ?? v.arrival,
         departure: old.departure ?? v.departure,
+        observedAt:
+          Date.parse(old.observedAt) >= Date.parse(v.observedAt) ? old.observedAt : v.observedAt,
+        timezone: old.timezone,
         accuracyM: Math.min(old.accuracyM, v.accuracyM),
         latitude: old.accuracyM <= v.accuracyM ? old.latitude : v.latitude,
         longitude: old.accuracyM <= v.accuracyM ? old.longitude : v.longitude,
       };
+      if (!Visit.safeParse(merged).success) throw new HabitsModelError('visit_identity_changed');
+      if (old.id !== v.id) {
+        const aliases = s.visitAliases[old.id] ?? [];
+        if (!aliases.includes(v.id)) {
+          if (aliases.length >= 20) throw new HabitsModelError('habits_capacity');
+          s.visitAliases[old.id] = [...aliases, v.id];
+        }
+      }
+      if (
+        old.arrival !== merged.arrival ||
+        old.departure !== merged.departure ||
+        old.latitude !== merged.latitude ||
+        old.longitude !== merged.longitude ||
+        old.accuracyM !== merged.accuracyM
+      )
+        s.patterns = [];
+      s.visits[index] = merged;
     } else {
-      if (s.visits.length >= 2000) throw new Error('habits_capacity');
+      if (s.visits.length >= 2000) throw new HabitsModelError('habits_capacity');
       s.visits.push(v);
     }
     const merged = index >= 0 ? (s.visits[index] ?? v) : v;
     if (credibleVisit(merged) && !visitPlace(s, merged)) {
-      if (s.places.length >= 300) throw new Error('habits_capacity');
+      if (s.places.length >= 300) throw new HabitsModelError('habits_capacity');
       s.places.push(
         Place.parse({ id: randomUUID(), latitude: merged.latitude, longitude: merged.longitude }),
       );
     }
   }
+  pruneHabits(s, now);
 }
 function local(v: Visit) {
   const parts = new Intl.DateTimeFormat('en-CA', {

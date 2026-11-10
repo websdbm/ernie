@@ -8,7 +8,9 @@ import { guardianSettings } from '../guardian.js';
 import type { HealthCipher } from '../health-protection/crypto.js';
 import {
   distanceM,
+  forgottenObservation,
   HabitState,
+  HabitsModelError,
   ingestVisits,
   initialHabits,
   pruneHabits,
@@ -114,6 +116,7 @@ export function createHabitsService(opts: HabitsOptions) {
       const s = row
         ? HabitState.parse(JSON.parse(cipher.decrypt(ctx, row.envelope).toString('utf8')))
         : initialHabits();
+      pruneHabits(s, now());
       const result = await fn(s, revision, settings, c);
       if (write) {
         const envelope = cipher.encrypt(
@@ -152,21 +155,12 @@ export function createHabitsService(opts: HabitsOptions) {
   });
   return {
     async get(userId: string) {
-      return transaction(
-        userId,
-        async (s, r, settings) => {
-          pruneHabits(s, now());
-          return view(s, r, settings);
-        },
-        false,
-      );
+      return transaction(userId, async (s, r, settings) => view(s, r, settings), false);
     },
     async configure(userId: string, input: unknown) {
       const body = Config.parse(input);
       return transaction(userId, async (s, r, settings) => {
         if (r !== body.expectedRevision) fail('habits_changed');
-        // Increasing retention must never resurrect evidence already expired under the old policy.
-        pruneHabits(s, now());
         if (body.collecting || body.aiAllowed) requireEnabled(settings);
         if (s.collecting !== body.collecting) {
           s.epoch = randomUUID();
@@ -198,10 +192,12 @@ export function createHabitsService(opts: HabitsOptions) {
         if (!s.collecting || body.epoch !== s.epoch) fail('habits_paused', 403);
         try {
           ingestVisits(s, body.visits, now());
-        } catch {
+        } catch (error) {
+          if (!(error instanceof HabitsModelError)) throw error;
+          if (error.code === 'habits_capacity') fail('habits_capacity');
           fail('invalid_visits', 400);
         }
-        for (const p of s.places.filter((p) => !p.confirmedAt && !p.linkedPlaceId)) {
+        for (const p of s.places.filter((p) => !p.excluded && !p.confirmedAt && !p.linkedPlaceId)) {
           const matches = known.filter(
             (k) =>
               k.lat !== undefined &&
@@ -239,12 +235,19 @@ export function createHabitsService(opts: HabitsOptions) {
         .strict()
         .parse(input);
       return transaction(userId, async (s, r, settings) => {
-        if (body.action === 'clear') Object.assign(s, initialHabits());
+        if (body.action === 'clear')
+          Object.assign(s, initialHabits(), { lastQuestionDay: s.lastQuestionDay });
         else if (body.action === 'forget_visit') {
-          if (!body.id || !s.visits.some((v) => v.id === body.id)) fail('visit_not_found', 404);
+          const visit = s.visits.find((v) => v.id === body.id);
+          if (!body.id || !visit) fail('visit_not_found', 404);
           const ids = [body.id, ...(s.visitAliases[body.id] ?? [])];
-          if (s.ignoredVisitIds.length + ids.length > 5000) fail('habits_capacity');
+          if (
+            s.ignoredVisitIds.length + ids.length > 5000 ||
+            s.forgottenObservations.length >= 5000
+          )
+            fail('habits_capacity');
           const expiresAt = new Date(now().getTime() + 90 * 86400000).toISOString();
+          s.forgottenObservations.push(forgottenObservation(s, visit, expiresAt));
           s.ignoredVisitIds.push(...ids.map((id) => ({ id, expiresAt })));
           delete s.visitAliases[body.id];
           s.visits = s.visits.filter((v) => !ids.includes(v.id));
@@ -268,6 +271,7 @@ export function createHabitsService(opts: HabitsOptions) {
             p.snoozeUntil = new Date(now().getTime() + 86400000).toISOString();
           }
         }
+        pruneHabits(s, now());
         return view(s, r + 1, settings);
       });
     },
@@ -276,7 +280,6 @@ export function createHabitsService(opts: HabitsOptions) {
       // Stable service day; a client-supplied timezone cannot reset the daily allowance.
       timezone = 'Europe/Rome';
       return transaction(userId, async (s, _r, settings, c) => {
-        pruneHabits(s, now());
         if (!enabled(settings) || !s.collecting) return null;
         const today = new Intl.DateTimeFormat('en-CA', {
           timeZone: timezone,
@@ -288,15 +291,16 @@ export function createHabitsService(opts: HabitsOptions) {
         const p = questionCandidate(s, now());
         if (!p) return null;
         const counts = (
-          await c.query<{ n: number; last: Date | null }>(
-            "SELECT count(*) FILTER (WHERE (sent_at AT TIME ZONE $2)::date=($3::timestamptz AT TIME ZONE $2)::date)::int n,max(sent_at) last FROM proactive_messages WHERE user_id=$1 AND status='sent'",
+          await c.query<{ n: number; habits_today: number; last: Date | null }>(
+            "SELECT count(*) FILTER (WHERE (sent_at AT TIME ZONE $2)::date=($3::timestamptz AT TIME ZONE $2)::date)::int n,count(*) FILTER (WHERE kind='habit_learning' AND (sent_at AT TIME ZONE $2)::date=($3::timestamptz AT TIME ZONE $2)::date)::int habits_today,max(sent_at) last FROM proactive_messages WHERE user_id=$1 AND status='sent'",
             [userId, timezone, now()],
           )
         ).rows[0];
+        if (counts && counts.habits_today > 0) return null;
         const candidate = {
           userId,
           kind: 'habit_learning' as const,
-          dedupeKey: `habit_learning:${p.id}:${today}`,
+          dedupeKey: `habit_learning:${today}`,
           title: 'Un luogo da conoscere',
           body: 'C’è una sosta che puoi descrivere nella sezione Abitudini.',
           evidence: { source: 'user' as const, refs: [p.id] },
@@ -311,7 +315,7 @@ export function createHabitsService(opts: HabitsOptions) {
           }).verdict !== 'send'
         )
           return null;
-        await c.query(
+        const inserted = await c.query(
           "INSERT INTO proactive_messages(user_id,kind,dedupe_key,title,body,evidence,status,sent_at) VALUES($1,$2,$3,$4,$5,$6,'sent',$7) ON CONFLICT(user_id,dedupe_key) DO NOTHING",
           [
             userId,
@@ -323,6 +327,7 @@ export function createHabitsService(opts: HabitsOptions) {
             now(),
           ],
         );
+        if (inserted.rowCount !== 1) return null;
         p.askedAt = now().toISOString();
         s.lastQuestionDay = today;
         return {
@@ -340,7 +345,6 @@ export function createHabitsService(opts: HabitsOptions) {
         userId,
         async (s, _r, settings) => {
           if (!enabled(settings) || !s.aiAllowed) return null;
-          pruneHabits(s, now());
           const terms = text
             .toLocaleLowerCase('it')
             .split(/[^\p{L}\p{N}]+/u)
@@ -384,9 +388,9 @@ export function createHabitsService(opts: HabitsOptions) {
       try {
         await c.query('BEGIN');
         await c.query("SET LOCAL app.scheduler='on'");
-        ids = (await c.query<{ user_id: string }>('SELECT user_id FROM habits_state')).rows.map(
-          (r) => r.user_id,
-        );
+        ids = (
+          await c.query<{ user_id: string }>('SELECT user_id FROM habits_state ORDER BY user_id')
+        ).rows.map((r) => r.user_id);
         await c.query('COMMIT');
       } catch (error) {
         await c.query('ROLLBACK');
@@ -394,11 +398,18 @@ export function createHabitsService(opts: HabitsOptions) {
       } finally {
         c.release();
       }
-      for (const id of ids) await this.maintenance(id);
+      let failed = false;
+      for (const id of ids) {
+        try {
+          await this.maintenance(id);
+        } catch {
+          failed = true;
+        }
+      }
+      if (failed) fail('habits_maintenance_failed', 503);
     },
     async maintenance(userId: string) {
       return transaction(userId, async (s, _r, settings) => {
-        pruneHabits(s, now());
         if (enabled(settings) && s.collecting) reviewHabits(s, now(), 'Europe/Rome');
       });
     },

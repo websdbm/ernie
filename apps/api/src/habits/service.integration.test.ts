@@ -3,6 +3,7 @@ import { createPool, type Pool, withUser } from '@ernie/db';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHealthCipher } from '../health-protection/crypto.js';
+import { forgottenObservation, HabitState } from './model.js';
 import { habitsRoutes } from './routes.js';
 import { createHabitsService } from './service.js';
 
@@ -70,6 +71,39 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
         time = value;
       },
     };
+  };
+  const stored = async (id: string) => {
+    const row = (
+      await owner.query<{ revision: number; envelope: unknown }>(
+        'SELECT revision,envelope FROM habits_state WHERE user_id=$1',
+        [id],
+      )
+    ).rows[0];
+    if (!row) throw new Error('missing fixture state');
+    const context = {
+      userId: id,
+      resourceKind: 'habits-state',
+      resourceId: id,
+      resourceVersion: row.revision,
+    };
+    return {
+      context,
+      state: HabitState.parse(JSON.parse(cipher.decrypt(context, row.envelope).toString('utf8'))),
+    };
+  };
+  const editStored = async (id: string, edit: (s: HabitState) => void) => {
+    const { context, state } = await stored(id);
+    edit(state);
+    const revision = context.resourceVersion + 1;
+    const envelope = cipher.encrypt(
+      { ...context, resourceVersion: revision },
+      Buffer.from(JSON.stringify(HabitState.parse(state))),
+    );
+    await owner.query('UPDATE habits_state SET revision=$2,envelope=$3 WHERE user_id=$1', [
+      id,
+      revision,
+      JSON.stringify(envelope),
+    ]);
   };
   beforeAll(async () => {
     owner = createPool({ connectionString: url as string });
@@ -150,6 +184,106 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     await s.upload(id, { epoch: state.epoch, visits: [a, b] });
     expect((await s.get(id)).visits).toHaveLength(0);
   });
+  it('suppresses offline unseen IDs across concurrent deletion and retries, preserving later visits', async () => {
+    const { id, s, state, a, setTime } = await seed();
+    setTime(new Date('2026-11-10T14:30:00Z'));
+    const later = {
+      ...observation(),
+      arrival: '2026-11-10T14:01:00Z',
+      departure: '2026-11-10T14:20:00Z',
+      observedAt: '2026-11-10T14:30:00Z',
+    };
+    await s.upload(id, { epoch: state.epoch, visits: [later] });
+    await Promise.all([
+      s.act(id, { action: 'forget_visit', id: a.id }),
+      s.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] }),
+    ]);
+    await Promise.all([
+      s.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] }),
+      s.upload(id, {
+        epoch: state.epoch,
+        visits: [
+          {
+            ...a,
+            id: randomUUID(),
+            arrival: '2026-11-10T12:01:02Z',
+            latitude: a.latitude + 0.00002,
+            longitude: a.longitude + 0.00002,
+          },
+        ],
+      }),
+    ]);
+    const result = await s.get(id);
+    expect(result.visits.map((v) => v.id)).toEqual([later.id]);
+    expect(result).not.toHaveProperty('observationKey');
+    expect(result).not.toHaveProperty('forgottenObservations');
+    const persisted = (await stored(id)).state;
+    expect(persisted.forgottenObservations).toEqual([
+      {
+        arrival: expect.stringMatching(/^[a-f0-9]{64}$/),
+        departure: expect.stringMatching(/^[a-f0-9]{64}$/),
+        expiresAt: '2027-02-08T14:30:00.000Z',
+      },
+    ]);
+    const raw = await owner.query(
+      'SELECT row_to_json(h)::text raw FROM habits_state h WHERE user_id=$1',
+      [id],
+    );
+    expect(raw.rows[0].raw).not.toContain(persisted.observationKey);
+    expect(raw.rows[0].raw).not.toContain('forgottenObservations');
+  });
+  it('rolls back a whole upload when valid partial inputs would create an invalid merged visit', async () => {
+    const { id, s, state, a } = await seed();
+    const partial = { ...a, id: randomUUID(), arrival: '2026-11-10T12:22:00Z', departure: null };
+    await s.upload(id, { epoch: state.epoch, visits: [partial] });
+    const before = await stored(id);
+    await expect(
+      s.upload(id, {
+        epoch: state.epoch,
+        visits: [
+          { ...a, id: randomUUID(), latitude: 46 },
+          {
+            ...a,
+            id: randomUUID(),
+            arrival: '2026-11-10T12:21:00Z',
+            departure: '2026-11-10T12:21:30Z',
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'invalid_visits' });
+    expect(await stored(id)).toEqual(before);
+  });
+  it('reports alias capacity explicitly without poisoning state or blocking deletion', async () => {
+    const { id, s, state, a } = await seed();
+    await editStored(id, (data) => {
+      data.visitAliases[a.id] = Array.from({ length: 20 }, () => randomUUID());
+    });
+    const before = await stored(id);
+    await expect(
+      s.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] }),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'habits_capacity' });
+    expect(await stored(id)).toEqual(before);
+    await s.act(id, { action: 'forget_visit', id: a.id });
+    await s.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] });
+    expect((await s.get(id)).visits).toHaveLength(0);
+  });
+  it('prunes expired suppression records before checking deletion capacity', async () => {
+    const { id, s, a } = await seed();
+    await editStored(id, (data) => {
+      const expiresAt = '2026-11-10T12:15:00Z';
+      data.ignoredVisitIds = Array.from({ length: 5000 }, () => ({
+        id: randomUUID(),
+        expiresAt,
+      }));
+      const fingerprint = forgottenObservation(data, a, expiresAt);
+      data.forgottenObservations = Array.from({ length: 5000 }, () => ({ ...fingerprint }));
+    });
+    await s.act(id, { action: 'forget_visit', id: a.id });
+    const persisted = (await stored(id)).state;
+    expect(persisted.visits).toEqual([]);
+    expect(persisted.ignoredVisitIds).toHaveLength(1);
+    expect(persisted.forgottenObservations).toHaveLength(1);
+  });
   it('linked alias refinement stays one visit and deletion removes every linked ID', async () => {
     const { id, s, state, a } = await seed();
     const b = { ...a, id: randomUUID() };
@@ -163,7 +297,7 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     expect((await s.get(id)).visits).toHaveLength(0);
   });
   it('increasing retention cannot restore observations already expired under the old policy', async () => {
-    const { id, s, setTime } = await seed();
+    const { id, s, a, setTime } = await seed();
     let state = await s.get(id);
     await s.configure(id, {
       expectedRevision: state.revision,
@@ -182,7 +316,12 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
       retentionDays: 90,
       policyVersion: 1,
     });
+    await Promise.all([
+      s.upload(id, { epoch: state.epoch, visits: [a] }),
+      s.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] }),
+    ]);
     expect((await s.get(id)).visits).toHaveLength(0);
+    expect((await stored(id)).state.visits).toHaveLength(0);
   });
   it('exclusion drops stored and future visits and clear rotates epoch', async () => {
     const { id, s, state, a } = await seed();
@@ -197,6 +336,29 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
       code: 'habits_paused',
     });
   });
+  it('does not repopulate excluded place descriptions from geographic profile suggestions', async () => {
+    const { id, s, state, a } = await seed();
+    const p = (await s.get(id)).places[0];
+    if (!p) throw new Error('missing fixture place');
+    await s.act(id, { action: 'exclude_place', id: p.id });
+    const linked = createHabitsService({
+      pool: app,
+      cipher,
+      now: () => new Date(a.observedAt),
+      places: async () => [{ id: 'profile-place', label: 'Ufficio', lat: 45, lng: 12 }],
+    });
+    await linked.upload(id, { epoch: state.epoch, visits: [{ ...a, id: randomUUID() }] });
+    expect((await linked.get(id)).places).toEqual([
+      expect.objectContaining({
+        id: p.id,
+        excluded: true,
+        label: 'Luogo escluso',
+        purpose: '',
+        linkedPlaceId: null,
+        confirmedAt: null,
+      }),
+    ]);
+  });
   it('one question per stable day; later works on next day and expired evidence cannot ask', async () => {
     const { id, s, setTime } = await seed();
     const q = await s.question(id, 'Pacific/Kiritimati');
@@ -208,6 +370,49 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     setTime(new Date('2026-12-20T13:00:00Z'));
     expect(await s.question(id, 'Europe/Rome')).toBeNull();
     expect((await s.get(id)).places).toHaveLength(0);
+  });
+  it('clear and re-enable cannot reset the daily allowance, including concurrent questions', async () => {
+    const { id, s, setTime } = await seed();
+    expect(await s.question(id, 'Europe/Rome')).not.toBeNull();
+    await s.act(id, { action: 'clear' });
+    const state = await configure(s, id);
+    setTime(new Date('2026-11-10T14:30:00Z'));
+    await s.upload(id, {
+      epoch: state.epoch,
+      visits: [
+        {
+          ...observation(),
+          arrival: '2026-11-10T14:01:00Z',
+          departure: '2026-11-10T14:20:00Z',
+          observedAt: '2026-11-10T14:30:00Z',
+        },
+      ],
+    });
+    expect(
+      await Promise.all([s.question(id, 'Pacific/Kiritimati'), s.question(id, 'Pacific/Honolulu')]),
+    ).toEqual([null, null]);
+    await editStored(id, (data) => {
+      data.lastQuestionDay = null;
+    });
+    expect(await s.question(id, 'Europe/Rome')).toBeNull();
+    const sent = await owner.query(
+      "SELECT count(*)::int n FROM proactive_messages WHERE user_id=$1 AND kind='habit_learning' AND status='sent'",
+      [id],
+    );
+    expect(sent.rows[0].n).toBe(1);
+  });
+  it('does not return a question when the daily delivery key was already claimed', async () => {
+    const { id, s } = await seed();
+    await withUser(app, id, async (c) => {
+      await c.query(
+        "INSERT INTO proactive_messages(user_id,kind,dedupe_key,title,body,evidence,status) VALUES($1,'habit_learning','habit_learning:2026-11-10','Fixture','Fixture',$2,'pending')",
+        [id, JSON.stringify({ source: 'user', refs: [] })],
+      );
+    });
+    expect(await s.question(id, 'Europe/Rome')).toBeNull();
+    const persisted = (await stored(id)).state;
+    expect(persisted.lastQuestionDay).toBeNull();
+    expect(persisted.places[0]?.askedAt).toBeNull();
   });
   it('AI disclosure requires consent and relevance, excludes raw coordinates and unconfirmed places', async () => {
     const { id, s } = await seed(true);
@@ -240,6 +445,22 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     setTime(new Date('2027-01-01T12:00:00Z'));
     await s.maintainAll();
     expect((await s.get(id)).visits).toHaveLength(0);
+    expect((await stored(id)).state.visits).toHaveLength(0);
+  });
+  it('isolates a corrupt archive during maintenance and still reports the failed sweep', async () => {
+    const [broken, healthy] = [await seed(), await seed()].sort((a, b) => a.id.localeCompare(b.id));
+    if (!broken || !healthy) throw new Error('missing fixture accounts');
+    await owner.query("UPDATE habits_state SET envelope='{}'::jsonb WHERE user_id=$1", [broken.id]);
+    healthy.setTime(new Date('2027-01-01T12:00:00Z'));
+    try {
+      await expect(healthy.s.maintainAll()).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'habits_maintenance_failed',
+      });
+      expect((await stored(healthy.id)).state.visits).toEqual([]);
+    } finally {
+      await owner.query('DELETE FROM habits_state WHERE user_id=$1', [broken.id]);
+    }
   });
   it('HTTP authenticates, validates, isolates and marks private responses no-store', async () => {
     const { id, s } = await seed();

@@ -3,7 +3,8 @@ import UserNotifications
 
 /// Registrazione APNs e consegna delle notifiche: il contenuto arriva comunque dal server (`/v1/notifications`).
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    @MainActor var model: AppModel?
+    @MainActor let rootModel = AppModel()
+    @MainActor var model: AppModel? { rootModel }
 
     func application(
         _ application: UIApplication,
@@ -14,6 +15,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Rapporti di iOS su blocchi e chiusure per errore: al server, per la diagnosi.
         DiagnosticsReporter.shared.start()
         if let credentials = Credentials.load() { MediaUploadQueue.shared.configure(credentials) }
+        if launchOptions?[.location] != nil {
+            Task { await rootModel.resumeHabitsInBackground() }
+        }
         return true
     }
 

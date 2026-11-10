@@ -17,16 +17,17 @@ struct HabitsView: View {
                 }
                 if let state = store.snapshot {
                     Section {
-                        Label(store.deviceEnabled ? "Raccolta abilitata su questo iPhone" : "Raccolta ferma su questo iPhone", systemImage: store.deviceEnabled ? "location.fill" : "location.slash")
+                        Label(store.collectingOnDevice ? "Raccolta abilitata su questo iPhone" : "Raccolta ferma su questo iPhone", systemImage: store.collectingOnDevice ? "location.fill" : "location.slash")
                         if !state.skillEnabled { Text("Attiva Abitudini dal pannello Skill per iniziare. Lo storico resta consultabile.").foregroundStyle(.secondary) }
                         else if !store.deviceEnabled {
                             Button("Attiva su questo iPhone") { confirmStart = true }
                         } else {
                             Button("Sospendi la raccolta", role: .destructive) { Task { await store.configure(collecting: false, aiAllowed: state.aiAllowed, retentionDays: state.retentionDays) } }
-                            if store.authorization != .authorizedAlways {
-                                Text("Per le soste in background scegli Sempre nelle impostazioni di localizzazione di iOS.").foregroundStyle(.secondary)
-                                Button("Apri impostazioni iOS") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
-                            }
+                        }
+                        if state.skillEnabled, store.authorization != .authorizedAlways,
+                           store.deviceEnabled || store.authorization == .denied || store.authorization == .restricted {
+                            Text("Per le soste in background scegli Sempre nelle impostazioni di localizzazione di iOS.").foregroundStyle(.secondary)
+                            Button("Apri impostazioni iOS") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                         }
                         Picker("Conserva le visite", selection: Binding(get: { state.retentionDays }, set: { days in Task { await store.configure(collecting: state.collecting, aiAllowed: state.aiAllowed, retentionDays: days) } })) {
                             Text("7 giorni").tag(7); Text("30 giorni").tag(30); Text("90 giorni").tag(90)
@@ -80,7 +81,7 @@ struct HabitsView: View {
                                 if let arrival = HabitVisit.date(visit.arrival) { Text(arrival, format: .dateTime.day().month().hour().minute()) }
                                 Text(visit.departure == nil ? "Partenza non ancora rilevata" : "Sosta conclusa").font(.caption).foregroundStyle(.secondary)
                             }.swipeActions { Button("Dimentica", role: .destructive) { Task { await store.act("forget_visit", id: visit.id) } } }
-                    }
+                        }
                     }
                     if state.places.contains(where: \.excluded) {
                         Section("Luoghi esclusi") { Text("\(state.places.filter(\.excluded).count) aree escluse. Le coordinate servono soltanto a ignorare nuove visite in queste aree.").foregroundStyle(.secondary) }

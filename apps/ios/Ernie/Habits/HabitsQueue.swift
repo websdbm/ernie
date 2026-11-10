@@ -49,11 +49,17 @@ struct HabitsQueue {
         return key
     }
     func load() throws -> Payload? {
-        guard !UserDefaults.standard.bool(forKey: blockedKey), FileManager.default.fileExists(atPath: file.path) else { return nil }
-        let data = try Data(contentsOf: file)
+        guard UserDefaults.standard.object(forKey: blockedKey) as? Bool == false else { return nil }
+        let data: Data
+        do { data = try Data(contentsOf: file) }
+        catch let failure as CocoaError where failure.code == .fileReadNoSuchFile { return nil }
         return try JSONDecoder().decode(Payload.self, from: AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key(create: false), authenticating: Data(scope.utf8)))
     }
     func save(_ payload: Payload) throws {
+        guard UserDefaults.standard.object(forKey: blockedKey) as? Bool == false else { throw HabitsFailure(code: "habits_paused") }
+        try write(payload)
+    }
+    private func write(_ payload: Payload) throws {
         guard payload.visits.count <= 1000 else { throw HabitsFailure(code: "habits_capacity") }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
         var protectedDirectory = directory; var values = URLResourceValues(); values.isExcludedFromBackup = true
@@ -64,7 +70,9 @@ struct HabitsQueue {
         var protectedFile = file; try protectedFile.setResourceValues(values)
     }
     func begin(_ payload: Payload) throws {
-        try save(payload)
+        // A failed explicit opt-in must not leave the previous file usable.
+        UserDefaults.standard.set(true, forKey: blockedKey)
+        try write(payload)
         UserDefaults.standard.set(false, forKey: blockedKey)
     }
     @discardableResult func clear() -> Bool {
@@ -74,7 +82,7 @@ struct HabitsQueue {
         if FileManager.default.fileExists(atPath: file.path) {
             do { try FileManager.default.removeItem(at: file) } catch { removed = false }
         }
-        let status = SecItemDelete(query as CFDictionary)
+        let status = suppliedKey == nil ? SecItemDelete(query as CFDictionary) : errSecItemNotFound
         return removed && (status == errSecSuccess || status == errSecItemNotFound)
     }
     static func visitID(arrival: Date?, departure: Date?, latitude: Double, longitude: Double) -> String {

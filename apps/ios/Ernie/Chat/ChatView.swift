@@ -92,7 +92,11 @@ struct ChatView: View {
         .sheet(isPresented: $showUsage, onDismiss: sheetDidDismiss) { UsageView(scope: .personal) }
         .sheet(isPresented: $showUsageAdmin, onDismiss: sheetDidDismiss) { UsageView(scope: .all) }
         .sheet(isPresented: $showBrain, onDismiss: sheetDidDismiss) { SecondBrainView() }
-        .sheet(isPresented: $showHabits, onDismiss: { model.habits.scrubPresentation(); sheetDidDismiss() }) {
+        .sheet(isPresented: $showHabits, onDismiss: {
+            model.habits.scrubPresentation()
+            sheetDidDismiss()
+            Task { await model.habits.refresh() }
+        }) {
             HabitsView(store: model.habits).chatAppearance(costume: resolvedCostume)
         }
         .sheet(isPresented: $showHealth, onDismiss: { healthStore.scrub(); sheetDidDismiss() }) {

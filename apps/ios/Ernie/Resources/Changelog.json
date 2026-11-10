@@ -1,5 +1,30 @@
 [
   {
+    "build": 120,
+    "date": "2026-11-10",
+    "title": "Abitudini, con il tuo consenso",
+    "items": [
+      {
+        "icon": "figure.walk",
+        "title": "Luoghi e soste in uno spazio dedicato",
+        "detail": "La nuova skill Abitudini è inizialmente spenta. Attivala e scegli su quale iPhone raccogliere le soste approssimative rilevate da iOS, anche in background. Non è un tracciamento continuo.",
+        "test": "Attiva Abitudini dal pannello Skill, apri la sezione e leggi il consenso prima di abilitare questo iPhone."
+      },
+      {
+        "icon": "mappin.and.ellipse",
+        "title": "Insegna a Ernie i tuoi luoghi",
+        "detail": "Descrivi le soste, distingui visite occasionali e luoghi abituali. Ernie propone al massimo una domanda al giorno e separa le informazioni confermate dalle possibili routine.",
+        "test": "Quando compare un luogo, descrivilo oppure scegli di rimandare o escluderlo."
+      },
+      {
+        "icon": "hand.raised",
+        "title": "Raccolta e AI sotto il tuo controllo",
+        "detail": "Storico cifrato nel tuo account, durata selezionabile, pausa e cancellazione. Il contesto pertinente per il modello AI richiede un consenso separato e revocabile.",
+        "test": "Prova la pausa e riapri la sezione: la raccolta non deve riattivarsi da sola."
+      }
+    ]
+  },
+  {
     "build": 119,
     "date": "2026-11-10",
     "title": "Salute, in uno spazio protetto",

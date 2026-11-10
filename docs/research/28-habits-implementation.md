@@ -23,7 +23,10 @@ le descrizioni confermate rimangono finché eliminate. Le aree escluse mantengon
 ignorare. Per eliminare anche queste, usare Elimina tutti i dati.
 
 Le visite equivalenti tra dispositivi si fondono; gli alias conosciuti sono conservati per impedire che
-un retry faccia ricomparire una visita dimenticata. Tombstone di soli ID per 90 giorni, poi eliminate.
+un retry faccia ricomparire una visita dimenticata. Anche ID nuovi vengono filtrati con impronte HMAC
+spazio-temporali, senza coordinate nelle tombstone, conservate solo nello stato cifrato per 90 giorni.
+Il confronto tollera piccoli scostamenti; non identifica tutte le varianti possibili e soste
+spazio-temporalmente indistinguibili possono coincidere. Le altre visite nello stesso luogo restano ammesse.
 Osservazioni imprecise o brevi non generano luoghi/routine. Una routine richiede almeno tre giorni distinti,
 lo stesso giorno settimanale, un intervallo di almeno 14 giorni e orari sufficientemente vicini.
 Le ipotesi sono separate dalle descrizioni confermate; nessun impegno o promemoria creato automaticamente.
@@ -56,14 +59,34 @@ ordine deterministico delle visite, pruning prima delle domande, invalidazione d
 account. Seconda lettura: correzione degli alias già noti dopo raffinamento della posizione e della
 retention aumentata dopo scadenza delle evidenze. Correzioni verificate con test riproducibili; il rapporto AI da solo non prova il funzionamento.
 
+## Implementazione delegata per la build 120
+
+Due sessioni Copilot CLI su copie isolate, GPT-6.1 Sol per backend e iOS, con permessi di scrittura
+limitati rispettivamente al modulo Abitudini e ai suoi test. Nessuna shell, rete, MCP o credenziale
+accessibile ai revisori; Codex integra, corregge gli errori di compilazione e verifica sul progetto completo.
+Consumo rendicontato dal CLI: 60,977 + 74,879 AI credits per le due sessioni cumulative, più
+0,374 + 7,532 dei tentativi iniziali di sola lettura: circa **143,762 AI credits**. Sono crediti Copilot,
+non consumi dell'account Ernie. Nessuna modifica al budget dell'abbonamento. I primi tentativi di scrittura
+non hanno modificato file per un disallineamento del percorso `/tmp`/`/private/tmp` nell'allowlist,
+poi corretto mantenendo lo stesso perimetro.
+
+Correzioni iOS: stop e invalidazione dopo revoca, rivalutazione permessi dopo ogni attesa,
+scadenza locale effettiva, errori archivio visibili, conservazione della partenza, ripristino delle domande
+al rientro. AppDelegate avvia il coordinatore su evento di localizzazione anche prima della view;
+la view usa lo stesso AppModel, l'attivazione Abitudini per stesso account è idempotente.
+Le domande non risposte sono conservate solo in memoria fino alla chiusura del processo.
+
 ## Verifiche eseguite
 
-- 106 test backend in nove suite, di cui 21 Abitudini: osservazioni, deduplicazione/alias, inferenza,
+- 124 test backend in nove suite, di cui 39 Abitudini: osservazioni, deduplicazione/alias, inferenza,
   retention, consenso/revoca, cifratura/isolation RLS con ruolo applicativo reale, HTTP autenticato.
+  Inclusi upload invalidi atomici, revoca concorrente, ID offline sconosciuti, budget dopo cancellazione
+  e manutenzione che isola gli errori del singolo account. Nessuna migrazione aggiuntiva oltre 0054.
 - Tutte le 54 migrazioni applicate da zero a PostgreSQL/pgvector **temporaneo locale**. Nessun dato reale.
 - TypeScript e Biome verificati. Nessuna chiamata a provider LLM nei test dell'applicazione.
-- 9 test nativi sul Mac dell'ufficio con Xcode 27.2/iOS Simulator: contratto, coda protetta/pausa,
-  cambio account con risposte ritardate, divieto di opt-in implicito, invio senza metadati server.
+- 46 test nativi in due suite sul Mac dell'ufficio con Xcode 27.2/iOS Simulator: contratto, coda protetta/pausa,
+  cambio account con risposte ritardate, divieto di opt-in implicito, invio senza metadati server,
+  revoca durante GET/config/upload, scadenza reale del lease, guasti della coda e callback fuori ordine.
   Render chiaro/scuro con caratteri accessibili, OCR per evitare snapshot vuoti e ispezione visiva.
 - Evidenze temporanee: `/tmp/ernie-habits-all-tests.log`, `/tmp/ernie-habits-local-tests.log`,
   `/tmp/habits-light.png`, `/tmp/habits-dark.png`, `/tmp/ernie-habits-copilot-review-20261110/`.

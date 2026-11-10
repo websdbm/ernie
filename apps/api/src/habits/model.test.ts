@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  forgottenObservation,
+  HabitState,
   ingestVisits,
   initialHabits,
   pruneHabits,
@@ -10,11 +12,11 @@ import {
 } from './model.js';
 
 const now = new Date('2026-11-10T12:00:00Z');
-const state = () => ({
+const state = (): HabitState => ({
   ...initialHabits(),
   collecting: true,
   enabledAt: '2026-09-01T00:00:00Z',
-  retentionDays: 90 as const,
+  retentionDays: 90,
 });
 const visit = (arrival = '2026-11-10T09:00:00Z', patch: Partial<Visit> = {}): Visit => ({
   id: randomUUID(),
@@ -55,12 +57,149 @@ describe('Abitudini observation and inference boundaries', () => {
   it('partial updates preserve completed visit and best coordinate accuracy', () => {
     const s = state(),
       a = visit();
-    ingestVisits(s, [a, { ...a, departure: null, latitude: 45.0002, accuracyM: 90 }], now);
+    ingestVisits(
+      s,
+      [
+        a,
+        {
+          ...a,
+          departure: null,
+          latitude: 45.0002,
+          accuracyM: 90,
+          observedAt: '2026-11-10T11:00:00Z',
+          timezone: 'Pacific/Honolulu',
+        },
+      ],
+      now,
+    );
     expect(s.visits[0]).toMatchObject({
       departure: a.departure,
       latitude: a.latitude,
       accuracyM: 20,
+      observedAt: a.observedAt,
+      timezone: a.timezone,
     });
+  });
+  it('suppresses unseen IDs and small cross-cell jitter without excluding other visits', () => {
+    const s = state();
+    const a = visit('2026-11-10T09:00:59Z');
+    s.forgottenObservations.push(forgottenObservation(s, a, '2026-12-01T00:00:00Z'));
+    const later = visit('2026-11-10T11:00:00Z');
+    const elsewhere = visit(a.arrival ?? undefined, { latitude: 45.01 });
+    ingestVisits(
+      s,
+      [
+        { ...a, id: randomUUID() },
+        visit('2026-11-10T09:01:01Z', { latitude: 45.00002, longitude: 12.00002 }),
+        { ...a, id: randomUUID(), arrival: null },
+        later,
+        elsewhere,
+      ],
+      now,
+    );
+    expect(s.visits.map((v) => v.id)).toEqual([later.id, elsewhere.id]);
+  });
+  it('suppresses completed retries of forgotten departure-only observations', () => {
+    const s = state();
+    const a = visit(undefined, { arrival: null });
+    s.forgottenObservations.push(forgottenObservation(s, a, '2026-12-01T00:00:00Z'));
+    ingestVisits(s, [visit()], now);
+    expect(s.visits).toHaveLength(0);
+  });
+  it('does not equate distinct known arrivals merely because their departures match', () => {
+    const s = state();
+    const a = visit();
+    s.forgottenObservations.push(forgottenObservation(s, a, '2026-12-01T00:00:00Z'));
+    const other = visit('2026-11-10T09:30:00Z', { departure: a.departure });
+    ingestVisits(s, [other], now);
+    expect(s.visits).toEqual([other]);
+  });
+  it('expires observation fingerprints and scopes them to a private state key', () => {
+    const s = state();
+    const a = visit();
+    s.forgottenObservations.push(forgottenObservation(s, a, now.toISOString()));
+    expect(forgottenObservation(state(), a, now.toISOString()).arrival).not.toBe(
+      s.forgottenObservations[0]?.arrival,
+    );
+    ingestVisits(s, [a], now);
+    expect(s.forgottenObservations).toEqual([]);
+    expect(s.visits).toEqual([a]);
+  });
+  it('validates known aliases before geographic matching and rejects identity changes', () => {
+    const s = state();
+    const a = visit();
+    const b = visit('2026-11-10T11:00:00Z');
+    const alias = { ...b, id: randomUUID() };
+    ingestVisits(s, [a, b, alias], now);
+    const before = structuredClone(s);
+    expect(() => ingestVisits(s, [{ ...alias, arrival: a.arrival }], now)).toThrow(
+      'visit_identity_changed',
+    );
+    expect(s).toEqual(before);
+    expect(() => ingestVisits(s, [{ ...alias, latitude: 46, accuracyM: 1 }], now)).toThrow(
+      'visit_identity_changed',
+    );
+    expect(s).toEqual(before);
+  });
+  it('rejects invalid merged intervals before recording an alias or changing evidence', () => {
+    const s = state();
+    const a = visit(undefined, { departure: null });
+    ingestVisits(s, [a], now);
+    const before = structuredClone(s);
+    const b = visit('2026-11-10T08:59:00Z', { departure: '2026-11-10T08:59:30Z' });
+    expect(Visit.safeParse(b).success).toBe(true);
+    expect(() => ingestVisits(s, [b], now)).toThrow('visit_identity_changed');
+    expect(s).toEqual(before);
+    expect(HabitState.safeParse(s).success).toBe(true);
+  });
+  it('does not let a completed retry change the identity of a departure-only visit', () => {
+    const s = state();
+    const a = visit(undefined, { arrival: null });
+    ingestVisits(s, [a], now);
+    const before = structuredClone(s);
+    expect(() => ingestVisits(s, [visit('2026-11-10T07:00:00Z', { id: a.id })], now)).toThrow(
+      'visit_identity_changed',
+    );
+    expect(s).toEqual(before);
+  });
+  it.each([false, true])(
+    'invalidates refined evidence, retaining only explicitly confirmed orphan places (confirmed=%s)',
+    (confirmed) => {
+      const s = state();
+      const data = [
+        visit('2026-10-27T09:00:00Z', { accuracyM: 50 }),
+        visit('2026-11-03T09:00:00Z', { accuracyM: 50 }),
+        visit(undefined, { accuracyM: 50 }),
+      ];
+      ingestVisits(s, data, now);
+      reviewHabits(s, now, 'Europe/Rome');
+      expect(s.patterns).toHaveLength(1);
+      const oldPlace = s.places[0];
+      if (!oldPlace) throw new Error('missing fixture place');
+      if (confirmed) {
+        oldPlace.confirmedAt = now.toISOString();
+        oldPlace.purpose = 'Lavoro';
+      }
+      ingestVisits(
+        s,
+        data.map((v) => ({ ...v, latitude: 45.002, accuracyM: 5 })),
+        now,
+      );
+      expect(s.patterns).toEqual([]);
+      expect(s.places).toHaveLength(confirmed ? 2 : 1);
+      expect(s.places.some((p) => p.id === oldPlace.id)).toBe(confirmed);
+      if (confirmed) expect(s.places.find((p) => p.id === oldPlace.id)?.purpose).toBe('Lavoro');
+    },
+  );
+  it('does not reimport expired evidence after retention is increased', () => {
+    const s = state();
+    const a = visit('2026-10-27T09:00:00Z');
+    ingestVisits(s, [a], now);
+    s.retentionDays = 7;
+    pruneHabits(s, now);
+    s.retentionDays = 90;
+    ingestVisits(s, [a, { ...a, id: randomUUID() }], now);
+    expect(s.visits).toEqual([]);
   });
   it('does not classify short or imprecise visits', () => {
     const s = state();

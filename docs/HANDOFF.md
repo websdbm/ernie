@@ -5,6 +5,21 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Build 120 — Abitudini verificata, archivio in preparazione
+
+10 novembre 2026. Due implementazioni Copilot su copie isolate integrate e verificate da Codex.
+124 test backend in nove suite, 46 iOS in due suite; TypeScript/Biome e render chiaro/scuro accessibile passati.
+Correzioni di revoca/pausa e avvio background, lease locale, coda protetta, visite tardive/alias e cancellazione,
+limiti delle domande anche dopo clear, manutenzione isolata per account. AppDelegate e SwiftUI condividono
+lo stesso AppModel; nessun opt-in implicito e nessun prompt di permesso al riavvio.
+
+Numero/changelog 120 aggiornati. Pubblicazione ancora da autorizzare: **server resta API fe3a60f,
+worker 119, TestFlight 119**; migrazione 0054 e chiave Abitudini non applicate al server.
+L’iPhone collegato è stato riletto alla 119 dopo l’aggiornamento dell’utente, non alterato dai test.
+Restano firma/export 120 e prova hardware con visite reali; Apple Salute resta successiva.
+Note e protocollo di verifica in [build 120](releases/build-120.md); limiti/costi Copilot nella
+[ricerca 28](research/28-habits-implementation.md). Modifiche estranee a backup/configurazione/assets preservate.
+
 ### Abitudini e revisore Copilot — prima implementazione verificata, non pubblicata
 
 10 novembre 2026. Copilot CLI aggiornato 0.0.335 → **1.0.108** e verificato con due revisioni reali
