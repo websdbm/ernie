@@ -34,15 +34,18 @@ Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261
 ### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
 
 L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. Stato corrente e criteri di
-chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 in preparazione, non pubblicata**:
+chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 compilata, firmata e verificata, non pubblicata**:
 ricerca web, strumenti comuni, comandi SSH, accuratezza referti e budget automazioni implementati.
 Dettagli in [ricerca 25](research/25-open-features-wave1.md), verifiche e ricevute in
 [build 118](releases/build-118.md). Abitudini/HealthKit richiedono prima i contratti di protezione e revoca.
 Sospensioni Instagram/rete VPS conservate. La 117 rimane distribuita; nessuna migrazione 0051 o modifica
 di produzione effettuata per questo gruppo. Nuovo rilascio richiederà API **e worker** prima del client.
 Verifiche: **191 test backend, 42 iOS**, TypeScript/Biome verdi; database temporaneo con RLS,
-render chiaro/scuro/caratteri accessibili e revisione indipendente. Sorgenti 118 pronti per commit/archivio;
-nessuna nuova raccolta sensibile o prova su iPhone fisico.
+render chiaro/scuro/caratteri accessibili e revisione indipendente. Sorgenti 118
+**`a56ea5533247fc7dea8e0de8ea334b356de2bb88`** su GitHub, verificati prima dell'archivio Mac Studio.
+306 input iOS identici a Git e ai test; quattro firme Apple Distribution/entitlement verificati,
+isolamento diario conservato. IPA SHA-256 `451e6049e1086d34b508ae4003bf56782df6e5d8e52b21a21591b13e99ced423`.
+Nessuna nuova raccolta sensibile o prova su iPhone fisico. Nessun upload 118, API/worker invariati.
 
 Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
 funzione sviluppata o impostazione cambiata durante la ricognizione precedente all'autorizzazione.

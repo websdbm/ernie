@@ -1,13 +1,15 @@
 # Build 118 — ricerca e modifiche affidabili
 
-10 novembre 2026. **In preparazione; non pubblicata**. Build attualmente distribuita: 117.
+10 novembre 2026. **Compilata, firmata e verificata; non pubblicata**. Build attualmente distribuita: 117.
 
 Ambito: ricerca web con passaggi pertinenti/cache/letture batch, strumenti di contesto e patch Todo,
 rimozioni inventario SSH con precondizione concorrente, date/riferimenti dei referti più precisi,
 conteggio giornaliero automazioni nel loro fuso. Dettagli e limiti in
 [ricerca 25](../research/25-open-features-wave1.md).
 
-Sorgenti, SHA remoto e manifest finale saranno registrati prima della distribuzione.
+Sorgenti **`a56ea5533247fc7dea8e0de8ea334b356de2bb88`**, pubblicati su GitHub e SHA remoto verificato
+prima dell'archivio. Tutti i **306 input iOS** identici al commit e ai test nativi; snapshot Git pulito
+sul Mac Studio, senza usare le modifiche estranee presenti nel workspace.
 **191 test backend in 21 suite superati**, inclusi test PostgreSQL su database temporaneo con RLS,
 revisioni/idempotenza, revoche e operazioni concorrenti; TypeScript e Biome verdi.
 Review indipendente completata: corretti stop durante verifica permessi, requisito modello avanzato
@@ -25,6 +27,25 @@ Nessuna nuova misurazione di latenza LLM o prova su iPhone fisico.
 Test nativi e cinque render: `/tmp/ernie-open-features-118-20261110-r2/`; sul Mac Studio
 `~/Library/Caches/ernie-checks/open-features-118-20261110-r2/Build118.xcresult`.
 Manifest test SHA-256 `28904afaea9cf2495870eb3739e58d016bde35c8c67fb555455999524089a3eb`.
+
+## Archivio verificato, in attesa di autorizzazione
+
+Archivio Release ed export Apple riusciti sul Mac Studio. Quattro firme **Apple Distribution** verificate
+con `codesign --verify --deep --strict`, build 118 ed entitlement conformi ai sorgenti. Il gruppo privato
+del diario rimane soltanto nell'app principale. Changelog nell'IPA identico a Git; nessuna chiave privata
+copiata e nessuna modifica al Portachiavi. Export locale con `destination=export`, nessun upload.
+
+IPA **82.132.756 byte**, SHA-256
+`451e6049e1086d34b508ae4003bf56782df6e5d8e52b21a21591b13e99ced423`.
+Artefatti sul Mac Studio: `~/Library/Caches/ernie-builds/build-118-20261110-open-features/`:
+`source/`, `source-sha.txt`, `ios-inputs.json`, `Ernie-unsigned.xcarchive`, `Ernie-profile.xcarchive`,
+`export-profile-api/Ernie.ipa`, `verified-ipa/`, `release-manifest.json`, log archive/export.
+Preparazione firma tramite script versionato `apps/ios/scripts/prepare-cloud-signing.py`, profili validi
+del precedente archivio 117, poi export Apple e verifica delle quattro componenti.
+
+API/worker ancora alla versione pubblicata; migrazione 0051 non eseguita. Serve il via libera esplicito
+per pubblicazione e scritture sul database, come richiesto in HANDOFF, sezione Server.
+Database sintetico locale dei test eliminato dopo le verifiche; nessun dato reale toccato.
 
 ## Ordine e compatibilità
 
