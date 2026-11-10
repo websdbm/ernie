@@ -37,8 +37,8 @@ Individua al massimo 3 punti del messaggio che si possono intendere in modi dive
 Per ogni punto: «about» è il pezzo di testo così come l'ha scritto l'utente; «question» una domanda di poche parole; «options» da 2 a 3 interpretazioni brevi (poche parole), concrete e diverse fra loro, prese dal contesto (persone note, luoghi, argomenti degli ultimi scambi), scritte come risposta diretta («Giorgio», «Jev, il router decisionale»). Non aggiungere l'opzione «non si sa»: c'è già.
 Fuori dalla situazione «richiesta operativa possibile», se il messaggio è chiaro restituisci nessuna domanda. Non chiedere dettagli che servono solo a eseguire la richiesta quando il testo non è ambiguo.
 
-Nella situazione «richiesta operativa possibile» controlla anche quale funzione deve occuparsene e quale risultato si aspetta l'utente. Preferiamo verificare una possibile richiesta piuttosto che ignorarla. Scrivi UNA domanda kind=capability con da 2 a 4 opzioni: gli ID ESATTI delle capacità attive pertinenti (non le sole candidate iniziali) e, se serve, none per sola conversazione/consiglio. Anche se una funzione sembra chiara, questa domanda permette a Jev di verificarla. La domanda può arrivare all'utente: scrivila in italiano comprensibile, senza identificatori tecnici. Non proporre funzioni spente o inventate. Puoi aggiungere fino a due domande kind=meaning sui veri dubbi interpretativi.
-Per questa situazione la domanda sulla funzione va nel campo capability obbligatorio; questions contiene soltanto eventuali altre domande. Negli altri casi usa il solo campo questions.
+Nella situazione «richiesta operativa possibile» controlla anche quale funzione deve occuparsene e quale risultato si aspetta l'utente. Preferiamo verificare una possibile richiesta piuttosto che ignorarla. Se esistono due risultati realmente plausibili e diversi, scrivi UNA domanda kind=capability con da 2 a 4 opzioni: gli ID ESATTI delle capacità attive pertinenti (non le sole candidate iniziali) e, se serve, none per sola conversazione/consiglio. Se la funzione è già esplicita (es. «imposta un promemoria»), capability deve essere null: i dettagli mancanti come testo e orario vanno chiesti dal modello principale, non sono un dubbio sulla funzione. Non inventare alternative soltanto per riempire le opzioni. La domanda può arrivare all'utente: scrivila in italiano comprensibile, senza identificatori tecnici. Non proporre funzioni spente o inventate. Puoi aggiungere fino a due domande kind=meaning sui veri dubbi interpretativi.
+Per questa situazione il campo capability è obbligatorio ma può essere null; questions contiene soltanto eventuali altre domande. Negli altri casi usa il solo campo questions.
 Le altre domande hanno opzioni in italiano autosufficienti. Non inventare preferenze, durate, fatti o consenso e non chiedere a Jev di indovinarli: se manca un dato esecutivo, segnala il dubbio al modello principale che potrà leggere i dati e chiedere alla persona. Le conferme brevi si riferiscono soltanto alla proposta identificabile nel contesto. Un dubbio operativo non implica autorizzazione e non cambia le regole delle azioni.`;
 
 export function questionerPrompt(input: ClarifyInput): string {
@@ -73,15 +73,17 @@ export interface ClarifyQuestionerDeps {
 
 export function requestResolutionSchema(capabilities: NonNullable<ClarifyInput['capabilities']>) {
   return z.object({
-    capability: z.object({
-      kind: z.literal('capability'),
-      about: z.string().min(1).max(60),
-      question: z.string().min(3).max(200),
-      options: z
-        .array(z.enum([...capabilities.map((c) => c.id), 'none']))
-        .min(2)
-        .max(4),
-    }),
+    capability: z
+      .object({
+        kind: z.literal('capability'),
+        about: z.string().min(1).max(60),
+        question: z.string().min(3).max(200),
+        options: z
+          .array(z.enum([...capabilities.map((c) => c.id), 'none']))
+          .min(2)
+          .max(4),
+      })
+      .nullable(),
     questions: Questions.shape.questions.max(2),
   });
 }
@@ -144,7 +146,10 @@ export function createClarifyQuestioner(
     const requestParsed = requestSchema.safeParse(r.object);
     const questions: ClarifyQuestion[] = request
       ? requestParsed.success
-        ? [requestParsed.data.capability, ...requestParsed.data.questions]
+        ? [
+            ...(requestParsed.data.capability ? [requestParsed.data.capability] : []),
+            ...requestParsed.data.questions,
+          ]
         : []
       : parsed.success
         ? parsed.data.questions

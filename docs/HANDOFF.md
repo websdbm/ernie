@@ -5,6 +5,25 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Correzione resolver promemoria — pronta, non pubblicata
+
+10 novembre 2026. Diagnosi in sola lettura delle interazioni segnalate: il resolver ha riproposto
+la stessa scelta di funzione tre volte. Il client inviava la sola etichetta del pulsante; mancava una
+continuazione persistente della richiesta originale. Jev sceglieva la funzione corretta sotto soglia,
+quindi il resolver ripeteva la domanda. Nessuna chiamata di creazione promemoria nello scambio esaminato.
+
+Correzione backend: richiesta/scelta conservate in Redis per account e sessione, scadenza dieci minuti,
+consumo atomico una volta; scelta ripresa senza un nuovo giro di chiarimenti. Un messaggio diverso o
+un allegato scarta la domanda pendente; skill ricontrollata al momento della risposta. Comando esplicito
+«Imposta un promemoria» al modello per testo/orario, senza elezione artificiale della funzione.
+Questioner può dichiarare capability=null quando non c’è ambiguità; etichette brevi per promemoria a
+argomento e indicazioni, mai descrizioni/esempi troncati. Compatibile con la build 119, nessuna migrazione.
+
+**81 test in sei suite superati**, inclusi riconnessione e Redis reale (consumo concorrente, scadenza,
+isolamento account/sessione); TypeScript e Biome verificati. Nessun modello reale o promemoria personale
+modificato nei test. Pubblicazione API ancora da autorizzare; API/worker e TestFlight restano alla 119.
+Prossimo lavoro autorizzato: Abitudini, poi Apple Salute; entrambe ancora spente/non implementate.
+
 ### Build 119 — Salute pubblicata e verificata
 
 10 novembre 2026. Pubblicazione autorizzata dall'utente. **API e worker 119 attivi e sani**, immagine

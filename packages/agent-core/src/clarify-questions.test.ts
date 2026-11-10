@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { requestResolutionSchema } from './clarify.js';
 
-describe('domanda operativa obbligatoria', () => {
+describe('verifica operativa senza domande artificiali', () => {
   it('una risposta vuota non è una risoluzione; le opzioni possono usare solo funzioni attive', () => {
     const schema = requestResolutionSchema([{ id: 'todo', description: 'Attività' }]);
     expect(schema.safeParse({ questions: [] }).success).toBe(false);
+    expect(schema.safeParse({ capability: null, questions: [] }).success).toBe(true);
     const capability = {
       kind: 'capability',
       about: 'programma',

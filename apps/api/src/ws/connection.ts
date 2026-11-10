@@ -71,6 +71,7 @@ import {
   parseSchemaCommand,
 } from '../documents-flow.js';
 import { type PerformanceObservation, ServerTurnTrace } from '../performance.js';
+import { isExplicitReminderStart, resolveChoice } from '../resolver-choice.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 import { videoContentInstructions } from '../video-flow.js';
@@ -691,6 +692,17 @@ export class ClientConnection {
     ac.signal.throwIfAborted();
     // Gli allegati correnti sono indicati a Jev e nel contesto del modello, separati dalla cronologia.
     const attachments = event.payload.attachments ?? [];
+    // A choice belongs to the preceding request, including after reconnect/server restart.
+    // Any other new input consumes/discards it; never attach an old answer to a later task.
+    const pendingChoice = await this.deps.store.takeResolverChoice(this.auth.userId, sessionId);
+    const selectedChoice = attachments.length ? undefined : resolveChoice(pendingChoice, text);
+    const choice =
+      selectedChoice &&
+      (selectedChoice.skillId === null ||
+        selectedChoice.skillId === undefined ||
+        skills?.get(selectedChoice.skillId))
+        ? selectedChoice
+        : undefined;
     const attachmentNotes: string[] = [];
     for (const a of attachments) {
       const d = await this.deps.documents?.describe(this.auth.userId, a.id);
@@ -747,7 +759,11 @@ export class ClientConnection {
       }
     }
     // La riga dell'allegato precede il testo: il modello la vede subito e non la scambia per un riferimento a documenti passati.
-    const modelText = attachmentNotes.length ? `${attachmentNotes.join('\n')}\n\n${text}` : text;
+    const modelText = attachmentNotes.length
+      ? `${attachmentNotes.join('\n')}\n\n${text}`
+      : choice
+        ? `${choice.message}\nScelta: ${text}`
+        : text;
     // Tetto di spesa: il titolare può alzarlo o toglierlo (0); per gli altri account vale al massimo quello del
     // server, che un valore personale può solo abbassare (revisione del 16 ott 2026: un account seguito poteva
     // mettere 0, cioè nessun limite).
@@ -808,7 +824,9 @@ export class ClientConnection {
         if (plan) followUpMatch = { skill, plan };
       }
     }
-    let match = followUpMatch ?? (attachments.length === 0 ? (skills?.match(text) ?? null) : null);
+    let match = choice
+      ? null
+      : (followUpMatch ?? (attachments.length === 0 ? (skills?.match(text) ?? null) : null));
     // Il comando rapido ha capito tutta la frase? Se no, la richiesta passa al modello (le risposte a una domanda
     // della skill, «alle 9», sono brevi: non si controllano).
     let skillNote: string | undefined;
@@ -935,18 +953,24 @@ export class ClientConnection {
 
     // Jev vede i metadati, non il testo OCR: per gli allegati il dubbio si risolve dopo la lettura.
     const clarification =
-      attachments.length || youtubeLinksIn(text).length
-        ? undefined
-        : await this.clarifyTurn(
-            modelText,
-            event.payload.inputMode,
-            decision,
-            sessionId,
-            correlationId,
-            skills,
-            ac.signal,
-          );
-    if (clarification?.awaiting) return;
+      choice ??
+      (!attachments.length && skills?.get('ricordami') && isExplicitReminderStart(text)
+        ? {
+            skillId: 'ricordami',
+            note: 'L’utente ha chiesto esplicitamente di impostare un promemoria. Non chiedere quale funzione usare. Chiedi che cosa ricordare e quando, usando solo dettagli già espliciti nel contesto; non creare nulla finché mancano dati essenziali.',
+          }
+        : attachments.length || youtubeLinksIn(text).length
+          ? undefined
+          : await this.clarifyTurn(
+              modelText,
+              event.payload.inputMode,
+              decision,
+              sessionId,
+              correlationId,
+              skills,
+              ac.signal,
+            ));
+    if (clarification && 'awaiting' in clarification && clarification.awaiting) return;
     const clarifyNote = clarification?.note;
     const effectiveSkillId =
       clarification && 'skillId' in clarification ? clarification.skillId : decision.skillId;
@@ -1257,7 +1281,7 @@ export class ClientConnection {
     ac.signal.throwIfAborted();
     this.activeTurns.set(correlationId, ac);
     this.deps.tools?.setToolContext(sessionId, {
-      userMessage: text,
+      userMessage: choice ? modelText : text,
       userId: this.auth.userId,
       sessionId,
       requestId: correlationId,
@@ -1648,6 +1672,8 @@ export class ClientConnection {
         const labels: Record<string, string> = {
           todo: 'Organizza le attività',
           ricordami: 'Imposta un promemoria',
+          promemoria_evento: 'Ricordamelo quando ne parliamo',
+          portami: 'Apri le indicazioni stradali',
           shopping_list: 'Aggiorna una lista della spesa',
           ricette: 'Gestisci le ricette',
           second_brain: 'Gestisci il Second Brain',
@@ -1656,13 +1682,17 @@ export class ClientConnection {
         const options = q.options.slice(0, 4).map((o, i) => ({
           id: String(i + 1),
           label: (q.kind === 'capability'
-            ? (labels[o] ??
-              SKILL_CATALOG.find((s) => s.id === o)?.title ??
-              skills?.get(o)?.description ??
-              o)
+            ? (labels[o] ?? SKILL_CATALOG.find((s) => s.id === o)?.title ?? 'Altra funzione')
             : o
           ).slice(0, 80),
         }));
+        await this.deps.store.saveResolverChoice(this.auth.userId, sessionId, {
+          message: text,
+          question: q.question,
+          kind: q.kind ?? 'meaning',
+          options: options.map((o, i) => ({ label: o.label, value: q.options[i] as string })),
+          createdAt: Date.now(),
+        });
         await this.replyLocally(
           'skill',
           q.question,

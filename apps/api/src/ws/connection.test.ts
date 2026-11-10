@@ -19,6 +19,7 @@ import {
 } from '@ernie/skills';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from '../auth.js';
+import type { ResolverChoice } from '../resolver-choice.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 import { ClientConnection, type ConnectionDeps } from './connection.js';
 
@@ -41,7 +42,17 @@ function fakeStore(owner = auth.userId) {
   const taints = new Map<string, string>();
   const pins = new Set<string>();
   const requests = new Set<string>();
+  const choices = new Map<string, ResolverChoice>();
   const store: SessionStore = {
+    async saveResolverChoice(userId, sessionId, choice) {
+      choices.set(`${userId}:${sessionId}`, choice);
+    },
+    async takeResolverChoice(userId, sessionId) {
+      const key = `${userId}:${sessionId}`;
+      const choice = choices.get(key) ?? null;
+      choices.delete(key);
+      return choice;
+    },
     async claimRequest(id, correlationId) {
       const key = `${id}:${correlationId}`;
       if (requests.has(key)) return false;
@@ -417,6 +428,104 @@ describe('ClientConnection: programma personale e scheda Todo', () => {
       'Che risultato vuoi?',
       'skill',
     );
+  });
+
+  it.each([false, true])(
+    'riprende la scelta senza ricominciare il resolver, anche dopo riconnessione=%s',
+    async (reconnect) => {
+      const registry = new SkillRegistry().register(createTodoSkill());
+      const runTurn = vi.fn(async (_input: TurnInput) => {});
+      const run = vi.fn(
+        async (): Promise<Clarification> => ({
+          trigger: 'request',
+          questions: [],
+          answers: [],
+          resolved: [],
+          unresolved: [
+            {
+              kind: 'capability',
+              about: 'programma',
+              question: 'Che risultato vuoi?',
+              options: ['todo', 'none'],
+            },
+          ],
+          costUsd: 0,
+          latencyMs: 1,
+        }),
+      );
+      const d = deps(
+        {
+          skills: { registryFor: async () => registry },
+          runTurn,
+          clarify: {
+            run,
+            known: async () => ({ people: [], places: [] }),
+            thresholds: { ambiguity: 0.82, correction: 0.8 },
+          },
+        },
+        undefined,
+        fakeRouter({ operationalIntent: 0.9 }),
+      );
+      const socket = fakeSocket();
+      let conn = new ClientConnection(socket.socket, auth, d);
+      const c = client(randomUUID());
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('Passare alle 19:30 in laboratorio a sistemare le scatole'));
+      await tick();
+      if (reconnect) {
+        conn = new ClientConnection(fakeSocket().socket, auth, d);
+        await conn.handleRaw(c.start());
+      }
+      await conn.handleRaw(c.message('Organizza le attività'));
+      await tick();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(runTurn).toHaveBeenCalledTimes(1);
+      expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain(
+        'Passare alle 19:30 in laboratorio a sistemare le scatole',
+      );
+      expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain(
+        'ha scelto «Organizza le attività»',
+      );
+      expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain('todo_save');
+    },
+  );
+
+  it('il comando esplicito di promemoria chiede i dettagli al modello, non la funzione', async () => {
+    const registry = new SkillRegistry().register({
+      id: 'ricordami',
+      kind: 'guided',
+      description: 'Promemoria',
+      category: 'reminders',
+      riskClass: 'low',
+      examples: [],
+      allowedTools: ['reminder_create'],
+      instructions: 'Chiedi testo e orario mancanti.',
+    });
+    const run = vi.fn();
+    const runTurn = vi.fn(async (_input: TurnInput) => {});
+    const d = deps(
+      {
+        skills: { registryFor: async () => registry },
+        runTurn,
+        clarify: {
+          run,
+          known: async () => ({ people: [], places: [] }),
+          thresholds: { ambiguity: 0.82, correction: 0.8 },
+        },
+      },
+      undefined,
+      fakeRouter({ operationalIntent: 0.9 }),
+    );
+    const socket = fakeSocket(),
+      conn = new ClientConnection(socket.socket, auth, d),
+      c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Imposta un promemoria'));
+    await tick();
+    expect(run).not.toHaveBeenCalled();
+    expect(runTurn).toHaveBeenCalledOnce();
+    expect(runTurn.mock.calls[0]?.[0].memoryContext).toContain('Non chiedere quale funzione usare');
+    expect(socket.sent.some((e) => e.type === 'assistant.block')).toBe(false);
   });
 
   it('un falso positivo risolto come conversazione toglie la procedura operativa precedente', async () => {

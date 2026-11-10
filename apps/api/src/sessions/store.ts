@@ -1,6 +1,7 @@
 import { type Pool, withUser } from '@ernie/db';
 import { type AgentEvent, shouldPersist } from '@ernie/protocol';
 import type { Redis } from 'ioredis';
+import { ResolverChoice } from '../resolver-choice.js';
 
 export interface SessionRecord {
   readonly id: string;
@@ -22,6 +23,8 @@ export class SessionForbiddenError extends Error {
 }
 
 export interface SessionStore {
+  saveResolverChoice(userId: string, sessionId: string, choice: ResolverChoice): Promise<void>;
+  takeResolverChoice(userId: string, sessionId: string): Promise<ResolverChoice | null>;
   /** Crea la sessione (id scelto dal client) o la riprende se appartiene all'utente. */
   ensure(
     userId: string,
@@ -91,6 +94,23 @@ export function createSessionStore(
   const maxEvents = opts.logMaxEvents ?? 500;
 
   return {
+    async saveResolverChoice(userId, sessionId, choice) {
+      await redis.set(
+        `ernie:resolver:${userId}:${sessionId}`,
+        JSON.stringify(ResolverChoice.parse(choice)),
+        'EX',
+        600,
+      );
+    },
+    async takeResolverChoice(userId, sessionId) {
+      const raw = await redis.getdel(`ernie:resolver:${userId}:${sessionId}`);
+      if (!raw) return null;
+      try {
+        return ResolverChoice.parse(JSON.parse(raw));
+      } catch {
+        return null;
+      }
+    },
     async claimRequest(sessionId, correlationId) {
       return (
         (await redis.set(
