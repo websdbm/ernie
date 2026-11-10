@@ -61,6 +61,11 @@ copia locale `/tmp/ernie120-runtime-smoke-result.json`. Nessun consenso attivato
 
 Upload riuscito senza errori, ricevuta `2e08b05d-86cb-4919-9278-2c2ec8903e65`, 82.870.043 byte.
 Stato Apple e gruppo Interni da rileggere prima di dichiarare disponibile la build.
+Controllo avviato sul Mac Studio (`release-watcher.mjs`, massimo 40 tentativi ogni 25 s): solo dopo
+VALID scrive/rilegge note italiane, assegna il gruppo Interni esistente e verifica entrambi. Esiti in
+`release-watcher-result.json`, `asc-final.json`, `release-manifest.json`; non ripete upload e non aggiunge tester.
+Ultima lettura in sessione: `processing_pending`, build ancora assente dalla lista Apple. Non confondere
+la ricevuta di upload con disponibilità TestFlight. Alla ripresa leggere prima questi file.
 
 ## Prova su iPhone
 

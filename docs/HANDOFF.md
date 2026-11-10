@@ -19,6 +19,9 @@ gruppo diario privato solo nell’app, 318 input iOS verificati. Artefatti e man
 `~/Library/Caches/ernie-builds/build-120-20261110-habits/`. Upload TestFlight avviato, disponibilità da
 rileggere in Apple. iPhone del titolare verificato alla 119, non sovrascritto durante i test.
 Restano elaborazione/TestFlight e prova hardware con soste reali; Apple Salute successiva.
+Controllo automatico limitato avviato sul Mac Studio: leggere `release-watcher-result.json` nella cartella
+della build; su VALID completa note/Interni e aggiorna manifest/`asc-final.json`. Ultimo esito visto:
+`processing_pending`; non ripetere upload. Aggiornare questa nota quando la disponibilità è verificata.
 Dettagli e protocollo: [build 120](releases/build-120.md); limiti/costi Copilot:
 [ricerca 28](research/28-habits-implementation.md). Modifiche estranee preservate.
 
