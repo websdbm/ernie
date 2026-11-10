@@ -225,10 +225,10 @@ private actor HealthFixtureTransport {
         for (name, scheme, costume, size): (String, ColorScheme, BearCostume, DynamicTypeSize) in [
             ("light", .light, .base, .large), ("dark", .dark, .base, .large), ("borg", .dark, .borg, .large), ("large", .light, .base, .accessibility3)
         ] {
-            let content = HealthVaultView(store: store).content.padding(20).frame(width: 375)
-                .background(ChatPalette(costume: costume).ground).chatAppearance(costume: costume)
+            let content = HealthVaultView(store: store).chatAppearance(costume: costume)
+                .environment(\.scenePhase, .active)
                 .environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
-            let host = UIHostingController(rootView: ScrollView { content }.frame(width: 375, height: 844))
+            let host = UIHostingController(rootView: content)
             host.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
             let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
             let previousKey = scene.windows.first(where: \.isKeyWindow)
@@ -244,8 +244,9 @@ private actor HealthFixtureTransport {
                 return nil
             }
             let scroll = try #require(findScroll(host.view))
-            let maximum = max(0, scroll.contentSize.height - scroll.bounds.height)
-            var offsets = Array(stride(from: CGFloat(0), to: maximum, by: 650)); offsets.append(maximum)
+            let minimum = -scroll.adjustedContentInset.top
+            let maximum = max(minimum, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
+            var offsets = Array(stride(from: minimum, to: maximum, by: 650)); offsets.append(maximum)
             var shots: [UIImage] = [], text = ""
             for offset in offsets {
                 scroll.setContentOffset(CGPoint(x: 0, y: offset), animated: false)

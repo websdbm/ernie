@@ -14,6 +14,12 @@ revoca durante provider in corso, cancellazione durante elaborazione, selezione 
 assenza di scritture negli archivi generici e rifiuto di ingressi sanitari prima dell'indicizzazione.
 TypeScript e Biome verificati. Nessun provider AI reale o referto personale usato nei test.
 
+**48 test iOS in 7 suite superati** su Mac Studio/Xcode27.0. Verificati UI completa, consenso,
+revoca in corso, upload manuale senza AI, export/cleanup, deep link e decodifica eventi. Render chiaro,
+scuro, Borg e accessibility3 a375pt, con scorrimento e titoli multilinea. Manifest r10
+`328e05e5b77add87333a9dfa6eb3293ac1b736ef8cee1a887e5b4277c5d3c9d0`; rispetto al test,
+release differisce solo per numeri build/progetto generato, changelog e label italiana health_open.
+
 Review indipendente: corretto possibile log del prompt sanitario nelle eccezioni provider Mastra
 (regressione sintetica riprodotta, due test passati con logger disabilitato); ricontrollo ticket dopo
 attesa del lock; indice legacy Salute.md incluso nella barriera di migrazione.
@@ -34,6 +40,10 @@ file esportati non è dimostrabile dal solo simulatore.
 4. Runtime dal medesimo Git, inventario finale e migrazione verificata. Smoke su account sintetici,
    test isolamento/revoca/lettura/esportazione e assenza di dati in chiaro. Rimuovere le fixture.
 5. Pubblicazione TestFlight solo dopo API pronta; aggiornare questa nota con ricevute/stato effettivo.
+
+Backup preliminare creato in `/srv/staging3/backups/ernie-pre-119-20261110/`: dump e indice
+pg_restore verificati; configurazioni e container in esecuzione invariati. Rinnovare il dump dopo stop
+writer prima delle scritture. Nessuna prova di ripristino integrale eseguita.
 
 Produzione e TestFlight non sono stati aggiornati da questa nota. Non usare il vecchio runtime Salute
 come rollback automatico dopo l'apertura del nuovo archivio: reintrodurrebbe scritture in chiaro.

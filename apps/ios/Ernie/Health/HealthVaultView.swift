@@ -134,7 +134,7 @@ struct HealthVaultView: View {
             if let draft = store.draft {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Da salvare in Salute", systemImage: "lock.doc").font(.headline)
-                    TextField("Titolo del documento", text: Binding(get: { store.draft?.title ?? "" }, set: { store.draft?.title = $0 })).font(.headline).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+                    TextField("Titolo del documento", text: Binding(get: { store.draft?.title ?? "" }, set: { store.draft?.title = $0 }), axis: .vertical).lineLimit(1...4).font(.headline).textFieldStyle(.roundedBorder).autocorrectionDisabled()
                     Text("\(draft.pages.count) \(draft.pages.count == 1 ? "pagina" : "pagine") · \(draft.attachments.count) \(draft.attachments.count == 1 ? "allegato" : "allegati")").font(.callout)
                     Text("Il documento è ancora solo in memoria sul dispositivo. Non è stato inviato alla chat o a Media.").font(.callout).fixedSize(horizontal: false, vertical: true)
                     Button("Salva nell’archivio protetto", systemImage: "lock.fill") { Task { await store.upload() } }.buttonStyle(ErnieButtonStyle(emphasis: .primary, fillsWidth: true)).disabled(store.busy)

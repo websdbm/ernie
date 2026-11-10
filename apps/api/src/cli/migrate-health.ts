@@ -21,7 +21,7 @@ async function main() {
       `SELECT user_id FROM health_reports WHERE kind <> '[protected]' UNION SELECT user_id FROM health_values UNION SELECT user_id FROM health_notices UNION SELECT user_id FROM brain_notes WHERE note_type='salute' OR path LIKE 'Salute/%' OR path='Salute.md'`,
     );
     const docs = await admin.query<{ id: string; user_id: string; title: string; body: string }>(
-      `SELECT id,user_id,title,body FROM documents WHERE status <> 'deleted'`,
+      `SELECT id,user_id,title,body FROM documents`,
     );
     const media = await admin.query<{
       id: string;

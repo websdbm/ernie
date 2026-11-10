@@ -25,7 +25,9 @@ La scelta è archivio in Ernie con esportazione esplicita, senza copie leggibili
 - Inventario staging3 read-only: zero referti/valori/avvisi legacy, note/candidati OCR sanitari o chiamate
   ai tool clinici. 21 vault, nessuna cartella Salute corrente/storica. Ripetere dopo stop writer.
 
-Resta da completare la verifica nativa/firma della 119 e il rilascio con verifica runtime. Non dichiarare
+**48 test iOS/7 suite verdi**, render chiaro/scuro/Borg/accessibility3 verificati. Rimangono firma
+e rilascio119 con verifica runtime. Backup preliminare privato `ernie-pre-119-20261110` creato;
+dump/indice verificati, nessun runtime o configurazione modificato. Non dichiarare
 cifrati i dati reali dalla sola presenza dei sorgenti. Chiave e migrazioni non ancora configurate in produzione.
 Le modifiche preesistenti fuori ambito a docs/CONFIGURATION, docs/DEPLOY, ricerca12 e backup restano escluse.
 
