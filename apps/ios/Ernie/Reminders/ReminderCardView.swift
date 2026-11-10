@@ -34,10 +34,10 @@ import SwiftUI
     }
 }
 
-/// Superficie condivisa da chat e raccolta. I canali sono stato; l'editor contiene i comandi.
+/// Superficie condivisa da chat e raccolta: canali azionabili; dettagli e annullamento nel menu.
 struct ReminderCardView: View {
     let item: ReminderItem
-    var defaultAlarm = true
+    var allowsChannelPrompt = true
     var onEdit: () -> Void = {}
     var onCancel: () -> Void = {}
     @Environment(\.chatPalette) private var palette
@@ -52,7 +52,7 @@ struct ReminderCardView: View {
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 22, style: .continuous) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             header
             Text(item.text)
                 .font(.system(size: titleSize, weight: .semibold, design: palette.terminal ? .monospaced : .default))
@@ -77,12 +77,8 @@ struct ReminderCardView: View {
             if item.location != nil || item.meetingURL != nil || item.notes != nil {
                 ReminderDetailsView(item: item)
             }
-            if scheduled {
-                Rectangle().fill(palette.hairline).frame(height: 1).accessibilityHidden(true)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 16) { channels; Spacer(minLength: 0); editButton }
-                    VStack(alignment: .leading, spacing: 14) { channels; editButton }
-                }
+            if scheduled, item.place == nil {
+                ReminderChannelSettings(item: item, compact: true, allowsEmailPrompt: allowsChannelPrompt)
             }
         }
         .fontDesign(palette.terminal ? .monospaced : .default)
@@ -196,7 +192,7 @@ struct ReminderCardView: View {
     private func date(_ value: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(ReminderCardPresentation.day(value)).font(.subheadline.weight(.semibold))
-            Text(ReminderCardPresentation.fullDate(value)).font(.caption)
+            Text(value.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "it_IT")))).font(.caption)
         }
         .foregroundStyle(palette.accentText)
         .fixedSize(horizontal: false, vertical: true)
@@ -224,41 +220,6 @@ struct ReminderCardView: View {
         .accessibilityLabel("\(label): \(ReminderCardPresentation.fullDate(value)), ore \(ReminderCardPresentation.time(value))")
     }
 
-    private var channels: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if item.place != nil {
-                Label("Notifica sul telefono", systemImage: "location")
-            } else {
-                if item.forLabel == nil {
-                    Label((item.channels?.alarm ?? defaultAlarm) ? "Sveglia attiva" : "Sveglia disattivata", systemImage: "alarm")
-                }
-                Label(item.channels?.email == true ? "Email attiva" : "Email disattivata", systemImage: "envelope")
-            }
-        }
-        .font(.caption).foregroundStyle(palette.inkSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var editButton: some View {
-        Button("Modifica", systemImage: "pencil", action: onEdit)
-            .buttonStyle(ReminderEditButtonStyle())
-            .accessibilityHint("Modifica testo, orario, dettagli e modalità di avviso")
-    }
-}
-
-private struct ReminderEditButtonStyle: ButtonStyle {
-    @Environment(\.chatPalette) private var palette
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.subheadline.weight(.semibold))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .frame(minWidth: 44, minHeight: 44)
-            .foregroundStyle(palette.accentText)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 11))
-            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(palette.hairline))
-            .contentShape(RoundedRectangle(cornerRadius: 11))
-            .opacity(configuration.isPressed ? 0.6 : 1)
-    }
 }
 
 /// Un editor per chat e raccolta: i canali restano collegati allo store anche se cambia l'id.

@@ -264,7 +264,7 @@ struct RemindersCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(rows) { r in
-                ReminderCardView(item: r, defaultAlarm: ReminderAlarms.enabled,
+                ReminderCardView(item: r, allowsChannelPrompt: editing == nil,
                                  onEdit: { editing = r },
                                  onCancel: { Task { await model.reminders.cancel(r) } })
             }
@@ -443,6 +443,8 @@ struct ReminderEditForm: View {
 /// Interruttori «Sveglia» ed «Email» di un promemoria in programma (valori dallo store, invio solo del campo cambiato).
 struct ReminderChannelSettings: View {
     let item: ReminderItem
+    var compact = false
+    var allowsEmailPrompt = true
     @Environment(AppModel.self) private var model
     /// Indirizzo digitato nell'invito «Qual è la tua email?».
     @State private var emailDraft = ""
@@ -456,7 +458,7 @@ struct ReminderChannelSettings: View {
     /// Invito a dare l'indirizzo: compare quando lo store segnala «needsEmail» per questo promemoria.
     private var askingEmail: Binding<Bool> {
         Binding(
-            get: { model.reminders.needsEmailFor == model.reminders.resolve(item.id) },
+            get: { allowsEmailPrompt && model.reminders.needsEmailFor == model.reminders.resolve(item.id) },
             set: { if !$0 { model.reminders.dismissEmailPrompt() } }
         )
     }
@@ -464,13 +466,23 @@ struct ReminderChannelSettings: View {
     private var draftLooksLikeEmail: Bool { emailDraft.contains("@") && emailDraft.contains(".") }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if item.forLabel == nil {
-                Toggle("Sveglia", isOn: Binding(get: { alarmOn }, set: { change(email: nil, alarm: $0) }))
+        Group {
+            if compact {
+                HStack(spacing: 8) {
+                    if item.forLabel == nil {
+                        channelIcon("Sveglia", symbol: "alarm", isOn: alarmOn) { change(email: nil, alarm: !alarmOn) }
+                    }
+                    channelIcon("Email", symbol: "envelope", isOn: emailOn) { change(email: !emailOn, alarm: nil) }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    if item.forLabel == nil {
+                        Toggle("Sveglia", isOn: Binding(get: { alarmOn }, set: { change(email: nil, alarm: $0) }))
+                    }
+                    Toggle("Email", isOn: Binding(get: { emailOn }, set: { change(email: $0, alarm: nil) }))
+                }.toggleStyle(.switch)
             }
-            Toggle("Email", isOn: Binding(get: { emailOn }, set: { change(email: $0, alarm: nil) }))
         }
-        .toggleStyle(.switch)
         .tint(palette.accent)
         .disabled(updating)
         .alert("Qual è la tua email?", isPresented: askingEmail) {
@@ -490,6 +502,24 @@ struct ReminderChannelSettings: View {
         } message: {
             Text("La salvo nella tua scheda e la uso per le email dei promemoria.")
         }
+    }
+
+    private func channelIcon(_ title: String, symbol: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: isOn ? "\(symbol).fill" : symbol)
+                .font(.system(size: 20, weight: .medium))
+                .frame(width: 44, height: 44)
+                .foregroundStyle(isOn ? palette.accentText : palette.inkSecondary)
+                .background(isOn ? palette.accentSoft : palette.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.hairline))
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .opacity(updating ? 0.55 : 1)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "Attiva" : "Disattivata")
+        .accessibilityHint(isOn ? "Tocca per disattivare" : "Tocca per attivare")
+        .accessibilityIdentifier("reminder.channel.\(symbol)")
     }
 
     private func change(email: Bool?, alarm: Bool?) {

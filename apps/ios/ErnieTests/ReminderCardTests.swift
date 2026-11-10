@@ -44,6 +44,7 @@ import UIKit
         let palette = ChatPalette(costume: costume)
         let renderer = ImageRenderer(content: ReminderCardView(item: item)
             .padding(16).frame(width: width).background(palette.ground)
+            .environment(AppModel())
             .environment(\.chatPalette, palette)
             .environment(\.colorScheme, scheme)
             .environment(\.dynamicTypeSize, size))
@@ -68,8 +69,10 @@ import UIKit
     }
 
     @Test func anteprimeDiStatiTemiETimeline() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-cards-116")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-cards-117")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var off = reminder(); off.channels = .init(email: false, alarm: false)
+        var both = reminder(); both.channels = .init(email: true, alarm: true)
         var two = reminder(); two.eventAt = "2026-11-12T08:00:00Z"
         var cancelled = reminder(); cancelled.status = "cancelled"
         var done = reminder(); done.status = "done"
@@ -78,6 +81,8 @@ import UIKit
         var recurring = reminder(); recurring.repeatInfo = .init(kind: "weekly", weekdays: [5], day: nil, hour: 19, minute: 0, label: "Ogni venerdì alle 19")
         let cases: [(String, ReminderItem, CGFloat, BearCostume, ColorScheme, DynamicTypeSize)] = [
             ("light", reminder(), 390, .astronaut, .light, .large),
+            ("channels-off", off, 390, .astronaut, .light, .large),
+            ("channels-on", both, 390, .astronaut, .dark, .large),
             ("dark", reminder(), 390, .astronaut, .dark, .large),
             ("borg", reminder(), 390, .borg, .dark, .large),
             ("two-moments", two, 390, .astronaut, .light, .large),
@@ -102,7 +107,7 @@ import UIKit
     }
 
     @Test func editorConTuttiIDettagliInChiaroEBorg() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-cards-116")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-cards-117")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var item = reminder()
         item.at = "2099-11-11T18:00:00Z"
@@ -125,6 +130,7 @@ import UIKit
         let previous = scene.windows.first(where: \.isKeyWindow)
         let host = UIHostingController(rootView: content
             .frame(width: width, height: height, alignment: .top)
+            .environment(AppModel())
             .environment(\.chatPalette, ChatPalette(costume: costume))
             .environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
             .ignoresSafeArea())

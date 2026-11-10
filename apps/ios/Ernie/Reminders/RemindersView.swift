@@ -90,7 +90,7 @@ struct RemindersView: View {
     }
 
     private func row(_ r: ReminderItem) -> some View {
-        ReminderCardView(item: r, defaultAlarm: ReminderAlarms.enabled,
+        ReminderCardView(item: r, allowsChannelPrompt: editing == nil,
                          onEdit: { editing = r },
                          onCancel: { Task { await model.reminders.cancel(r) } })
             .listRowSeparator(.hidden)

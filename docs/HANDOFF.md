@@ -5,17 +5,16 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-Ultimo aggiornamento: **10 novembre 2026**, Codex — **Maximize implementato**, build **117 compilata, firmata e verificata**.
-Skill disponibile ma spenta per account; scelta modello/provider/sforzo per conversazione, congelata nel
-messaggio quando entra in coda. Cataloghi Anthropic/OpenRouter reali e cached, consenso delle skill e controllo
-genitori riletti prima degli override, permessi/SSH invariati. Automatico conserva il routing ordinario.
-Nessun fallback di servizio per scelta manuale; tariffe del modello applicate anche alle stime dei consumi.
-Backend senza migrazioni. Sorgenti `6db4934de2c09d8ba8899de9850c37c6f6a47ed5` su GitHub prima
-dell’archivio, 304 input iOS coincidenti con Git e i test. 113 test backend / 17 nativi superati; quattro firme
-Apple Distribution ed entitlement verificati, compreso isolamento del diario. IPA pronta sul Mac Studio
-in `~/Library/Caches/ernie-builds/build-117-20261110-maximize/export-profile-api/Ernie.ipa`.
-**API non ancora pubblicata; TestFlight resta alla 116**. Dettagli e verifiche:
-[build 117](releases/build-117.md). Per la pubblicazione API serve il via libera previsto nella sezione Server.
+Ultimo aggiornamento: **10 novembre 2026**, Codex — pubblicazione API e build **117 autorizzata** dall’utente.
+Prima dell’upload l’utente ha chiesto anche la rifinitura dei promemoria: Modifica solo nel menu, Sveglia/Email
+azionabili come icone senza label, stato tramite colore e simbolo pieno/vuoto. Componente comune chat/raccolta,
+richiesta email mancante conservata, giorno non duplicato. **Ricompilazione della 117 in corso**: la prima IPA
+di Maximize (sorgenti `6db4934`) non è stata distribuita ed è superata dalla revisione UI.
+
+Maximize: skill disponibile ma spenta per account; scelta modello/provider/sforzo per conversazione,
+congelata quando il messaggio entra in coda. Cataloghi reali, controllo dei permessi, nessun fallback silenzioso.
+113 test backend e 35 test iOS superati, prove sintetiche reali su Fable/Sol riuscite. Backend senza migrazioni.
+**API ancora a2f50e5; TestFlight ancora alla 116.** [Verifiche e rilascio](releases/build-117.md).
 
 Stato del rilascio precedente: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento

@@ -2,8 +2,14 @@
   {
     "build": 117,
     "date": "2026-11-10",
-    "title": "Maximize: scegli come ragiona Ernie",
+    "title": "Maximize e promemoria più compatti",
     "items": [
+      {
+        "icon": "alarm",
+        "title": "Promemoria senza comandi ripetuti",
+        "detail": "Modifica resta nel menu con i tre puntini. Sveglia ed Email si attivano dalla scheda con due icone: colorate e piene quando attive, neutre quando spente. Meno testo e spazi, sia in chat sia nella raccolta.",
+        "test": "Tocca Sveglia ed Email sulla scheda e verifica il cambio di stato; apri i tre puntini per modificare i dettagli."
+      },
       {
         "icon": "slider.horizontal.3",
         "title": "Il modello giusto per la conversazione",
