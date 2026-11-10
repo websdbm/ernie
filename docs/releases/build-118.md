@@ -1,7 +1,7 @@
 # Build 118 — ricerca e modifiche affidabili
 
 10 novembre 2026. Pubblicazione autorizzata esplicitamente dall'utente. **API e worker pubblicati e sani;
-build 118 caricata senza errori, in attesa di validazione Apple**. Ultima build validata da Apple: 117.
+build 118 disponibile su TestFlight**, gruppo **Interni**, **VALID / IN_BETA_TESTING**.
 
 Ambito: ricerca web con passaggi pertinenti/cache/letture batch, strumenti di contesto e patch Todo,
 rimozioni inventario SSH con precondizione concorrente, date/riferimenti dei referti più precisi,
@@ -87,11 +87,15 @@ se sono stati importati referti con data NULL: il vecchio codice non li gestisce
 per permettere un rollback; conservare i dati e correggere avanti o predisporre un recupero mirato.
 Non eseguire `SET NOT NULL` con referti non datati. La migrazione 0051 è ora applicata in produzione.
 
-## Caricamento Apple
+## Distribuzione verificata
 
 Upload riuscito senza errori il 10 novembre, ricevuta `21ea7472-c461-4a85-b530-673699a853d3`;
-trasferiti esattamente 82.132.756 byte. Validazione e disponibilità TestFlight da verificare prima di
-dichiarare distribuita la 118. Le note italiane vengono pubblicate dal changelog versionato.
+trasferiti esattamente 82.132.756 byte e hash IPA ricontrollato dopo l'upload, invariato.
+Apple **VALID / IN_BETA_TESTING**, gruppo **Interni**; Build ID
+**`21ea7472-c461-4a85-b530-673699a853d3`**. Note italiane pubblicate e rilette: **1.529 caratteri**,
+identiche al changelog versionato. Nessuna installazione diretta su iPhone.
+`asc-current.json`, `asc-localizations.json`, `whats-new-result.json`, `upload.log` e
+`release-manifest.json` nel percorso degli artefatti conservano le ricevute.
 
 ## Lavori non inclusi
 

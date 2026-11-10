@@ -1,6 +1,6 @@
 # Ernie — Piano di implementazione
 
-> Roadmap aggiornata al **10 novembre 2026**, dopo la build **117**. Stato pubblicato e ricevute in
+> Roadmap aggiornata al **10 novembre 2026**, dopo la build **118**. Stato pubblicato e ricevute in
 > [HANDOFF](docs/HANDOFF.md) e [rilasci](docs/releases/). Le milestone di ottobre sotto sono uno storico:
 > il lavoro corrente è la tabella seguente, che sostituisce le vecchie ipotesi superate (in particolare avatar 3D).
 
@@ -12,29 +12,30 @@ Una funzione non è chiusa perché esiste soltanto la sua specifica o un pulsant
 
 | ID | Area | Stato | Criterio di chiusura |
 |---|---|---|---|
-| R1 | Ricerca online | Implementata e testata; rilascio 118 da autorizzare | Passaggi pertinenti, letture batch limitate, copertura/freschezza, cache per account. Test e integrazione verdi; resta verifica del provider e misura su traffico reale dopo rilascio. |
-| R2 | Strumenti comuni | Prima versione implementata; misure reali aperte | `day_snapshot`, `resolve_target`, `read_sources`; anteprima/applicazione/verifica limitate ai Todo esistenti, revisioni e retry provati su PostgreSQL. Budget e revoche verificati; riduzione chiamate/token da misurare sul corpus reale. |
-| R3 | SSH, comandi mancanti | Implementati e testati; rilascio 118 da autorizzare | Rimozione inventario dall'app con conferma, refresh, errori e precondizione atomica contro modifiche da altri dispositivi. Test account isolati; nessuna modifica agli host remoti. |
-| R4 | Salute, accuratezza e protezione | Accuratezza pronta per 118; protezione ancora aperta | Date ignote e riferimenti ambigui corretti, migrazione 0051 solo nullable. Cifratura, consenso revocabile e cancellazione coordinata ancora da implementare dopo inventario completo delle copie; dettagli ricerca 25. |
+| R1 | Ricerca online | Pubblicata e verificata | Passaggi pertinenti, letture batch limitate, copertura/freschezza, cache per account. Test e prova reale Firecrawl su due fonti/cache verdi; misure generali di latenza restano in R10. |
+| R2 | Strumenti comuni | Prima versione pubblicata; misure reali aperte | `day_snapshot`, `resolve_target`, `read_sources`; anteprima/applicazione/verifica limitate ai Todo esistenti, revisioni e retry provati su PostgreSQL e nel runtime pubblicato. Budget e revoche verificati; riduzione chiamate/token da misurare sul corpus reale. |
+| R3 | SSH, comandi mancanti | Pubblicati e verificati nella 118 | Rimozione inventario dall'app con conferma, refresh, errori e precondizione atomica contro modifiche da altri dispositivi. Test e smoke HTTPS isolati; nessuna operazione della skill sugli host remoti. |
+| R4 | Salute, accuratezza e protezione | Accuratezza pubblicata nella 118; protezione aperta | Date ignote e riferimenti ambigui corretti, migrazione 0051 applicata e date esistenti intatte. Cifratura, consenso revocabile e cancellazione coordinata ancora da implementare dopo inventario completo delle copie; dettagli ricerca 25. |
 | R5 | Skill Abitudini | Pianificato | Visite iOS, storico personale cifrato, luoghi/relazioni, fatti-ipotesi-conferme distinti, domande proattive entro budget; disattivazione ferma raccolta/job/contesto; prova su dispositivo. |
 | R6 | Apple Salute | Pianificato, dipende da R4 | HealthKit sola lettura, permessi per categoria, sincronizzazione incrementale/deduplicazione/cancellazioni, ultimo aggiornamento e profilo leggibile; prova con permessi reali su iPhone. |
 | R7 | Skill Analisi immagini | Pianificato | Foto/ritagli al classificatore visivo quando utile, domande e follow-up sull'immagine corretta, lettura LLM con fonti/incertezza; batch multipli e isolamento verificati. |
 | R8 | Nove foto ricetta | Originali non reperiti nei percorsi verificati | File e conversioni temporanee non trovati nei percorsi noti dei due Mac. Servono originali per trascrizione fedele e verifica duplicati/importazione; non attestata una precedente importazione. |
 | R9 | Collegamenti esterni | Prerequisiti esterni | Contabo: password API valida, inventario e associazioni provati in sola lettura. YouTube: chiave Data API dedicata/restrizioni e video normali verificati. Non memorizzare credenziali in Git. |
-| R10 | Rifiniture e misure | Budget giornaliero corretto; altri residui aperti | Budget automazioni ora nel fuso locale, test PostgreSQL verde; richiede nuovo worker. Restano Todo/Redis, vecchi titoli dei luoghi, connessioni WS, misure latenza/errori e prove native su iPhone. |
+| R10 | Rifiniture e misure | Budget giornaliero pubblicato; altri residui aperti | Budget automazioni ora nel fuso locale, test PostgreSQL verde e worker aggiornato. Restano Todo/Redis, vecchi titoli dei luoghi, connessioni WS, misure latenza/errori e prove native su iPhone. |
 
 Ordine: R1/R2/R3 separabili; R4 prima della raccolta R5/R6; R7 riusa Media e i controlli del dominio;
 R8 indipendente; R9 avanza fino al punto in cui serve l'autenticazione dell'utente. Non dichiarare chiusi
 HealthKit/background e qualità della mobilità con soli test del simulatore.
 
 Primo gruppo in [build 118](docs/releases/build-118.md) e [dettagli/verifiche](docs/research/25-open-features-wave1.md).
-**117 resta la versione pubblicata** finché non è autorizzato e verificato il nuovo rilascio.
+**118 disponibile su TestFlight Interni**, API e worker pubblicati; non chiude le aree personali ancora aperte.
 Per R4 la sequenza è: collegare originali e derivati; chiudere tutte le vie di invio AI e cancellazione;
 progettare compatibilità Obsidian e recupero chiavi; migrare copie attuali e revisioni/backup; solo dopo,
 abilitare nuova raccolta Abitudini/HealthKit. Nessuna nuova raccolta sensibile avviata in questo incremento.
 
 ### Già pubblicato
 
+- **118**: ricerca mirata/cache/batch, strumenti comuni e patch Todo, gestione inventario SSH, accuratezza referti e budget automazioni per fuso.
 - **117**: Maximize per conversazione e sforzo, promemoria compatti con canali interattivi, voce Drama +15%.
 - **115–116**: fino a tre compiti, precisazioni durante il lavoro, risolutore dei messaggi, `time_windows`,
   persistenza iOS fuori dal main, componenti UI uniformi e nuove schede promemoria.

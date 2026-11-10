@@ -9,8 +9,9 @@ Ultimo aggiornamento: **10 novembre 2026**, Codex — **API e worker 118 pubblic
 applicata dopo backup e date esistenti invariate. Immagine `b7d5e6e8…`, sorgenti `a56ea55`; 17 moduli compilati
 identici ai test. Smoke sintetico HTTPS/DB passato, zero LLM e operazioni su host gestiti; fixture rimosse.
 Prova Firecrawl su due pagine pubbliche e cache passata. Postgres/Redis e configurazioni invariati.
-**Build 118 caricata senza errori, in attesa di validazione Apple**; ricevuta
-`21ea7472-c461-4a85-b530-673699a853d3`, stessa IPA firmata/verificata. Pubblicazione autorizzata dall'utente.
+**Build 118 disponibile su TestFlight**, gruppo **Interni**, **VALID / IN_BETA_TESTING**; Build ID
+`21ea7472-c461-4a85-b530-673699a853d3`, stessa IPA firmata/verificata e hash invariato dopo upload.
+Note italiane rilette e identiche al changelog, 1.529 caratteri. Pubblicazione autorizzata dall'utente.
 Backup/recupero `ernie-pre-118-20261110`; ricevute e confini in [build 118](releases/build-118.md).
 
 Rilascio precedente: **10 novembre 2026**, Codex — API **pubblicata e sana**, build **117 disponibile su TestFlight**,
@@ -42,18 +43,18 @@ Backup `ernie-pre-maximize-20261110`, recupero API `ernie-app:pre-maximize-20261
 ### Ricognizione delle richieste ancora aperte — 10 novembre, dopo la 117
 
 L'utente ha autorizzato di **aggiornare la roadmap e chiudere i punti aperti**. Stato corrente e criteri di
-chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 compilata, firmata e verificata, caricata su Apple**:
+chiusura in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md), R1–R10. **Build 118 pubblicata e verificata**:
 ricerca web, strumenti comuni, comandi SSH, accuratezza referti e budget automazioni implementati.
 Dettagli in [ricerca 25](research/25-open-features-wave1.md), verifiche e ricevute in
 [build 118](releases/build-118.md). Abitudini/HealthKit richiedono prima i contratti di protezione e revoca.
 Sospensioni Instagram/rete VPS conservate. API **e worker** pubblicati prima del client, migrazione 0051
-applicata e verificata. La distribuzione iOS attende la validazione Apple della 118.
+applicata e verificata. La 118 è ora disponibile al gruppo TestFlight Interni.
 Verifiche: **191 test backend, 42 iOS**, TypeScript/Biome verdi; database temporaneo con RLS,
 render chiaro/scuro/caratteri accessibili e revisione indipendente. Sorgenti 118
 **`a56ea5533247fc7dea8e0de8ea334b356de2bb88`** su GitHub, verificati prima dell'archivio Mac Studio.
 306 input iOS identici a Git e ai test; quattro firme Apple Distribution/entitlement verificati,
 isolamento diario conservato. IPA SHA-256 `451e6049e1086d34b508ae4003bf56782df6e5d8e52b21a21591b13e99ced423`.
-Nessuna nuova raccolta sensibile o prova su iPhone fisico. Upload 118 concluso; verifica TestFlight in corso.
+Nessuna nuova raccolta sensibile o prova su iPhone fisico. Upload 118 concluso e disponibilità TestFlight verificata.
 
 Confrontati richieste, codice, specifiche e configurazione del backend in sola lettura. Nessuna nuova
 funzione sviluppata o impostazione cambiata durante la ricognizione precedente all'autorizzazione.
@@ -485,7 +486,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | **118 caricata**, validazione in corso; ultima disponibile **117**, `VALID`, `IN_BETA_TESTING`, gruppo Interni |
+| App su TestFlight | build **118**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `a56ea55` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API/worker **a56ea55** (10 nov), immagine `b7d5e6e8…`; API healthy, worker pronto. Recupero separato `ernie-app:pre-118-api-20261110` / `ernie-app:pre-118-worker-20261110` |
 | Migrazioni | fino alla **0051**, applicata e verificata; date dei referti esistenti invariate |
