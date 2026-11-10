@@ -1,7 +1,8 @@
 # Promemoria — proposte visive del 10 novembre 2026
 
-Richiesta: proporre schede più professionali prima di modificare l’app. **Solo anteprima**:
-nessuna modifica SwiftUI/backend, build o distribuzione. Versione pubblicata: 115.
+Richiesta iniziale: proporre schede più professionali prima di modificare l’app. Questo documento conserva
+la verifica dell'anteprima; dopo l'approvazione sono state implementate A/C e pubblicata la **build 116**.
+Stato effettivo e prove native in [build 116](../releases/build-116.md).
 
 Aprire [il prototipo offline](reminder-cards-20261110.html): tre varianti, temi chiaro/scuro/Borg,
 modifica simulata di titolo/ora/canali e annullamento con conferma. Nessuna rete, persistenza o collegamento

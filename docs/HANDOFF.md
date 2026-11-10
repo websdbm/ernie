@@ -8,16 +8,34 @@ modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le re
 Ultimo aggiornamento: **10 novembre 2026**, Codex — nuove schede promemoria approvate e implementate.
 Essenziale in chat e nella raccolta, timeline con avviso/appuntamento espliciti; menu con annullamento
 confermato, editor comune con interruttori dei canali, palette avatar e testo accessibile. **18 test nativi
-verdi** in tre suite, rendering reale di 11 schede e due editor. Build **116 in preparazione**, distribuita
-ancora la 115; backend e promemoria reali invariati. [Verifiche e rilascio](releases/build-116.md).
+verdi** in tre suite, rendering reale di 11 schede e due editor. Build **116 disponibile su TestFlight**,
+gruppo **Interni**, **VALID / IN_BETA_TESTING**, Build ID `e9642d54-9cb7-4660-83fe-1a433c1a354d`.
+Sorgenti `603cf6e8316db29b90f31c207b295ae8fce58fc2` pubblicati prima dell'archivio, 302 input iOS identici
+a Git e ai test sul Mac Studio. Quattro firme Apple Distribution/entitlement verificati e note italiane
+rilette (823 caratteri). Backend e promemoria reali invariati. [Verifiche e rilascio](releases/build-116.md).
 
-Richieste aggiuntive in analisi: migliorare ricerca web e protocollo di apprendimento delle abitudini.
-L’utente ha scelto storico spostamenti anche nel backend personale cifrato e chiarito che permette il
-contesto pertinente ai modelli esterni: non richiede isolamento totale sul dispositivo. Account e chat
-restano separati; osservazioni non equivalgono a fatti confermati. Nessuna nuova raccolta/permissione
-di posizione attivata e nessun cambiamento alla ricerca web in questa sessione.
+Richieste aggiuntive **in specifica, non implementate nella 116**:
+- [Ricerca web, abitudini e salute](research/22-web-and-habits.md): Firecrawl funzionante, attuale taglio
+  ai primi 3.000 caratteri da migliorare. Storico spostamenti nel backend personale cifrato e contesto
+  pertinente consentito ai modelli esterni. Domande attive per dare significato a visite/luoghi/clienti,
+  fatti osservati distinti da ipotesi. Skill **Abitudini** disattivabile: stop effettivo a raccolta, job e
+  uso automatico. Revisione globale al massimo quotidiana, risposte utente consolidate nell'area interessata.
+- Estensione della skill **Salute** con HealthKit e profilo personale; esiste già l'importazione referti,
+  manca HealthKit. Scelto esplicitamente **consenso AI continuativo revocabile** per Salute. Migrare anche
+  le copie/derivati esistenti alla cifratura prevista; note “private” non equivalgono a contenuto cifrato.
+  Salute e Abitudini hanno interruttori indipendenti per account. Nessun accesso implicito al diario o agli
+  archivi chat. Domande proattive in un'unica coda/budget, senza attribuire diagnosi da pattern indiretti.
+- [Maximize](research/23-maximize.md): skill per selettore di modello principale/sforzo per conversazione,
+  Automatico iniziale, catalogo reale dei provider e livelli compatibili. Sol 6.1 presente nel catalogo
+  pubblico OpenRouter; nessuna inferenza di prova. Serve resolver provider-specifico prima degli override.
+- [Analisi immagini](research/24-image-analysis.md): nuova skill proposta, Jev multimodale per domande
+  strutturate e modello visivo per dettagli/risposte; riuso Media/ricette/Brain, niente analisi reali nuove.
+  Il percorso allegati corrente passa a Jev solo i metadati; la catalogazione Media già usa un LLM visivo.
 
-Ultimo rilascio: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
+Nessuna nuova raccolta/permissione di posizione o Salute attivata, né nuove preferenze/modelli sugli account.
+Le specifiche includono prove, confini e sequenza degli incrementi; questa sessione pubblica solo la UI promemoria.
+
+Rilascio precedente: **9 novembre 2026**, Codex — ottimizzazione performance, compiti paralleli e uniformità UI.
 **Build 115 disponibile su TestFlight**, gruppo **Interni**, Apple **VALID / IN_BETA_TESTING**;
 **API pubblicata e sana**. Build ID `dcd20e25-2552-4815-9356-7c4b61c4824b`, note italiane verificate
 identiche al changelog (1.179 caratteri).
@@ -387,10 +405,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **115**, verificata il 9 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `a2f50e5` |
+| App su TestFlight | build **116**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `603cf6e` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API **a2f50e5** (9 nov, performance/compiti paralleli), immagine `d3d57a72…`, healthy; worker invariato. Recupero API `ernie-app:pre-performance-20261109` |
-| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 115 |
+| Migrazioni | fino alla **0050**, applicate anche sul server; nessuna nuova migrazione nella 116 |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
