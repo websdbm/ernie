@@ -5,36 +5,28 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 119 pronta, non pubblicata — integrazione Salute
+### Build119 — backend pubblicato, elaborazione TestFlight in corso
 
-10 novembre 2026. L'utente ha autorizzato integrazione nell'app e migrazione dei dati esistenti;
-Salute va completata prima di Abitudini e Apple Salute. **Produzione/TestFlight restano 118**.
-La scelta è archivio in Ernie con esportazione esplicita, senza copie leggibili in Obsidian.
-[Contratti e recupero](research/27-health-vault-integration.md), [rilascio 119](releases/build-119.md).
+10 novembre2026. Pubblicazione autorizzata dall'utente. **API e worker119 attivi e sani**, immagine
+f317e2d6…, sorgenti203542a5753092c6a641e45a03f4ddb014484ef6 su GitHub. **0052/0053 applicate** dopo
+backup aggiornato a writer fermi. Chiave Salute dedicata configurata, copia di recupero privata separata
+anche fuori dal server; non pubblicare o trasferire la chiave nei sorgenti/log.
 
-- API `/v1/health/*`, originali/OCR/valori cifrati, UI dedicata Documenti/Valori/Chiedi, consenso AI
-  continuativo revocabile. Manuale indipendente da skill/AI; main chat apre solo la sezione, niente valori
-  clinici nei tool, contesto o memoria ordinari. Diario separato. Backend decifra: non dichiarare E2EE.
-- Keyring `HEALTH_ENCRYPTION_KEYS` dedicato; mancante = Salute indisponibile, nessun fallback. Migrazioni
-  0052 e 0053 da applicare con backup/vecchi writer fermi. CLI migrate-health inventario default,
-  applicazione esplicita e blocco copie esterne/ambigue. Consenso mai abilitato dalla migrazione.
-- Controllo locale prima della coda Media e guardie API su referti riconoscibili; non è riconoscimento
-  infallibile di ogni immagine. Usare importazione Salute. Chat libera segue le regole della chat.
-- **117 test backend/16 suite verdi**, TypeScript/Biome verificati. Review ha corretto log sanitari
-  in errori provider, scadenza durante lock e indice Salute.md. Dati sintetici, zero provider reali.
-- Inventario staging3 read-only: zero referti/valori/avvisi legacy, note/candidati OCR sanitari o chiamate
-  ai tool clinici. 21 vault, nessuna cartella Salute corrente/storica. Ripetere dopo stop writer.
+Inventario finale: nessun dato legacy da trasferire, 21 vault senza percorsi Salute correnti/storici.
+CLI migrazione ready, zero record trasferiti e zero consensi attivati. Consultazione/importazione manuale
+indipendente da AI; analisi richiede skill e consenso esplicito revocabile. Nessuna sync Obsidian o copia
+nella chat principale. Backend capace di decifrare: non dichiarare E2EE. Diario separato.
 
-**48 test iOS/7 suite verdi**, render chiaro/scuro/Borg/accessibility3 verificati. **119 compilata,
-firmata/verificata**, sorgenti203542a5753092c6a641e45a03f4ddb014484ef6 su GitHub, 313 input iOS identici.
-Quattro firme Apple Distribution/entitlement verificati, Diario isolato. Manifest e IPA nel percorso
-Mac Studio `~/Library/Caches/ernie-builds/build-119-20261110-health/`; dettagli nel rilascio119.
-Immagine backend f317e2d6… costruita e verificata (20 moduli identici, smoke crypto senza rete), **non attivata**.
-Server checkout203542a ma container ancora118: non ricrearli prima di chiave/migrazioni52–53/passaggio dati.
-Backup preliminare privato `ernie-pre-119-20261110` creato; dump/indice verificati, nessun runtime o
-configurazione modificato. Rinnovare dump dopo stop writer. Pubblicazione in attesa del via libera esplicito. Non dichiarare
-cifrati i dati reali dalla sola presenza dei sorgenti. Chiave e migrazioni non ancora configurate in produzione.
-Le modifiche preesistenti fuori ambito a docs/CONFIGURATION, docs/DEPLOY, ricerca12 e backup restano escluse.
+**117 test backend,48 iOS** e render chiaro/scuro/Borg/accessibility3 passati. Smoke HTTPS reale con
+fixture sintetiche passato: isolamento, cifratura, export, consenso/revoca, cancellazione; fixture rimosse,
+zero LLM/operazioni SSH/provider. Postgres/Redis e configurazioni precedenti invariati, solo nuova chiave
+a .env. Recupero e limiti in [rilascio119](releases/build-119.md) e [ricerca27](research/27-health-vault-integration.md).
+
+**119 firmata/verificata e caricata su Apple**, ricevuta3ad9737e-c595-4a05-bbf1-cebffe82e90a;
+elaborazione in corso, disponibilità TestFlight non ancora confermata. IPA e manifest Mac Studio in
+`~/Library/Caches/ernie-builds/build-119-20261110-health/`. Non ricaricare un duplicato.
+Backup operativo `ernie-pre-119-20261110`; non riattivare vecchi writer Salute automaticamente.
+Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito preservate.
 
 ### Ultimo rilascio effettivamente pubblicato
 

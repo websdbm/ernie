@@ -1,6 +1,7 @@
 # Build 119 — Salute protetta
 
-10 novembre 2026. **Compilata, firmata e verificata; non pubblicata**. API/build effettivamente pubblicate restano 118.
+10 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker119 pubblicati e sani;
+migrazioni0052/0053 e passaggio dati completati. Build119 caricata su Apple, elaborazione in corso.**
 
 Archivio Salute dedicato: documenti/OCR/originali/valori cifrati per account, consultazione manuale indipendente
 dall'AI, consenso continuativo revocabile, elaborazioni isolate dalla chat e dal Second Brain, esportazione
@@ -47,13 +48,40 @@ Artefatti: `~/Library/Caches/ernie-builds/build-119-20261110-health/`, `source/`
 
 Immagine backend **`sha256:f317e2d6e25834df1fa4ef68a199de87bde9dbe1b087dd5b617bb8ae4305a92b`**
 costruita sul server dallo stesso commit recuperato da Git. 20 moduli compilati identici ai test;
-smoke cifratura nell'immagine con rete disabilitata superato. **Non attivata**: quattro container
-API/worker/Postgres/Redis, avvii e hash configurazione sono rimasti identici. Repository server ora
-al commit203542a: non ricreare API/worker prima di chiave/migrazioni/passaggio dati.
+smoke cifratura nell'immagine con rete disabilitata superato. API e worker attivi dalla stessa immagine;
+Postgres/Redis invariati. Il campo versione descrittivo dell'ambiente mantiene l'etichetta storica:
+usare SHA immagine/commit per identificare il backend.
 
-Database locale sintetico e relative credenziali temporanee rimossi dopo i test. Sul server nessuna
-migrazione52/53 applicata, nessuna chiave Salute configurata, nessun consenso modificato.
-La pubblicazione API/worker e TestFlight resta in attesa del via libera esplicito previsto da HANDOFF.
+Database locale sintetico e relative credenziali temporanee rimossi dopo i test. La configurazione originale
+è conservata byte per byte con la sola aggiunta di `HEALTH_ENCRYPTION_KEYS`; ownership e modi invariati,
+override invariato. Chiave casuale dedicata con copia privata sul server, separata dal dump, e copia di
+recupero sul Mac dell'ufficio fuori dal repository; checksum delle copie verificati senza esporre il segreto.
+
+## Pubblicazione backend e migrazione verificate
+
+Vecchi API/worker fermati durante il cutover. Backup aggiornato `database-cutover.dump` e indice
+`pg_restore --list` verificati in `/srv/staging3/backups/ernie-pre-119-20261110/`.
+Applicate **0052_health_protection.sql e0053_health_sources.sql**, 51 migrazioni precedenti riconosciute.
+Inventario ripetuto a writer fermi: nessun referto/valore/avviso legacy o candidato documentale/Media;
+21 vault, nessun percorso Salute corrente/storico. CLI `--apply --writers-stopped`: ready, zero record
+trasferiti perché non presenti, zero consensi attivati. Nessuna cancellazione di dati personali richiesta.
+
+Smoke HTTPS sul runtime effettivo: importazione manuale e retry, export esplicito, originali/allegati,
+valori senza data e ricerca parametro, isolamento tra due account, ciphertext senza titoli/OCR/valori in
+chiaro, guardie Media/documenti generici, consenso versionato/revoca/disattivazione skill, cancellazione
+di fonte/allegati/analisi. Zero chiamate LLM, zero operazioni SSH/provider. Fixture/account/API key rimossi.
+Nessun testo sanitario sintetico nei log API/worker e nessun errore; health/ready HTTPS verdi.
+Il proxy aggiunge anch'esso no-store: verifica delle direttive HTTP, senza richiedere stringa identica.
+
+Evidenze: `/tmp/ernie119-runtime-smoke-result.json`, copia nel backup server; `activation-verification.json`,
+`health-inventory-final.json`, `vault-inventory-final.json`, `health-migration-result.json` nel backup.
+Non eseguita prova di ripristino integrale. Immagini pre119 conservate per recupero controllato;
+non riattivare il vecchio writer Salute dopo nuovi caricamenti.
+
+## TestFlight
+
+Upload riuscito senza errori, ricevuta **3ad9737e-c595-4a05-bbf1-cebffe82e90a**, trasferiti82.588.585byte.
+Hash IPA ricontrollato dopo upload e invariato. Elaborazione Apple e lettura delle note italiane in corso.
 
 ## Sequenza di rilascio
 
@@ -65,9 +93,5 @@ La pubblicazione API/worker e TestFlight resta in attesa del via libera esplicit
    test isolamento/revoca/lettura/esportazione e assenza di dati in chiaro. Rimuovere le fixture.
 5. Pubblicazione TestFlight solo dopo API pronta; aggiornare questa nota con ricevute/stato effettivo.
 
-Backup preliminare creato in `/srv/staging3/backups/ernie-pre-119-20261110/`: dump e indice
-pg_restore verificati; configurazioni e container in esecuzione invariati. Rinnovare il dump dopo stop
-writer prima delle scritture. Nessuna prova di ripristino integrale eseguita.
-
-Produzione e TestFlight non sono stati aggiornati da questa nota. Non usare il vecchio runtime Salute
-come rollback automatico dopo l'apertura del nuovo archivio: reintrodurrebbe scritture in chiaro.
+Backup preliminare e backup al cutover conservati. Non usare il vecchio runtime Salute come rollback
+automatico dopo l'apertura del nuovo archivio: reintrodurrebbe scritture in chiaro.
