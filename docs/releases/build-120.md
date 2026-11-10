@@ -67,6 +67,9 @@ VALID scrive/rilegge note italiane, assegna il gruppo Interni esistente e verifi
 Ultima lettura in sessione: `processing_pending`, build ancora assente dalla lista Apple. Non confondere
 la ricevuta di upload con disponibilità TestFlight. Alla ripresa leggere prima questi file.
 
+Ricontrollo ore 16:31–16:33 CET del 10 novembre: 120 ancora assente dall’elenco Apple,
+119 ultima VALID; watcher ancora `processing_pending`. Nessuna ripetizione dell’upload.
+
 ## Prova su iPhone
 
 L'iPhone del titolare risulta collegato al Mac dell'ufficio; al primo controllo aveva la 118 e l'utente

@@ -22,6 +22,9 @@ Restano elaborazione/TestFlight e prova hardware con soste reali; Apple Salute s
 Controllo automatico limitato avviato sul Mac Studio: leggere `release-watcher-result.json` nella cartella
 della build; su VALID completa note/Interni e aggiorna manifest/`asc-final.json`. Ultimo esito visto:
 `processing_pending`; non ripetere upload. Aggiornare questa nota quando la disponibilità è verificata.
+Ricontrollo 10 novembre, ore 16:31–16:33 CET: API Apple ancora senza build 120, ultima 119/VALID;
+watcher `processing_pending`, nessun errore di upload. iPhone non interrogabile via CoreDevice: versione
+installata non riconfermata. Prova guidata rinviata alla disponibilità 120, nessuna raccolta attivata.
 Dettagli e protocollo: [build 120](releases/build-120.md); limiti/costi Copilot:
 [ricerca 28](research/28-habits-implementation.md). Modifiche estranee preservate.
 
