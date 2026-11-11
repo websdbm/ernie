@@ -339,7 +339,7 @@ private final class NativeSpeechOutput: NSObject, SpeechOutput, AVSpeechSynthesi
         let utterance = AVSpeechUtterance(string: text)
         self.utterance = utterance
         utterance.voice = voice
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * 1.15)
         utterance.prefersAssistiveTechnologySettings = false
         synthesizer.speak(utterance)
     }

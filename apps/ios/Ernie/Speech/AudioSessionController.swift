@@ -1,7 +1,7 @@
 import AVFoundation
 
 /// Sessione audio per la conversazione vocale: registrazione e riproduzione insieme, altoparlante, Bluetooth.
-/// La cancellazione d'eco e l'AGC si attivano su `AVAudioEngine.inputNode.setVoiceProcessingEnabled(true)` (A.13).
+/// Ascolto e sintesi sono alternati: il microfono riceve audio senza il processore da chiamata.
 enum AudioSessionController {
     /// La sintesi avviene a microfono chiuso: voiceChat senza Voice I/O riduce il livello d'uscita.
     /// Playback conserva l'uscita scelta dall'utente (altoparlante/cuffie) e il normale volume multimediale.
@@ -18,15 +18,21 @@ enum AudioSessionController {
         Log.speech.info("riproduzione: \(describe(), privacy: .public)")
     }
 
-    @MainActor static func activateForVoice() throws {
+    @MainActor static func activateForVoice() async throws {
         ErnieSoundPlayer.shared.beginVoice(.microphone)
         let session = AVAudioSession.sharedInstance()
         // `.duckOthers` (che include la miscelazione): mentre Ernie ascolta o parla, musica, video e podcast si
         // abbassano invece di interromperlo; prima la sessione non era miscelabile e qualunque app che partiva con
         // il proprio audio fermava l'ascolto. Chiamate, Siri e sveglie interrompono comunque (regola di iOS).
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
-            try session.setActive(true)
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
+            if #available(iOS 27.0, *) {
+                guard try await session.activate(options: []) else {
+                    throw NSError(domain: "Ernie.Speech", code: 9, userInfo: [NSLocalizedDescriptionKey: "La sessione audio non è disponibile"])
+                }
+            } else {
+                try await Task.detached { try AVAudioSession.sharedInstance().setActive(true) }.value
+            }
         } catch {
             ErnieSoundPlayer.shared.endVoice(.microphone)
             throw error
@@ -91,15 +97,10 @@ final class MicrophoneCapture {
         var started = false
         defer { if !started { stop() } }
         let input = engine.inputNode
-        // L'elaborazione vocale (AEC/AGC) va attivata prima di leggere il formato e installare il tap;
-        // su alcuni dispositivi non è disponibile: si prosegue senza.
-        setVoiceProcessing(true, on: input)
-        var fmt = await waitForFormat(of: input)
-        if fmt == nil, voiceProcessing {
-            Log.speech.warning("formato vuoto con elaborazione vocale: riprovo senza (niente cancellazione d'eco)")
-            setVoiceProcessing(false, on: input)
-            fmt = await waitForFormat(of: input)
-        }
+        // Il player è fermo durante l'ascolto. Voice I/O avviava AEC/AGC a ogni tocco,
+        // con negoziazione della route e attenuazione variabile della riproduzione successiva.
+        setVoiceProcessing(false, on: input)
+        let fmt = await waitForFormat(of: input)
         try Task.checkCancellation()
         guard let fmt else {
             throw NSError(domain: "Ernie.Speech", code: 6, userInfo: [
@@ -168,7 +169,7 @@ final class MicrophoneCapture {
             if attempt == 2 {
                 // Riattivare la sessione fa ricostruire la route d'ingresso.
                 AudioSessionController.deactivate()
-                try? AudioSessionController.activateForVoice()
+                try? await AudioSessionController.activateForVoice()
             }
             try? await Task.sleep(for: .milliseconds(150))
         }

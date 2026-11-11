@@ -43,7 +43,7 @@ import UIKit
                 self.error = "Dettatura locale non disponibile. Puoi scrivere; il diario non usa un servizio di trascrizione remoto."; self.stop(); return
             }
             do {
-                try AudioSessionController.activateForVoice()
+                try await AudioSessionController.activateForVoice()
                 let capture = MicrophoneCapture()
                 self.capture = capture
                 let stream = try await capture.start()

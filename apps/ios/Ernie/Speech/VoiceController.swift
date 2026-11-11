@@ -72,6 +72,7 @@ final class VoiceController {
     private var reader: Task<Void, Never>?
     private var captureGeneration = UUID()
     private var starter: Task<Void, Never>?
+    private var preparedInput: Task<(any SpeechInput)?, Never>?
     private var ticker: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
     private var resumeAfterInterruption = false
@@ -94,6 +95,16 @@ final class VoiceController {
         if case .notInstalled = modelState {
             try? await SpeechModel.shared.ensureInstalled()
             modelState = await SpeechModel.shared.refresh()
+        }
+        guard preparedInput == nil, case .installed = modelState else { return }
+        preparedInput = Task {
+            let input = await SpeechInputFactory.make()
+            do {
+                try await input.prepare()
+                return input
+            } catch {
+                return nil
+            }
         }
     }
 
@@ -162,6 +173,7 @@ final class VoiceController {
     }
 
     private func startCapture(token: UUID) async {
+        let startedAt = Date.now
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw NSError(domain: "Ernie.Speech", code: 4, userInfo: [
@@ -170,11 +182,12 @@ final class VoiceController {
             }
             try Task.checkCancellation()
             await ensureModelWithProgress(token: token)
+            let modelReadyAt = Date.now
             try Task.checkCancellation()
             phase = .preparing
             // Mai aprire il microfono mentre la sintesi è in corso (mute logico): `beginCapture` l'ha già fermata.
             if !VoiceLoopPolicy.mayOpenMicrophone(speakerSpeaking: speaker.isSpeaking) { _ = speaker.stop() }
-            try AudioSessionController.activateForVoice()
+            try await AudioSessionController.activateForVoice()
             let capture = MicrophoneCapture()
             capture.onLevel = { [weak self] level in
                 Task { @MainActor [weak self] in self?.updateLevel(level) }
@@ -184,7 +197,11 @@ final class VoiceController {
             guard let format = capture.format else { throw NSError(domain: "Ernie.Speech", code: 5) }
             self.capture = capture
             voiceProcessingActive = capture.voiceProcessing
-            let engine = await SpeechInputFactory.make()
+            let ready = preparedInput
+            preparedInput = nil
+            let engine: any SpeechInput
+            if let prepared = await ready?.value { engine = prepared }
+            else { engine = await SpeechInputFactory.make() }
             guard captureGeneration == token, !Task.isCancelled else { return }
             self.engine = engine
             engineName = engine.engineName
@@ -192,6 +209,7 @@ final class VoiceController {
             try Task.checkCancellation()
             guard captureGeneration == token else { return }
             phase = .listening
+            Log.speech.info("avvio microfono: modello \(Int(modelReadyAt.timeIntervalSince(startedAt) * 1000)) ms, totale \(Int(Date.now.timeIntervalSince(startedAt) * 1000)) ms")
             detector = continuous ? TurnDetector() : nil
             conversation.setListening(true)
             Log.speech.info("ascolto avviato con \(engine.engineName, privacy: .public), continuo \(self.continuous)")
@@ -341,6 +359,7 @@ final class VoiceController {
         detector = nil
         // In conversazione continua la sessione resta attiva tra un turno e l'altro: la riapertura è più rapida.
         if !keepSession { AudioSessionController.deactivate() }
+        else { Task { await self.prewarm() } }
     }
 
     // MARK: - eventi audio di sistema (B.7)

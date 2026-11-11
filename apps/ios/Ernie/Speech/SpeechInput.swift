@@ -10,9 +10,14 @@ struct TranscriptUpdate: Sendable, Equatable {
 /// Motore di trascrizione: riceve i buffer del microfono, emette il testo (parziale e finale).
 protocol SpeechInput: AnyObject, Sendable {
     var engineName: String { get }
+    func prepare() async throws
     func start(audio: AsyncStream<AudioChunk>, inputFormat: AVAudioFormat) async throws -> AsyncStream<TranscriptUpdate>
     /// Chiude l'input e attende la finalizzazione.
     func stop() async
+}
+
+extension SpeechInput {
+    func prepare() async throws {}
 }
 
 enum SpeechInputFactory {
@@ -20,7 +25,7 @@ enum SpeechInputFactory {
 
     /// SpeechTranscriber (iOS 26, on-device) quando l'italiano è supportato; altrimenti SFSpeechRecognizer.
     static func make() async -> any SpeechInput {
-        if SpeechTranscriber.isAvailable, await SpeechTranscriber.supportedLocale(equivalentTo: locale) != nil {
+        if case .installed = await SpeechModel.shared.refresh() {
             return ModernTranscriber()
         }
         return LegacyTranscriber()
@@ -59,13 +64,16 @@ actor SpeechModel {
 
     private(set) var state: State = .notInstalled
     private var install: Task<Void, Error>?
+    private var checkedUntil = Date.distantPast
 
     private static func module() -> SpeechTranscriber {
         SpeechTranscriber(locale: SpeechInputFactory.locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
     }
 
     /// Stato letto dal sistema (non scarica nulla).
-    func refresh() async -> State {
+    func refresh(force: Bool = false) async -> State {
+        if !force, Date.now < checkedUntil { return state }
+        defer { checkedUntil = Date.now.addingTimeInterval(300) }
         guard SpeechTranscriber.isAvailable else {
             state = .unavailable("SpeechTranscriber assente su questo dispositivo")
             return state
@@ -120,6 +128,7 @@ actor SpeechModel {
             Log.speech.info("modello di trascrizione italiano installato")
         } catch {
             state = .notInstalled
+            checkedUntil = .distantPast
             Log.speech.error("scaricamento del modello fallito: \(error.localizedDescription, privacy: .public)")
             throw error
         }
@@ -137,8 +146,11 @@ final class ModernTranscriber: SpeechInput, @unchecked Sendable {
     private var inputBuilder: AsyncStream<AnalyzerInput>.Continuation?
     private var feeder: Task<Void, Never>?
     private var reader: Task<Void, Never>?
+    private var transcriber: SpeechTranscriber?
+    private var targetFormat: AVAudioFormat?
 
-    func start(audio: AsyncStream<AudioChunk>, inputFormat: AVAudioFormat) async throws -> AsyncStream<TranscriptUpdate> {
+    func prepare() async throws {
+        if analyzer != nil { return }
         let transcriber = SpeechTranscriber(
             locale: SpeechInputFactory.locale,
             transcriptionOptions: [],
@@ -148,9 +160,19 @@ final class ModernTranscriber: SpeechInput, @unchecked Sendable {
         // Di norma già installato da `prewarm`; altrimenti lo scaricamento avviene qui (senza avanzamento visibile).
         try await SpeechModel.shared.ensureInstalled()
         let analyzer = SpeechAnalyzer(modules: [transcriber])
-        self.analyzer = analyzer
         guard let targetFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
             throw NSError(domain: "Ernie.Speech", code: 1, userInfo: [NSLocalizedDescriptionKey: "formato audio non disponibile"])
+        }
+        try await analyzer.prepareToAnalyze(in: targetFormat)
+        self.transcriber = transcriber
+        self.targetFormat = targetFormat
+        self.analyzer = analyzer
+    }
+
+    func start(audio: AsyncStream<AudioChunk>, inputFormat: AVAudioFormat) async throws -> AsyncStream<TranscriptUpdate> {
+        try await prepare()
+        guard let analyzer, let transcriber, let targetFormat else {
+            throw NSError(domain: "Ernie.Speech", code: 1)
         }
         Log.speech.info("SpeechTranscriber: formato analizzatore \(Int(targetFormat.sampleRate)) Hz, \(targetFormat.channelCount) canali")
         let sameFormat = targetFormat.sampleRate == inputFormat.sampleRate && targetFormat.channelCount == inputFormat.channelCount && targetFormat.commonFormat == inputFormat.commonFormat

@@ -475,10 +475,12 @@ struct SpeechPlaybackSessionTests {
             Issue.record("Per la prova audio reale serve il permesso microfono del simulatore")
             return
         }
-        try AudioSessionController.activateForVoice()
+        try await AudioSessionController.activateForVoice()
         let capture = MicrophoneCapture()
         defer { capture.stop(); AudioSessionController.deactivate() }
         let stream = try await capture.start()
+        #expect(!capture.voiceProcessing)
+        #expect(AVAudioSession.sharedInstance().mode == .measurement)
         let received = await withTaskGroup(of: Bool.self) { group in
             group.addTask {
                 for await chunk in stream { return chunk.buffer.frameLength > 0 }
@@ -508,8 +510,8 @@ struct SpeechPlaybackSessionTests {
         #expect(!engine.inputNode.isVoiceProcessingEnabled)
     }
 
-    @Test func chiudereIlMicrofonoDisattivaAncheLElaborazioneCheAttenuaIlPlayer() throws {
-        try AudioSessionController.activateForVoice()
+    @Test func chiudereIlMicrofonoDisattivaAncheLElaborazioneCheAttenuaIlPlayer() async throws {
+        try await AudioSessionController.activateForVoice()
         let engine = AVAudioEngine()
         let capture = MicrophoneCapture(engine: engine)
         defer { capture.stop(); AudioSessionController.deactivate() }
@@ -536,9 +538,9 @@ struct SpeechPlaybackSessionTests {
         speaker.onAudibleStarted = { starts += 1 }
         // Primo ascolto e successivo ritorno al microfono: entrambi devono lasciare spazio al playback normale.
         for turn in 1...2 {
-            try AudioSessionController.activateForVoice()
+            try await AudioSessionController.activateForVoice()
             #expect(session.category == .playAndRecord)
-            #expect(session.mode == .voiceChat)
+            #expect(session.mode == .measurement)
             speaker.beginTurn()
             speaker.flush(fullText: "Prova audio.")
             let deadline = ContinuousClock.now + .seconds(3)

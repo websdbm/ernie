@@ -62,7 +62,8 @@ function levels(mp3: Buffer) {
 }
 
 describe.skipIf(!available)('speech audio with real FFmpeg', () => {
-  it('raises quiet speech, controls loud peaks and plays the full phrase 15 percent faster without raising pitch', async () => {
+  it('equalizes quiet and loud speech at a medium-fast pace while preserving pitch', async () => {
+    const normalizedLevels: number[] = [];
     for (const amplitude of [0.06, 0.8]) {
       const input = fixture(amplitude),
         before = levels(input);
@@ -70,18 +71,20 @@ describe.skipIf(!available)('speech audio with real FFmpeg', () => {
         after = levels(output);
       expect(after.peak).toBeLessThan(0.98);
       expect(after.db).toBeGreaterThan(-16);
-      expect(after.db).toBeLessThan(-11);
-      expect(Math.abs(after.seconds - before.seconds / 1.15)).toBeLessThan(0.08);
+      expect(after.db).toBeLessThan(-12);
+      normalizedLevels.push(after.db);
+      expect(Math.abs(after.seconds - before.seconds / 1.25)).toBeLessThan(0.09);
       expect(Math.abs(after.frequency - before.frequency)).toBeLessThan(2);
-      if (amplitude === 0.06) expect(after.db - before.db).toBeGreaterThan(8);
+      if (amplitude === 0.06) expect(after.db - before.db).toBeGreaterThan(6);
     }
+    expect(Math.max(...normalizedLevels) - Math.min(...normalizedLevels)).toBeLessThan(1);
   });
   it('does not amplify silence or drop a short utterance', async () => {
     const silence = fixture(0);
     expect(await normalizeSpeechAudio(silence)).toEqual(silence);
     const short = fixture(0.1, 0.15);
     const result = levels(await normalizeSpeechAudio(short));
-    expect(result.seconds).toBeGreaterThanOrEqual(0.15);
+    expect(result.seconds).toBeGreaterThanOrEqual(0.1);
     expect(result.peak).toBeLessThan(0.98);
   });
   it('rejects malformed, oversized and cancelled audio and releases the processor', async () => {

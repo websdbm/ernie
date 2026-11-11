@@ -333,6 +333,78 @@ describe('ClientConnection: apprendimento in Abitudini', () => {
 });
 
 describe('ClientConnection: programma personale e scheda Todo', () => {
+  it.each([false, true])(
+    'un sì segue l’ultima domanda ancora aperta dopo un impegno concluso, riconnessione=%s',
+    async (reconnect) => {
+      const store = fakeStore();
+      const socket = fakeSocket();
+      const question = 'Vuoi che imposti quello per il tecnico di domani alle 7:20?';
+      const previous = `Ho corretto la call di venerdì alle 15. ${'Il promemoria della call è già salvato e completo. '.repeat(8)}\n\nResta aperto il passaggio dal tecnico. ${question}`;
+      const runTurn = vi.fn(async (input: TurnInput) => {
+        const reply = runTurn.mock.calls.length === 1 ? previous : 'Riprendo solo il tecnico.';
+        await input.emit('assistant.started', { route: 'llm' });
+        await input.emit('assistant.text.completed', { text: reply });
+        await input.emit('assistant.completed', { finishReason: 'stop' });
+      });
+      const clarify = vi.fn(async (): Promise<Clarification | null> => null);
+      const d = deps(
+        {
+          runTurn,
+          clarify: {
+            run: clarify,
+            known: async () => ({ people: [], places: [] }),
+            thresholds: { ambiguity: 0.8, correction: 0.8 },
+          },
+        },
+        store,
+        fakeRouter({ skillId: 'ricordami', operationalIntent: 0.9 }),
+      );
+      const c = client(randomUUID());
+      let conn = new ClientConnection(socket.socket, auth, d);
+      await conn.handleRaw(c.start());
+      await conn.handleRaw(c.message('Correggi il titolo della call già inserita'));
+      await tick();
+      clarify.mockClear();
+      if (reconnect) {
+        conn = new ClientConnection(fakeSocket().socket, auth, d);
+        await conn.handleRaw(c.start());
+      }
+      await conn.handleRaw(c.message('Sì'));
+      await tick();
+      expect(clarify).not.toHaveBeenCalled();
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1]?.[0].memoryContext).toContain(
+        `domanda rimasta aperta: «${question}»`,
+      );
+      expect(runTurn.mock.calls[1]?.[0].memoryContext).toContain(
+        'Gli altri impegni già creati o modificati',
+      );
+    },
+  );
+
+  it('riprende l’orario in risposta a una domanda del modello, ma una nuova richiesta non eredita la domanda', async () => {
+    const store = fakeStore();
+    const socket = fakeSocket();
+    const runTurn = vi.fn(async (input: TurnInput) => {
+      await input.emit('assistant.text.completed', {
+        text: 'Quando vuoi l’avviso per prendere la valigia?',
+      });
+      await input.emit('assistant.completed', { finishReason: 'stop' });
+    });
+    const d = deps({ runTurn }, store);
+    const conn = new ClientConnection(socket.socket, auth, d);
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Devo ricordarmi la valigia'));
+    await tick();
+    await conn.handleRaw(c.message('Giovedì alle 7:20'));
+    await tick();
+    expect(runTurn.mock.calls[1]?.[0].memoryContext).toContain('prendere la valigia');
+    await conn.handleRaw(c.message('Cerca una ricetta per la pasta'));
+    await tick();
+    expect(runTurn.mock.calls[2]?.[0].memoryContext ?? '').not.toContain('domanda rimasta aperta');
+  });
+
   it('il resolver risolto prosegue senza mostrare la propria analisi come una domanda', async () => {
     const registry = new SkillRegistry().register(createSecondBrainSkill());
     const runTurn = vi.fn(async (_input: TurnInput) => {});

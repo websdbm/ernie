@@ -90,6 +90,27 @@ describe.skipIf(!ready)('sessioni, RLS e costi con Postgres reale (ruolo ernie_a
     expect(await b.claimRequest(sessionId, randomUUID())).toBe(true);
   });
 
+  it('conserva la domanda aperta tra due connessioni e la consuma una volta per account e sessione', async () => {
+    const a = createSessionStore(app, redis);
+    const b = createSessionStore(app, redis);
+    const session = randomUUID();
+    const followup = {
+      message: 'La call è già salvata. Vuoi impostare l’avviso per il viaggio?',
+      question: 'Vuoi impostare l’avviso per il viaggio?',
+      kind: 'followup' as const,
+      options: [],
+      createdAt: Date.now(),
+    };
+    await a.saveResolverChoice(userA, session, followup);
+    expect(await b.takeResolverChoice(userB, session)).toBeNull();
+    expect(await b.takeResolverChoice(userA, randomUUID())).toBeNull();
+    const replies = await Promise.all([
+      a.takeResolverChoice(userA, session),
+      b.takeResolverChoice(userA, session),
+    ]);
+    expect(replies.filter(Boolean)).toEqual([followup]);
+  });
+
   it('classe della sessione: sale, ridiscende e il segno della scelta manuale', async () => {
     const store = createSessionStore(app, redis, { logTtlSeconds: 60 });
     const sessionId = randomUUID();

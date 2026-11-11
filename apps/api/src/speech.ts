@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { BudgetGuard, LlmCallRecorder } from '@ernie/model-gateway';
 import type { AuthContext } from './auth.js';
@@ -6,12 +7,14 @@ import { normalizeSpeechAudio } from './speech-audio.js';
 
 export const SPEECH_MODEL = 'fish-audio/drama-3';
 const BEAR_VOICE =
-  'Speak Italian as Ernie, a friendly adult male bear. Use a very deep, distinctly hoarse and raspy bass voice, with a coarse gravelly texture, rich chest resonance and an audible low rumble in every phrase. The rasp must be prominent, not a subtle hint. Keep the delivery full-bodied, resonant and clearly projected, with crisp intelligible words and natural pacing. Maintain this same rugged low register throughout. Warm and reassuring, never threatening. No whispering, breathy softness, shouting, animal noises or roaring.';
+  'Speak clear, natural Italian in the same adult male baritone voice throughout. Warm, conversational and practical, with clear consonants, steady projection and a comfortable medium-fast pace. Keep pitch, loudness and vocal texture even between sentences. Use short natural pauses. The tone is lightly warm and grounded, with clean articulation.';
 export const SPEECH_STYLES = {
-  warm: `${BEAR_VOICE} Sound affectionate, relaxed and gently humorous.`,
-  playful: `${BEAR_VOICE} Sound playfully amused and expressive, keeping the deep register even when excited.`,
-  calm: `${BEAR_VOICE} Sound especially calm and reassuring, with measured phrasing while retaining the pronounced rasp and full vocal presence.`,
+  warm: BEAR_VOICE,
+  playful: BEAR_VOICE,
+  calm: BEAR_VOICE,
 } as const;
+export const REFERENCE_TRANSCRIPT =
+  'Ciao, sono Ernie. Ti aiuto a organizzare la giornata, ricordare gli impegni e ritrovare quello che ti serve. Parliamo con chiarezza, una cosa alla volta. Sono qui, dimmi pure.';
 export type SpeechStyle = keyof typeof SPEECH_STYLES;
 export class SpeechError extends Error {
   constructor(
@@ -62,6 +65,9 @@ export function connectionNeverOpened(err: unknown): boolean {
 }
 export function createSpeechService(opts: SpeechOptions) {
   const active = new Set<string>();
+  const reference = !opts.voiceId
+    ? readFileSync(new URL('../static/ernie-voice.mp3', import.meta.url)).toString('base64')
+    : null;
   const windows = new Map<string, { at: number; requests: number }>();
   return {
     async synthesize(
@@ -90,7 +96,10 @@ export function createSpeechService(opts: SpeechOptions) {
         signal ?? new AbortController().signal,
         AbortSignal.timeout(opts.timeoutMs),
       ]);
-      const bytes = Buffer.byteLength(`[${SPEECH_STYLES[style]}] ${text}`, 'utf8');
+      const bytes = Buffer.byteLength(
+        `[${SPEECH_STYLES[style]}] ${text}${reference ? REFERENCE_TRANSCRIPT : ''}`,
+        'utf8',
+      );
       const estimatedCostUsd = (bytes * opts.usdPerMillionBytes) / 1_000_000;
       const limit = speechBudget(auth, opts.dailyBudgetUsd);
       try {
@@ -119,6 +128,17 @@ export function createSpeechService(opts: SpeechOptions) {
                   instructions: SPEECH_STYLES[style],
                   response_format: 'mp3',
                   ...(opts.voiceId ? { voice: opts.voiceId } : {}),
+                  ...(reference
+                    ? {
+                        input_references: [
+                          {
+                            type: 'input_audio',
+                            input_audio: { data: `data:audio/mpeg;base64,${reference}` },
+                          },
+                          { type: 'text', text: REFERENCE_TRANSCRIPT },
+                        ],
+                      }
+                    : {}),
                 }),
                 signal: abort,
               });

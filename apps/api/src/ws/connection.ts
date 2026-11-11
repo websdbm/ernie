@@ -83,7 +83,12 @@ import {
 } from '../habits/chat.js';
 import { HabitsError, type HabitsService } from '../habits/service.js';
 import { type PerformanceObservation, ServerTurnTrace } from '../performance.js';
-import { isExplicitReminderStart, type ResolverChoice, resolveChoice } from '../resolver-choice.js';
+import {
+  isExplicitReminderStart,
+  lastAssistantQuestion,
+  type ResolverChoice,
+  resolveChoice,
+} from '../resolver-choice.js';
 import type { RouterDecisionRecorder } from '../router/recorder.js';
 import { SessionForbiddenError, type SessionRecord, type SessionStore } from '../sessions/store.js';
 import { videoContentInstructions } from '../video-flow.js';
@@ -781,7 +786,7 @@ export class ClientConnection {
     const modelText = attachmentNotes.length
       ? `${attachmentNotes.join('\n')}\n\n${text}`
       : choice
-        ? `${choice.message}\nScelta: ${text}`
+        ? `${'followup' in choice ? choice.note : choice.message}\nScelta: ${text}`
         : text;
     // Tetto di spesa: il titolare può alzarlo o toglierlo (0); per gli altri account vale al massimo quello del
     // server, che un valore personale può solo abbassare (revisione del 16 ott 2026: un account seguito poteva
@@ -1333,6 +1338,8 @@ export class ClientConnection {
     };
     // Il turno gira in background così `user.cancel` e `tool.confirmation.respond` possono essere gestiti nel frattempo.
     let responseFinished = false;
+    let lastReply = '';
+    let lastChoices: Extract<ContentBlock, { kind: 'choices' }> | undefined;
     void run({
       userId: this.auth.userId,
       sessionId,
@@ -1351,9 +1358,36 @@ export class ClientConnection {
       abortSignal: ac.signal,
       recorder: this.deps.recorder,
       logger: this.deps.logger,
-      emit: (type, payload) => {
-        if (type === 'assistant.text.completed')
-          this.remember('assistente', String((payload as { text: string }).text));
+      emit: async (type, payload) => {
+        if (type === 'assistant.text.completed') {
+          lastReply = String((payload as { text: string }).text);
+          this.remember('assistente', lastReply);
+        }
+        if (type === 'assistant.block') {
+          const block = (payload as { block?: ContentBlock }).block;
+          if (block?.kind === 'choices') lastChoices = block;
+        }
+        if (
+          type === 'assistant.completed' &&
+          (payload as { finishReason?: string }).finishReason === 'stop'
+        ) {
+          const question = lastAssistantQuestion(lastReply) ?? lastChoices?.question;
+          if (question && question.length <= 200) {
+            await this.deps.store.saveResolverChoice(this.auth.userId, sessionId, {
+              kind: 'followup',
+              question,
+              message: lastReply.slice(-8000) || question,
+              options:
+                lastChoices?.question === question
+                  ? lastChoices.options.map((o) => ({
+                      label: o.label,
+                      value: o.label.slice(0, 100),
+                    }))
+                  : [],
+              createdAt: Date.now(),
+            });
+          }
+        }
         return this.send(type, payload, correlationId);
       },
       takeSteers: () => {

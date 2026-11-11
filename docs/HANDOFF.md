@@ -5,6 +5,28 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Build 121 — conversazione e voce, preparazione del rilascio
+
+11 novembre 2026. Riscontro sul turno segnalato: una conferma alla domanda conclusiva su un avviso ancora
+aperto è stata associata a un altro impegno, già completato, perché il resolver vedeva soltanto l’inizio
+della lunga risposta. Ora la domanda finale del modello e il suo contesto restano nella continuazione
+account/sessione. Risposte brevi e orari pertinenti la riprendono prima del chiarimento di funzione,
+anche dopo riconnessione. Nuove richieste autonome e scadenza continuano a interrompere la continuazione.
+
+Voce naturale con riferimento sintetico fisso, stessa direzione nei tre stili, ritmo medio-veloce e
+volume livellato dentro e fra le frasi. Campione sintetico nel backend, nessuna registrazione dell’utente.
+Input iOS con modello predisposto in anticipo, stato degli asset riusato e attivazione audio asincrona.
+Nuova build necessaria per le modifiche del microfono e del ripiego vocale iOS.
+
+98 test backend superati, inclusi PostgreSQL/Redis reali e FFmpeg. Prova con Sonnet 5.5 reale e strumenti
+simulati: un avviso per la richiesta aperta, zero modifiche o duplicati dell’impegno concluso. Campione
+TTS con riferimento fisso generato dal vivo e normalizzato. iOS compilato: 37 test passati; la prova di
+cattura reale fallisce per l’assenza di un ingresso audio predefinito sul Mac del simulatore. Tempi reali
+e Bluetooth richiedono prova su iPhone. Nessuna modifica agli impegni personali durante la diagnosi.
+
+Include la correzione Abitudini `3788508`. API ancora da pubblicare. Stato e dettagli in
+[build 121](releases/build-121.md). Modifiche estranee alla sessione preservate.
+
 ### Abitudini — orari insegnati in chat, backend pronto per la pubblicazione
 
 10 novembre 2026. La chat riconosce l’insegnamento esplicito di un orario. Se la persona descrive un

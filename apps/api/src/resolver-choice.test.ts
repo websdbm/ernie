@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isExplicitReminderStart, type ResolverChoice, resolveChoice } from './resolver-choice.js';
+import {
+  isExplicitReminderStart,
+  isFollowupAnswer,
+  lastAssistantQuestion,
+  type ResolverChoice,
+  resolveChoice,
+} from './resolver-choice.js';
 
 const choice = (): ResolverChoice => ({
   message: 'Passare in laboratorio alle 19:30',
@@ -12,6 +18,29 @@ const choice = (): ResolverChoice => ({
   createdAt: Date.now(),
 });
 describe('continuazione delle domande del resolver', () => {
+  it('riconosce la domanda conclusiva anche dopo un impegno già completato', () => {
+    const question = 'Vuoi che imposti l’avviso per il viaggio alle 7:20 di domani?';
+    const message = `La call è già stata corretta. ${'Dettagli della call. '.repeat(20)}\n\n${question}`;
+    expect(lastAssistantQuestion(message)).toBe(question);
+    expect(lastAssistantQuestion('Mi hai chiesto «Che ora è?» e ti ho già risposto.')).toBeNull();
+    const p: ResolverChoice = {
+      message,
+      question,
+      kind: 'followup',
+      options: [],
+      createdAt: Date.now(),
+    };
+    expect(resolveChoice(p, 'Sì')?.note).toContain(`domanda rimasta aperta: «${question}»`);
+    expect(resolveChoice(p, 'Crea una lista per domani')).toBeUndefined();
+    expect(resolveChoice({ ...p, createdAt: Date.now() - 601000 }, 'Sì')).toBeUndefined();
+  });
+  it('lega un orario alla domanda temporale e mantiene indipendenti le richieste nuove', () => {
+    expect(isFollowupAnswer('Giovedì alle 7:20', 'Quando vuoi l’avviso?')).toBe(true);
+    expect(
+      isFollowupAnswer('Giovedì alle 7:20 ricordami il veterinario', 'Quando vuoi l’avviso?'),
+    ).toBe(false);
+    expect(isFollowupAnswer('7:20', 'Chi è Luca?')).toBe(false);
+  });
   it('conserva richiesta e scelta e non interpreta una scelta come nuova richiesta', () => {
     expect(resolveChoice(choice(), 'Imposta un promemoria')).toMatchObject({
       message: 'Passare in laboratorio alle 19:30',

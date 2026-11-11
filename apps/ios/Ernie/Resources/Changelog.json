@@ -1,5 +1,36 @@
 [
   {
+    "build": 121,
+    "date": "2026-11-11",
+    "title": "Conversazione e voce più chiare",
+    "items": [
+      {
+        "icon": "bubble.left.and.bubble.right",
+        "title": "Riprendi la domanda rimasta aperta",
+        "detail": "Una risposta breve come sì o un orario riprende l’ultima domanda di Ernie, anche dopo una riconnessione.",
+        "test": "Completa un impegno e rispondi alla domanda su un altro rimasto aperto."
+      },
+      {
+        "icon": "waveform",
+        "title": "Voce naturale e uniforme",
+        "detail": "Una voce maschile calda con riferimento fisso, ritmo medio-veloce e volume livellato per capire meglio Ernie in mobilità.",
+        "test": "Ascolta più frasi consecutive e confronta ritmo e volume."
+      },
+      {
+        "icon": "mic",
+        "title": "Avvio dell’ascolto ottimizzato",
+        "detail": "Il trascrittore viene preparato in anticipo e la sessione audio si attiva senza bloccare l’interfaccia. I controlli sul modello già installato vengono riutilizzati.",
+        "test": "Apri il microfono più volte e prova anche dopo una risposta vocale."
+      },
+      {
+        "icon": "figure.walk",
+        "title": "Insegna gli orari in chat",
+        "detail": "Con Abitudini attiva puoi salvare un orario abituale e una variazione per un giorno, poi chiederli a Ernie.",
+        "test": "Spiega un orario abituale e un’eccezione per oggi, quindi chiedi cosa ha imparato."
+      }
+    ]
+  },
+  {
     "build": 120,
     "date": "2026-11-10",
     "title": "Abitudini, con il tuo consenso",

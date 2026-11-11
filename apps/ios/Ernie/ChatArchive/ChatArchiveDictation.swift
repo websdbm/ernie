@@ -31,7 +31,7 @@ import Speech
             guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "it_IT")), recognizer.isAvailable,
                   recognizer.supportsOnDeviceRecognition else { error = "Dettatura locale non disponibile. Puoi usare il microfono della tastiera."; stop(); return }
             do {
-                try AudioSessionController.activateForVoice()
+                try await AudioSessionController.activateForVoice()
                 let capture = MicrophoneCapture(); self.capture = capture
                 let audio = try await capture.start()
                 guard self.token == generation, !Task.isCancelled else { self.stop(); return }

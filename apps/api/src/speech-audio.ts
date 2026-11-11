@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 
-const COMPRESSOR = 'acompressor=threshold=0.125:ratio=3:attack=10:release=150:makeup=1';
+const COMPRESSOR =
+  'highpass=f=70,acompressor=threshold=0.05:ratio=3:attack=5:release=100:makeup=1,dynaudnorm=f=150:g=7:p=0.8:m=6:r=0.12';
 // Accelera l'audio già sintetizzato mantenendo la frequenza della voce: niente nuova richiesta AI.
-const TEMPO = 'atempo=1.15';
+const TEMPO = 'atempo=1.25';
 const MAX_BYTES = 4_000_000;
 let active = 0;
 
@@ -65,7 +66,7 @@ async function processAudio(input: Buffer, args: string[], signal: AbortSignal) 
   });
 }
 
-/** Voce 15% più rapida, stesso registro; livella ogni frase e limita i picchi, senza cambiare il volume di sistema. */
+/** Ritmo medio-veloce, registro invariato e volume uniforme tra sillabe e frasi. */
 export async function normalizeSpeechAudio(input: Buffer, signal?: AbortSignal): Promise<Buffer> {
   if (input.length > MAX_BYTES || active >= 4) throw new Error('Elaborazione audio occupata');
   const abort = AbortSignal.any([
@@ -84,7 +85,7 @@ export async function normalizeSpeechAudio(input: Buffer, signal?: AbortSignal):
     if (!Number.isFinite(mean)) throw new Error('Livello audio non misurabile');
     // Non trasformare silenzio/rumore quasi impercettibile in un soffio amplificato.
     if (mean < -55) return input;
-    const gain = Math.min(18, Math.max(-24, -12 - mean));
+    const gain = Math.min(24, Math.max(-24, -14 - mean));
     const result = await processAudio(
       input,
       [

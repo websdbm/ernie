@@ -4,7 +4,13 @@ import { createLogger } from '@ernie/observability';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthContext } from './auth.js';
 import { buildServer } from './server.js';
-import { createSpeechService, SPEECH_MODEL, speechBudget } from './speech.js';
+import {
+  createSpeechService,
+  REFERENCE_TRANSCRIPT,
+  SPEECH_MODEL,
+  SPEECH_STYLES,
+  speechBudget,
+} from './speech.js';
 
 const auth: AuthContext = {
   userId: randomUUID(),
@@ -43,6 +49,10 @@ describe('Drama 3 speech', () => {
     expect(request.model).toBe(SPEECH_MODEL);
     expect(request.instructions).toContain('Italian');
     expect(request.voice).toBeUndefined();
+    expect(request.input_references[0].input_audio.data).toMatch(/^data:audio\/mpeg;base64,/u);
+    expect(request.input_references[1]).toEqual({ type: 'text', text: REFERENCE_TRANSCRIPT });
+    expect(SPEECH_STYLES.warm).toBe(SPEECH_STYLES.calm);
+    expect(SPEECH_STYLES.playful).toBe(SPEECH_STYLES.warm);
     expect(recorder.record).toHaveBeenCalledWith(
       expect.objectContaining({
         modelClass: 'tts',
