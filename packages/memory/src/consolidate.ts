@@ -161,7 +161,7 @@ parole tecniche del tema di cui parla. Al massimo 6; nessuna → lista vuota.`;
  * stata fatta anche se non vede lo strumento. Fuori dai trascritti per la memoria e per il genitore.
  */
 export const LOCAL_ACTION_NOTE =
-  '[Nota di sistema, non per l’utente: questa risposta l’ha data una skill di Ernie senza modello e l’azione descritta è già stata eseguita davvero. Non ripeterla e non «correggerla».]';
+  '[Nota di sistema, non per l’utente: risposta già consegnata da una funzione di Ernie. Le azioni esplicitamente dichiarate come completate sono già eseguite: evita di ripeterle. Domande, alternative e richieste di dettagli restano punti aperti e non confermano alcuna esecuzione.]';
 export const isSystemNote = (text: string): boolean => text.startsWith('[Nota di sistema');
 
 const isToolPart = (p: unknown): boolean => {

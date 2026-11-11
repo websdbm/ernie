@@ -18,7 +18,9 @@ volume livellato dentro e fra le frasi. Campione sintetico nel backend, nessuna 
 Input iOS con modello predisposto in anticipo, stato degli asset riusato e attivazione audio asincrona.
 Nuova build necessaria per le modifiche del microfono e del ripiego vocale iOS.
 
-98 test backend superati, inclusi PostgreSQL/Redis reali e FFmpeg. Prova con Sonnet 5.5 reale e strumenti
+106 test backend superati, inclusi PostgreSQL/Redis reali e FFmpeg. Una conferma priva di domanda valida
+chiede quale richiesta riprendere; la nota delle risposte locali distingue domande e azioni concluse.
+Prova con Sonnet 5.5 reale e strumenti
 simulati: un avviso per la richiesta aperta, zero modifiche o duplicati dell’impegno concluso. Campione
 TTS con riferimento fisso generato dal vivo e normalizzato. iOS compilato: 37 test passati; la prova di
 cattura reale fallisce per l’assenza di un ingresso audio predefinito sul Mac del simulatore. Tempi reali

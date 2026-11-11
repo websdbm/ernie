@@ -1,7 +1,7 @@
 # Build 121 — Conversazione e voce
 
 11 novembre 2026. Sorgenti e dipendenze backend preparati. Pubblicazione API e distribuzione iOS in attesa.
-98 test backend, TypeScript e Biome verificati. 37 test iOS passati; un test del microfono richiede hardware
+106 test backend, TypeScript e Biome verificati. 37 test iOS passati; un test del microfono richiede hardware
 audio non disponibile sul Mac usato per il simulatore, come descritto sotto.
 
 ## Conversazione
@@ -11,6 +11,8 @@ con scadenza di dieci minuti e consumo atomico. Un sì/no, un’opzione o un ora
 prima di un nuovo chiarimento di funzione. Una nuova richiesta esplicita resta autonoma. La nota riporta il
 contesto della domanda e chiede di controllare gli impegni esistenti per evitare duplicazioni. Domande citate
 all’interno di una risposta conclusa non vengono riaperte.
+Una conferma senza una domanda valida chiede il riferimento all’utente. La nota interna dei turni locali
+conserva la distinzione tra domande ancora aperte e azioni esplicitamente concluse.
 
 Regressione sintetica di un impegno già corretto seguito dalla proposta su un altro, domanda oltre i primi
 200 caratteri, risposta breve e riconnessione. Con il modello reale Sonnet 5.5 e strumenti soltanto simulati:

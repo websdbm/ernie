@@ -930,6 +930,22 @@ export class ClientConnection {
       return;
     }
 
+    // A bare authorization without a live question must never revive an already completed task.
+    if (
+      !choice &&
+      !attachments.length &&
+      /^(?:s[iì](?:,? (?:grazie|fallo|procedi))?|confermo|procedi|fallo)[.!]?$/iu.test(text.trim())
+    ) {
+      await this.replyLocally(
+        'deterministic',
+        'A quale impegno ti riferisci? Dimmi quale richiesta vuoi riprendere.',
+        correlationId,
+        t0,
+        text,
+      );
+      return;
+    }
+
     // 3) Budget, poi decisione (cache → Jev → fallback); il Policy Engine può solo restringere.
     try {
       await this.deps.budget.assertWithinBudget(this.auth.userId, budget);

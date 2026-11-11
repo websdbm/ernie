@@ -333,6 +333,24 @@ describe('ClientConnection: apprendimento in Abitudini', () => {
 });
 
 describe('ClientConnection: programma personale e scheda Todo', () => {
+  it('una conferma senza domanda valida chiede il riferimento e non riapre impegni conclusi', async () => {
+    const socket = fakeSocket();
+    const runTurn = vi.fn();
+    const d = deps({ runTurn });
+    const conn = new ClientConnection(socket.socket, auth, d);
+    const c = client(randomUUID());
+    await conn.handleRaw(c.start());
+    await conn.handleRaw(c.message('Sì'));
+    expect(d.router.calls).toBe(0);
+    expect(runTurn).not.toHaveBeenCalled();
+    expect(
+      field(
+        socket.sent.findLast((e) => e.type === 'assistant.text.completed'),
+        'text',
+      ),
+    ).toContain('A quale impegno');
+  });
+
   it.each([false, true])(
     'un sì segue l’ultima domanda ancora aperta dopo un impegno concluso, riconnessione=%s',
     async (reconnect) => {
