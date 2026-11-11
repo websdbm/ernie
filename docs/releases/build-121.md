@@ -1,10 +1,11 @@
 # Build 121 — Conversazione e voce
 
-11 novembre 2026. Sorgenti e dipendenze backend preparati. Pubblicazione API e distribuzione iOS in attesa.
+11 novembre 2026. API pubblicata e build disponibile su TestFlight per il gruppo Interni,
+con autorizzazione dell’utente. Stato Apple verificato: **VALID / IN_BETA_TESTING**.
 106 test backend, TypeScript e Biome verificati. 37 test iOS passati; un test del microfono richiede hardware
 audio non disponibile sul Mac usato per il simulatore, come descritto sotto.
 
-## Archivio pronto
+## Archivio distribuito
 
 - Sorgenti iOS pubblicati e verificati su GitHub `ab51bba39238a17e6a868e5251d4818bbbd3c906`.
 - Archivio Release da checkout pulito con Xcode 27.2; export Apple sul Mac Studio con Xcode 27.0.
@@ -13,9 +14,28 @@ audio non disponibile sul Mac usato per il simulatore, come descritto sotto.
 - IPA 82.882.525 byte, SHA-256 `3fc324cd8051935bb515d5ca63be3a181f626dd932849f3f62479b7ee1a8d501`.
 - Artefatti privati sul Mac Studio `~/Library/Caches/ernie-builds/build-121-20261111-voice/`,
   `release-manifest.json` e `export/Ernie.ipa`. Copia locale dell’archivio in `/tmp/ernie-build121.eZZD9m/`.
-- Backend da pubblicare `791c2dc`, che aggiunge la protezione sulle conferme senza riferimento e la nota
+- Backend pubblicato `791c2dc`, che aggiunge la protezione sulle conferme senza riferimento e la nota
   dei turni locali. Gli input iOS sono identici al commit dell’archivio. Nessuna migrazione SQL nuova.
-- Export completato e verificato; upload TestFlight non avviato. Pubblicazione in attesa del via libera.
+- Upload completato una sola volta, 82.882.525 byte; build ID `cf62dcbc-abce-47c7-87c8-2599911021ae`.
+- Elaborazione Apple conclusa, assegnazione a Interni e note italiane rilette (1.028 caratteri,
+  corrispondenti al changelog). Manifest finale e `asc-final.json` nella cartella privata degli artefatti.
+
+## API attiva e verifica del rilascio
+
+Server aggiornato da Git al commit pubblicato `e5e48742ca4ee428266e442a5f1188c6d7311205`.
+Backup cartella/configurazioni e dump PostgreSQL verificato in
+`/srv/staging3/backups/ernie-pre-121-20261111/`. Immagine precedente conservata come
+`ernie-app:pre-121-20261111`. Nuova immagine API
+`sha256:c8675a283ea4822045e285eb4afec89f321ac777ed50f117e8b5313a0077214c`.
+API healthy; health e readiness pubbliche verificano PostgreSQL e Redis.
+Worker, PostgreSQL e Redis non ricreati; `.env` e override identici al backup. Nessuna migrazione SQL.
+L’etichetta di versione della health conserva il valore storico imposto dall’ambiente: sorgenti e
+immagine sono stati verificati direttamente, insieme agli hash dei moduli compilati e della voce.
+
+Smoke sul codice compilato in esercizio con account sintetici: salvataggio/rilettura HTTPS degli orari
+Abitudini, cifratura e isolamento fra utenti; domanda lunga ripresa dopo riconnessione attraverso Redis;
+conferma senza riferimento; riferimento vocale e normalizzazione FFmpeg. Tutti passati, zero chiamate
+ai provider e zero promemoria/automazioni creati. Connessioni e fixture sintetiche rimosse.
 
 ## Conversazione
 
@@ -58,6 +78,6 @@ sono passate.
 
 ## Dipendenze
 
-Include l’apprendimento degli orari dichiarati della revisione `3788508`, ancora da pubblicare sul backend.
+Include l’apprendimento degli orari dichiarati della revisione `3788508`, pubblicato sul backend.
 Nessuna migrazione SQL nuova. Il writer Abitudini deve conservare il nuovo campo cifrato `declared`.
-Prima di distribuire aggiornare il backend e rileggerne lo stato. Per il rilascio seguire AGENTS.md.
+Backend aggiornato e riletto prima della disponibilità TestFlight. Per i rilasci seguire AGENTS.md.

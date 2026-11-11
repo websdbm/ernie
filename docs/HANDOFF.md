@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 121 — conversazione e voce, firmata e verificata
+### Build 121 — API pubblicata e disponibile su TestFlight
 
 11 novembre 2026. Riscontro sul turno segnalato: una conferma alla domanda conclusiva su un avviso ancora
 aperto è stata associata a un altro impegno, già completato, perché il resolver vedeva soltanto l’inizio
@@ -26,14 +26,20 @@ TTS con riferimento fisso generato dal vivo e normalizzato. iOS compilato: 37 te
 cattura reale fallisce per l’assenza di un ingresso audio predefinito sul Mac del simulatore. Tempi reali
 e Bluetooth richiedono prova su iPhone. Nessuna modifica agli impegni personali durante la diagnosi.
 
-Include la correzione Abitudini `3788508`. API ancora da pubblicare. Stato e dettagli in
+Include la correzione Abitudini `3788508`, ora pubblicata. Stato e dettagli in
 [build 121](releases/build-121.md). Modifiche estranee alla sessione preservate.
 IPA pronto sul Mac Studio in `~/Library/Caches/ernie-builds/build-121-20261111-voice/export/Ernie.ipa`,
 manifest verificato. Sorgenti iOS GitHub `ab51bba39238a17e6a868e5251d4818bbbd3c906`, 318 input identici,
-quattro bundle 121 firmati Apple Distribution; sorgenti backend da pubblicare `791c2dc`.
-Export verificato, nessun upload della 121 avviato. Pubblicazione API e TestFlight richiedono via libera.
+quattro bundle 121 firmati Apple Distribution; sorgenti backend `791c2dc`.
+Pubblicazione autorizzata dall’utente e completata l’11 novembre: checkout server `e5e4874`, API healthy,
+immagine `c8675a28…`. Backup `/srv/staging3/backups/ernie-pre-121-20261111/`; nessuna migrazione,
+worker/Postgres/Redis non ricreati e configurazioni preservate. Smoke sul servizio compilato passato:
+orari Abitudini cifrati e isolati, continuazione dopo riconnessione e conferma senza riferimento,
+asset voce e FFmpeg. Fixture sintetiche rimosse, nessuna chiamata al provider durante lo smoke.
+TestFlight **VALID / IN_BETA_TESTING**, gruppo **Interni**, build ID
+`cf62dcbc-abce-47c7-87c8-2599911021ae`; note italiane rilette e coerenti, 1.028 caratteri.
 
-### Abitudini — orari insegnati in chat, backend pronto per la pubblicazione
+### Abitudini — orari insegnati in chat, pubblicato con API 121
 
 10 novembre 2026. La chat riconosce l’insegnamento esplicito di un orario. Se la persona descrive un
 orario abituale e un’eccezione senza chiedere di salvarli, propone un solo passaggio di conferma, valido
@@ -52,10 +58,13 @@ scrive il nuovo campo, evitare il rollback a un writer precedente che lo scarter
 
 Verifica locale su WebSocket e PostgreSQL isolato (116 test, TypeScript e Biome): due turni, riconnessione,
 rilettura nello stesso giorno e il giorno seguente, isolamento, cifratura e zero promemoria/automazioni. Test nel repo
-con dati sintetici. Pubblicazione API e verifica sul servizio in attesa di via libera. Nessun dato
-personale importato in produzione.
+con dati sintetici. Pubblicazione API e verifica sul servizio completate l’11 novembre con la 121.
+Nessun dato personale importato in produzione.
 
-### Build 120 — API/worker pubblicati; TestFlight in elaborazione
+### Build 120 — API/worker pubblicati; elaborazione Apple conclusa
+
+Aggiornamento 11 novembre: elaborazione Apple conclusa (`VALID`); la build corrente distribuita a Interni
+è la 121. Le righe seguenti conservano la cronologia della pubblicazione del 10 novembre.
 
 10 novembre 2026. Pubblicazione autorizzata esplicitamente dall’utente. API e worker attivi e sani,
 migrazione **0054** applicata dopo backup a writer fermi; chiave Abitudini dedicata con recupero privato
@@ -166,8 +175,9 @@ Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito prese
 
 ### Ultimo rilascio effettivamente pubblicato
 
-**119**, 10 novembre 2026: API/worker, migrazioni 0052/0053 e TestFlight Interni verificati,
-come descritto sopra. Sorgenti della build `203542a`; i successivi commit aggiornano la documentazione.
+**121**, 11 novembre 2026: API e TestFlight Interni verificati (`VALID / IN_BETA_TESTING`).
+Sorgenti iOS `ab51bba`, backend funzionale `791c2dc`, checkout server `e5e4874`.
+Worker ancora alla 120; schema fino alla 0054, nessuna nuova migrazione per la 121.
 
 ### Rilasci precedenti
 
@@ -653,10 +663,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **119**, verificata il 10 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `203542a` |
+| App su TestFlight | build **121**, verificata l’11 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `ab51bba` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **fe3a60f**, immagine `a50890ae…`; worker **203542a**, immagine `f317e2d6…` (10 nov). API healthy, worker pronto. Recupero API `ernie-app:pre-resolver-20261110`; nessun rollback a writer Salute precedenti alla 119 |
-| Migrazioni | fino alla **0053**, applicate e verificate; migrazione Salute completata con zero referti preesistenti da trasferire, nessun consenso attivato |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **791c2dc**, checkout `e5e4874`, immagine `c8675a28…`; worker **120**, immagine `f533f499…`. API healthy, worker non ricreato. Backup pre-121 disponibile; evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
+| Migrazioni | fino alla **0054**, applicate e verificate; Salute senza referti preesistenti da trasferire, nessun consenso attivato. Nessuna migrazione per la 121 |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
