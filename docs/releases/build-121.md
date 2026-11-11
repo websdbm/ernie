@@ -4,6 +4,19 @@
 106 test backend, TypeScript e Biome verificati. 37 test iOS passati; un test del microfono richiede hardware
 audio non disponibile sul Mac usato per il simulatore, come descritto sotto.
 
+## Archivio pronto
+
+- Sorgenti iOS pubblicati e verificati su GitHub `ab51bba39238a17e6a868e5251d4818bbbd3c906`.
+- Archivio Release da checkout pulito con Xcode 27.2; export Apple sul Mac Studio con Xcode 27.0.
+- 318 input iOS verificati per SHA-256, quattro bundle 121 firmati Apple Distribution con entitlement e
+  profili coerenti; gruppo privato Diario presente soltanto nell’app principale, APNs production.
+- IPA 82.882.525 byte, SHA-256 `3fc324cd8051935bb515d5ca63be3a181f626dd932849f3f62479b7ee1a8d501`.
+- Artefatti privati sul Mac Studio `~/Library/Caches/ernie-builds/build-121-20261111-voice/`,
+  `release-manifest.json` e `export/Ernie.ipa`. Copia locale dell’archivio in `/tmp/ernie-build121.eZZD9m/`.
+- Backend da pubblicare `791c2dc`, che aggiunge la protezione sulle conferme senza riferimento e la nota
+  dei turni locali. Gli input iOS sono identici al commit dell’archivio. Nessuna migrazione SQL nuova.
+- Export completato e verificato; upload TestFlight non avviato. Pubblicazione in attesa del via libera.
+
 ## Conversazione
 
 La domanda conclusiva della risposta del modello viene conservata nella continuazione per account e sessione,

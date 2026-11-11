@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 121 — conversazione e voce, preparazione del rilascio
+### Build 121 — conversazione e voce, firmata e verificata
 
 11 novembre 2026. Riscontro sul turno segnalato: una conferma alla domanda conclusiva su un avviso ancora
 aperto è stata associata a un altro impegno, già completato, perché il resolver vedeva soltanto l’inizio
@@ -28,6 +28,10 @@ e Bluetooth richiedono prova su iPhone. Nessuna modifica agli impegni personali 
 
 Include la correzione Abitudini `3788508`. API ancora da pubblicare. Stato e dettagli in
 [build 121](releases/build-121.md). Modifiche estranee alla sessione preservate.
+IPA pronto sul Mac Studio in `~/Library/Caches/ernie-builds/build-121-20261111-voice/export/Ernie.ipa`,
+manifest verificato. Sorgenti iOS GitHub `ab51bba39238a17e6a868e5251d4818bbbd3c906`, 318 input identici,
+quattro bundle 121 firmati Apple Distribution; sorgenti backend da pubblicare `791c2dc`.
+Export verificato, nessun upload della 121 avviato. Pubblicazione API e TestFlight richiedono via libera.
 
 ### Abitudini — orari insegnati in chat, backend pronto per la pubblicazione
 
