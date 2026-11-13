@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 122 — API/worker pubblicati; Apple richiede la licenza aggiornata
+### Build 122 — API/worker pubblicati; upload Apple riuscito
 
 13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni
 e salvataggio di link richiesto dall’utente. Letture MCP avanzate con schemi verificati dal vivo e
@@ -33,23 +33,25 @@ rimosse e nessuna chiamata al provider. Backup `/srv/staging3/backups/ernie-pre-
 L’utente ha creato Apple Development e Apple Distribution validi sul Mac ufficio, senza revoche.
 Archivio ed export Apple completati su Xcode 27.2 ufficio (Mac Studio offline). Sorgenti iOS GitHub
 `2ca3f01ed4bba3f1b20a0ff32957d17ddfbe30d9`, 321 input verificati, quattro bundle 122 firmati
-Apple Distribution, Diario privato soltanto nell’app e APNs production. IPA 83.023.284 byte,
-SHA-256 `9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
+Apple Distribution, Diario privato soltanto nell’app e APNs production. IPA effettivamente caricata
+83.023.606 byte, SHA-256 `0c85642f48234f05168d5b0278d5b03878784dfc7aba705ee8882096506f8fab`.
 Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`.
 Include inoltre filtro/paginazione delle raccolte per l’agente, così omonimi e raccolte oltre la prima
-pagina vengono risolti per percorso senza inviare tutta la libreria al modello. Portachiavi e login
-Apple completati dall’utente. Il primo upload è terminato con **EXPORT FAILED**, errore Apple
-«You do not have required contracts to perform an operation». App Store Connect → Azienda e il
-portale Developer confermano un Apple Developer Program License Agreement aggiornato da accettare
-entro il **14 novembre 2026**. Aperta in Chrome la pagina di revisione:
-`https://developer.apple.com/account/agree/7MJ4WNXK5F/terms`, lasciata all’utente per lettura e decisione.
-Nessun contratto accettato dall’agente; richiesta di intervento diretto in sospeso. **Non dichiarare
-la 122 caricata o disponibile su TestFlight**: l’ultima build visibile è la 121. Nessun processo di
-upload ancora attivo. Dopo l’accettazione verificare lo stato Apple e ritentare dall’archivio firmato,
-senza ricompilare o chiedere una nuova approvazione di pubblicazione (già concessa).
-Log privato `upload.log` nella cartella degli artefatti; cattura di riscontro locale
-`/tmp/ernie122-apple-agreement.png`. Non intervenire sugli avvisi bancari/DAC7 o sul rinnovo abbonamento:
-sono fuori ambito rispetto alla licenza che blocca questo caricamento.
+pagina vengono risolti per percorso senza inviare tutta la libreria al modello.
+
+Dopo il primo rifiuto per contratto aggiornato, l’utente ha letto e accettato personalmente la licenza.
+Nuovo upload dall’archivio già firmato **riuscito il 13 novembre alle 14:19 CET**: Apple conferma
+«Upload succeeded» e «Uploaded package is processing». Non caricare nuovamente la 122.
+Firme/profili e 321 input ricontrollati sul pacchetto caricato; i quattro eseguibili, al netto della
+firma, sono identici all’export già verificato. L’IPA preliminare aveva SHA `9e77a7e2…` e 83.023.284 byte;
+la nuova esportazione per upload cambia il confezionamento/firma, non i binari compilati.
+Log privato `upload-after-agreement.log`, riscontro `verify-upload.json`, confronto
+`upload-binary-comparison.json` e manifest aggiornato nella cartella degli artefatti.
+
+**Elaborazione Apple, note italiane e gruppo Interni ancora da verificare**: la sessione web di App
+Store Connect è scaduta; scheda lasciata al login con richiesta all’utente. Note da 949 caratteri già
+pronte in `whats-new-it.txt`. La pubblicazione è autorizzata; dopo il login completare la distribuzione
+senza richiedere una nuova approvazione. Non dichiarare ancora la disponibilità della 122 su iPhone.
 Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight
@@ -224,7 +226,8 @@ Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito prese
 
 **121**, 11 novembre 2026: API e TestFlight Interni verificati (`VALID / IN_BETA_TESTING`).
 Sorgenti iOS `ab51bba`, backend funzionale `791c2dc`, checkout server `e5e4874`.
-Worker ancora alla 120; schema fino alla 0054, nessuna nuova migrazione per la 121.
+Stato aggiornato del backend: API e worker 122, schema fino alla 0055. Per la 122 upload Apple riuscito;
+verifica della distribuzione Interni ancora pendente (vedi sezione iniziale).
 
 ### Rilasci precedenti
 

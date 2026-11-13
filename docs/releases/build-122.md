@@ -1,8 +1,8 @@
 # Build 122 — Raindrop
 
 13 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker pubblicati e verificati**,
-migrazione 0055 applicata. Account personale ancora da collegare. Caricamento iOS rifiutato da Apple
-per contratto aggiornato non accettato: **122 non disponibile su TestFlight**, dove resta la 121.
+migrazione 0055 applicata. Account personale ancora da collegare. **Upload iOS ricevuto da Apple**
+alle 14:19 CET; elaborazione, note italiane e assegnazione Interni ancora da verificare dopo il login web.
 
 ## Funzionalità
 
@@ -53,21 +53,29 @@ senza revocare i precedenti. Mac Studio offline, non utilizzato per questa compi
 
 Quattro bundle 122 firmati Apple Distribution, profili validi e coerenti, APNs production e gruppo
 Diario privato solo nell’app principale, nessun permesso di debug nell’IPA.
-IPA **83.023.284 byte**, SHA-256
+IPA effettivamente caricata **83.023.606 byte**, SHA-256
+`0c85642f48234f05168d5b0278d5b03878784dfc7aba705ee8882096506f8fab`.
+L’export preliminare verificato era 83.023.284 byte, SHA-256
 `9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
+Nuova verifica completa di firme/profili e input sul pacchetto caricato; tutti e quattro gli eseguibili
+privati della firma sono identici all’export preliminare. Il confezionamento e la firma dell’app
+principale cambiano nell’esportazione con destinazione upload, non il codice compilato.
 Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`:
 archivio firmato, export IPA, manifest, input e log. Il backend comprende inoltre la risoluzione
 delle raccolte per nome/percorso, con risultati paginati e totali espliciti; nessuna differenza agli
 input iOS rispetto al commit dell’archivio.
 
-Il via libera di pubblicazione è stato ricevuto. L’utente ha autorizzato il Portachiavi e completato
-il login Apple. Export con destinazione upload terminato con errore
-«You do not have required contracts to perform an operation» (ID Apple `145c29e5-5759-4713-bb57-e0e6fb1e25eb`).
-Il portale ufficiale conferma un nuovo Apple Developer Program License Agreement richiesto entro il
-14 novembre 2026. Aperto il contratto in Chrome per la lettura e l’eventuale accettazione personale
-da parte dell’utente; l’agente non ha accettato accordi. Log privato `upload.log`, nessun upload attivo.
-Dopo il riscontro verificare che il blocco sia rimosso e ritentare dall’archivio già firmato, quindi
-controllare elaborazione, note italiane e gruppo Interni. La pubblicazione è già autorizzata.
+Il via libera di pubblicazione è stato ricevuto. Il primo upload era stato rifiutato per contratto
+aggiornato. L’utente ha letto e accettato personalmente la licenza; il secondo upload dall’archivio
+firmato è terminato con **EXPORT SUCCEEDED**, «Upload succeeded» e «Uploaded package is processing»
+il **13 novembre 2026 alle 14:19 CET**. Log privato `upload-after-agreement.log`; pacchetto effettivo
+conservato in `upload/Ernie.ipa`, verifica `verify-upload.json`, confronto binari
+`upload-binary-comparison.json`. Nessun nuovo caricamento necessario.
+
+Sessione web App Store Connect scaduta: lasciata scheda di login all’utente per verificare elaborazione,
+applicare le note italiane già pronte (949 caratteri, `whats-new-it.txt`) e assegnare il gruppo Interni.
+**Disponibilità della 122 su TestFlight non ancora verificata**; nessuna dichiarazione di distribuzione
+completata finché il portale non la conferma. Non occorre un nuovo consenso alla pubblicazione.
 
 ## Backend pubblicato
 
