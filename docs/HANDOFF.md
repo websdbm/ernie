@@ -5,6 +5,15 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Raindrop — chiarimento del collegamento su iPhone
+
+13 novembre 2026. Lo screenshot dell’utente dopo il login mostra la pagina corretta «Integrazioni»;
+il login del sito non collega automaticamente Ernie. Verificati codice iOS e guida ufficiale:
+build 122 usa un Test token personale, non OAuth con callback. Procedura mobile esplicitata in
+[Raindrop](integrations/raindrop.md#dopo-il-login-su-iphone): Per sviluppatori → Crea nuova app →
+impostazioni app → Test token, poi incollarlo nel campo protetto di Ernie e premere Collega account.
+Nessuna credenziale acquisita né nuova build; collegamento reale ancora da completare dall’utente.
+
 ### Build 122 — API/worker pubblicati e disponibile su TestFlight
 
 13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni

@@ -17,6 +17,16 @@ Impostazioni → Raindrop, oppure Skill → Raindrop → Account e segnalibri.
 4. Cercare nella raccolta o chiedere «cerca in Raindrop…», «riassumi questo segnalibro»,
    «salva questo link in Raindrop». Per una raccolta omonima Ernie deve chiedere quale usare.
 
+### Dopo il login su iPhone
+
+La pagina «Integrazioni» di Raindrop è la destinazione prevista: il login con username e password
+vale per il sito Raindrop e non completa automaticamente il collegamento con Ernie nella build 122.
+Scorrere fino a **Per sviluppatori → Crea nuova app**, darle un nome riconoscibile (per esempio
+«Ernie personale»), aprirne le impostazioni e copiare **Test token**. Tornare quindi a
+**Ernie → Impostazioni → Raindrop**, incollarlo in **Token personale Raindrop** e premere
+**Collega account**. Non usare Client ID, Client Secret o password al posto del Test token.
+Non inviare il token in chat. Il collegamento OAuth con ritorno automatico all’app non è implementato.
+
 Ogni utente collega la propria credenziale. Spegnere la skill blocca richieste HTTP e strumenti,
 interrompe le operazioni locali in corso e conserva il collegamento. Scollegare elimina la credenziale
 dal database corrente di Ernie, anche con skill spenta; non revoca il token presso Raindrop né elimina
