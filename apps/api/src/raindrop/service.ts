@@ -1,6 +1,7 @@
 import { type Pool, withUser } from '@ernie/db';
 import type { z } from 'zod';
 import type { HealthCipher } from '../health-protection/crypto.js';
+import type { OAuthGrant, RaindropOAuth } from './oauth.js';
 import {
   type McpRead,
   RaindropError,
@@ -52,6 +53,7 @@ const context = (userId: string) => ({
 });
 export interface RaindropStatus {
   configured: boolean;
+  oauthConfigured: boolean;
   enabled: boolean;
   connected: boolean;
   account: { id: number; name: string; pro: boolean } | null;
@@ -62,7 +64,19 @@ export function createRaindropService(deps: {
   cipher: HealthCipher | null;
   provider: RaindropProvider;
   canUse(userId: string): Promise<boolean>;
+  oauth?: RaindropOAuth | null;
+  now?: () => number;
 }) {
+  const now = deps.now ?? Date.now;
+  const oauth = () => {
+    if (!deps.oauth)
+      throw new RaindropError(
+        'oauth_not_configured',
+        'Accesso automatico non ancora disponibile su questo server. Il token personale continua a funzionare.',
+        503,
+      );
+    return deps.oauth;
+  };
   const active = new Map<string, Set<AbortController>>();
   const writes = new Map<string, Promise<unknown>>();
   const mutate = async <T>(userId: string, run: () => Promise<T>): Promise<T> => {
@@ -127,10 +141,15 @@ export function createRaindropService(deps: {
       try {
         const p = JSON.parse(bytes.toString()) as {
           token: string;
+          refreshToken?: string;
+          expiresAt?: number;
           account: { id: number; name: string; pro: boolean };
         };
         return {
           token: Token.parse(p.token),
+          ...(p.refreshToken
+            ? { refreshToken: Token.parse(p.refreshToken), expiresAt: p.expiresAt }
+            : {}),
           account: { id: p.account.id, name: p.account.name, pro: p.account.pro },
         };
       } finally {
@@ -151,14 +170,43 @@ export function createRaindropService(deps: {
   ): Promise<T> =>
     operation(userId, signal, async (combined) => {
       await requireEnabled(userId);
-      const record = await deps.store.get(userId);
+      let record = await deps.store.get(userId);
       if (!record)
         throw new RaindropError(
           'not_connected',
           'Collega il tuo account in Impostazioni → Raindrop.',
           409,
         );
-      const credential = decode(userId, record);
+      let credential = decode(userId, record);
+      if (credential.refreshToken && (credential.expiresAt ?? 0) <= now() + 60_000) {
+        // Serialize refresh with reconnect/disconnect and concurrent reads for this account.
+        await mutate(userId, async () => {
+          await requireEnabled(userId);
+          checkActive(combined);
+          const latest = await deps.store.get(userId);
+          checkActive(combined);
+          if (!latest)
+            throw new RaindropError('connection_changed', 'Collegamento Raindrop cambiato.', 409);
+          // A concurrent read may already have refreshed the current account.
+          const decoded = decode(userId, latest);
+          if (decoded.refreshToken && (decoded.expiresAt ?? 0) <= now() + 60_000) {
+            const grant = await oauth().refresh(decoded.refreshToken, combined);
+            await requireEnabled(userId);
+            checkActive(combined);
+            const bytes = Buffer.from(JSON.stringify({ ...grant, account: decoded.account }));
+            try {
+              await deps.store.put(userId, cipher().encrypt(context(userId), bytes));
+            } finally {
+              bytes.fill(0);
+            }
+          }
+        });
+        record = await deps.store.get(userId);
+        checkActive(combined);
+        if (!record)
+          throw new RaindropError('connection_changed', 'Collegamento Raindrop cambiato.', 409);
+        credential = decode(userId, record);
+      }
       checkActive(combined);
       const result = await run(credential.token, combined);
       await requireEnabled(userId);
@@ -175,14 +223,61 @@ export function createRaindropService(deps: {
         );
       return result;
     });
+  const invalidateAuthorization = async (userId: string) => {
+    pause(userId);
+    await mutate(userId, async () => {
+      await deps.oauth?.cancel(userId);
+    });
+  };
+  const persist = async (
+    userId: string,
+    grant: { token: string } | OAuthGrant,
+    combined: AbortSignal,
+  ) => {
+    await requireEnabled(userId);
+    const key = cipher();
+    checkActive(combined);
+    const account = await deps.provider.account(grant.token, combined);
+    await mutate(userId, async () => {
+      await requireEnabled(userId);
+      checkActive(combined);
+      const bytes = Buffer.from(JSON.stringify({ ...grant, account }));
+      try {
+        await deps.store.put(userId, key.encrypt(context(userId), bytes));
+      } finally {
+        bytes.fill(0);
+      }
+    });
+    checkActive(combined);
+  };
   return {
     pause,
+    invalidateAuthorization,
+    async beginOAuth(userId: string, verifier: string) {
+      pause(userId);
+      return mutate(userId, async () => {
+        await deps.oauth?.cancel(userId);
+        await requireEnabled(userId);
+        cipher();
+        return oauth().begin(userId, verifier);
+      });
+    },
+    async completeOAuth(userId: string, input: { state: string; verifier: string; code: string }) {
+      return operation(userId, undefined, async (combined) => {
+        await requireEnabled(userId);
+        cipher();
+        const grant = await oauth().complete(userId, input, combined);
+        await persist(userId, grant, combined);
+        return this.status(userId);
+      });
+    },
     async status(userId: string): Promise<RaindropStatus> {
       const enabled = await deps.canUse(userId);
       const record = await deps.store.get(userId);
       const account = record && deps.cipher ? decode(userId, record).account : null;
       return {
         configured: !!deps.cipher,
+        oauthConfigured: !!deps.cipher && !!deps.oauth,
         enabled,
         connected: !!account,
         account,
@@ -190,30 +285,14 @@ export function createRaindropService(deps: {
       };
     },
     async connect(userId: string, input: string, signal?: AbortSignal) {
-      pause(userId);
+      await invalidateAuthorization(userId);
       return operation(userId, signal, async (combined) => {
-        await requireEnabled(userId);
-        const key = cipher();
-        const token = Token.parse(input);
-        checkActive(combined);
-        // Validate by reading /user only; do not import or mutate the remote library.
-        const account = await deps.provider.account(token, combined);
-        await mutate(userId, async () => {
-          await requireEnabled(userId);
-          checkActive(combined);
-          const bytes = Buffer.from(JSON.stringify({ token, account }));
-          try {
-            await deps.store.put(userId, key.encrypt(context(userId), bytes));
-          } finally {
-            bytes.fill(0);
-          }
-        });
-        checkActive(combined);
+        await persist(userId, { token: Token.parse(input) }, combined);
         return this.status(userId);
       });
     },
     async disconnect(userId: string) {
-      pause(userId);
+      await invalidateAuthorization(userId);
       await mutate(userId, () => deps.store.remove(userId));
       return this.status(userId);
     },

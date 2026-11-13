@@ -162,6 +162,7 @@ import {
 import { createPerformanceStore, type PerformanceObservation } from './performance.js';
 import { pickBrainPlace, placeFromNote } from './places.js';
 import { createPrivateDiaryService } from './private-diary.js';
+import { createRaindropOAuthStore, raindropOAuthFromEnvironment } from './raindrop/oauth.js';
 import { createRaindropProvider } from './raindrop/provider.js';
 import { createRaindropService, createRaindropStore } from './raindrop/service.js';
 import { createRaindropTools } from './raindrop/tools.js';
@@ -500,6 +501,7 @@ async function main(): Promise<void> {
     store: createRaindropStore(postgres.pool),
     cipher: healthCipherFromEnvironment(process.env.RAINDROP_ENCRYPTION_KEYS),
     provider: createRaindropProvider(),
+    oauth: raindropOAuthFromEnvironment(process.env, createRaindropOAuthStore(redis.client)),
     canUse: async (userId) => {
       const settings = await loadUserSettings(userId);
       return settings.killSwitch !== true && enabledSkillIds(settings).has('raindrop');
@@ -1111,7 +1113,7 @@ async function main(): Promise<void> {
       // decadono soltanto allora, non a ogni modifica delle impostazioni.
       onSettingsChanged: async (userId) => {
         companions.invalidateUser(userId);
-        raindrop.pause(userId);
+        await raindrop.invalidateAuthorization(userId);
         await health.consent.revoke(userId);
         await ssh.invalidate(userId);
       },
@@ -1142,7 +1144,7 @@ async function main(): Promise<void> {
       applyGuardian,
       onChanged: async (userId, skillId, before) => {
         companions.invalidateUser(userId);
-        if (skillId === 'raindrop') raindrop.pause(userId);
+        if (skillId === 'raindrop') await raindrop.invalidateAuthorization(userId);
         if (
           skillId === 'abitudini' &&
           !enabledSkillIds(await loadUserSettings(userId)).has('abitudini')

@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct RaindropView: View {
     @Environment(AppModel.self) private var model
@@ -15,6 +16,9 @@ struct RaindropView: View {
     @State private var error: String?
     @State private var searchGeneration = UUID()
     @State private var confirmDisconnect = false
+    @State private var authorization = RaindropWebAuthorization()
+    @State private var authorizationGeneration = UUID()
+    @State private var authorizationTask: Task<Void, Never>?
 
     var body: some View {
         List {
@@ -41,14 +45,15 @@ struct RaindropView: View {
                         Text("Il server deve essere aggiornato e configurato prima del collegamento.")
                             .font(.footnote).foregroundStyle(.secondary)
                     } else if status.enabled {
-                        Link("Apri le integrazioni di Raindrop", destination: URL(string: "https://app.raindrop.io/settings/integrations")!)
-                        Text("Crea un’app personale nelle integrazioni Raindrop, aprine le impostazioni e copia il «Test token». Incollalo qui: verrà verificato e conservato cifrato nel tuo account Ernie. Non inviarlo in chat.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        SecureField("Token personale Raindrop", text: $token)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Button("Collega account") { Task { await connect() } }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if status.oauthConfigured == true {
+                            Button { authorizationTask = Task { await connectOAuth() } } label: {
+                                Label("Accedi con Raindrop", systemImage: "person.crop.circle.badge.checkmark")
+                            }
+                            .buttonStyle(.borderedProminent).disabled(busy)
+                            Text("Accedi sul sito Raindrop e autorizza Ernie. Tornerai automaticamente qui.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                            DisclosureGroup("Collegamento manuale con token") { manualConnection }
+                        } else { manualConnection }
                     } else {
                         Text("Attiva la skill per collegare il tuo account.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -67,10 +72,47 @@ struct RaindropView: View {
             clear()
             await load()
         }
-        .onDisappear { token = ""; searchGeneration = UUID() }
+        .onDisappear { token = ""; searchGeneration = UUID(); authorizationTask?.cancel(); authorization.cancel() }
         .confirmationDialog("Scollegare Raindrop?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
             Button("Scollega account", role: .destructive) { Task { await disconnect() } }
         } message: { Text("La credenziale sarà rimossa da Ernie. I tuoi segnalibri resteranno su Raindrop.") }
+    }
+
+    @ViewBuilder private var manualConnection: some View {
+        Link("Apri le integrazioni di Raindrop", destination: URL(string: "https://app.raindrop.io/settings/integrations")!)
+        Text("Crea un’app personale nelle integrazioni Raindrop, aprine le impostazioni e copia il «Test token». Incollalo qui: verrà verificato e conservato cifrato nel tuo account Ernie. Non inviarlo in chat.")
+            .font(.footnote).foregroundStyle(.secondary)
+        SecureField("Token personale Raindrop", text: $token)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+        Button("Collega account") { Task { await connect() } }
+            .buttonStyle(.borderedProminent)
+            .disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func connectOAuth() async {
+        guard let api = model.api, !busy else { return }
+        let attempt = UUID()
+        authorizationGeneration = attempt
+        busy = true; error = nil
+        defer { if model.credentials == api.credentials && authorizationGeneration == attempt { busy = false } }
+        do {
+            let verifier = try makeRaindropVerifier()
+            let start = try await api.raindropOAuthStart(verifier: verifier)
+            try Task.checkCancellation()
+            guard model.credentials == api.credentials, authorizationGeneration == attempt else { return }
+            let code = try await authorization.authorize(start)
+            try Task.checkCancellation()
+            guard model.credentials == api.credentials, authorizationGeneration == attempt else { return }
+            let value = try await api.raindropOAuthComplete(state: start.state, verifier: verifier, code: code)
+            guard model.credentials == api.credentials, authorizationGeneration == attempt else { return }
+            status = value
+            token = ""
+            await loadLibrary(api)
+        } catch is CancellationError { /* Closing the panel cancels the local flow. */
+        } catch let err as ASWebAuthenticationSessionError where err.code == .canceledLogin {
+        } catch {
+            if model.credentials == api.credentials, authorizationGeneration == attempt { self.error = Self.describe(error) }
+        }
     }
 
     @ViewBuilder private var library: some View {
@@ -114,6 +156,7 @@ struct RaindropView: View {
     }
 
     private func clear() {
+        authorizationGeneration = UUID(); authorizationTask?.cancel(); authorization.cancel()
         searchGeneration = UUID(); token = ""; status = nil; owner = nil; collections = []; items = []
         query = ""; collectionId = 0; nextPage = nil; error = nil; busy = false; searching = false
     }

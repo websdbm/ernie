@@ -5,6 +5,25 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Raindrop OAuth — implementazione locale, non pubblicata
+
+13 novembre 2026. L’utente riferisce di avere completato il collegamento manuale e richiede login
+con ritorno automatico. Nuovo pulsante «Accedi con Raindrop» tramite sessione web nativa, API autenticate
+start/complete, binding al dispositivo/account, state casuale monouso con TTL Redis di 5 minuti.
+Credenziali OAuth e refresh cifrati nella connessione esistente, rinnovo su uso e invalidazione su
+spegnimento/scollegamento; token manuali preservati. Nessuna nuova migrazione né modifica alla libreria.
+
+49 test backend passati, incluso Redis reale isolato, 6 iOS passati e compilazione simulatore;
+TypeScript/Biome verificati. OAuth provider simulato: nessun accesso alla libreria reale durante i test.
+**Non ancora attivo nella build 122 / API pubblicata**: serve registrare una sola app OAuth del gestore,
+configurare privatamente `RAINDROP_OAUTH_CLIENT_ID` e `RAINDROP_OAUTH_CLIENT_SECRET`, verificare che
+Raindrop accetti `ernie://raindrop-auth` e restituisca lo state, quindi pubblicare API e nuova build
+con la consueta autorizzazione. Il flusso reale sul provider non è stato verificato. Nuove compilazioni
+solo temporanee per test: nessun nuovo numero di build distribuito e nessun upload effettuato.
+Guida e prerequisiti in [Raindrop](integrations/raindrop.md#accesso-automatico--incremento-non-ancora-rilasciato).
+Esempi pratici aggiunti alla guida. Il collegamento riferito dall’utente non è stato verificato dal
+backend con le sue credenziali: non dichiararlo verificato. Intervento SINGLE, nessun sottoagente.
+
 ### Raindrop — chiarimento del collegamento su iPhone
 
 13 novembre 2026. Lo screenshot dell’utente dopo il login mostra la pagina corretta «Integrazioni»;

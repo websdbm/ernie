@@ -33,9 +33,73 @@ dal database corrente di Ernie, anche con skill spenta; non revoca il token pres
 la libreria. Revocarlo nelle integrazioni Raindrop se non serve altrove. I backup precedenti seguono
 la retention operativa del server.
 
-Non è ancora implementato l’OAuth interattivo integrato nell’app. Il token personale evita un nuovo
-client secret globale; un futuro flusso OAuth richiederà registrazione e callback dell’app Ernie.
+La build 122 distribuita usa il token manuale. L’incremento OAuth è implementato nei sorgenti ma
+**non ancora pubblicato o configurato in produzione**. Non modifica i collegamenti manuali esistenti.
 La guida MCP segnala che i client ospitati potrebbero richiedere abilitazione dal provider.
+
+## Accesso automatico — incremento non ancora rilasciato
+
+L’utente preme **Accedi con Raindrop**, accede e autorizza sul sito del provider; la sessione nativa
+`ASWebAuthenticationSession` intercetta il ritorno `ernie://raindrop-auth` e il pannello rilegge
+profilo e raccolte. La password resta nel sito Raindrop. Nessun access/refresh token passa negli URL
+né arriva all’app; lo scambio del codice è eseguito dal backend autenticato.
+
+Prerequisiti del gestore, una volta per ciascun backend Ernie:
+
+1. Registrare un’app OAuth Ernie nel pannello Raindrop; configurare il redirect esatto
+   `ernie://raindrop-auth`. **Accettazione di questo redirect e ritorno reale dello state vanno
+   verificati con il client registrato prima di dichiarare il flusso funzionante in produzione.**
+   La documentazione ufficiale descrive OAuth e redirect registrati, ma non costituisce una prova
+   del comportamento del nostro specifico client nativo.
+2. Configurare privatamente `RAINDROP_OAUTH_CLIENT_ID` e `RAINDROP_OAUTH_CLIENT_SECRET` nel backend.
+   Il secret non viene distribuito nell’iPhone. Nessun valore di credenziale va versionato.
+3. Pubblicare l’API e una nuova build iOS dopo il normale via libera al rilascio, poi provare accesso,
+   annullamento, rinnovo e scollegamento su iPhone. Non è necessaria una nuova migrazione SQL.
+
+Senza entrambe le variabili il backend dichiara `oauthConfigured: false`: resta disponibile il token
+manuale. La vecchia build ignora il nuovo campo; il nuovo client gestisce anche server senza quel campo.
+Il nuovo pulsante appare solo quando l’API dichiara OAuth configurato e la skill è accesa.
+Il collegamento manuale resta in una sezione espandibile. Un account già collegato continua a funzionare.
+
+Protocollo: POST autenticata `/v1/raindrop/oauth/start` con prova casuale del dispositivo;
+risposta URL di autorizzazione e state casuale. POST `/v1/raindrop/oauth/complete` con codice,
+state e prova, senza possibilità di scegliere un altro userId. Un solo tentativo per account,
+scadenza 5 minuti; Redis contiene solo hash di state/prova e fingerprint della configurazione.
+Consumo atomico monouso, confronto prima della cancellazione: tentativi sbagliati non consumano
+quelli validi. DELETE `/v1/raindrop/oauth` annulla il tentativo; spegnimento skill, kill switch,
+scollegamento e collegamento manuale lo invalidano. Il ritorno deve avere origine, state e codice
+attesi; URL di autorizzazione e callback sono verificati anche nell’iPhone.
+
+Access token, refresh token e scadenza restano nell’envelope cifrato già dedicato alla connessione.
+Alla prima lettura dopo la scadenza imminente il servizio rinnova l’accesso prima di chiamare Raindrop.
+Nessun polling in background, nessun rinnovo per i Test token. Rinnovi/collegamenti/scollegamenti sono
+serializzati per account nell’unico processo API attuale. Un futuro deployment con più repliche API
+richiederà anche un lock distribuito del rinnovo prima di abilitarle.
+Nessun tentativo automatico di ripetere uno scambio incerto; errori provider depurati, payload limitati,
+HTTPS e redirect di rete rifiutati. La prova locale di binding non è PKCE del provider: la documentazione
+Raindrop consultata non lo descrive. Client secret resta necessario allo scambio sul backend.
+
+Verifiche locali dell’incremento: 49 test backend passati (incluso Redis reale isolato e consumo
+concorrente), una precedente integrazione PostgreSQL non rieseguita; 6 test iOS passati e compilazione
+simulatore. Provider OAuth simulato nei test; **login reale e ritorno dal provider non ancora verificati**.
+
+## Come usare la skill
+
+Attivare Raindrop e collegare il proprio account. In Impostazioni → Raindrop si possono scegliere
+raccolta e ricerca, aprire i segnalibri e consultarne note ed evidenziazioni. Nella chat principale:
+
+- «Mostrami le raccolte che ho in Raindrop».
+- «Cerca in Raindrop gli articoli sugli agenti AI».
+- «Cerca i segnalibri con tag WordPress nella raccolta Lavoro».
+- «Riassumi questo segnalibro e dammi il link originale».
+- «Confronta questi due articoli salvati in Raindrop».
+- «Salva questo link in Raindrop nella raccolta X, con tag Y».
+- «Salva nel Second Brain questo punto dell’articolo, citando la fonte» (trasferimento esplicito).
+
+La lettura integrale e la ricerca semantica dipendono dal piano/funzioni disponibili presso Raindrop.
+L’estratto non equivale al testo completo; Ernie deve segnalare il limite. Non sono esposti strumenti
+per cancellare, spostare o riorganizzare in massa i segnalibri. Nessuna scansione preventiva dell’intera
+libreria, nessun trasferimento automatico nel Second Brain.
 
 ## Backend e sicurezza
 

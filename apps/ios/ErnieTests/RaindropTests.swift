@@ -41,4 +41,50 @@ struct RaindropTests {
         #expect(item("https://example.test/article").safeURL?.host == "example.test")
         #expect(ToolLabels.name("raindrop_save") == "Salvataggio in Raindrop")
     }
+    @Test func accessoAutomaticoAccettaSoloRaindropERitornoConStateCorretto() throws {
+        let state = String(repeating: "a", count: 43)
+        let start = RaindropOAuthStart(authorizationURL: "https://raindrop.io/oauth/authorize?client_id=test&response_type=code&redirect_uri=ernie%3A%2F%2Fraindrop-auth&state=\(state)", state: state)
+        #expect(start.safeURL != nil)
+        #expect(try start.code(from: URL(string: "ernie://raindrop-auth?code=synthetic-code&state=\(state)")!) == "synthetic-code")
+        for value in [
+            "ernie://raindrop-auth?code=x&state=wrong",
+            "ernie://raindrop-auth?code=x&state=\(state)&state=\(state)",
+            "ernie://raindrop-auth?code=x&code=y&state=\(state)",
+            "ernie://other?code=x&state=\(state)",
+            "https://raindrop-auth?code=x&state=\(state)",
+            "ernie://raindrop-auth?error=access_denied&state=\(state)",
+            "ernie://raindrop-auth?code=x&state=\(state)#fragment"
+        ] { #expect(throws: RaindropAuthorizationError.self) { try start.code(from: URL(string: value)!) } }
+        for value in [
+            start.authorizationURL.replacingOccurrences(of: "raindrop.io", with: "evil.test"),
+            start.authorizationURL.replacingOccurrences(of: "https:", with: "http:"),
+            start.authorizationURL + "&state=duplicate",
+            start.authorizationURL + "&redirect_uri=https://evil.test",
+            start.authorizationURL + "&client_secret=secret"
+        ] { #expect(RaindropOAuthStart(authorizationURL: value, state: state).safeURL == nil) }
+    }
+    @Test func provaLocaleCasualeENonRiutilizzata() throws {
+        let a = try makeRaindropVerifier(), b = try makeRaindropVerifier()
+        #expect(a != b)
+        #expect(a.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil)
+    }
+    @Test func oauthUsaCorpiAutenticatiSenzaSegretiNegliURL() async throws {
+        let state = String(repeating: "a", count: 43), verifier = String(repeating: "b", count: 64)
+        let data = Data(status.utf8)
+        let api = ApiClient(credentials: credentials, transport: { req in
+            #expect(req.httpMethod == "POST")
+            #expect(req.url?.query == nil)
+            #expect(req.value(forHTTPHeaderField: "Authorization") == "Bearer test-ernie-key")
+            let body = try #require(try JSONSerialization.jsonObject(with: req.httpBody!) as? [String: String])
+            if req.url?.path == "/v1/raindrop/oauth/start" {
+                #expect(body == ["verifier": verifier])
+                return (Data("{\"authorizationURL\":\"https://raindrop.io/oauth/authorize\",\"state\":\"\(state)\"}".utf8), HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }
+            #expect(req.url?.path == "/v1/raindrop/oauth/complete")
+            #expect(body == ["state": state, "verifier": verifier, "code": "synthetic-code"])
+            return (data, HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        #expect(try await api.raindropOAuthStart(verifier: verifier).state == state)
+        #expect(try await api.raindropOAuthComplete(state: state, verifier: verifier, code: "synthetic-code").connected)
+    }
 }

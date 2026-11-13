@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Authenticator } from '../auth.js';
 import { createAuthHook } from '../ws/plugin.js';
+import { OAuthCode, OAuthProof, OAuthState } from './oauth.js';
 import { Id, RaindropError, Search, Token } from './provider.js';
 import type { RaindropService } from './service.js';
 
@@ -36,6 +37,21 @@ export async function raindropRoutes(app: FastifyInstance, opts: RaindropRoutesO
       return req.auth.userId;
     };
     api.get('/v1/raindrop', async (req) => opts.service.status(uid(req)));
+    api.post('/v1/raindrop/oauth/start', { bodyLimit: 4096 }, async (req) => {
+      const { verifier } = z.object({ verifier: OAuthProof }).strict().parse(req.body);
+      return opts.service.beginOAuth(uid(req), verifier);
+    });
+    api.post('/v1/raindrop/oauth/complete', { bodyLimit: 4096 }, async (req) => {
+      const input = z
+        .object({ state: OAuthState, verifier: OAuthProof, code: OAuthCode })
+        .strict()
+        .parse(req.body);
+      return opts.service.completeOAuth(uid(req), input);
+    });
+    api.delete('/v1/raindrop/oauth', async (req) => {
+      await opts.service.invalidateAuthorization(uid(req));
+      return { ok: true };
+    });
     api.put('/v1/raindrop/connection', { bodyLimit: 6000 }, async (req) => {
       const { token } = z.object({ token: Token }).strict().parse(req.body);
       return opts.service.connect(uid(req), token);
