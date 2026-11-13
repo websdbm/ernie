@@ -1,7 +1,8 @@
 # Build 122 — Raindrop
 
-13 novembre 2026. Implementazione autorizzata dall’utente. API/worker e iOS preparati,
-**non pubblicati**; account personale ancora da collegare. La build attiva resta la 121.
+13 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker pubblicati e verificati**,
+migrazione 0055 applicata. Account personale ancora da collegare. Caricamento iOS avviato ma in
+attesa della richiesta Portachiavi sul Mac: **122 non ancora verificata su TestFlight**, dove resta la 121.
 
 ## Funzionalità
 
@@ -59,5 +60,26 @@ archivio firmato, export IPA, manifest, input e log. Il backend comprende inoltr
 delle raccolte per nome/percorso, con risultati paginati e totali espliciti; nessuna differenza agli
 input iOS rispetto al commit dell’archivio.
 
-Nessun caricamento App Store Connect effettuato. API/worker, migrazione, chiave e TestFlight in attesa
-del via libera di pubblicazione richiesto da HANDOFF.md. Il collegamento personale si verifica dopo.
+Il via libera di pubblicazione è stato ricevuto. Caricamento tramite Xcode dall’archivio verificato,
+destinazione upload, log privato `upload.log`: in attesa del consenso Portachiavi per codesign.
+Richiesto all’utente anche il login Apple nella scheda App Store Connect per verificare elaborazione,
+note italiane e gruppo Interni. Non avviare un secondo caricamento né dichiarare disponibilità prima
+del riscontro Apple. La finestra SecurityAgent richiede intervento diretto dell’utente.
+
+## Backend pubblicato
+
+Checkout Git `35e9008e03bab9fae65b60c2d348f8dd3f809493`; immagine API e worker
+`sha256:32bec54e34a7197e3ca46a8250ab49d3d5ed93561aef201a16c73f5e731b2547`.
+Backup `/srv/staging3/backups/ernie-pre-122-20261113/`: progetto, configurazioni, dump PostgreSQL
+con indice verificato, vecchie immagini distinte per API/worker, log e risultato smoke.
+Migrazione 0055 applicata, RLS e FORCE RLS riletti; chiave dedicata generata e copia privata di
+recupero sul Mac ufficio in `~/Library/Application Support/ErniePrivate/`.
+Solo la nuova impostazione Raindrop aggiunta: altre impostazioni e override confrontati col backup.
+Postgres e Redis non ricreati; health/readiness pubbliche 200, worker memoria e automazioni pronti.
+L’etichetta legacy della health resta quella dell’ambiente; Git, immagine e sei moduli compilati
+verificati direttamente rispetto ai moduli locali testati.
+
+Smoke sul servizio in esercizio: stato HTTPS configurato ma spento, collegamento con provider sintetico
+iniettato nel servizio compilato, cifratura e isolamento, blocco a skill spenta, scollegamento e filtro
+di memoria. Fixture rimosse; zero chiamate reali a Raindrop/LLM e nessuna nota/fatto/automazione creata.
+Zero utenti con skill esplicitamente attivata e zero collegamenti reali al termine delle verifiche.

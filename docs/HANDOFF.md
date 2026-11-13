@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 122 — Raindrop implementato, pubblicazione e collegamento personale da completare
+### Build 122 — API/worker pubblicati; caricamento Apple in attesa del Portachiavi
 
 13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni
 e salvataggio di link richiesto dall’utente. Letture MCP avanzate con schemi verificati dal vivo e
@@ -23,7 +23,12 @@ Verifiche: TypeScript/Biome, **289 test backend passati** (29 integrazioni non p
 inclusa RLS su PostgreSQL locale dedicato, cifratura, isolamento, revoca durante lettura/collegamento,
 protocollo MCP/SSE, memoria e router; **25 test iOS passati**, build simulatore 122 compilata.
 Nessun accesso all’account Raindrop reale: disponibilità MCP/piano e contenuti vanno provati dopo
-il collegamento. Nessuna pubblicazione, migrazione o chiave nuova sul server; resta attiva la 121.
+il collegamento. Pubblicazione API/worker autorizzata e completata il 13 novembre: checkout `35e9008`,
+immagine comune `32bec54e…`, migrazione **0055** applicata dopo backup. API healthy e worker memoria/
+automazioni pronti, PostgreSQL e Redis non ricreati. Keyring dedicato con copia privata di recupero
+anche sul Mac ufficio, altre impostazioni e override preservati. La skill resta spenta per tutti;
+zero collegamenti reali. Smoke HTTPS/codice compilato/RLS/cifratura/confine memoria passato, fixture
+rimosse e nessuna chiamata al provider. Backup `/srv/staging3/backups/ernie-pre-122-20261113/`.
 
 L’utente ha creato Apple Development e Apple Distribution validi sul Mac ufficio, senza revoche.
 Archivio ed export Apple completati su Xcode 27.2 ufficio (Mac Studio offline). Sorgenti iOS GitHub
@@ -32,8 +37,13 @@ Apple Distribution, Diario privato soltanto nell’app e APNs production. IPA 83
 SHA-256 `9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
 Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`.
 Include inoltre filtro/paginazione delle raccolte per l’agente, così omonimi e raccolte oltre la prima
-pagina vengono risolti per percorso senza inviare tutta la libreria al modello. Nessun upload avviato;
-pubblicazione API/worker, migrazione/chiave e TestFlight richiedono il via libera specifico.
+pagina vengono risolti per percorso senza inviare tutta la libreria al modello. L’upload è autorizzato
+e avviato da Xcode usando l’archivio verificato, ma è ancora fermo sul processo codesign/Portachiavi:
+**non dichiarare la 122 caricata o disponibile su TestFlight**. L’utente deve autorizzare la finestra
+protetta sul Mac (SecurityAgent non controllabile dallo strumento) e completare l’accesso Apple nella
+scheda Chrome App Store Connect aperta. Due richieste di input in sospeso; non richiedere una nuova
+approvazione di pubblicazione, già concessa. Log privato `upload.log` nella cartella degli artefatti.
+Comando attivo: xcodebuild exportArchive, destinazione upload; evitare un secondo upload concorrente.
 Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight
@@ -696,8 +706,8 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 |---|---|
 | App su TestFlight | build **121**, verificata l’11 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `ab51bba` |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **791c2dc**, checkout `e5e4874`, immagine `c8675a28…`; worker **120**, immagine `f533f499…`. API healthy, worker non ricreato. Backup pre-121 disponibile; evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
-| Migrazioni | fino alla **0054**, applicate e verificate; Salute senza referti preesistenti da trasferire, nessun consenso attivato. Nessuna migrazione per la 121 |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API e worker **122**, checkout `35e9008`, immagine comune `32bec54e…`. API healthy, worker memoria/automazioni pronti. Backup pre-122 disponibile; evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
+| Migrazioni | fino alla **0055**, applicate e verificate. Raindrop con chiave dedicata, zero collegamenti reali e skill spenta; nessun consenso Salute/Abitudini attivato |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
