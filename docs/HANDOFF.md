@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 122 — API/worker pubblicati; caricamento Apple in attesa del Portachiavi
+### Build 122 — API/worker pubblicati; Apple richiede la licenza aggiornata
 
 13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni
 e salvataggio di link richiesto dall’utente. Letture MCP avanzate con schemi verificati dal vivo e
@@ -37,13 +37,19 @@ Apple Distribution, Diario privato soltanto nell’app e APNs production. IPA 83
 SHA-256 `9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
 Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`.
 Include inoltre filtro/paginazione delle raccolte per l’agente, così omonimi e raccolte oltre la prima
-pagina vengono risolti per percorso senza inviare tutta la libreria al modello. L’upload è autorizzato
-e avviato da Xcode usando l’archivio verificato, ma è ancora fermo sul processo codesign/Portachiavi:
-**non dichiarare la 122 caricata o disponibile su TestFlight**. L’utente deve autorizzare la finestra
-protetta sul Mac (SecurityAgent non controllabile dallo strumento) e completare l’accesso Apple nella
-scheda Chrome App Store Connect aperta. Due richieste di input in sospeso; non richiedere una nuova
-approvazione di pubblicazione, già concessa. Log privato `upload.log` nella cartella degli artefatti.
-Comando attivo: xcodebuild exportArchive, destinazione upload; evitare un secondo upload concorrente.
+pagina vengono risolti per percorso senza inviare tutta la libreria al modello. Portachiavi e login
+Apple completati dall’utente. Il primo upload è terminato con **EXPORT FAILED**, errore Apple
+«You do not have required contracts to perform an operation». App Store Connect → Azienda e il
+portale Developer confermano un Apple Developer Program License Agreement aggiornato da accettare
+entro il **14 novembre 2026**. Aperta in Chrome la pagina di revisione:
+`https://developer.apple.com/account/agree/7MJ4WNXK5F/terms`, lasciata all’utente per lettura e decisione.
+Nessun contratto accettato dall’agente; richiesta di intervento diretto in sospeso. **Non dichiarare
+la 122 caricata o disponibile su TestFlight**: l’ultima build visibile è la 121. Nessun processo di
+upload ancora attivo. Dopo l’accettazione verificare lo stato Apple e ritentare dall’archivio firmato,
+senza ricompilare o chiedere una nuova approvazione di pubblicazione (già concessa).
+Log privato `upload.log` nella cartella degli artefatti; cattura di riscontro locale
+`/tmp/ernie122-apple-agreement.png`. Non intervenire sugli avvisi bancari/DAC7 o sul rinnovo abbonamento:
+sono fuori ambito rispetto alla licenza che blocca questo caricamento.
 Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight

@@ -1,8 +1,8 @@
 # Build 122 — Raindrop
 
 13 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker pubblicati e verificati**,
-migrazione 0055 applicata. Account personale ancora da collegare. Caricamento iOS avviato ma in
-attesa della richiesta Portachiavi sul Mac: **122 non ancora verificata su TestFlight**, dove resta la 121.
+migrazione 0055 applicata. Account personale ancora da collegare. Caricamento iOS rifiutato da Apple
+per contratto aggiornato non accettato: **122 non disponibile su TestFlight**, dove resta la 121.
 
 ## Funzionalità
 
@@ -60,11 +60,14 @@ archivio firmato, export IPA, manifest, input e log. Il backend comprende inoltr
 delle raccolte per nome/percorso, con risultati paginati e totali espliciti; nessuna differenza agli
 input iOS rispetto al commit dell’archivio.
 
-Il via libera di pubblicazione è stato ricevuto. Caricamento tramite Xcode dall’archivio verificato,
-destinazione upload, log privato `upload.log`: in attesa del consenso Portachiavi per codesign.
-Richiesto all’utente anche il login Apple nella scheda App Store Connect per verificare elaborazione,
-note italiane e gruppo Interni. Non avviare un secondo caricamento né dichiarare disponibilità prima
-del riscontro Apple. La finestra SecurityAgent richiede intervento diretto dell’utente.
+Il via libera di pubblicazione è stato ricevuto. L’utente ha autorizzato il Portachiavi e completato
+il login Apple. Export con destinazione upload terminato con errore
+«You do not have required contracts to perform an operation» (ID Apple `145c29e5-5759-4713-bb57-e0e6fb1e25eb`).
+Il portale ufficiale conferma un nuovo Apple Developer Program License Agreement richiesto entro il
+14 novembre 2026. Aperto il contratto in Chrome per la lettura e l’eventuale accettazione personale
+da parte dell’utente; l’agente non ha accettato accordi. Log privato `upload.log`, nessun upload attivo.
+Dopo il riscontro verificare che il blocco sia rimosso e ritentare dall’archivio già firmato, quindi
+controllare elaborazione, note italiane e gruppo Interni. La pubblicazione è già autorizzata.
 
 ## Backend pubblicato
 
