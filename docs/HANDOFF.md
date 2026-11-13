@@ -5,6 +5,19 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Raindrop.io — fattibilità verificata, collegamento non ancora implementato
+
+13 novembre 2026. Dall’email fornita dall’utente identificato Raindrop.io. Disponibili MCP ufficiale
+Streamable HTTP (`https://api.raindrop.io/rest/v2/ai/mcp`), OAuth/token e API REST. Nessuna integrazione
+Raindrop/MCP trovata nel backend attuale. Proposta: skill attivabile per account, autorizzazione personale,
+ricerca/lettura e salvataggio su richiesta, fonti con link; memoria Second Brain soltanto su richiesta
+esplicita. Nessuna credenziale acquisita, libreria importata o modifica runtime effettuata.
+La [guida MCP aggiornata](https://help.raindrop.io/integrations/mcp) distingue piano gratuito limitato
+da Pro con ricerca testuale/semantica; la pagina developer riporta ancora beta solo Pro.
+Per un client ospitato la guida chiede di contattare il provider per abilitare il supporto; alternativa
+documentata: token OAuth API personale. Verificare piano e autorizzazione con l’account reale prima
+di promettere ricerca completa. Questa sessione riguarda soltanto la fattibilità, senza sviluppo autorizzato.
+
 ### Build 121 — API pubblicata e disponibile su TestFlight
 
 11 novembre 2026. Riscontro sul turno segnalato: una conferma alla domanda conclusiva su un avviso ancora
