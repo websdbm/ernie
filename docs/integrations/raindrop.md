@@ -60,6 +60,8 @@ REST autenticata con la normale chiave Ernie, scope `chat`, `Cache-Control: no-s
 
 Strumenti agente: `raindrop_search`, `raindrop_get`, `raindrop_collections`, `raindrop_read_tools`,
 `raindrop_read`, `raindrop_save`. Disponibili solo a skill accesa, con controllo ripetuto nel servizio.
+`raindrop_collections` filtra per nome/percorso con `query`, pagina con `offset`/`limit` e restituisce
+`total`, `matches`, `items`, `nextOffset`: le raccolte omonime si distinguono dal percorso dei genitori.
 Le letture hanno provenienza privata/non fidata; query e scritture sono canali verso l’esterno e
 rispettano il motore delle conferme esistente. Il modello non può collegare token.
 

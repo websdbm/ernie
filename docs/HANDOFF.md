@@ -19,16 +19,21 @@ Consolidamento e riepilogo di sessione escludono le risposte dell’assistente d
 anche nei seguiti senza altre letture; restano i messaggi diretti della persona. Pubblicare **API e
 worker insieme** per mantenere questo confine. Second Brain aggiornato solo su richiesta esplicita.
 
-Verifiche: TypeScript/Biome, **288 test backend passati** (29 integrazioni non pertinenti saltate),
+Verifiche: TypeScript/Biome, **289 test backend passati** (29 integrazioni non pertinenti saltate),
 inclusa RLS su PostgreSQL locale dedicato, cifratura, isolamento, revoca durante lettura/collegamento,
 protocollo MCP/SSE, memoria e router; **25 test iOS passati**, build simulatore 122 compilata.
 Nessun accesso all’account Raindrop reale: disponibilità MCP/piano e contenuti vanno provati dopo
 il collegamento. Nessuna pubblicazione, migrazione o chiave nuova sul server; resta attiva la 121.
 
-Firma ancora da completare: Mac Studio offline su Tailscale; ufficio con due Apple Development
-scaduti e nessuna identità valida. L’utente è in ufficio: richiesto rinnovo/creazione in Xcode →
-Accounts → team 76X78MBPR3 → Manage Certificates, senza revocare certificati esistenti.
-Attendere il riscontro per firma/esportazione; pubblicazione produzione richiede via libera specifico.
+L’utente ha creato Apple Development e Apple Distribution validi sul Mac ufficio, senza revoche.
+Archivio ed export Apple completati su Xcode 27.2 ufficio (Mac Studio offline). Sorgenti iOS GitHub
+`2ca3f01ed4bba3f1b20a0ff32957d17ddfbe30d9`, 321 input verificati, quattro bundle 122 firmati
+Apple Distribution, Diario privato soltanto nell’app e APNs production. IPA 83.023.284 byte,
+SHA-256 `9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
+Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`.
+Include inoltre filtro/paginazione delle raccolte per l’agente, così omonimi e raccolte oltre la prima
+pagina vengono risolti per percorso senza inviare tutta la libreria al modello. Nessun upload avviato;
+pubblicazione API/worker, migrazione/chiave e TestFlight richiedono il via libera specifico.
 Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight

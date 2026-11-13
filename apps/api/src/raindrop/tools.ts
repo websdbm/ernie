@@ -52,12 +52,46 @@ export function createRaindropTools(service: RaindropService): ToolSpec[] {
       version: '1.0.0',
       category: 'raindrop',
       description:
-        'Elenca raccolte Raindrop, gerarchia e ID per scegliere dove cercare o salvare. Non inventare l’ID di una raccolta; se il nome è ambiguo fai scegliere all’utente.',
+        'Trova raccolte Raindrop per nome/percorso con query, oppure elencale per pagine usando offset e nextOffset. Restituisce gerarchia, percorso e ID. Non inventare ID; per omonimi fai scegliere il percorso all’utente. total e matches distinguono totale e risultati filtrati.',
       risk: readRisk,
       requiredScopes: ['chat'],
-      inputSchema: z.object({}).strict(),
+      inputSchema: z
+        .object({
+          query: z.string().trim().max(160).default(''),
+          offset: z.number().int().min(0).max(2000).default(0),
+          limit: z.number().int().min(1).max(20).default(10),
+        })
+        .strict(),
       outputSchema: z.unknown(),
-      execute: (_i, c) => safe(() => service.collections(c.userId, c.signal)),
+      execute: (i, c) =>
+        safe(async () => {
+          const all = await service.collections(c.userId, c.signal);
+          const byId = new Map(all.map((v) => [v.id, v]));
+          const path = (id: number) => {
+            const seen = new Set<number>();
+            const names: string[] = [];
+            let next: number | null = id;
+            while (next !== null && !seen.has(next) && names.length < 15) {
+              seen.add(next);
+              const value = byId.get(next);
+              if (!value) break;
+              names.unshift(value.title);
+              next = value.parentId;
+            }
+            return names.join(' / ').slice(0, 1000);
+          };
+          const query = i.query.toLocaleLowerCase('it');
+          const matches = all
+            .map((v) => ({ ...v, path: path(v.id) }))
+            .filter((v) => !query || v.path.toLocaleLowerCase('it').includes(query));
+          const items = matches.slice(i.offset, i.offset + i.limit);
+          return {
+            total: all.length,
+            matches: matches.length,
+            items,
+            nextOffset: i.offset + items.length < matches.length ? i.offset + items.length : null,
+          };
+        }),
       untrustedSource: () => 'raindrop:collections',
     }),
     defineTool({

@@ -32,7 +32,7 @@ letture avanzate e piano devono essere verificati con l’account reale.
 ## Verifiche
 
 - `pnpm typecheck` e Biome sui file cambiati superati.
-- **288 test backend passati**, 29 integrazioni estranee non eseguite; PostgreSQL isolato dedicato
+- **289 test backend passati**, 29 integrazioni estranee non eseguite; PostgreSQL isolato dedicato
   `127.0.0.1:62205/ernie` per RLS/cifratura/migrazione. Fixture sintetiche rimosse dal test.
 - HTTP autenticata, rifiuto userId contraffatto, token assente dalle risposte/log, errori provider depurati,
   limite payload e redirect, unica richiesta di salvataggio, schemi MCP/SSE con connessione lasciata aperta.
@@ -45,7 +45,19 @@ letture avanzate e piano devono essere verificati con l’account reale.
 ## Archivio e distribuzione
 
 Numero 122 in tutti e quattro i bundle, changelog e progetto Xcode versionati.
-Compilazioni di test locali riuscite; archivio dispositivo da preparare dal commit pubblicato.
-Firma/esportazione non completate: Mac Studio offline; sul Mac ufficio risultano solo due certificati
-Apple Development scaduti. L’utente sta verificando Manage Certificates in Xcode.
-Nessun caricamento App Store Connect effettuato. Non confondere archivio senza firma con IPA installabile.
+Sorgenti iOS pubblicati e SHA remoto verificato: `2ca3f01ed4bba3f1b20a0ff32957d17ddfbe30d9`.
+Checkout pulito, 321 input iOS verificati per SHA-256. Archivio Release ed export Apple con Xcode 27.2
+sul Mac ufficio: l’utente ha creato certificati Apple Development e Apple Distribution validi,
+senza revocare i precedenti. Mac Studio offline, non utilizzato per questa compilazione.
+
+Quattro bundle 122 firmati Apple Distribution, profili validi e coerenti, APNs production e gruppo
+Diario privato solo nell’app principale, nessun permesso di debug nell’IPA.
+IPA **83.023.284 byte**, SHA-256
+`9e77a7e2969306f3c93d628cd40bb7446a1745897f990a0365f7f93194488bc7`.
+Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-122-20261113-raindrop/`:
+archivio firmato, export IPA, manifest, input e log. Il backend comprende inoltre la risoluzione
+delle raccolte per nome/percorso, con risultati paginati e totali espliciti; nessuna differenza agli
+input iOS rispetto al commit dell’archivio.
+
+Nessun caricamento App Store Connect effettuato. API/worker, migrazione, chiave e TestFlight in attesa
+del via libera di pubblicazione richiesto da HANDOFF.md. Il collegamento personale si verifica dopo.
