@@ -32,6 +32,7 @@
 		163801116EF484F5FD581802 /* HabitsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF86D5438B7D364DCA0719F /* HabitsTests.swift */; };
 		171BFD743848BDDB3B0720E1 /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CA9BF65ABE4952F37F34D7 /* InboxStore.swift */; };
 		1A654130D63927DC48E6AB94 /* HealthVaultStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571C1719665A52748811EEC9 /* HealthVaultStore.swift */; };
+		1ACCE02B8BC74FE7D36364C5 /* RaindropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FC4960F74910BAAF2E4A0CB /* RaindropView.swift */; };
 		1AD7B1A4F74390207ABDC6CA /* ernie-bear-v3-fallback.png in Resources */ = {isa = PBXBuildFile; fileRef = 567C3C7EEA2BAEEFD1AE5176 /* ernie-bear-v3-fallback.png */; };
 		1E20EE93269DFEFF1DFB9110 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2A025DD4F394BFED9AD6D3 /* Keychain.swift */; };
 		20B6E697B4947C1107E185F5 /* TerminalChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1104EFE6E4A879E7E316F3E7 /* TerminalChatTests.swift */; };
@@ -46,6 +47,7 @@
 		2A5E6AF978D040998A7842E2 /* ReminderAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6A0A245A9E7CF7BB3B5812 /* ReminderAlarm.swift */; };
 		2A75EAED43459370467478A9 /* AvatarStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC3F434F25CD1D74C96C8E8 /* AvatarStage.swift */; };
 		2BD898CA68FA16C2D2E06585 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5F81F2C5E0230E53EE2493 /* Speaker.swift */; };
+		2D063EA1C271933DBFE1A79E /* RaindropTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B977A92E8FB30053A573C /* RaindropTests.swift */; };
 		2E2AE0CB0F0095940BFD3079 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3B5A05A74A82D7EAD93D989E /* Assets.xcassets */; };
 		2E979824E4D38D37447FEFCF /* FamilyMessageCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F73AEB0AE202B3FA98948CB6 /* FamilyMessageCardTests.swift */; };
 		2F2A2C4CA771852078CADF8D /* ernie-bear-v3-night.png in Resources */ = {isa = PBXBuildFile; fileRef = 4ACB8BB3C74086AE6C9519EC /* ernie-bear-v3-night.png */; };
@@ -151,6 +153,7 @@
 		9B9DF1D50EA65E3D8CEFE2F7 /* ShoppingCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191C6CE16907D39919854571 /* ShoppingCardTests.swift */; };
 		9BA3A63DC00A00CF94B383CC /* BrainKnowledge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7C91876D2292383C015461 /* BrainKnowledge.swift */; };
 		9F5A44B1A297A3FC335DAEBA /* ernie-bear-v3-halloween.png in Resources */ = {isa = PBXBuildFile; fileRef = 7A5DD5E654850582A7832ED1 /* ernie-bear-v3-halloween.png */; };
+		9F7DB7D04A2EC6A3A2FC0941 /* RaindropModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783B1596C1B93BC407F15417 /* RaindropModels.swift */; };
 		9F80B48AB894B8F2D750184D /* HealthVaultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9955529E1D3D94F43A8A4915 /* HealthVaultView.swift */; };
 		A02A1568DB1590CF531ACD2D /* OperatingPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */; };
 		A14896871DD65DA1BEFA059F /* SupervisionNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601FBB8E4C5C5A2ED4BFCBE8 /* SupervisionNotice.swift */; };
@@ -301,6 +304,7 @@
 		06EE0AFE813FB6C140EBCC18 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		07959913339575177EEEA5F4 /* ernie-bear-v3-jedi.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-jedi.png"; sourceTree = "<group>"; };
 		079B338D379031F111D0A8D4 /* UsageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageModels.swift; sourceTree = "<group>"; };
+		087B977A92E8FB30053A573C /* RaindropTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaindropTests.swift; sourceTree = "<group>"; };
 		088F8B730F08811F3C0B89B6 /* MediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTests.swift; sourceTree = "<group>"; };
 		098A7CA1392994E9472FCEE3 /* UsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageView.swift; sourceTree = "<group>"; };
 		098CFF2AFD305C74A2B897D4 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
@@ -412,6 +416,7 @@
 		76416F1739622AD37E503DA1 /* DiaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViews.swift; sourceTree = "<group>"; };
 		776746702F34B36435BC04EA /* MediaImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaImportCoordinator.swift; sourceTree = "<group>"; };
 		7834712467189E8358BF5C1B /* Ernie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ernie.entitlements; sourceTree = "<group>"; };
+		783B1596C1B93BC407F15417 /* RaindropModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaindropModels.swift; sourceTree = "<group>"; };
 		79DCEB0A78FCF1F3E4CEDCD0 /* HabitsQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitsQueue.swift; sourceTree = "<group>"; };
 		7A04F7AC1E243E495725298C /* ConfirmationCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationCopy.swift; sourceTree = "<group>"; };
 		7A5DD5E654850582A7832ED1 /* ernie-bear-v3-halloween.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "ernie-bear-v3-halloween.png"; sourceTree = "<group>"; };
@@ -453,6 +458,7 @@
 		9955529E1D3D94F43A8A4915 /* HealthVaultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthVaultView.swift; sourceTree = "<group>"; };
 		9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderingTests.swift; sourceTree = "<group>"; };
 		9FB716C0AF20DF248C2062D2 /* FamilyLatest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyLatest.swift; sourceTree = "<group>"; };
+		9FC4960F74910BAAF2E4A0CB /* RaindropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaindropView.swift; sourceTree = "<group>"; };
 		A4804C253D0FD9F7C5401E60 /* ernie-ui-send.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "ernie-ui-send.wav"; sourceTree = "<group>"; };
 		A614D638E5877EEC3B261965 /* SoundSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundSettingsSection.swift; sourceTree = "<group>"; };
 		A6941CF87DE4F986B7CCE056 /* ReminderCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderCardView.swift; sourceTree = "<group>"; };
@@ -560,6 +566,15 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		174FEBB67F49642A1742C646 /* Raindrop */ = {
+			isa = PBXGroup;
+			children = (
+				783B1596C1B93BC407F15417 /* RaindropModels.swift */,
+				9FC4960F74910BAAF2E4A0CB /* RaindropView.swift */,
+			);
+			path = Raindrop;
+			sourceTree = "<group>";
+		};
 		22A9BBE23A356BA082DEC987 /* ErnieTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -590,6 +605,7 @@
 				4A4EAAEFBA2E4464B33E1C32 /* OperatingPreferencesTests.swift */,
 				9B07CFEFE28BF84DD5B70B86 /* OrderingTests.swift */,
 				FFADBB8C959380C87F836E68 /* PerformanceObservationTests.swift */,
+				087B977A92E8FB30053A573C /* RaindropTests.swift */,
 				74EAED8097FB2EF14E6B4514 /* ReadabilityTests.swift */,
 				1368F35E3B735718D566D794 /* RecipesTests.swift */,
 				6A13D22DE0CA5713C69F155F /* ReminderCardTests.swift */,
@@ -676,6 +692,7 @@
 				36E23BDD590261C5BE906DB6 /* Health */,
 				D079FB610D8C39CC4171ED91 /* Media */,
 				69AED0D3939374F32691BBEB /* Protocol */,
+				174FEBB67F49642A1742C646 /* Raindrop */,
 				0F9391698D6BE0DD8FFADE18 /* Recipes */,
 				4E46A961D7A68084BD873471 /* Reminders */,
 				AFE436249AC5C987A3266741 /* Resources */,
@@ -1245,6 +1262,7 @@
 				A02A1568DB1590CF531ACD2D /* OperatingPreferencesTests.swift in Sources */,
 				E5EE6BC917331155085BF71E /* OrderingTests.swift in Sources */,
 				7D6D8FDD304DEF73652A903F /* PerformanceObservationTests.swift in Sources */,
+				2D063EA1C271933DBFE1A79E /* RaindropTests.swift in Sources */,
 				DF38A2E1B2EBBCE2DBA783E7 /* ReadabilityTests.swift in Sources */,
 				F6712BF7ABEC68159F9696FA /* RecipesTests.swift in Sources */,
 				775AAAA32B4F008DACF14C5B /* ReminderCardTests.swift in Sources */,
@@ -1402,6 +1420,8 @@
 				8EDE82C5228FE0AB4B4E8AB9 /* PlacePermission.swift in Sources */,
 				CD57F0C38F410183F2AFCDA2 /* ProfileView.swift in Sources */,
 				F95A0C74CA40D10E3F1FE40D /* ProtocolClient.swift in Sources */,
+				9F7DB7D04A2EC6A3A2FC0941 /* RaindropModels.swift in Sources */,
+				1ACCE02B8BC74FE7D36364C5 /* RaindropView.swift in Sources */,
 				7F9E0792061E98393F4CCD8A /* RecipesView.swift in Sources */,
 				AD4C213E6136D977110A5375 /* ReminderAlarm.swift in Sources */,
 				EC6B4F06442C52D95B789AFF /* ReminderAlarms.swift in Sources */,
@@ -1479,7 +1499,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1534,7 +1554,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1625,7 +1645,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieShare/ErnieShare.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1646,7 +1666,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieWidgets/ErnieWidgets.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1670,7 +1690,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1753,7 +1773,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1774,7 +1794,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ErnieNotifications/ErnieNotifications.entitlements;
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ErnieNotifications/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1798,7 +1818,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ernie/Ernie.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 121;
+				CURRENT_PROJECT_VERSION = 122;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Ernie/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

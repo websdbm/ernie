@@ -4,6 +4,7 @@ import type { Logger } from '@ernie/observability';
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import type { ThreadReader } from './consolidate.js';
+import { withoutExternalLibraryResponses } from './external-library.js';
 
 /**
  * Riassunto ricorsivo della conversazione (ricerca 11, C1; idee da Letta, Hermes Agent, OpenClaw).
@@ -261,7 +262,9 @@ export async function summarizeSession(
     perPage: false,
     orderBy: { field: 'createdAt', direction: 'ASC' },
   });
-  const all = messages.map(threadMessage).filter((m): m is ThreadMessage => m !== null);
+  const all = withoutExternalLibraryResponses(messages)
+    .map(threadMessage)
+    .filter((m): m is ThreadMessage => m !== null);
   const uncovered = prev ? all.filter((m) => m.createdAt > prev.coveredUntil) : all;
   const choice = chooseFold(uncovered, high, low);
   if (!choice) return { compacted: false, uncovered: uncovered.length, folded: 0, fallback: false };

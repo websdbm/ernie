@@ -276,6 +276,7 @@ struct SettingsView: View {
                 }
                 Section("Skill") {
                     NavigationLink("Scegli le skill disponibili") { SkillsView(mode: .available) }
+                    NavigationLink { RaindropView() } label: { Label("Raindrop", systemImage: "bookmark.fill") }
                 }
                 Section("Preferenze operative") {
                     NavigationLink("Come lavora Ernie") { OperatingPreferencesView() }

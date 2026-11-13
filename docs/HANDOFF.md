@@ -5,18 +5,31 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Raindrop.io — fattibilità verificata, collegamento non ancora implementato
+### Build 122 — Raindrop implementato, pubblicazione e collegamento personale da completare
 
-13 novembre 2026. Dall’email fornita dall’utente identificato Raindrop.io. Disponibili MCP ufficiale
-Streamable HTTP (`https://api.raindrop.io/rest/v2/ai/mcp`), OAuth/token e API REST. Nessuna integrazione
-Raindrop/MCP trovata nel backend attuale. Proposta: skill attivabile per account, autorizzazione personale,
-ricerca/lettura e salvataggio su richiesta, fonti con link; memoria Second Brain soltanto su richiesta
-esplicita. Nessuna credenziale acquisita, libreria importata o modifica runtime effettuata.
-La [guida MCP aggiornata](https://help.raindrop.io/integrations/mcp) distingue piano gratuito limitato
-da Pro con ricerca testuale/semantica; la pagina developer riporta ancora beta solo Pro.
-Per un client ospitato la guida chiede di contattare il provider per abilitare il supporto; alternativa
-documentata: token OAuth API personale. Verificare piano e autorizzazione con l’account reale prima
-di promettere ricerca completa. Questa sessione riguarda soltanto la fattibilità, senza sviluppo autorizzato.
+13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni
+e salvataggio di link richiesto dall’utente. Letture MCP avanzate con schemi verificati dal vivo e
+allowlist di sole tre funzioni read-only; nessun tool generico di scrittura o cancellazione MCP.
+Pannello iOS in Impostazioni → Raindrop e nella descrizione della skill, token personale in campo
+protetto, ricerca paginata e raccolte annidate. Scollegamento distinto dallo spegnimento della skill.
+
+Migrazione **0055** (`raindrop_connections`, FORCE RLS); token e metadati account cifrati con keyring
+dedicato `RAINDROP_ENCRYPTION_KEYS`, mai in settings/LLM/log. Nessuna libreria copiata nel database.
+Consolidamento e riepilogo di sessione escludono le risposte dell’assistente dal primo uso di Raindrop,
+anche nei seguiti senza altre letture; restano i messaggi diretti della persona. Pubblicare **API e
+worker insieme** per mantenere questo confine. Second Brain aggiornato solo su richiesta esplicita.
+
+Verifiche: TypeScript/Biome, **288 test backend passati** (29 integrazioni non pertinenti saltate),
+inclusa RLS su PostgreSQL locale dedicato, cifratura, isolamento, revoca durante lettura/collegamento,
+protocollo MCP/SSE, memoria e router; **25 test iOS passati**, build simulatore 122 compilata.
+Nessun accesso all’account Raindrop reale: disponibilità MCP/piano e contenuti vanno provati dopo
+il collegamento. Nessuna pubblicazione, migrazione o chiave nuova sul server; resta attiva la 121.
+
+Firma ancora da completare: Mac Studio offline su Tailscale; ufficio con due Apple Development
+scaduti e nessuna identità valida. L’utente è in ufficio: richiesto rinnovo/creazione in Xcode →
+Accounts → team 76X78MBPR3 → Manage Certificates, senza revocare certificati esistenti.
+Attendere il riscontro per firma/esportazione; pubblicazione produzione richiede via libera specifico.
+Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight
 

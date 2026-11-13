@@ -85,6 +85,7 @@ import {
   createMessagesSkill,
   createNavigateSkill,
   createPgActivityStore,
+  createRaindropSkill,
   createRecipesSkill,
   createReminderSkill,
   createSecondBrainSkill,
@@ -161,6 +162,9 @@ import {
 import { createPerformanceStore, type PerformanceObservation } from './performance.js';
 import { pickBrainPlace, placeFromNote } from './places.js';
 import { createPrivateDiaryService } from './private-diary.js';
+import { createRaindropProvider } from './raindrop/provider.js';
+import { createRaindropService, createRaindropStore } from './raindrop/service.js';
+import { createRaindropTools } from './raindrop/tools.js';
 import { createReminderStore } from './reminders.js';
 import { createRouterDecisionRecorder } from './router/recorder.js';
 import { createSentinelStore } from './sentinels.js';
@@ -492,6 +496,16 @@ async function main(): Promise<void> {
     providers: createSshProviderAdapters(),
   });
   for (const t of createSshTools(ssh)) registry.register(t);
+  const raindrop = createRaindropService({
+    store: createRaindropStore(postgres.pool),
+    cipher: healthCipherFromEnvironment(process.env.RAINDROP_ENCRYPTION_KEYS),
+    provider: createRaindropProvider(),
+    canUse: async (userId) => {
+      const settings = await loadUserSettings(userId);
+      return settings.killSwitch !== true && enabledSkillIds(settings).has('raindrop');
+    },
+  });
+  for (const t of createRaindropTools(raindrop)) registry.register(t);
 
   const recipes = withResourceSync(
     createRecipeRepository(postgres.pool),
@@ -806,7 +820,7 @@ async function main(): Promise<void> {
     tools: {
       registry,
       executor,
-      categories: [...new Set([...config.tools.categories, 'ssh'])],
+      categories: [...new Set([...config.tools.categories, 'ssh', 'raindrop'])],
       core: [
         'memory_search',
         'operating_preferences_list',
@@ -832,6 +846,7 @@ async function main(): Promise<void> {
         createShoppingListSkill(shopping),
         createTodoSkill(),
         createSshSkill(),
+        createRaindropSkill(),
         createRecipesSkill(),
         createDocumentsSkill(),
         createSentinelsSkill(),
@@ -1096,6 +1111,7 @@ async function main(): Promise<void> {
       // decadono soltanto allora, non a ogni modifica delle impostazioni.
       onSettingsChanged: async (userId) => {
         companions.invalidateUser(userId);
+        raindrop.pause(userId);
         await health.consent.revoke(userId);
         await ssh.invalidate(userId);
       },
@@ -1126,6 +1142,7 @@ async function main(): Promise<void> {
       applyGuardian,
       onChanged: async (userId, skillId, before) => {
         companions.invalidateUser(userId);
+        if (skillId === 'raindrop') raindrop.pause(userId);
         if (
           skillId === 'abitudini' &&
           !enabledSkillIds(await loadUserSettings(userId)).has('abitudini')
@@ -1170,6 +1187,7 @@ async function main(): Promise<void> {
       diagnostics: contentReaders,
     },
     ssh: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: ssh },
+    raindrop: { authenticator, allowedOrigins: config.ws.allowedOrigins, service: raindrop },
     todo: {
       authenticator,
       allowedOrigins: config.ws.allowedOrigins,
@@ -1473,7 +1491,7 @@ async function main(): Promise<void> {
         },
         tools: {
           // Todo è già nel set core dell'agente: anche Jev deve poterlo distinguere dai promemoria.
-          categories: [...new Set([...config.tools.categories, 'todo'])],
+          categories: [...new Set([...config.tools.categories, 'todo', 'raindrop'])],
           setToolContext: companions.setToolContext,
           taintTtlSeconds: 1800,
         },

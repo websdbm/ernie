@@ -169,6 +169,10 @@ struct SkillsView: View {
                 }
                 .transition(.opacity)
             }
+            if skill.id == "raindrop", !locked {
+                NavigationLink("Account e segnalibri") { RaindropView() }
+                    .font(.footnote)
+            }
         }
         .padding(.vertical, 2)
     }

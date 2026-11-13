@@ -6,6 +6,7 @@ export * from './memory.js';
 export * from './messages.js';
 export * from './navigate.js';
 export * from './proposals.js';
+export * from './raindrop.js';
 export * from './registry.js';
 export * from './reminder.js';
 export * from './reminder-repeat.js';

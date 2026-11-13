@@ -1,5 +1,11 @@
 /** Etichette per le attività mostrate all’utente; gli identificativi restano interni. */
 export const TOOL_LABELS: Readonly<Record<string, string>> = {
+  raindrop_search: 'Ricerca nei segnalibri',
+  raindrop_get: 'Lettura del segnalibro',
+  raindrop_collections: 'Consultazione delle raccolte Raindrop',
+  raindrop_read_tools: 'Verifica delle funzioni Raindrop',
+  raindrop_read: 'Lettura dei contenuti Raindrop',
+  raindrop_save: 'Salvataggio in Raindrop',
   ssh_inventory: 'Consultazione di server e siti',
   ssh_investigate: 'Analisi del dominio e del server',
   ssh_diagnose: 'Diagnostica del server',

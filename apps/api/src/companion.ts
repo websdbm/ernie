@@ -324,6 +324,10 @@ export function createCompanionFactory(deps: CompanionFactoryDeps) {
         memorySnapshot +=
           '\n\nSecond Brain: i fatti attuali e gli orari abituali si salvano nelle schede con brain_knowledge_update, dopo ricerca e lettura della persona/argomento. Le domande su sport, scuola, accompagnamento, ritiro o rientro in una data si verificano con brain_agenda (today/tomorrow sono calcolati nel fuso del telefono). Orari abituali e ricordi non implicano richieste di avviso: non creare reminder o Todo senza richiesta esplicita. Attività terminata non prova rientro a casa; assenza di attività non prova disponibilità. Se mancano orari strutturati consulta le note e segnala i dati sconosciuti.';
       }
+      if (enabledSkillIds(effective).has('raindrop')) {
+        memorySnapshot +=
+          '\n\nRaindrop è una libreria esterna privata, separata dal Second Brain. Usa i tool raindrop_ per richieste sui segnalibri e cita i link. Non memorizzare automaticamente articoli, note o evidenziazioni come fatti sulla persona; un trasferimento richiede una richiesta esplicita. Non chiedere token in chat: il collegamento è nel pannello Raindrop. Le funzioni avanzate richiedono lo schema corrente di raindrop_read_tools; un estratto non è una lettura integrale.';
+      }
       const style = styleNote(effective);
       if (style) memorySnapshot = `${memorySnapshot}\n\nCome parli: ${style}`;
 

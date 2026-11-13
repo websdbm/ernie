@@ -1,3 +1,4 @@
+import { createRaindropSkill, RAINDROP_TOOLS } from './raindrop.js';
 import type { GuidedSkill } from './types.js';
 
 /**
@@ -27,6 +28,20 @@ export interface SkillCatalogEntry {
 }
 
 export const SKILL_CATALOG: readonly SkillCatalogEntry[] = [
+  {
+    id: 'raindrop',
+    title: 'Raindrop',
+    icon: 'bookmark.fill',
+    tint: 'blue',
+    summary: 'Cerca e consulta i tuoi segnalibri, senza importarli nella memoria.',
+    description:
+      'Collega il tuo account Raindrop per cercare raccolte, tag, articoli ed evidenziazioni e salvare link su richiesta. La libreria resta separata dal Second Brain. Il collegamento è personale e cifrato; puoi spegnere la skill o scollegare l’account. Le ricerche avanzate possono richiedere Raindrop Pro.',
+    kind: 'guided',
+    tools: RAINDROP_TOOLS,
+    examples: createRaindropSkill().examples,
+    defaultAvailable: true,
+    defaultEnabled: false,
+  },
   {
     id: 'abitudini',
     title: 'Abitudini',

@@ -1,5 +1,30 @@
 [
   {
+    "build": 122,
+    "date": "2026-11-13",
+    "title": "I tuoi segnalibri con Raindrop",
+    "items": [
+      {
+        "icon": "bookmark.fill",
+        "title": "Collega la tua libreria",
+        "detail": "Attiva la skill Raindrop e collega il tuo account da Impostazioni. La credenziale è conservata cifrata e puoi scollegarla quando vuoi.",
+        "test": "Apri Impostazioni → Raindrop e verifica attivazione e collegamento. Non inviare il token in chat."
+      },
+      {
+        "icon": "magnifyingglass",
+        "title": "Ritrova articoli, note e raccolte",
+        "detail": "Cerca per parole, raccolta e tag, consulta le evidenziazioni o chiedi a Ernie di leggere e confrontare i segnalibri. Le funzioni avanzate dipendono dal piano Raindrop.",
+        "test": "Cerca un articolo già salvato e chiedi a Ernie di riassumerlo citando il link."
+      },
+      {
+        "icon": "lock.shield",
+        "title": "Separato dal Second Brain",
+        "detail": "La libreria resta su Raindrop. Consultarla non importa automaticamente contenuti nella memoria personale. Puoi chiedere esplicitamente di salvare una specifica informazione.",
+        "test": "Spegni la skill: Ernie non deve più consultare Raindrop. Scollegare deve lasciare intatti i segnalibri."
+      }
+    ]
+  },
+  {
     "build": 121,
     "date": "2026-11-11",
     "title": "Conversazione e voce più chiare",

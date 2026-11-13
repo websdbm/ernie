@@ -98,6 +98,7 @@ describe('catalogo delle skill', () => {
 
   it('una skill non disponibile (impostazioni) non è attiva anche se accesa nel pannello', () => {
     expect([...availableSkillIds(undefined)].sort()).toEqual([
+      'abitudini',
       'chat_archive',
       'diario',
       'diario_personale',
@@ -105,6 +106,7 @@ describe('catalogo delle skill', () => {
       'maximize',
       'messaggi',
       'portami',
+      'raindrop',
       'ricette',
       'ricordami',
       'salute',
@@ -118,6 +120,8 @@ describe('catalogo delle skill', () => {
       ...availableSkillIds({
         skillsAvailable: {
           maximize: false,
+          abitudini: false,
+          raindrop: false,
           chat_archive: false,
           ricette: false,
           documenti: false,
@@ -192,13 +196,19 @@ describe('catalogo delle skill', () => {
     // Salute e SSH richiedono attivazione esplicita.
     expect([...disabledToolIds(undefined)].sort()).toEqual([
       'health_open',
+      'raindrop_collections',
+      'raindrop_get',
+      'raindrop_read',
+      'raindrop_read_tools',
+      'raindrop_save',
+      'raindrop_search',
       'ssh_diagnose',
       'ssh_inventory',
       'ssh_investigate',
       'ssh_operation',
       'ssh_plan',
     ]);
-    expect(disabledToolIds({ skills: { salute: true, ssh: true } }).size).toBe(0);
+    expect(disabledToolIds({ skills: { salute: true, ssh: true, raindrop: true } }).size).toBe(0);
   });
 
   it('la skill guidata «Ricette» porta istruzioni e tool coerenti con il catalogo', () => {

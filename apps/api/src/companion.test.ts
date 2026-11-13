@@ -1,7 +1,7 @@
 import type { Memory } from '@ernie/agent-core';
 import type { Logger } from '@ernie/observability';
 import type { LearnedSkillRepository } from '@ernie/skills';
-import { createRecipesSkill, createShoppingListSkill } from '@ernie/skills';
+import { createRaindropSkill, createRecipesSkill, createShoppingListSkill } from '@ernie/skills';
 import type { SoulRepository } from '@ernie/soul';
 import { describe, expect, it, vi } from 'vitest';
 import { createCompanionFactory, supervisedNote } from './companion.js';
@@ -28,6 +28,29 @@ const shopping = {
 } as unknown as Parameters<typeof createShoppingListSkill>[0];
 
 describe('skill per utente a metà conversazione', () => {
+  it('Raindrop is enabled per account and disappears from the live registry after deactivation', async () => {
+    const settings: Record<string, Record<string, unknown>> = {
+      a: { skills: { raindrop: true } },
+      b: {},
+    };
+    const factory = createCompanionFactory({
+      gateway: null,
+      memory: {} as Memory,
+      souls: {} as SoulRepository,
+      logger,
+      loadSettings: async (id) => settings[id] ?? {},
+      skills: { builtin: [createRaindropSkill()], learned },
+    });
+    expect((await factory.skillsFor({ userId: 'a', settings: {} })).get('raindrop')).toBeDefined();
+    expect(
+      (await factory.skillsFor({ userId: 'b', settings: {} })).get('raindrop'),
+    ).toBeUndefined();
+    settings.a = { skills: { raindrop: false } };
+    factory.invalidateUser('a');
+    expect(
+      (await factory.skillsFor({ userId: 'a', settings: {} })).get('raindrop'),
+    ).toBeUndefined();
+  });
   it('starts settings and learned reads together and shares them across simultaneous tasks', async () => {
     const started: string[] = [];
     let settingsReady: (value: Record<string, unknown>) => void = () => {};

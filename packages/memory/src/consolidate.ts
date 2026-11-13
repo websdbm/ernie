@@ -3,6 +3,7 @@ import { type LlmCallRecorder, type ModelGateway, normalizeUsage } from '@ernie/
 import type { Logger } from '@ernie/observability';
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
+import { withoutExternalLibraryResponses } from './external-library.js';
 import {
   applyWithJudge,
   createLlmJudge,
@@ -300,7 +301,7 @@ export async function consolidateThread(
     perPage: false,
     orderBy: { field: 'createdAt', direction: 'ASC' },
   });
-  const lines = messages
+  const lines = withoutExternalLibraryResponses(messages)
     .map(messageToLine)
     .filter((l): l is TranscriptLine => l !== null)
     .filter((l) => !cursor || l.createdAt > cursor)

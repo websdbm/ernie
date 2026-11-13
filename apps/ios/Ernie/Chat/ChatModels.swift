@@ -216,6 +216,12 @@ enum AgentState: Sendable, Equatable {
 /// Fallback anche per le attività già salvate nelle conversazioni precedenti.
 enum ToolLabels {
     static let italian: [String: String] = [
+        "raindrop_search": "Ricerca nei segnalibri",
+        "raindrop_get": "Lettura del segnalibro",
+        "raindrop_collections": "Consultazione delle raccolte Raindrop",
+        "raindrop_read_tools": "Verifica delle funzioni Raindrop",
+        "raindrop_read": "Lettura dei contenuti Raindrop",
+        "raindrop_save": "Salvataggio in Raindrop",
         "brain_merge": "Unione delle schede",
         "brain_search": "Ricerca nel Second Brain",
         "brain_read": "Lettura della scheda",
