@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 122 — API/worker pubblicati; upload Apple riuscito
+### Build 122 — API/worker pubblicati e disponibile su TestFlight
 
 13 novembre 2026. Skill opt-in per account, API REST ufficiali per ricerca/raccolte/note/evidenziazioni
 e salvataggio di link richiesto dall’utente. Letture MCP avanzate con schemi verificati dal vivo e
@@ -48,10 +48,14 @@ la nuova esportazione per upload cambia il confezionamento/firma, non i binari c
 Log privato `upload-after-agreement.log`, riscontro `verify-upload.json`, confronto
 `upload-binary-comparison.json` e manifest aggiornato nella cartella degli artefatti.
 
-**Elaborazione Apple, note italiane e gruppo Interni ancora da verificare**: la sessione web di App
-Store Connect è scaduta; scheda lasciata al login con richiesta all’utente. Note da 949 caratteri già
-pronte in `whats-new-it.txt`. La pubblicazione è autorizzata; dopo il login completare la distribuzione
-senza richiedere una nuova approvazione. Non dichiarare ancora la disponibilità della 122 su iPhone.
+**Elaborazione Apple conclusa e distribuzione Interni verificata il 13 novembre 2026**.
+Build ID `2d82def1-b710-47a6-a8da-48943d281a27`, versione **0.1.0 (122)**;
+App Store Connect → Interni → Build mostra **«Test in corso»**, due tester del gruppo esistente.
+Note italiane salvate e rilette dopo ricaricamento della pagina: **949 caratteri**.
+Nessun nuovo tester o gruppo aggiunto; l’assegnazione Interni era già automatica.
+Riscontro locale `/tmp/ernie122-notes-saved.png`, manifest privato aggiornato.
+Resta da collegare l’account Raindrop personale e provare letture/piano reali dall’iPhone;
+la skill resta inizialmente spenta e la libreria separata dal Second Brain.
 Dettagli e limiti in [build 122](releases/build-122.md) e [integrazione Raindrop](integrations/raindrop.md).
 
 ### Build 121 — API pubblicata e disponibile su TestFlight
@@ -224,10 +228,10 @@ Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito prese
 
 ### Ultimo rilascio effettivamente pubblicato
 
-**121**, 11 novembre 2026: API e TestFlight Interni verificati (`VALID / IN_BETA_TESTING`).
-Sorgenti iOS `ab51bba`, backend funzionale `791c2dc`, checkout server `e5e4874`.
-Stato aggiornato del backend: API e worker 122, schema fino alla 0055. Per la 122 upload Apple riuscito;
-verifica della distribuzione Interni ancora pendente (vedi sezione iniziale).
+**122**, 13 novembre 2026: API e worker pubblicati, migrazione **0055**, TestFlight **Interni**
+verificato con stato **«Test in corso»**, build ID `2d82def1-b710-47a6-a8da-48943d281a27`.
+Sorgenti iOS `2ca3f01`, backend `35e9008`, note italiane da 949 caratteri salvate e rilette.
+Skill Raindrop spenta per impostazione predefinita; account personale ancora da collegare.
 
 ### Rilasci precedenti
 
@@ -713,7 +717,7 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **121**, verificata l’11 nov: `VALID`, `IN_BETA_TESTING`, gruppo Interni; sorgenti iOS `ab51bba` |
+| App su TestFlight | build **122**, verificata il 13 nov: **Test in corso**, gruppo Interni; sorgenti iOS `2ca3f01`, note italiane rilette |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
 | Server staging3 (`/srv/staging3/projects/ernie`) | API e worker **122**, checkout `35e9008`, immagine comune `32bec54e…`. API healthy, worker memoria/automazioni pronti. Backup pre-122 disponibile; evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
 | Migrazioni | fino alla **0055**, applicate e verificate. Raindrop con chiave dedicata, zero collegamenti reali e skill spenta; nessun consenso Salute/Abitudini attivato |

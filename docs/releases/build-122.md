@@ -1,8 +1,8 @@
 # Build 122 — Raindrop
 
 13 novembre 2026. Pubblicazione autorizzata dall’utente. **API e worker pubblicati e verificati**,
-migrazione 0055 applicata. Account personale ancora da collegare. **Upload iOS ricevuto da Apple**
-alle 14:19 CET; elaborazione, note italiane e assegnazione Interni ancora da verificare dopo il login web.
+migrazione 0055 applicata. **Build 122 disponibile su TestFlight Interni**, stato «Test in corso».
+Note italiane salvate e rilette; account Raindrop personale ancora da collegare.
 
 ## Funzionalità
 
@@ -72,10 +72,16 @@ il **13 novembre 2026 alle 14:19 CET**. Log privato `upload-after-agreement.log`
 conservato in `upload/Ernie.ipa`, verifica `verify-upload.json`, confronto binari
 `upload-binary-comparison.json`. Nessun nuovo caricamento necessario.
 
-Sessione web App Store Connect scaduta: lasciata scheda di login all’utente per verificare elaborazione,
-applicare le note italiane già pronte (949 caratteri, `whats-new-it.txt`) e assegnare il gruppo Interni.
-**Disponibilità della 122 su TestFlight non ancora verificata**; nessuna dichiarazione di distribuzione
-completata finché il portale non la conferma. Non occorre un nuovo consenso alla pubblicazione.
+Verifica completata nel portale autenticato il **13 novembre 2026**:
+
+- Build ID `2d82def1-b710-47a6-a8da-48943d281a27`, versione **0.1.0 (122)**.
+- Gruppo esistente **Interni**, due tester, assegnazione già automatica: nessun gruppo o tester aggiunto.
+- Interni → Build mostra la 122 con stato **«Test in corso»**, scadenza fra 90 giorni.
+- Note italiane **949 caratteri** salvate e rilette dopo ricaricamento della pagina.
+- Riscontro locale `/tmp/ernie122-notes-saved.png`; manifest privato aggiornato.
+
+Resta il collegamento dell’account Raindrop personale e la prova su iPhone con la libreria reale;
+letture avanzate e disponibilità MCP/piano non provate con l’account dell’utente.
 
 ## Backend pubblicato
 
