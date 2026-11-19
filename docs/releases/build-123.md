@@ -39,8 +39,13 @@ quella descrizione e il luogo storico resta da confermare con l’utente. Nessun
 ## Rilascio
 
 Build 123 nei quattro bundle, changelog e progetto versionati prima dell’archiviazione. Compilazione
-per distribuzione dal commit GitHub verificato, con manifest privato di input/hash. Stato archivio e
-firma da aggiornare a preparazione conclusa; nessun caricamento effettuato.
+per distribuzione dal commit GitHub verificato **`4f3ccbe5882d0339d2531a15317b304fa5e81d66`**, con 321
+input iOS confrontati nel manifest privato. Checkout pulito `/tmp/ernie-build123-20261119-source`.
+Archivio sul Mac ufficio arrivato alla firma; `codesign` in attesa di accesso alla chiave del Portachiavi.
+Richiesto intervento diretto dell’utente sull’eventuale finestra macOS. Firma/export IPA ancora da
+concludere e verificare; nessun caricamento effettuato. Log e manifest privati in
+`~/Library/Caches/ernie-builds/build-123-20261119-habits/`. Non avviare un secondo upload/archivio prima
+di avere verificato lo stato di quello già in corso.
 
 Necessario aggiornare **API e iOS**; worker invariato per questa correzione, nessuna migrazione SQL,
 nessuna modifica obbligatoria a `.env` o ai consensi. Backup prima del deploy e normale approvazione

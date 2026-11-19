@@ -20,7 +20,14 @@ revisione inferenziale sempre una volta al giorno, nessuna chiamata LLM. Limiti/
 rispettati. Una domanda aperta, una notifica per domanda, nessuna ripetizione per semplice riapertura.
 
 61 test backend passati con PostgreSQL/RLS locale, 38 iOS e rendering chiaro/scuro passati; TS/Biome.
-Build 123/changelog aggiornati. Archivio di distribuzione in preparazione dal commit GitHub verificato.
+Build 123/changelog aggiornati, sorgenti GitHub `4f3ccbe5882d0339d2531a15317b304fa5e81d66`, 321 input iOS
+rilevati da checkout pulito `/tmp/ernie-build123-20261119-source`. Compilazione archive arrivata alla firma;
+i processi `codesign` restano in attesa di accesso alla chiave del Portachiavi. Chiesto all’utente di
+controllare/autorizzare personalmente l’eventuale richiesta macOS, nessuna password acquisita.
+Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-123-20261119-habits/`, `archive.log` e
+`source-inputs.json`. Processo Xcode 33298 ancora attivo al riscontro; attendere e verificarne l’esito,
+poi export solo locale con `ExportOptions-review.plist`, firme/profili/hash prima di chiedere il via
+libera alla pubblicazione. Nessuna IPA firmata verificata ancora; non dichiarare pronto TestFlight.
 **API e TestFlight restano alla 122**: nessuna pubblicazione o scrittura in produzione autorizzata per
 questo incremento. Serve via libera API e TestFlight; nessuna migrazione e worker invariato.
 Dettagli in [build 123](releases/build-123.md). Modifiche estranee preservate.
