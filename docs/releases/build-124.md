@@ -47,7 +47,15 @@ questo non provava che la modifica del promemoria fosse stata eseguita.
 
 ## Distribuzione
 
-Numero 124 e changelog nei quattro bundle. Sorgenti da pubblicare su GitHub prima della compilazione
-per distribuzione; annotare qui il commit verificato e l’esito archive/export. Richiede aggiornamento
-API e iOS; worker invariato. Backup e via libera esplicito prima di pubblicazione o correzione del
+Numero 124 e changelog nei quattro bundle. Sorgenti pubblicati e SHA remoto verificato:
+**`35c073efa39e03cbcf07224feb463eea327cdbba`**. Compilazione per distribuzione da checkout pulito
+`/tmp/ernie-build124-20261119-source`, 321 input iOS confrontati nel manifest privato.
+Archivio ed export completati sul Mac ufficio con Xcode 27.2. Verificati quattro bundle 124 firmati
+Apple Distribution, profili validi, APNs production, gruppi condivisi coerenti con i sorgenti e Diario
+privato solo nell’app principale. IPA **83.108.466 byte**, SHA-256
+**`1ea5afd146590c5ceaeef9e68ce8f3e4db65029618e6ac270a7bbb9211838f2f`**.
+Artefatti/manifest privati ufficio in
+`~/Library/Caches/ernie-builds/build-124-20261119-reminder-correction/`.
+**Nessun upload della 124 e nessun deploy di questo incremento eseguiti**.
+Richiede aggiornamento API e iOS; worker invariato. Backup e via libera esplicito prima di pubblicazione o correzione del
 record reale, come da HANDOFF. Il rilascio non corregge automaticamente luoghi o altri promemoria.

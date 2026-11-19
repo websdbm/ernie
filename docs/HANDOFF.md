@@ -19,9 +19,13 @@ Correzione: nuovo luogo subito visibile nella conferma, deadline nel client, spi
 rettifiche identiche nello stesso turno non ripetono conferme o scritture. Le etichette senza indirizzo
 non aprono più destinazioni casuali in Mappe. Conferme e policy restano operative, nessun bypass.
 **66 test backend** (PostgreSQL locale/RLS inclusi), **24 iOS** chiaro/scuro/Borg e caratteri grandi;
-TypeScript/Biome e diff verificati. Build 124/changelog preparati; compilazione per distribuzione
-solo dal commit GitHub verificato, esito da aggiornare. Nessuna migrazione, necessario API + iOS,
-worker invariato. **Pubblicato resta API/iOS 123, worker 122**. Nessun via libera per questo incremento
+TypeScript/Biome e diff verificati. Build 124/changelog pubblicati su GitHub; sorgenti
+**`35c073efa39e03cbcf07224feb463eea327cdbba`**, SHA remoto verificato prima della compilazione.
+Archive/export completati da checkout pulito, 321 input iOS identici. Quattro bundle 124 Apple
+Distribution verificati; APNs production e Diario privato solo nell’app. IPA **83.108.466 byte**,
+SHA-256 **`1ea5afd146590c5ceaeef9e68ce8f3e4db65029618e6ac270a7bbb9211838f2f`**.
+Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-124-20261119-reminder-correction/`.
+Nessun upload/deploy 124; nessuna migrazione, necessario API + iOS, worker invariato. **Pubblicato resta API/iOS 123, worker 122**. Nessun via libera per questo incremento
 ancora ricevuto; vedere [build 124](releases/build-124.md). Modifiche estranee preservate.
 
 ### Build 123 — API pubblicata e disponibile su TestFlight
