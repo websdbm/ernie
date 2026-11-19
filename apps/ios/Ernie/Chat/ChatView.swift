@@ -691,6 +691,10 @@ struct ConfirmationCardContent: View {
         VStack(alignment: .leading, spacing: 10) {
             if let decision {
                 reviewHeader(decision)
+                if decision == "expired", card.toolId == "reminder_update" {
+                    Text(ConfirmationCopy.expirationExplanation(for: card))
+                        .font(.footnote).foregroundStyle(palette.inkSecondary)
+                }
                 if reviewExpanded {
                     Divider()
                     Text(presentation.summary).font(.callout).foregroundStyle(palette.ink)
@@ -700,8 +704,8 @@ struct ConfirmationCardContent: View {
                         Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
                             .font(.footnote).foregroundStyle(palette.inkSecondary)
                     }
-                    if decision == "expired" {
-                        Text("Richiesta scaduta. Chiedi a Ernie di ripeterla.")
+                    if decision == "expired", card.toolId != "reminder_update" {
+                        Text(ConfirmationCopy.expirationExplanation(for: card))
                             .font(.footnote).foregroundStyle(palette.inkSecondary)
                     }
                 }
@@ -722,6 +726,9 @@ struct ConfirmationCardContent: View {
                     }
                 }
                 reason
+                if let deadline = ConfirmationCopy.deadline(for: card) {
+                    Label(deadline, systemImage: "clock").font(.caption).foregroundStyle(palette.inkSecondary)
+                }
                 if presentation.incomplete == true {
                     Text("I dettagli di questa richiesta sono incompleti. Annullala e chiedi a Ernie di ripeterla.")
                         .font(.footnote).foregroundStyle(palette.inkSecondary)

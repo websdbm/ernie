@@ -5,6 +5,7 @@ import type { EventType, PayloadInputOf } from '@ernie/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { memoryToolCallRecorder } from './audit.js';
+import { createReminderTools } from './builtins/reminders.js';
 import {
   createShoppingTools,
   createStubShoppingRepository,
@@ -39,7 +40,7 @@ function memoryApprovalStore(): ApprovalStore & { decided: Map<string, string> }
     },
     async resolve(_u, id, decision) {
       const r = rows.get(id);
-      if (!r || r.status !== 'pending') return 'not_found';
+      if (r?.status !== 'pending') return 'not_found';
       r.status = decision;
       decided.set(id, decision);
       return decision;
@@ -47,7 +48,7 @@ function memoryApprovalStore(): ApprovalStore & { decided: Map<string, string> }
     async consume(_u, id, toolId, args) {
       const { argsHash } = await import('@ernie/agent-core');
       const r = rows.get(id);
-      if (!r || r.status !== 'approved' || r.toolId !== toolId || r.argsHash !== argsHash(args))
+      if (r?.status !== 'approved' || r.toolId !== toolId || r.argsHash !== argsHash(args))
         return false;
       r.status = 'consumed';
       return true;
@@ -78,6 +79,104 @@ const echoSpec: ToolSpec = defineTool({
 });
 
 describe('createGuardedTool', () => {
+  it('rettifica luogo: conserva la conferma, spiega la scadenza e non esegue modifiche', async () => {
+    const update = vi.fn();
+    const store = {
+      create: vi.fn(),
+      list: vi.fn(async () => []),
+      remove: vi.fn(),
+      update,
+    };
+    const spec = createReminderTools(store).find((t) => t.id === 'reminder_update');
+    if (!spec) throw new Error('Missing reminder_update');
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('habits');
+    const events: Array<{ type: EventType; payload: unknown }> = [];
+    const ref: ToolContextRef = {
+      current: ctx(run, (type, payload) => {
+        events.push({ type, payload });
+      }),
+    };
+    const expire = vi.fn(async () => {});
+    const approvals = {
+      store: { ...memoryApprovalStore(), expire },
+      pending: new PendingApprovals(),
+      ttlMs: 30,
+    };
+    const audit = memoryToolCallRecorder();
+    const tool = createGuardedTool(spec, { policyRules: {}, approvals, audit, logger }, ref);
+    const input = { id: randomUUID(), location: 'Casa precedente, via Esempio 4, Padova' };
+    const result = await tool.execute?.(input, {} as never);
+    expect(result).toMatchObject({
+      error: 'approval_expired',
+      retryable: false,
+      reason: expect.stringContaining('conferma'),
+    });
+    expect((result as { reason: string }).reason).toContain('promemoria resta invariato');
+    expect((result as { reason: string }).reason).not.toMatch(/contaminata|Rule of Two/);
+    expect(update).not.toHaveBeenCalled();
+    expect(await tool.execute?.(input, {} as never)).toEqual(result);
+    expect(expire).toHaveBeenCalledOnce();
+    expect(events.find((e) => e.type === 'tool.confirmation.resolved')?.payload).toMatchObject({
+      decision: 'expired',
+    });
+    expect(audit.entries[0]).toMatchObject({
+      verdict: 'ask',
+      approved: false,
+      ok: false,
+      taintedBefore: true,
+    });
+  });
+
+  it('applica la rettifica del luogo una sola volta dopo conferma valida, senza cambiare gli orari', async () => {
+    const id = randomUUID();
+    const at = new Date(Date.now() + 3_600_000);
+    const eventAt = new Date(at.getTime() + 20 * 60_000);
+    const update = vi.fn(async (_user: string, target: string, patch: unknown) => ({
+      id: target,
+      text: 'Consegna',
+      at,
+      eventAt,
+      ...(patch as object),
+    }));
+    const store = { create: vi.fn(), list: vi.fn(async () => []), remove: vi.fn(), update };
+    const spec = createReminderTools(store).find((t) => t.id === 'reminder_update');
+    if (!spec) throw new Error('Missing reminder_update');
+    const run = new RunContext('u', ['chat'], 0);
+    run.markUntrusted('habits');
+    let approvalId = '';
+    const approvals = {
+      store: memoryApprovalStore(),
+      pending: new PendingApprovals(),
+      ttlMs: 1000,
+    };
+    const ref: ToolContextRef = {
+      current: ctx(run, (type, payload) => {
+        if (type === 'tool.confirmation.requested')
+          approvalId = (payload as { approvalId: string }).approvalId;
+      }),
+    };
+    const tool = createGuardedTool(
+      spec,
+      { policyRules: {}, approvals, audit: memoryToolCallRecorder(), logger },
+      ref,
+    );
+    const input = { id, location: 'Casa precedente, via Esempio 4, Padova' };
+    const result = tool.execute?.(input, {} as never);
+    await vi.waitFor(() => expect(approvals.pending.size).toBe(1));
+    expect(update).not.toHaveBeenCalled();
+    expect(await approvals.store.resolve('u', approvalId, 'approved')).toBe('approved');
+    approvals.pending.settle(approvalId, 'approved');
+    expect(await result).toMatchObject({
+      id,
+      location: input.location,
+      at: at.toISOString(),
+      eventAt: eventAt.toISOString(),
+    });
+    await tool.execute?.(input, {} as never);
+    expect(update).toHaveBeenCalledExactlyOnceWith('u', id, { location: input.location });
+  });
+
   it('il resolver none blocca scritture ed effetti esterni anche se il modello li chiama; lascia le letture', async () => {
     const ref: ToolContextRef = {
       current: { ...ctx(new RunContext('u', ['chat'], 0)), allowActions: false },

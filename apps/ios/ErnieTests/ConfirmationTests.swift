@@ -19,6 +19,42 @@ struct ConfirmationTests {
         ConfirmationCard(approvalId: "a", correlationId: "c", toolId: "recipe_save", reason: "run contaminata da contenuto non fidato (Rule of Two)", expiresAt: "2099-10-18T08:00:00.000Z", allowAlways: true, presentation: presentation)
     }
 
+    @Test func scadeLaConfermaNonIlPromemoria() {
+        var value = card()
+        value.toolId = "reminder_update"
+        value.decision = "expired"
+        #expect(ConfirmationCopy.status(for: value, decision: "expired").contains("modifica non applicata"))
+        #expect(ConfirmationCopy.expirationExplanation(for: value).contains("non il promemoria"))
+        #expect(ConfirmationCopy.expirationExplanation(for: value).contains("resta invariato"))
+        #expect(ConfirmationCopy.deadline(for: value)?.contains("Conferma entro") == true)
+    }
+
+    @Test @MainActor func rettificaLuogoVisibileEScadenzaLeggibileAncheInBorg() throws {
+        let p = ConfirmationPresentation(title: "Aggiornare questo promemoria?",
+            summary: "Nuovo luogo: «Casa precedente, via Esempio 4, Padova». Orario e avvisi restano invariati.",
+            confirmLabel: "Aggiorna promemoria", details: [])
+        for (name, costume, scheme, size, expired) in [
+            ("pending", BearCostume.astronaut, ColorScheme.light, DynamicTypeSize.large, false),
+            ("expired-borg", .borg, .dark, .large, true),
+            ("expired-accessible", .astronaut, .dark, .accessibility3, true)
+        ] {
+            var value = card(presentation: p)
+            value.toolId = "reminder_update"
+            value.decision = expired ? "expired" : nil
+            let palette = ChatPalette(costume: costume)
+            let renderer = ImageRenderer(content: ConfirmationCardContent(card: value)
+                .padding(16).frame(width: 320).background(palette.ground)
+                .environment(\.chatPalette, palette).environment(\.colorScheme, scheme)
+                .environment(\.dynamicTypeSize, size))
+            renderer.scale = 2
+            let image = try #require(renderer.uiImage)
+            #expect(image.size.width == 320)
+            let path = FileManager.default.temporaryDirectory.appendingPathComponent("ernie-reminder-correction-\(name).png")
+            try #require(image.pngData()).write(to: path)
+            print("REMINDER_CORRECTION_SNAPSHOT: \(path.path)")
+        }
+    }
+
     @Test func confermaStrutturataSopravviveAllaCronologia() throws {
         let value = card(presentation: presentation)
         let decoded = try JSONDecoder().decode(ConfirmationCard.self, from: JSONEncoder().encode(value))

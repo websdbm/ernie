@@ -99,6 +99,19 @@ extension EventsCodingTests {
         #expect(item.meetingURL == nil)
     }
 
+    @Test func etichettePersonaliNonDiventanoDestinazioniCasuali() {
+        var item = ReminderItem(id: "synthetic", text: "Consegna", at: "2099-01-01T10:00:00Z", status: "scheduled")
+        item.location = "casa precedente"
+        #expect(item.locationURL == nil)
+        item.location = "Casa precedente, via Esempio 4, Padova"
+        #expect(item.locationURL != nil)
+        item.location = "casa precedente"
+        item.locationAddress = "  "
+        #expect(item.locationURL == nil)
+        item.locationAddress = "Via Esempio 4, Padova"
+        #expect(URLComponents(url: item.locationURL!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "Via Esempio 4, Padova")
+    }
+
     @Test func modificaDettagliOmetteCampiInvariatiECancellaConNull() async throws {
         let api = ApiClient(credentials: .init(serverURL: URL(string: "https://example.test")!, apiKey: "test"), transport: { request in
             #expect(request.httpMethod == "PATCH")

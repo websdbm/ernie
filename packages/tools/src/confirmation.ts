@@ -7,9 +7,14 @@ import {
 } from '@ernie/protocol';
 
 /** Motivi interni conservati nell'audit; al cliente arriva una spiegazione comprensibile. */
-export function confirmationReason(verdict: Extract<PolicyVerdict, { kind: 'ask' }>): string {
+export function confirmationReason(
+  verdict: Extract<PolicyVerdict, { kind: 'ask' }>,
+  toolId?: string,
+): string {
   if (verdict.exfiltration)
     return 'Questa azione invia informazioni a un servizio esterno. Controlla quali dati verranno condivisi prima di confermare.';
+  if (toolId === 'reminder_update')
+    return 'Controlla la modifica proposta e conferma per applicarla. Fino alla conferma, il promemoria resta invariato.';
   if (verdict.reason.includes('contaminata'))
     return 'Prima di procedere, controlla i dati ricavati dai contenuti che ho letto.';
   if (verdict.reason.includes('sempre richiesta'))
@@ -152,7 +157,29 @@ export function confirmationPresentation(
       break;
     case 'reminder_update':
       title = 'Aggiornare questo promemoria?';
-      summary = 'Aggiorna i campi indicati del promemoria selezionato.';
+      summary = [
+        text('location')
+          ? `Nuovo luogo: ${quoted('location')}.`
+          : args.location === null
+            ? 'Rimuovi il luogo.'
+            : '',
+        text('text') ? `Nuovo testo: ${quoted('text')}.` : '',
+        text('at')
+          ? 'Aggiorna l’ora dell’avviso indicata nei dettagli.'
+          : 'Orario e avvisi restano invariati.',
+        args.url !== undefined
+          ? args.url === null
+            ? 'Rimuovi il link.'
+            : 'Aggiorna il link.'
+          : '',
+        args.notes !== undefined
+          ? args.notes === null
+            ? 'Rimuovi le note.'
+            : 'Aggiorna le note.'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
       confirmLabel = 'Aggiorna promemoria';
       break;
     case 'reminder_cancel':

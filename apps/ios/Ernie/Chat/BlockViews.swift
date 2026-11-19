@@ -338,6 +338,7 @@ struct ReminderDetailsView: View {
                     .accessibilityHint("Apri il luogo in Mappe")
                 } else {
                     Label(location, systemImage: "mappin.and.ellipse")
+                    Text("Indirizzo da precisare").font(.caption).foregroundStyle(palette.inkSecondary)
                 }
                 if let address = item.locationAddress, address != location {
                     Text(address).foregroundStyle(palette.inkSecondary)

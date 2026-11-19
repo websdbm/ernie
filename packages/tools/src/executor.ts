@@ -253,7 +253,7 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           toolId: spec.id,
           displayName: toolDisplayName(spec.id),
           argsPreview: presentation.summary.slice(0, 500),
-          reason: confirmationReason(verdict),
+          reason: confirmationReason(verdict, spec.id),
           presentation,
           expiresAt: created.expiresAt.toISOString(),
           ...(deps.rules && sticky ? { allowAlways: true } : {}),
@@ -290,6 +290,18 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           decision === 'approved' &&
           (await deps.approvals.store.consume(ctx.userId, created.id, spec.id, input));
         if (!approved) {
+          if (decision === 'expired') {
+            await deps.approvals.store.expire?.(ctx.userId, created.id).catch((err) => {
+              deps.logger.warn(
+                { err, toolId: spec.id },
+                'Chiusura della conferma scaduta non registrata',
+              );
+            });
+            await ctx.emit?.('tool.confirmation.resolved', {
+              approvalId: created.id,
+              decision: 'expired',
+            });
+          }
           await deps.audit.record({
             ...base,
             verdict: 'ask',
@@ -302,7 +314,13 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
           });
           return {
             error: decision === 'expired' ? 'approval_expired' : 'denied_by_user',
-            reason: verdict.reason,
+            reason:
+              decision === 'expired'
+                ? spec.id === 'reminder_update'
+                  ? 'La richiesta di conferma è scaduta senza una risposta: la modifica non è stata applicata e il promemoria resta invariato. È scaduta la conferma, non il promemoria. Spiegalo all’utente; non riprovare automaticamente. Per riprendere, chiedi una nuova conferma della stessa modifica dopo aver riletto il promemoria.'
+                  : 'La richiesta di conferma è scaduta senza una risposta: questa azione non è stata eseguita. Spiegalo all’utente e non riprovare automaticamente.'
+                : 'L’utente ha annullato la conferma: questa azione non è stata eseguita. Non riproporla automaticamente.',
+            retryable: false,
           } satisfies ToolErrorResult;
         }
       }

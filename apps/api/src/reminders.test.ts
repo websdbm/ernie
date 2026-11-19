@@ -565,6 +565,38 @@ describe('dettagli degli appuntamenti', () => {
     expect(moved).toMatchObject({ location: 'lavoro', notes: 'Documento aggiornato' });
     expect(moved?.url).toBeUndefined();
   });
+  it('rettifica solo il luogo mantenendo id, appuntamento e preavviso, senza duplicare job', async () => {
+    const fa = fakeAutomations();
+    const store = createReminderStore({
+      automations: fa.repo,
+      queue,
+      knownTools: [],
+      maxBudgetUsd: 1,
+    });
+    const at = new Date(Date.now() + 7_200_000);
+    const eventAt = new Date(at.getTime() + 20 * 60_000);
+    const r = await store.create(PAPA, {
+      text: 'Consegna',
+      at,
+      eventAt,
+      timezone: 'Europe/Rome',
+      location: 'casa precedente',
+    });
+    const created = vi.mocked(fa.repo.create).mock.calls.length;
+    const changed = await store.update(PAPA, r.id, {
+      location: 'Casa precedente, via Esempio 4, Padova',
+    });
+    expect(changed).toMatchObject({
+      id: r.id,
+      at: r.at,
+      eventAt: r.eventAt,
+      location: 'Casa precedente, via Esempio 4, Padova',
+    });
+    expect(vi.mocked(fa.repo.create).mock.calls).toHaveLength(created);
+    expect(fa.repo.remove).not.toHaveBeenCalled();
+    expect((await store.list(PAPA)).filter((x) => x.id === r.id)).toHaveLength(1);
+  });
+
   it('aggiunge i dettagli dopo e consente di cancellarli, senza inventare una sede', async () => {
     const fa = fakeAutomations();
     const store = createReminderStore({

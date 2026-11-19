@@ -5,6 +5,25 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Build 124 — rettifica promemoria pronta, pubblicazione ancora da autorizzare
+
+19 novembre 2026. Diagnosi in sola lettura del caso segnalato: sede creata come sola etichetta; il client
+la apriva come ricerca Mappe senza un indirizzo risolto. La rettifica aveva id e indirizzo corretti,
+ma la conferma richiesta dalla policy è scaduta dopo due minuti senza risposta. Non era scaduto
+il promemoria; orario/preavviso corretti. La risposta del modello non spiegava il vero motivo.
+L’indirizzo appreso separatamente nella scheda personale non equivaleva alla modifica del promemoria.
+Nessuna modifica ai dati personali; il punto restituito da Mappe non è osservabile nei log.
+
+Correzione: nuovo luogo subito visibile nella conferma, deadline nel client, spiegazione distinta
+«conferma scaduta / modifica non applicata». Stato scaduto registrato dal DB e notificato al client;
+rettifiche identiche nello stesso turno non ripetono conferme o scritture. Le etichette senza indirizzo
+non aprono più destinazioni casuali in Mappe. Conferme e policy restano operative, nessun bypass.
+**66 test backend** (PostgreSQL locale/RLS inclusi), **24 iOS** chiaro/scuro/Borg e caratteri grandi;
+TypeScript/Biome e diff verificati. Build 124/changelog preparati; compilazione per distribuzione
+solo dal commit GitHub verificato, esito da aggiornare. Nessuna migrazione, necessario API + iOS,
+worker invariato. **Pubblicato resta API/iOS 123, worker 122**. Nessun via libera per questo incremento
+ancora ricevuto; vedere [build 124](releases/build-124.md). Modifiche estranee preservate.
+
 ### Build 123 — API pubblicata e disponibile su TestFlight
 
 19 novembre 2026. Pubblicazione autorizzata dall’utente («pubblica») e completata. Verifica account/servizio

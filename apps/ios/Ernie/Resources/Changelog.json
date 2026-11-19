@@ -1,5 +1,30 @@
 [
   {
+    "build": 124,
+    "date": "2026-11-19",
+    "title": "Rettifiche dei promemoria più chiare",
+    "items": [
+      {
+        "icon": "mappin.and.ellipse",
+        "title": "Luoghi senza equivoci",
+        "detail": "Le etichette personali senza indirizzo non aprono una destinazione casuale in Mappe. Un indirizzo esplicito o un luogo già risolto resta apribile.",
+        "test": "Controlla un promemoria con un luogo senza indirizzo, poi aggiungi un indirizzo completo."
+      },
+      {
+        "icon": "checkmark.shield",
+        "title": "La modifica da confermare è visibile",
+        "detail": "Il nuovo luogo compare subito nella conferma, insieme alla scadenza. Cambiare solo il luogo conserva orario e preavviso.",
+        "test": "Rettifica il luogo di un promemoria e conferma la modifica dalla scheda."
+      },
+      {
+        "icon": "clock",
+        "title": "Scade la conferma, non il promemoria",
+        "detail": "Se non confermi in tempo, Ernie spiega che la modifica non è stata applicata. Il promemoria resta invariato e la stessa richiesta non viene ripetuta automaticamente nel turno.",
+        "test": "Lascia scadere una conferma di modifica e verifica il messaggio e il promemoria originale."
+      }
+    ]
+  },
+  {
     "build": 123,
     "date": "2026-11-19",
     "title": "Abitudini più chiare, anche nelle notifiche",

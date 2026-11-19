@@ -493,6 +493,7 @@ export function createReminderTools(
     }),
     defineTool({
       id: 'reminder_update',
+      oncePerTurn: true,
       version: '1',
       category: 'reminders',
       description:

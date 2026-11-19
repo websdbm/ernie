@@ -416,7 +416,12 @@ struct ReminderItem: Codable, Sendable, Equatable, Identifiable {
     }
 
     var locationURL: URL? {
-        guard let query = locationAddress ?? location, !query.isEmpty else { return nil }
+        let resolved = locationAddress?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let query = (resolved?.isEmpty == false ? resolved : location)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !query.isEmpty else { return nil }
+        // Un’etichetta personale non è una destinazione: Mappe potrebbe scegliere un omonimo vicino.
+        let address = #"(?i)(?:^|[\s,])(?:via|viale|piazza|piazzale|corso|strada|vicolo|largo|lungomare|contrada|vico)\s+\S|\b\d{5}\b|^-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+$"#
+        guard resolved?.isEmpty == false || query.range(of: address, options: .regularExpression) != nil else { return nil }
         var parts = URLComponents(string: "https://maps.apple.com/")
         parts?.queryItems = [URLQueryItem(name: "q", value: query)]
         return parts?.url

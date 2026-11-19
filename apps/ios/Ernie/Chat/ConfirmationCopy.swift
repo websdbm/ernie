@@ -16,8 +16,27 @@ enum ConfirmationCopy {
         switch decision {
         case "approved": card.always == true ? "Confermata · consenso salvato" : "Confermata"
         case "denied": "Annullata"
-        default: "Scaduta"
+        default: card.toolId == "reminder_update" ? "Conferma scaduta · modifica non applicata" : "Conferma scaduta"
         }
+    }
+
+    static func expirationExplanation(for card: ConfirmationCard) -> String {
+        card.toolId == "reminder_update"
+            ? "È scaduta la conferma, non il promemoria: resta invariato. Chiedi a Ernie di riproporre la modifica."
+            : "La conferma è scaduta: questa azione non è stata eseguita."
+    }
+
+    static func deadline(for card: ConfirmationCard) -> String? {
+        guard let date = expiration(for: card) else { return nil }
+        return "Conferma entro le \(date.formatted(.dateTime.hour().minute()))"
+    }
+
+    private static func expiration(for card: ConfirmationCard) -> Date? {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = parser.date(from: card.expiresAt) { return date }
+        parser.formatOptions = [.withInternetDateTime]
+        return parser.date(from: card.expiresAt)
     }
 
     private static func recipeTitle(for card: ConfirmationCard) -> String? {
@@ -72,7 +91,7 @@ enum ConfirmationCopy {
         "category": "Categoria", "tags": "Tag", "source": "Fonte", "url": "Pagina web", "notes": "Note", "reason": "Modifica richiesta",
         "recipe": "Ricetta", "items": "Prodotti", "names": "Prodotti", "name": "Nome", "quantity": "Quantità", "list": "Lista",
         "text": "Testo", "body": "Contenuto", "at": "Quando avvisarti", "eventAt": "Appuntamento", "place": "Luogo", "address": "Indirizzo",
-        "label": "Nome", "into": "Scheda finale", "from": "Nome attuale", "to": "Nuovo nome", "query": "Testo della ricerca", "id": "Riferimento"
+        "location": "Luogo dell’appuntamento", "label": "Nome", "into": "Scheda finale", "from": "Nome attuale", "to": "Nuovo nome", "query": "Testo della ricerca", "id": "Riferimento"
     ]
 
     private static func readable(_ value: Any?, key: String) -> String {
@@ -111,13 +130,6 @@ enum ConfirmationCopy {
 
     static func decision(for card: ConfirmationCard, now: Date) -> String? {
         if let decision = card.decision { return decision }
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var expires = parser.date(from: card.expiresAt)
-        if expires == nil {
-            parser.formatOptions = [.withInternetDateTime]
-            expires = parser.date(from: card.expiresAt)
-        }
-        return expires.map { $0 <= now ? "expired" : nil } ?? nil
+        return expiration(for: card).map { $0 <= now ? "expired" : nil } ?? nil
     }
 }

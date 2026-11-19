@@ -22,6 +22,8 @@ export interface ApprovalStore {
     id: string,
     decision: 'approved' | 'denied',
   ): Promise<ApprovalDecision | 'not_found'>;
+  /** Chiude una richiesta pendente solo dopo la scadenza verificata dal database. */
+  expire?(userId: string, id: string): Promise<void>;
   /** Consuma atomicamente un'approvazione valida per (tool, argomenti): true una sola volta. */
   consume(userId: string, id: string, toolId: string, args: unknown): Promise<boolean>;
 }
@@ -81,6 +83,15 @@ export function createPgApprovalStore(pool: Pool): ApprovalStore {
         if (!row) return 'not_found';
         return row.status as ApprovalDecision;
       });
+    },
+    async expire(userId, id) {
+      await withUser(pool, userId, (client) =>
+        client.query(
+          `UPDATE tool_approvals SET status = 'expired', decided_at = now()
+          WHERE id = $1 AND user_id = $2 AND status = 'pending' AND expires_at <= now()`,
+          [id, userId],
+        ),
+      );
     },
     async consume(userId, id, toolId, args) {
       const hash = argsHash(args);

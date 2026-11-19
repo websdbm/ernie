@@ -21,6 +21,19 @@ describe('conferme leggibili', () => {
     expect(JSON.stringify(p)).not.toContain('internal-proof');
     expect(JSON.stringify(p)).not.toContain('internal-state');
   });
+  it('mostra subito il nuovo luogo della rettifica, senza nasconderlo nei dettagli', () => {
+    const p = confirmationPresentation('reminder_update', {
+      id: 'synthetic-reminder',
+      location: 'Casa precedente, via Esempio 4, Padova',
+    });
+    expect(p.summary).toContain('Casa precedente, via Esempio 4, Padova');
+    expect(p.summary).toContain('Orario e avvisi restano invariati');
+    expect(p.summary).not.toContain('synthetic-reminder');
+    expect(
+      confirmationReason({ kind: 'ask', reason: 'run contaminata' }, 'reminder_update'),
+    ).toContain('conferma per applicarla');
+  });
+
   it('mostra la ricetta intera, senza JSON, conservando ingredienti, ordine e quantità', () => {
     const steps = ['Taglia il tempeh.', 'Cuoci con le spezie e distribuisci nelle tortillas.'];
     const args = {
