@@ -5,14 +5,14 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 124 — rettifica promemoria pronta, pubblicazione ancora da autorizzare
+### Build 124 — API pubblicata, TestFlight disponibile e luogo corretto
 
 19 novembre 2026. Diagnosi in sola lettura del caso segnalato: sede creata come sola etichetta; il client
 la apriva come ricerca Mappe senza un indirizzo risolto. La rettifica aveva id e indirizzo corretti,
 ma la conferma richiesta dalla policy è scaduta dopo due minuti senza risposta. Non era scaduto
 il promemoria; orario/preavviso corretti. La risposta del modello non spiegava il vero motivo.
 L’indirizzo appreso separatamente nella scheda personale non equivaleva alla modifica del promemoria.
-Nessuna modifica ai dati personali; il punto restituito da Mappe non è osservabile nei log.
+Durante la diagnosi nessuna modifica ai dati personali; il punto restituito da Mappe non è osservabile nei log.
 
 Correzione: nuovo luogo subito visibile nella conferma, deadline nel client, spiegazione distinta
 «conferma scaduta / modifica non applicata». Stato scaduto registrato dal DB e notificato al client;
@@ -25,8 +25,21 @@ Archive/export completati da checkout pulito, 321 input iOS identici. Quattro bu
 Distribution verificati; APNs production e Diario privato solo nell’app. IPA **83.108.466 byte**,
 SHA-256 **`1ea5afd146590c5ceaeef9e68ce8f3e4db65029618e6ac270a7bbb9211838f2f`**.
 Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-124-20261119-reminder-correction/`.
-Nessun upload/deploy 124; nessuna migrazione, necessario API + iOS, worker invariato. **Pubblicato resta API/iOS 123, worker 122**. Nessun via libera per questo incremento
-ancora ricevuto; vedere [build 124](releases/build-124.md). Modifiche estranee preservate.
+Pubblicazione API/iOS e correzione del luogo autorizzate esplicitamente dall’utente e completate.
+API pubblicata da git al commit sopra, immagine `c22fb385…`, health/ready HTTPS OK; cinque hash di moduli
+compilati identici ai file testati. Nove smoke sul runtime, con PostgreSQL/RLS e store promemoria
+sintetico, passati; fixture rimosse, zero LLM/APNs reali. Backup verificato
+`/srv/staging3/backups/ernie-pre-124-20261119.Qg4sDQ/`. Worker 122 (`32bec54e…`), DB, Redis e configurazioni
+invariati; nessuna migrazione, schema 0055.
+
+Stessa IPA trasferita e hash verificato sul Mac Studio, upload Apple riuscito senza errori. Build ID
+**`0f2dc962-7dad-4ea0-b898-2a2bbace1e5f`**, Apple **VALID / IN_BETA_TESTING**, gruppo esistente **Interni**
+verificato; note italiane salvate/rilette identiche, **908 caratteri**. Manifest privati aggiornati su
+entrambi i Mac. Non ricaricare la 124; firma completata, nessuna azione sul Portachiavi necessaria.
+Corretto il solo luogo del promemoria segnalato dopo backup e controllo dello stato precedente:
+stesso id, un solo impegno attivo, appuntamento e preavviso invariati. Prima/dopo esclusivamente nel
+backup privato, nessun dato personale in Git. UI/push reali da provare su iPhone dopo aggiornamento.
+Dettagli in [build 124](releases/build-124.md). Modifiche estranee preservate.
 
 ### Build 123 — API pubblicata e disponibile su TestFlight
 
@@ -310,10 +323,10 @@ Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito prese
 
 ### Ultimo rilascio effettivamente pubblicato
 
-**123**, 19 novembre 2026: API pubblicata e sana, worker 122 invariato, schema **0055**.
-TestFlight **VALID / IN_BETA_TESTING**, gruppo **Interni**, build ID `ecd64a17-edcd-41fc-a303-089f2a18bcb6`.
-Sorgenti API/iOS `4f3ccbe`, note italiane da 1.017 caratteri salvate e rilette. Abitudini: luoghi distinguibili,
-domande contestualizzate e notifiche generiche. Ricezione reale della nuova push da provare su iPhone.
+**124**, 19 novembre 2026: API pubblicata e sana, worker 122 invariato, schema **0055**.
+TestFlight **VALID / IN_BETA_TESTING**, gruppo **Interni**, build ID `0f2dc962-7dad-4ea0-b898-2a2bbace1e5f`.
+Sorgenti API/iOS `35c073e`, note italiane da 908 caratteri salvate e rilette. Rettifiche luogo/conferme più
+chiare; corretto il solo luogo del promemoria autorizzato, conservando id e orari. Nessuna migrazione.
 
 ### Rilasci precedenti
 
@@ -799,10 +812,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **123**, verificata il 19 nov: **VALID / IN_BETA_TESTING**, gruppo Interni; sorgenti iOS `4f3ccbe`, note italiane rilette |
+| App su TestFlight | build **124**, verificata il 19 nov: **VALID / IN_BETA_TESTING**, gruppo Interni; sorgenti iOS `35c073e`, note italiane rilette |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API **123**, checkout `4f3ccbe`, immagine `a69ca661…`; worker **122** invariato (`32bec54e…`). API healthy/ready, schema 0055, backup pre-123 verificato. Evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
-| Migrazioni | fino alla **0055**, applicate e verificate; nessuna nuova migrazione nella 123. Keyring dedicati preservati; il rilascio non modifica skill o consensi degli utenti |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **124**, checkout `35c073e`, immagine `c22fb385…`; worker **122** invariato (`32bec54e…`). API healthy/ready, schema 0055, backup pre-124 verificato. Evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
+| Migrazioni | fino alla **0055**, applicate e verificate; nessuna nuova migrazione nella 124. Keyring dedicati preservati; il rilascio non modifica skill o consensi degli utenti |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server

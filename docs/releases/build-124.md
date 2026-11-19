@@ -1,7 +1,8 @@
 # Build 124 — rettifica luoghi e scadenza delle conferme
 
-19 novembre 2026. Correzione preparata, **non ancora pubblicata**. API e TestFlight restano alla 123;
-worker 122 invariato. Nessuna migrazione. I dati personali del promemoria segnalato non sono stati modificati.
+19 novembre 2026. Pubblicazione e correzione del luogo autorizzate esplicitamente dall’utente e completate:
+**API 124 attiva, build 124 disponibile su TestFlight Interni**. Worker 122 invariato, nessuna migrazione.
+Nel promemoria segnalato aggiornato il solo luogo, mantenendo lo stesso id, orario e preavviso.
 
 ## Diagnosi verificata
 
@@ -56,6 +57,29 @@ privato solo nell’app principale. IPA **83.108.466 byte**, SHA-256
 **`1ea5afd146590c5ceaeef9e68ce8f3e4db65029618e6ac270a7bbb9211838f2f`**.
 Artefatti/manifest privati ufficio in
 `~/Library/Caches/ernie-builds/build-124-20261119-reminder-correction/`.
-**Nessun upload della 124 e nessun deploy di questo incremento eseguiti**.
-Richiede aggiornamento API e iOS; worker invariato. Backup e via libera esplicito prima di pubblicazione o correzione del
-record reale, come da HANDOFF. Il rilascio non corregge automaticamente luoghi o altri promemoria.
+Stessa IPA trasferita sul Mac Studio con confronto SHA-256 prima del caricamento. Upload riuscito
+senza errori usando la chiave Apple già presente, nessun trasferimento di credenziali. Build/delivery ID
+**`0f2dc962-7dad-4ea0-b898-2a2bbace1e5f`**, Apple **VALID / IN_BETA_TESTING**, presenza della 124 nel gruppo
+esistente **Interni** verificata. Note italiane salvate e rilette identiche: **908 caratteri**.
+Manifest e ricevute privati aggiornati su entrambi i Mac. Non ricaricare la build.
+
+API pubblicata da git sul commit sopra, immagine
+`sha256:c22fb385835d8f947cc0da24134bcac42337a03a504dbc45cd3173af2a79822c`.
+Backup protetto filesystem/configurazioni e dump PostgreSQL con indice verificato:
+`/srv/staging3/backups/ernie-pre-124-20261119.Qg4sDQ/`. Worker 122 (`32bec54e…`), PostgreSQL, Redis,
+`.env` e override invariati; nessuna migrazione, schema 0055. Health/ready HTTPS passati.
+Il vecchio valore della versione in health deriva dall’ambiente preservato: identificazione del rilascio
+mediante commit, immagine e hash di cinque moduli compilati, identici ai file locali testati.
+
+Nove controlli sul codice compilato distribuito: scadenza spiegata, zero scritture senza conferma,
+nuovo luogo visibile, scadenza nel DB/evento client, deduplica nello stesso turno, isolamento account,
+nuova conferma valida, scrittura nello scope autenticato e orari conservati con una sola esecuzione.
+PostgreSQL/RLS reali, archivio promemoria sintetico in memoria; fixture utente/approvazioni rimosse.
+Zero chiamate LLM o push reali. Riscontro protetto `runtime-smoke.json` nella cartella del backup.
+
+Dopo il backup, correzione autorizzata del solo `meta.location` del promemoria segnalato, nello scope
+applicativo dell’account e con lock/verifica dello stato precedente. Salvati prima/dopo nel backup
+protetto `reminder-correction.ndjson`, esclusi da Git. Confronto di tutti gli altri campi e rilettura
+attraverso il servizio promemoria compilato: stesso id, un solo impegno attivo, appuntamento/preavviso,
+trigger, canali e job invariati. Nessuna modifica ai luoghi o agli altri promemoria.
+Ricezione della push e interazione con la nuova UI su iPhone reale ancora da provare dopo aggiornamento.
