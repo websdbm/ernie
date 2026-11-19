@@ -34,6 +34,7 @@ final class ConversationStore {
     let gameStorageID: String
     /// Blocchi strutturati in arrivo (es. liste della spesa): l'app aggiorna gli store dedicati.
     var onBlock: ((ContentBlock) -> Void)?
+    var reminderIdentity: (String) -> String = { $0 }
     /// Ogni messaggio in famiglia che entra nella chat (gli urgenti vanno a tutto schermo).
     var onFamilyMessage: ((FamilyMessageBlock) -> Void)?
     /// Turno chiuso del tutto (risposta finita e voce terminata): la conversazione continua riapre il microfono.
@@ -823,7 +824,7 @@ final class ConversationStore {
             onBlock?(p.block)
             var block = p.block
             if case .reminders(let update) = block, update.replacesId != nil {
-                guard let remaining = items.refreshReminderCards(update, excluding: hiddenItemIds) else { persist(); break }
+                guard let remaining = items.refreshReminderCards(update, excluding: hiddenItemIds, resolveId: reminderIdentity) else { persist(); break }
                 block = .reminders(remaining)
             }
             if case .unknown = block { break }

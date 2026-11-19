@@ -280,6 +280,7 @@ final class AppModel {
             if store?.isForeground == true { ErnieSoundPlayer.shared.play(sound, key: key) }
         }
         store.onFamilyMessage = { [urgent] m in urgent.note(m) }
+        store.reminderIdentity = { [reminders] id in reminders.resolve(id) }
         store.onBlock = { [shopping, reminders, todoStore] block in
             if case .todoList(let b) = block { todoStore.apply(b.list); Task { await reminders.refresh() } }
             shopping.apply(block); reminders.apply(block)

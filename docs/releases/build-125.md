@@ -19,7 +19,7 @@ scaduta: quello stato era stato corretto separatamente, dopo autorizzazione dell
 - `reminder_list` è silenzioso per impostazione predefinita; `show:true` presenta l’elenco soltanto
   quando l’utente lo chiede. Schema e istruzioni distinguono lettura interna e richiesta di visualizzazione.
 - `reminder_update` presenta solo l’impegno modificato e il nuovo campo opzionale `replacesId`.
-  Il client aggiorna la scheda già presente, conservando posizione, messaggio e altri impegni; niente
+  Il client aggiorna la scheda già presente, conservando posizione, messaggio e altri impegni; riconosce anche gli alias dopo una modifica nel widget. Niente
   nuova copia in fondo. Gestisce anche la riprogrammazione che cambia id, con alias nello store locale.
 - Se la scheda non è più visibile (anche dopo `/clear`), il client mostra una sola scheda aggiornata.
   Un elenco richiesto esplicitamente resta un nuovo messaggio. Storia e aggiornamenti persistono.
@@ -36,7 +36,7 @@ scaduta: quello stato era stato corretto separatamente, dopo autorizzazione dell
   con vecchio/nuovo id, scadenze, policy/attacchi, orari/dettagli invariati e prefisso del companion.
 - **39 test iOS**, build simulatore 125: applicazione degli eventi reali al ConversationStore con due
   impegni, nessuna nuova scheda per la modifica, `/clear`, persistenza, cambio id, temi e caratteri grandi.
-  Risultati `/tmp/ernie-chat-reminder-flow-final3-20261119.xcresult`.
+  Risultati `/tmp/ernie-chat-reminder-flow-alias-20261119.xcresult`.
 - Prova con Sonnet 5.5 reale su due richieste sintetiche: rettifica → un solo blocco di aggiornamento;
   richiesta elenco → blocco con due righe. Nuovo schema/descrizioni e strumenti simulati in memoria,
   nessun dato personale o modifica all’account. Risposte più brevi, con un breve preambolo ancora presente

@@ -42,14 +42,21 @@ import UIKit
             defer { model.reminders.clear(); UserDefaults.standard.set(aliases, forKey: "reminders.replaced") }
             let a = ReminderItem(id: "original", text: "Prova", at: "2099-01-01T10:40:00Z", status: "scheduled", location: "Primo luogo")
             let b = ReminderItem(id: "other", text: "Altro", at: "2099-01-02T10:40:00Z", status: "scheduled", location: "Altro luogo")
+            var editedInWidget = a; editedInWidget.id = "widget-replacement"; editedInWidget.at = "2099-01-01T10:00:00Z"
+            let reply = try JSONSerialization.data(withJSONObject: ["reminder": JSONSerialization.jsonObject(with: JSONEncoder().encode(editedInWidget))])
+            let api = ApiClient(credentials: credentials, transport: { request in
+                (reply, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            })
+            model.reminders.configure(api: api)
             @MainActor func send(_ value: RemindersBlock, correlation: String, sequence: Int) {
                 store.apply(.init(payload: .assistantBlock(.init(blockId: "block-\(sequence)", block: .reminders(value))), sessionId: store.sessionId, correlationId: correlation, seq: sequence))
             }
             send(.init(title: "Appuntamento", reminders: [a]), correlation: "first", sequence: 1)
             send(.init(title: "Appuntamento", reminders: [b]), correlation: "second", sequence: 2)
             let originalCount = store.items.count
-            var moved = a; moved.id = "replacement"; moved.location = "Via Esempio 4, Padova"
-            send(.init(title: "Aggiornato", reminders: [moved], replacesId: a.id), correlation: "edit", sequence: 3)
+            #expect(await model.reminders.update(a, text: nil, at: ReminderStore.date(editedInWidget.at)))
+            var moved = editedInWidget; moved.id = "replacement"; moved.location = "Via Esempio 4, Padova"
+            send(.init(title: "Aggiornato", reminders: [moved], replacesId: editedInWidget.id), correlation: "edit", sequence: 3)
             #expect(store.items.count == originalCount)
             #expect(model.reminders.item(a.id)?.id == moved.id)
             #expect(model.reminders.item(b.id)?.location == b.location)

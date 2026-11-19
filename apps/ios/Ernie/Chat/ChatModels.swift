@@ -191,7 +191,7 @@ extension Array where Element == ChatItem {
 
     /// Le rettifiche aggiornano le schede nel punto originale della chat, senza aggiungere un altro elenco.
     /// Restituisce soltanto gli impegni che non hanno ancora una scheda visibile (es. dopo /clear).
-    mutating func refreshReminderCards(_ update: RemindersBlock, excluding hidden: Set<String> = []) -> RemindersBlock? {
+    mutating func refreshReminderCards(_ update: RemindersBlock, excluding hidden: Set<String> = [], resolveId: (String) -> String = { $0 }) -> RemindersBlock? {
         guard let oldId = update.replacesId else { return update }
         var represented = Set<String>()
         for index in indices {
@@ -200,7 +200,7 @@ extension Array where Element == ChatItem {
             message.blocks = message.blocks.map { block in
                 guard case .reminders(var current) = block else { return block }
                 current.reminders = current.reminders.map { item in
-                    guard let incoming = update.reminders.first(where: { $0.id == item.id || (item.id == oldId && update.reminders.count == 1) }) else { return item }
+                    guard let incoming = update.reminders.first(where: { resolveId($0.id) == resolveId(item.id) || (resolveId(item.id) == resolveId(oldId) && update.reminders.count == 1) }) else { return item }
                     represented.insert(incoming.id)
                     changed = true
                     return incoming

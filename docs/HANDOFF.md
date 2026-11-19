@@ -14,7 +14,7 @@ la lettura interna prima di una rettifica. Nessuna modifica ai dati personali in
 
 Ora le letture sono silenziose, `show:true` mostra l’elenco solo su richiesta. Le rettifiche inviano
 `replacesId` (opzionale): il client aggiorna la scheda nella posizione originale, anche se cambia id;
-nessuna copia in fondo. Dopo `/clear` o se manca la scheda compare solo l’impegno aggiornato.
+nessuna copia in fondo, anche passando da modifica nel widget a modifica in chat. Dopo `/clear` o se manca la scheda compare solo l’impegno aggiornato.
 Conferme compatte con dettagli/consenso permanente raccolti sotto Dettagli; avvertenze esterne e
 motivi non standard preservati. Istruzioni al modello per risposte più brevi e distinzione fra stato
 osservato ed esito di azioni precedenti; non un taglio rigido della risposta.
