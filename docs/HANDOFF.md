@@ -5,7 +5,7 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 125 — chat senza elenchi ripetuti, pronta nei sorgenti
+### Build 125 — chat senza elenchi ripetuti, firmata e pronta da pubblicare
 
 19 novembre 2026. Prova iPhone riletta in sola lettura: due rettifiche del luogo riuscite sullo stesso
 promemoria, orari invariati; entrambe le conferme approvate (26 e 8 secondi), **scadenza non provata**.
@@ -21,9 +21,14 @@ osservato ed esito di azioni precedenti; non un taglio rigido della risposta.
 
 73 test backend, 39 iOS, TypeScript/Biome e diff. Due prove reali Sonnet con strumenti sintetici:
 lettura interna senza elenco e visualizzazione esplicita corretta. Resta un breve preambolo nella
-rettifica: non promettere una sola frase sempre. Build 125/changelog aggiornati; archivio di
-rilascio da compilare dal commit GitHub verificato. Servono API + iOS, worker invariato e nessuna
-migrazione. **Pubblicato resta API/iOS 124, worker 122**; nessuna autorizzazione alla pubblicazione
+rettifica: non promettere una sola frase sempre. Build 125/changelog aggiornati, sorgenti GitHub
+**`1ec843207d019a65fe57caf20d5dd25c31d8bdb3`**, SHA remoto verificato prima dell’archivio.
+Archive/export da checkout pulito, 321 input verificati e quattro bundle 125 Apple Distribution validi;
+APNs production e Diario privato soltanto nell’app. IPA **83.122.933 byte**, SHA-256
+**`e9f0eb6e3cb85b9f639847f9c279cda61f465f877d46c2b40deea8e505468007`**.
+Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-125-20261119-chat-flow/`.
+Usare solo archivio/export finali, non la prima compilazione superata `1ed56a3`.
+Servono API + iOS, worker invariato e nessuna migrazione. **Pubblicato resta API/iOS 124, worker 122**; nessuna autorizzazione alla pubblicazione
 125 ancora ricevuta. [Dettagli](releases/build-125.md). Modifiche estranee preservate.
 
 ### Build 124 — API pubblicata, TestFlight disponibile e luogo corretto

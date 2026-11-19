@@ -48,6 +48,13 @@ scaduta: quello stato era stato corretto separatamente, dopo autorizzazione dell
 
 Necessari API e iOS 125 per aggiornare le schede nella posizione originale; client precedenti ignorano
 il campo opzionale e restano compatibili. Worker invariato, schema SQL 0055, nessuna migrazione.
-Sorgenti da pubblicare su GitHub prima dell’archiviazione per distribuzione. Aggiornare qui commit,
-manifest di input e verifica archive/export. Pubblicazione ancora da autorizzare; nessun dato personale
+Sorgenti pubblicati e SHA remoto verificato prima della compilazione:
+**`1ec843207d019a65fe57caf20d5dd25c31d8bdb3`**. Checkout pulito
+`/tmp/ernie-build125-20261119-source`, 321 input iOS confrontati nel manifest privato.
+Archive/export completati sul Mac ufficio, Xcode 27.2. Quattro bundle 125 Apple Distribution verificati;
+profili validi, APNs production, gruppi condivisi coerenti e Diario privato solo nell’app principale.
+IPA **83.122.933 byte**, SHA-256 **`e9f0eb6e3cb85b9f639847f9c279cda61f465f877d46c2b40deea8e505468007`**.
+Artefatti/manifest privati in `~/Library/Caches/ernie-builds/build-125-20261119-chat-flow/`.
+La prima compilazione sul commit `1ed56a3` è superata e non destinata alla distribuzione; usare solo
+`Ernie.xcarchive`/`export/Ernie.ipa` verificati sul commit definitivo sopra. Pubblicazione ancora da autorizzare; nessun dato personale
 modificato durante questa diagnosi. Il promemoria di prova resta nell’account finché l’utente lo annulla.
