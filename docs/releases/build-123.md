@@ -1,7 +1,8 @@
 # Build 123 — Abitudini: luoghi, domande e notifiche
 
-19 novembre 2026. Implementazione e verifiche locali completate. **Non pubblicata**: API e TestFlight
-restano alla 122. Nessuna scrittura nei dati personali, nessun invio di prova all’utente durante la diagnosi.
+19 novembre 2026. Pubblicazione autorizzata dall’utente e completata: **API 123 attiva e build 123
+disponibile su TestFlight, gruppo Interni**. Nessuna correzione dei dati personali durante la diagnosi,
+nessun invio di prova all’utente.
 
 ## Problema e correzione
 
@@ -41,14 +42,27 @@ quella descrizione e il luogo storico resta da confermare con l’utente. Nessun
 Build 123 nei quattro bundle, changelog e progetto versionati prima dell’archiviazione. Compilazione
 per distribuzione dal commit GitHub verificato **`4f3ccbe5882d0339d2531a15317b304fa5e81d66`**, con 321
 input iOS confrontati nel manifest privato. Checkout pulito `/tmp/ernie-build123-20261119-source`.
-Archivio sul Mac ufficio arrivato alla firma; `codesign` in attesa di accesso alla chiave del Portachiavi.
-Richiesto intervento diretto dell’utente sull’eventuale finestra macOS. Firma/export IPA ancora da
-concludere e verificare; nessun caricamento effettuato. Log e manifest privati in
-`~/Library/Caches/ernie-builds/build-123-20261119-habits/`. Non avviare un secondo upload/archivio prima
-di avere verificato lo stato di quello già in corso.
+Archivio ed export completati sul Mac ufficio con Xcode 27.2. Verificati tutti e quattro i bundle 123,
+Apple Distribution, profili validi, APNs production e gruppo Diario privato solo nell’app principale.
+IPA **83.102.520 byte**, SHA-256 **`0f75bc1db48725188f3a40c4bc69d86056959d22bde8be543d7b4274dc1f51bf`**.
+Stessa IPA trasferita sul Mac Studio con confronto hash; upload tramite chiave API Apple già presente
+sul Mac Studio, senza trasferire credenziali. Upload riuscito senza errori; build/delivery ID
+**`ecd64a17-edcd-41fc-a303-089f2a18bcb6`**, Apple **VALID / IN_BETA_TESTING**, accesso nel gruppo
+esistente **Interni** verificato. Note italiane salvate e rilette identiche: **1.017 caratteri**.
+Artefatti, log e manifest privati su entrambi i Mac in
+`~/Library/Caches/ernie-builds/build-123-20261119-habits/`. Non eseguire un altro upload della 123.
 
-Necessario aggiornare **API e iOS**; worker invariato per questa correzione, nessuna migrazione SQL,
-nessuna modifica obbligatoria a `.env` o ai consensi. Backup prima del deploy e normale approvazione
-esplicita per API/TestFlight. La nuova API comprende anche il codice OAuth Raindrop non ancora
-configurato: il pulsante resta nascosto senza i due parametri OAuth; i token manuali sono preservati.
-Non sovrascrivere chiavi o configurazioni esistenti e non dichiarare il login OAuth reale verificato.
+API pubblicata da git sullo stesso commit, immagine
+`sha256:a69ca661a431b26eac5cdf9a3167358335da0af48e1c822d48d87e1e7dc064e3`.
+Backup filesystem/configurazioni e dump PostgreSQL verificati:
+`/srv/staging3/backups/ernie-pre-123-20261119.Vpzgcu/`. Health/ready OK. Worker 122, PostgreSQL, Redis,
+`.env` e override invariati; nessuna migrazione (schema 0055). Cinque moduli distribuiti corrispondono
+agli hash dei moduli testati. Nove verifiche sul runtime reale compilato con fixture sintetiche:
+luoghi distinti, una notifica con letture concorrenti, data storica esplicita, domanda recuperata dopo
+riavvio, notifica senza posizione, isolamento account, chiusura dopo risposta, cifratura e skill spenta.
+Fixture rimosse, zero chiamate LLM/provider e zero push reali durante lo smoke.
+
+APNs configurato sul server; ricezione e apertura della nuova notifica da verificare sull’iPhone reale.
+La nuova API comprende il codice OAuth Raindrop, ma i parametri OAuth non sono configurati: il pulsante
+resta nascosto, token manuali preservati. Login OAuth reale non verificato né dichiarato operativo.
+L’associazione personale segnalata resta in attesa di conferma dell’utente; nessuna fusione automatica.

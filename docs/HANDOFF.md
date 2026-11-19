@@ -5,34 +5,38 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
-### Build 123 — correzione Abitudini pronta, rilascio da autorizzare
+### Build 123 — API pubblicata e disponibile su TestFlight
 
-19 novembre 2026. Verifica account/servizio in sola lettura: luoghi con coordinate distinte presentati
-con lo stesso titolo; risposta conservata ma rimasto il segnaposto. La domanda proattiva si riferiva a
-una sosta storica e usava «qui», senza data. Nessun dato personale modificato o esportato in Git;
-chiesta all’utente conferma dell’eventuale associazione tra descrizione e luogo, ancora in attesa.
+19 novembre 2026. Pubblicazione autorizzata dall’utente («pubblica») e completata. Verifica account/servizio
+in sola lettura: luoghi distinti presentati con lo stesso titolo; risposta conservata ma segnaposto ancora
+visibile. La domanda proattiva usava «qui» per una sosta storica. L’eventuale associazione personale tra
+descrizione e luogo resta da confermare con l’utente: nessun accorpamento o trasferimento automatico.
 
 Correzione: righe identificabili per data/ora, conteggio, ordinamento recente e descrizioni confermate;
 questionario sulla sosta recente eleggibile, riferimento temporale esplicito e ripresa della domanda
-aperta dopo riavvio. Richiesta aggiuntiva utente: notifica delle domande anche ad app chiusa. Voce inbox
-atomica, push generico senza dettagli del luogo, link diretto Abitudini; timer API ogni cinque minuti,
-revisione inferenziale sempre una volta al giorno, nessuna chiamata LLM. Limiti/quiet hours e skill
-rispettati. Una domanda aperta, una notifica per domanda, nessuna ripetizione per semplice riapertura.
+aperta dopo riavvio. Voce inbox atomica, push generico senza dettagli del luogo e link diretto Abitudini.
+Timer API ogni cinque minuti, inferenza una volta al giorno, nessuna chiamata LLM. Limiti/quiet hours e
+skill rispettati; una domanda aperta e massimo una nuova domanda/notifica al giorno.
 
-61 test backend passati con PostgreSQL/RLS locale, 38 iOS e rendering chiaro/scuro passati; TS/Biome.
-Build 123/changelog aggiornati, sorgenti GitHub `4f3ccbe5882d0339d2531a15317b304fa5e81d66`, 321 input iOS
-rilevati da checkout pulito `/tmp/ernie-build123-20261119-source`. Compilazione archive arrivata alla firma;
-i processi `codesign` restano in attesa di accesso alla chiave del Portachiavi. Chiesto all’utente di
-controllare/autorizzare personalmente l’eventuale richiesta macOS, nessuna password acquisita.
-Artefatti privati ufficio `~/Library/Caches/ernie-builds/build-123-20261119-habits/`, `archive.log` e
-`source-inputs.json`. Processo Xcode 33298 ancora attivo al riscontro; attendere e verificarne l’esito,
-poi export solo locale con `ExportOptions-review.plist`, firme/profili/hash prima di chiedere il via
-libera alla pubblicazione. Nessuna IPA firmata verificata ancora; non dichiarare pronto TestFlight.
-**API e TestFlight restano alla 122**: nessuna pubblicazione o scrittura in produzione autorizzata per
-questo incremento. Serve via libera API e TestFlight; nessuna migrazione e worker invariato.
+Sorgenti API/iOS GitHub **`4f3ccbe5882d0339d2531a15317b304fa5e81d66`**. 61 test backend e 38 iOS
+passati, TS/Biome e rendering chiaro/scuro verificati. API pubblicata da git su staging3, immagine
+`a69ca661…`, health/ready OK; nove controlli sul runtime compilato passati con fixture sintetiche poi
+rimosse, zero LLM/APNs reali. Cinque moduli compilati corrispondono agli hash locali testati.
+Backup verificato `/srv/staging3/backups/ernie-pre-123-20261119.Vpzgcu/`; nessuna migrazione,
+schema 0055, worker 122 (`32bec54e…`), PostgreSQL, Redis, `.env` e override preservati.
+APNs configurato; consegna/tocco della nuova notifica ancora da provare sull’iPhone reale.
+
+Archivio/export completati sul Mac ufficio, Xcode 27.2, da checkout pulito con 321 input iOS confrontati.
+Quattro bundle 123 Apple Distribution verificati, APNs production e Diario privato solo nell’app.
+IPA **83.102.520 byte**, SHA-256 **`0f75bc1db48725188f3a40c4bc69d86056959d22bde8be543d7b4274dc1f51bf`**.
+Stessa IPA trasferita e hash verificato sul Mac Studio, upload API Apple riuscito senza errori;
+nessuna chiave trasferita. Apple **VALID / IN_BETA_TESTING**, gruppo esistente **Interni** con accesso
+alla build verificato, nessun nuovo tester/gruppo. Build ID **`ecd64a17-edcd-41fc-a303-089f2a18bcb6`**.
+Note italiane salvate e rilette identiche, 1.017 caratteri. Artefatti/manifest privati su entrambi i Mac in
+`~/Library/Caches/ernie-builds/build-123-20261119-habits/`. Non ricaricare la build.
 Dettagli in [build 123](releases/build-123.md). Modifiche estranee preservate.
 
-### Raindrop OAuth — implementazione locale, non pubblicata
+### Raindrop OAuth — codice incluso nella 123, attivazione ancora da completare
 
 13 novembre 2026. L’utente riferisce di avere completato il collegamento manuale e richiede login
 con ritorno automatico. Nuovo pulsante «Accedi con Raindrop» tramite sessione web nativa, API autenticate
@@ -42,11 +46,11 @@ spegnimento/scollegamento; token manuali preservati. Nessuna nuova migrazione n�
 
 49 test backend passati, incluso Redis reale isolato, 6 iOS passati e compilazione simulatore;
 TypeScript/Biome verificati. OAuth provider simulato: nessun accesso alla libreria reale durante i test.
-**Non ancora attivo nella build 122 / API pubblicata**: serve registrare una sola app OAuth del gestore,
-configurare privatamente `RAINDROP_OAUTH_CLIENT_ID` e `RAINDROP_OAUTH_CLIENT_SECRET`, verificare che
-Raindrop accetti `ernie://raindrop-auth` e restituisca lo state, quindi pubblicare API e nuova build
-con la consueta autorizzazione. Il flusso reale sul provider non è stato verificato. Nuove compilazioni
-solo temporanee per test: nessun nuovo numero di build distribuito e nessun upload effettuato.
+**Codice incluso in API e build 123, accesso OAuth ancora disattivato**: verificato sul server che i due
+parametri OAuth non sono configurati, quindi il pulsante resta nascosto. Serve registrare una sola app
+del gestore, configurare privatamente `RAINDROP_OAUTH_CLIENT_ID` e `RAINDROP_OAUTH_CLIENT_SECRET`,
+verificare che Raindrop accetti `ernie://raindrop-auth` e restituisca lo state. Token manuali preservati.
+Il flusso reale sul provider non è stato verificato; non dichiararlo operativo.
 Guida e prerequisiti in [Raindrop](integrations/raindrop.md#accesso-automatico--incremento-non-ancora-rilasciato).
 Esempi pratici aggiunti alla guida. Il collegamento riferito dall’utente non è stato verificato dal
 backend con le sue credenziali: non dichiararlo verificato. Intervento SINGLE, nessun sottoagente.
@@ -283,10 +287,10 @@ Abitudini e Apple Salute non attivate. Modifiche preesistenti fuori ambito prese
 
 ### Ultimo rilascio effettivamente pubblicato
 
-**122**, 13 novembre 2026: API e worker pubblicati, migrazione **0055**, TestFlight **Interni**
-verificato con stato **«Test in corso»**, build ID `2d82def1-b710-47a6-a8da-48943d281a27`.
-Sorgenti iOS `2ca3f01`, backend `35e9008`, note italiane da 949 caratteri salvate e rilette.
-Skill Raindrop spenta per impostazione predefinita; account personale ancora da collegare.
+**123**, 19 novembre 2026: API pubblicata e sana, worker 122 invariato, schema **0055**.
+TestFlight **VALID / IN_BETA_TESTING**, gruppo **Interni**, build ID `ecd64a17-edcd-41fc-a303-089f2a18bcb6`.
+Sorgenti API/iOS `4f3ccbe`, note italiane da 1.017 caratteri salvate e rilette. Abitudini: luoghi distinguibili,
+domande contestualizzate e notifiche generiche. Ricezione reale della nuova push da provare su iPhone.
 
 ### Rilasci precedenti
 
@@ -772,10 +776,10 @@ che possono usare token. 19 test iOS verdi; 111 verificata su TestFlight/Interni
 
 | Cosa | Stato |
 |---|---|
-| App su TestFlight | build **122**, verificata il 13 nov: **Test in corso**, gruppo Interni; sorgenti iOS `2ca3f01`, note italiane rilette |
+| App su TestFlight | build **123**, verificata il 19 nov: **VALID / IN_BETA_TESTING**, gruppo Interni; sorgenti iOS `4f3ccbe`, note italiane rilette |
 | iPhone di Giorgio (ad hoc, account figlio) | build **105** (25 ott, verificata). UDID `00008110-001139321E6B801E`; installazione via Wi-Fi con `apps/ios/scripts/adhoc.sh` quando è nel Wi-Fi di casa e sbloccato. Al prossimo collegamento installare l'ultima build disponibile |
-| Server staging3 (`/srv/staging3/projects/ernie`) | API e worker **122**, checkout `35e9008`, immagine comune `32bec54e…`. API healthy, worker memoria/automazioni pronti. Backup pre-122 disponibile; evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
-| Migrazioni | fino alla **0055**, applicate e verificate. Raindrop con chiave dedicata, zero collegamenti reali e skill spenta; nessun consenso Salute/Abitudini attivato |
+| Server staging3 (`/srv/staging3/projects/ernie`) | API **123**, checkout `4f3ccbe`, immagine `a69ca661…`; worker **122** invariato (`32bec54e…`). API healthy/ready, schema 0055, backup pre-123 verificato. Evitare rollback a writer che scartano `declared` di Abitudini o precedenti alla cifratura Salute |
+| Migrazioni | fino alla **0055**, applicate e verificate; nessuna nuova migrazione nella 123. Keyring dedicati preservati; il rilascio non modifica skill o consensi degli utenti |
 | Protocollo | v1.**10** (`user.steer` / `assistant.steer`), pubblicato e provato dal vivo |
 
 ### Server
