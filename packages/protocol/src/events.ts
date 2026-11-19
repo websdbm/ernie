@@ -505,6 +505,8 @@ export const DocumentsBlock = z.object({
 /** Promemoria (v1.6): elenco con annullamento dalla scheda; l'app programma anche una notifica locale. */
 export const RemindersBlock = z.object({
   kind: z.literal('reminders'),
+  /** Aggiorna la scheda già presente; l’id può cambiare quando si riprogramma l’avviso. */
+  replacesId: z.uuid().optional(),
   title: z.string().max(100),
   reminders: z
     .array(

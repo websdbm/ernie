@@ -13,8 +13,7 @@ export function confirmationReason(
 ): string {
   if (verdict.exfiltration)
     return 'Questa azione invia informazioni a un servizio esterno. Controlla quali dati verranno condivisi prima di confermare.';
-  if (toolId === 'reminder_update')
-    return 'Controlla la modifica proposta e conferma per applicarla. Fino alla conferma, il promemoria resta invariato.';
+  if (toolId === 'reminder_update') return 'Conferma per applicare la modifica.';
   if (verdict.reason.includes('contaminata'))
     return 'Prima di procedere, controlla i dati ricavati dai contenuti che ho letto.';
   if (verdict.reason.includes('sempre richiesta'))
@@ -156,17 +155,15 @@ export function confirmationPresentation(
       confirmLabel = 'Crea promemoria';
       break;
     case 'reminder_update':
-      title = 'Aggiornare questo promemoria?';
+      title = 'Modifica promemoria';
       summary = [
         text('location')
-          ? `Nuovo luogo: ${quoted('location')}.`
+          ? `Luogo: ${quoted('location')}.`
           : args.location === null
             ? 'Rimuovi il luogo.'
             : '',
-        text('text') ? `Nuovo testo: ${quoted('text')}.` : '',
-        text('at')
-          ? 'Aggiorna l’ora dell’avviso indicata nei dettagli.'
-          : 'Orario e avvisi restano invariati.',
+        text('text') ? `Testo: ${quoted('text')}.` : '',
+        text('at') ? 'Aggiorna l’ora dell’avviso indicata nei dettagli.' : 'Orari invariati.',
         args.url !== undefined
           ? args.url === null
             ? 'Rimuovi il link.'
@@ -180,7 +177,7 @@ export function confirmationPresentation(
       ]
         .filter(Boolean)
         .join(' ');
-      confirmLabel = 'Aggiorna promemoria';
+      confirmLabel = 'Applica';
       break;
     case 'reminder_cancel':
       title = 'Annullare questo promemoria?';

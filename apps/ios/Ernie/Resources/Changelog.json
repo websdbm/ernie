@@ -1,5 +1,30 @@
 [
   {
+    "build": 125,
+    "date": "2026-11-19",
+    "title": "La chat prosegue senza schede ripetute",
+    "items": [
+      {
+        "icon": "bubble.left.and.text.bubble.right",
+        "title": "Aggiornamenti al loro posto",
+        "detail": "Le modifiche aggiornano la scheda già nella chat. Le letture interne non ripropongono tutti i promemoria; l’elenco compare quando lo chiedi.",
+        "test": "Crea due promemoria, modifica il luogo di uno: la scheda precedente si aggiorna e l’altro non viene riproposto."
+      },
+      {
+        "icon": "rectangle.compress.vertical",
+        "title": "Conferme compatte",
+        "detail": "Dati essenziali e pulsanti brevi. Dettagli e consenso permanente sono raccolti nello stesso pannello espandibile.",
+        "test": "Controlla una conferma in chiaro, scuro e con caratteri grandi."
+      },
+      {
+        "icon": "text.bubble",
+        "title": "Risposte essenziali",
+        "detail": "Per le operazioni semplici Ernie conferma in una frase, senza ripetere l’intera scheda o descrivere i passaggi interni.",
+        "test": "Modifica un promemoria e verifica la conferma breve."
+      }
+    ]
+  },
+  {
     "build": 124,
     "date": "2026-11-19",
     "title": "Rettifiche dei promemoria più chiare",

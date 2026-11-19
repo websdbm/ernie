@@ -680,7 +680,6 @@ struct ConfirmationCardContent: View {
     var onDecision: (Bool, Bool) async -> Bool = { _, _ in false }
     @State var detailsExpanded = false
     @State var reviewExpanded = false
-    @State private var optionsExpanded = false
     @State private var submitting = false
     @State private var authenticationFailed = false
 
@@ -691,10 +690,6 @@ struct ConfirmationCardContent: View {
         VStack(alignment: .leading, spacing: 10) {
             if let decision {
                 reviewHeader(decision)
-                if decision == "expired", card.toolId == "reminder_update" {
-                    Text(ConfirmationCopy.expirationExplanation(for: card))
-                        .font(.footnote).foregroundStyle(palette.inkSecondary)
-                }
                 if reviewExpanded {
                     Divider()
                     Text(presentation.summary).font(.callout).foregroundStyle(palette.ink)
@@ -710,22 +705,33 @@ struct ConfirmationCardContent: View {
                     }
                 }
             } else {
-                Label(presentation.title, systemImage: "hand.raised")
+                Label(card.toolId.hasPrefix("reminder_") ? ConfirmationCopy.compactTitle(for: card) : presentation.title, systemImage: "hand.raised")
                     .font(.headline)
                     .foregroundStyle(palette.ink)
                     .accessibilityAddTraits(.isHeader)
                 Text(ConfirmationCopy.compactSummary(for: card))
                     .font(.callout).foregroundStyle(palette.ink)
-                if !presentation.details.isEmpty {
+                if let essential = ConfirmationCopy.essentialReason(for: card) {
+                    Text(essential).font(.footnote).foregroundStyle(palette.inkSecondary)
+                }
+                if !presentation.details.isEmpty || card.allowAlways == true || card.reason != nil {
                     DisclosureGroup(isExpanded: $detailsExpanded) {
                         details.padding(.top, 6)
+                        if ConfirmationCopy.essentialReason(for: card) == nil { reason }
+                        if card.allowAlways == true, presentation.incomplete != true {
+                            Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
+                                .font(.footnote).foregroundStyle(palette.inkSecondary)
+                            Button { send(approve: true, always: true) } label: {
+                                Label(ConfirmationCopy.alwaysLabel(for: card.toolId), systemImage: "checkmark.shield")
+                                    .font(.subheadline.weight(.medium)).frame(minHeight: 44, alignment: .leading)
+                            }
+                            .buttonStyle(.borderless).disabled(submitting)
+                        }
                     } label: {
-                        Text(card.toolId == "recipe_save" ? "Ingredienti e preparazione" : "Dettagli dell’azione")
-                            .font(.subheadline.weight(.medium))
-                            .frame(minHeight: 44, alignment: .leading)
+                        Text(card.toolId == "recipe_save" ? "Ingredienti e preparazione" : "Dettagli")
+                            .font(.subheadline.weight(.medium)).frame(minHeight: 44, alignment: .leading)
                     }
                 }
-                reason
                 if let deadline = ConfirmationCopy.deadline(for: card) {
                     Label(deadline, systemImage: "clock").font(.caption).foregroundStyle(palette.inkSecondary)
                 }
@@ -741,24 +747,6 @@ struct ConfirmationCardContent: View {
                 if authenticationFailed {
                     Text("Conferma non completata. Riprova.").font(.subheadline).foregroundStyle(palette.inkSecondary)
                 }
-                if card.allowAlways == true, presentation.incomplete != true {
-                    DisclosureGroup(isExpanded: $optionsExpanded) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(ConfirmationCopy.alwaysExplanation(for: card.toolId))
-                                .font(.footnote).foregroundStyle(palette.inkSecondary)
-                            Button { send(approve: true, always: true) } label: {
-                                Label(ConfirmationCopy.alwaysLabel(for: card.toolId), systemImage: "checkmark.shield")
-                                    .font(.subheadline.weight(.medium))
-                                    .frame(minHeight: 44, alignment: .leading)
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(submitting)
-                        }
-                    } label: {
-                        Text("Opzioni di conferma").font(.footnote.weight(.medium))
-                            .frame(minHeight: 44, alignment: .leading)
-                    }
-                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -770,7 +758,6 @@ struct ConfirmationCardContent: View {
             if newValue != nil {
                 reviewExpanded = false
                 detailsExpanded = false
-                optionsExpanded = false
             }
         }
     }
@@ -854,12 +841,12 @@ struct ConfirmationCardContent: View {
 
     private var cancelButton: some View {
         Button("Annulla") { send(approve: false) }
-            .buttonStyle(.bordered).controlSize(.large)
+            .buttonStyle(.bordered).controlSize(.regular).font(.subheadline.weight(.medium)).frame(minHeight: 44)
     }
 
     private var approveButton: some View {
-        Button(presentation.confirmLabel) { send(approve: true) }
-            .buttonStyle(.borderedProminent).controlSize(.large)
+        Button(ConfirmationCopy.actionLabel(for: card)) { send(approve: true) }
+            .buttonStyle(.borderedProminent).controlSize(.regular).font(.subheadline.weight(.semibold)).frame(minHeight: 44)
             .tint(presentation.destructive == true ? Color.red : palette.accent)
             .disabled(presentation.incomplete == true)
     }

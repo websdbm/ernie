@@ -27,11 +27,13 @@ describe('conferme leggibili', () => {
       location: 'Casa precedente, via Esempio 4, Padova',
     });
     expect(p.summary).toContain('Casa precedente, via Esempio 4, Padova');
-    expect(p.summary).toContain('Orario e avvisi restano invariati');
+    expect(p.summary).toContain('Orari invariati');
+    expect(p.summary.length).toBeLessThan(80);
+    expect(p.confirmLabel).toBe('Applica');
     expect(p.summary).not.toContain('synthetic-reminder');
-    expect(
-      confirmationReason({ kind: 'ask', reason: 'run contaminata' }, 'reminder_update'),
-    ).toContain('conferma per applicarla');
+    expect(confirmationReason({ kind: 'ask', reason: 'run contaminata' }, 'reminder_update')).toBe(
+      'Conferma per applicare la modifica.',
+    );
   });
 
   it('mostra la ricetta intera, senza JSON, conservando ingredienti, ordine e quantità', () => {

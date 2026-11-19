@@ -19,12 +19,61 @@ struct ConfirmationTests {
         ConfirmationCard(approvalId: "a", correlationId: "c", toolId: "recipe_save", reason: "run contaminata da contenuto non fidato (Rule of Two)", expiresAt: "2099-10-18T08:00:00.000Z", allowAlways: true, presentation: presentation)
     }
 
+    @Test @MainActor func confermeCompatteMantengonoDettagliRischiETocco() throws {
+        let p = ConfirmationPresentation(title: "Modifica promemoria", summary: "Luogo: «Via Esempio 4, Padova». Orari invariati.", confirmLabel: "Applica", details: [.init(label: "Luogo dell’appuntamento", value: "Via Esempio 4, Padova")])
+        var value = card(presentation: p)
+        value.toolId = "reminder_update"
+        func render(_ card: ConfirmationCard) throws -> UIImage {
+            let r = ImageRenderer(content: ConfirmationCardContent(card: card).padding(16).frame(width: 320).background(Theme.ground))
+            return try #require(r.uiImage)
+        }
+        let pending = try render(value)
+        #expect(pending.size.height < 300)
+        value.decision = "expired"
+        let expired = try render(value)
+        #expect(expired.size.height < 150)
+        #expect(ConfirmationCopy.compactTitle(for: value) == "Modifica promemoria")
+        #expect(ConfirmationCopy.status(for: value, decision: "expired").contains("invariato"))
+        value.reason = "Questa azione invia informazioni a un servizio esterno. Controlla quali dati verranno condivisi prima di confermare."
+        #expect(ConfirmationCopy.essentialReason(for: value)?.contains("servizio esterno") == true)
+        value.reason = "Controlla la modifica proposta e conferma per applicarla. Fino alla conferma, il promemoria resta invariato."
+        #expect(ConfirmationCopy.essentialReason(for: value) == nil)
+        value.reason = "Permesso amministrativo richiesto"
+        #expect(ConfirmationCopy.essentialReason(for: value) == "Permesso amministrativo richiesto")
+    }
+
+    @Test @MainActor func rettificaAggiornaSoloLaSchedaPrecedenteSenzaRiproporreLElenco() throws {
+        let a = ReminderItem(id: "first", text: "Prova", at: "2099-01-01T10:40:00Z", status: "scheduled", eventAt: "2099-01-01T11:00:00Z", location: "Luogo iniziale")
+        let b = ReminderItem(id: "second", text: "Altro impegno", at: "2099-01-02T10:40:00Z", status: "scheduled", location: "Altro luogo")
+        var history: [ChatItem] = [
+            .message(.init(id: "m1", correlationId: "c1", role: .assistant, text: "Primo messaggio", blocks: [.reminders(.init(title: "Appuntamento", reminders: [a]))], createdAt: .distantPast)),
+            .message(.init(id: "m2", correlationId: "c2", role: .assistant, text: "Secondo messaggio", blocks: [.reminders(.init(title: "Appuntamento", reminders: [b]))], createdAt: .now))
+        ]
+        var changed = a; changed.location = "Via Esempio 4, Padova"
+        #expect(history.refreshReminderCards(.init(title: "Aggiornato", reminders: [changed], replacesId: a.id)) == nil)
+        #expect(history.count == 2)
+        guard case .message(let first) = history[0], case .reminders(let firstBlock) = first.blocks[0],
+              case .message(let second) = history[1], case .reminders(let secondBlock) = second.blocks[0] else { Issue.record("Schede perse"); return }
+        #expect(first.text == "Primo messaggio")
+        #expect(firstBlock.reminders == [changed])
+        #expect(secondBlock.reminders == [b])
+        let reloaded = try JSONDecoder().decode([ChatItem].self, from: JSONEncoder().encode(history))
+        #expect(reloaded == history)
+        var moved = changed; moved.id = "replacement"; moved.at = "2099-01-01T10:00:00Z"
+        #expect(history.refreshReminderCards(.init(title: "Spostato", reminders: [moved], replacesId: changed.id)) == nil)
+        var empty: [ChatItem] = []
+        let newCard = RemindersBlock(title: "Aggiornato", reminders: [moved], replacesId: changed.id)
+        #expect(empty.refreshReminderCards(newCard) == newCard)
+        let requestedList = RemindersBlock(title: "I tuoi promemoria", reminders: [moved,b])
+        #expect(history.refreshReminderCards(requestedList) == requestedList)
+    }
+
     @Test func scadeLaConfermaNonIlPromemoria() {
         var value = card()
         value.toolId = "reminder_update"
         value.decision = "expired"
-        #expect(ConfirmationCopy.status(for: value, decision: "expired").contains("modifica non applicata"))
-        #expect(ConfirmationCopy.expirationExplanation(for: value).contains("non il promemoria"))
+        #expect(ConfirmationCopy.status(for: value, decision: "expired").contains("invariato"))
+        #expect(ConfirmationCopy.expirationExplanation(for: value).contains("Conferma scaduta"))
         #expect(ConfirmationCopy.expirationExplanation(for: value).contains("resta invariato"))
         #expect(ConfirmationCopy.deadline(for: value)?.contains("Conferma entro") == true)
     }

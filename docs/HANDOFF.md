@@ -5,6 +5,27 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Build 125 — chat senza elenchi ripetuti, pronta nei sorgenti
+
+19 novembre 2026. Prova iPhone riletta in sola lettura: due rettifiche del luogo riuscite sullo stesso
+promemoria, orari invariati; entrambe le conferme approvate (26 e 8 secondi), **scadenza non provata**.
+Causa dei due impegni riproposti: `reminder_list` mostrava sempre il proprio risultato, anche durante
+la lettura interna prima di una rettifica. Nessuna modifica ai dati personali in questa sessione.
+
+Ora le letture sono silenziose, `show:true` mostra l’elenco solo su richiesta. Le rettifiche inviano
+`replacesId` (opzionale): il client aggiorna la scheda nella posizione originale, anche se cambia id;
+nessuna copia in fondo. Dopo `/clear` o se manca la scheda compare solo l’impegno aggiornato.
+Conferme compatte con dettagli/consenso permanente raccolti sotto Dettagli; avvertenze esterne e
+motivi non standard preservati. Istruzioni al modello per risposte più brevi e distinzione fra stato
+osservato ed esito di azioni precedenti; non un taglio rigido della risposta.
+
+73 test backend, 39 iOS, TypeScript/Biome e diff. Due prove reali Sonnet con strumenti sintetici:
+lettura interna senza elenco e visualizzazione esplicita corretta. Resta un breve preambolo nella
+rettifica: non promettere una sola frase sempre. Build 125/changelog aggiornati; archivio di
+rilascio da compilare dal commit GitHub verificato. Servono API + iOS, worker invariato e nessuna
+migrazione. **Pubblicato resta API/iOS 124, worker 122**; nessuna autorizzazione alla pubblicazione
+125 ancora ricevuta. [Dettagli](releases/build-125.md). Modifiche estranee preservate.
+
 ### Build 124 — API pubblicata, TestFlight disponibile e luogo corretto
 
 19 novembre 2026. Diagnosi in sola lettura del caso segnalato: sede creata come sola etichetta; il client

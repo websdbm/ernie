@@ -56,6 +56,11 @@ describe('cold start companion', () => {
       expect(started).toHaveLength(6);
       expect(build).toHaveBeenCalledTimes(1);
       expect(build.mock.calls[0]?.[0].memorySnapshot).toContain('Giulia (compagna)');
+      const prompt = build.mock.calls[0]?.[0].memorySnapshot;
+      expect(prompt).toContain('Conferma in una sola frase');
+      expect(prompt).toContain('stato attuale');
+      expect(prompt).toContain('sicurezza');
+      expect(prompt).toContain('reminder_create');
     } finally {
       for (const done of release) done();
     }

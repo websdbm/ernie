@@ -35,6 +35,39 @@ import UIKit
         #expect(!model.resolvingTask)
     }
 
+    @Test func rettificaNonRiproponePromemoriaGiaVisibiliEMostraUnaSchedaDopoClear() async throws {
+        try await withModel { model, transcript in
+            let store = try #require(model.conversation)
+            let aliases = UserDefaults.standard.object(forKey: "reminders.replaced")
+            defer { model.reminders.clear(); UserDefaults.standard.set(aliases, forKey: "reminders.replaced") }
+            let a = ReminderItem(id: "original", text: "Prova", at: "2099-01-01T10:40:00Z", status: "scheduled", location: "Primo luogo")
+            let b = ReminderItem(id: "other", text: "Altro", at: "2099-01-02T10:40:00Z", status: "scheduled", location: "Altro luogo")
+            @MainActor func send(_ value: RemindersBlock, correlation: String, sequence: Int) {
+                store.apply(.init(payload: .assistantBlock(.init(blockId: "block-\(sequence)", block: .reminders(value))), sessionId: store.sessionId, correlationId: correlation, seq: sequence))
+            }
+            send(.init(title: "Appuntamento", reminders: [a]), correlation: "first", sequence: 1)
+            send(.init(title: "Appuntamento", reminders: [b]), correlation: "second", sequence: 2)
+            let originalCount = store.items.count
+            var moved = a; moved.id = "replacement"; moved.location = "Via Esempio 4, Padova"
+            send(.init(title: "Aggiornato", reminders: [moved], replacesId: a.id), correlation: "edit", sequence: 3)
+            #expect(store.items.count == originalCount)
+            #expect(model.reminders.item(a.id)?.id == moved.id)
+            #expect(model.reminders.item(b.id)?.location == b.location)
+            let saved = try #require(transcript.load(store.sessionId))
+            #expect(saved.items.map(\.id) == store.items.map(\.id))
+            let savedBlocks = saved.items.compactMap { if case .message(let m) = $0 { return m.blocks }; return nil }
+            let liveBlocks = store.items.compactMap { if case .message(let m) = $0 { return m.blocks }; return nil }
+            #expect(savedBlocks == liveBlocks)
+            store.clearVisibleHistory()
+            #expect(store.visibleItems.isEmpty)
+            moved.location = "Via Esempio 8, Padova"
+            send(.init(title: "Aggiornato", reminders: [moved], replacesId: moved.id), correlation: "after-clear", sequence: 4)
+            #expect(store.visibleItems.count == 1)
+            send(.init(title: "I tuoi promemoria", reminders: [moved,b]), correlation: "explicit-list", sequence: 5)
+            #expect(store.visibleItems.count == 2)
+        }
+    }
+
     @Test func nuovoCompitoHaSessioneERispostaIndipendenti() async throws {
         try await withModel(kind: "new") { model, transcript in
             let first = try #require(model.conversation)

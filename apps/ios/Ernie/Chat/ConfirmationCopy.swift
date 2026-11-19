@@ -4,7 +4,9 @@ import Foundation
 enum ConfirmationCopy {
     /// Il riepilogo chiuso descrive la conferma, non promette che il tool sia già riuscito.
     static func compactTitle(for card: ConfirmationCard) -> String {
-        recipeTitle(for: card) ?? ToolLabels.name(card.toolId, displayName: card.displayName)
+        if card.toolId == "reminder_update" { return "Modifica promemoria" }
+        if card.toolId == "reminder_create" { return "Nuovo promemoria" }
+        return recipeTitle(for: card) ?? ToolLabels.name(card.toolId, displayName: card.displayName)
     }
 
     static func compactSummary(for card: ConfirmationCard) -> String {
@@ -16,14 +18,35 @@ enum ConfirmationCopy {
         switch decision {
         case "approved": card.always == true ? "Confermata · consenso salvato" : "Confermata"
         case "denied": "Annullata"
-        default: card.toolId == "reminder_update" ? "Conferma scaduta · modifica non applicata" : "Conferma scaduta"
+        default: card.toolId == "reminder_update" ? "Conferma scaduta · promemoria invariato" : "Conferma scaduta"
         }
     }
 
     static func expirationExplanation(for card: ConfirmationCard) -> String {
         card.toolId == "reminder_update"
-            ? "È scaduta la conferma, non il promemoria: resta invariato. Chiedi a Ernie di riproporre la modifica."
-            : "La conferma è scaduta: questa azione non è stata eseguita."
+            ? "Conferma scaduta. Il promemoria resta invariato."
+            : "Conferma scaduta. Azione non eseguita."
+    }
+
+    static func actionLabel(for card: ConfirmationCard) -> String {
+        switch card.toolId {
+        case "reminder_update": "Applica"
+        case "reminder_create": "Crea"
+        default: presentation(for: card).confirmLabel
+        }
+    }
+
+    /// Le avvertenze su dati condivisi e motivi non standard restano sempre visibili.
+    static func essentialReason(for card: ConfirmationCard) -> String? {
+        guard let raw = card.reason, let value = reason(raw) else { return nil }
+        let lower = raw.lowercased()
+        if lower.contains("servizio esterno") || lower.contains("fuga di dati") || lower.contains("esfiltr") { return value }
+        let generic = lower.contains("contaminat") || lower.contains("rule of two") || lower.contains("sempre richiesta")
+            || lower.hasPrefix("prima di procedere, controlla") || lower.hasPrefix("controlla la modifica proposta")
+            || lower == "conferma per applicare la modifica."
+            || lower == "questa azione richiede la tua conferma prima di procedere."
+            || lower.contains("effetto esterno con rischio")
+        return generic ? nil : value
     }
 
     static func deadline(for card: ConfirmationCard) -> String? {

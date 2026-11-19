@@ -110,9 +110,9 @@ describe('createGuardedTool', () => {
     expect(result).toMatchObject({
       error: 'approval_expired',
       retryable: false,
-      reason: expect.stringContaining('conferma'),
+      reason: expect.stringMatching(/conferma/i),
     });
-    expect((result as { reason: string }).reason).toContain('promemoria resta invariato');
+    expect((result as { reason: string }).reason).toContain('promemoria invariato');
     expect((result as { reason: string }).reason).not.toMatch(/contaminata|Rule of Two/);
     expect(update).not.toHaveBeenCalled();
     expect(await tool.execute?.(input, {} as never)).toEqual(result);

@@ -532,6 +532,7 @@ struct ReminderRepeatInfo: Codable, Sendable, Equatable {
 struct RemindersBlock: Codable, Sendable, Equatable {
     var title: String
     var reminders: [ReminderItem]
+    var replacesId: String? = nil
 }
 
 /// Domanda chiusa (v1.13): Ernie propone poche opzioni; il tocco su una manda la sua etichetta come messaggio.

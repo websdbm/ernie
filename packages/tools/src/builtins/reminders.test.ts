@@ -1,3 +1,4 @@
+import { ContentBlock } from '@ernie/protocol';
 import { describe, expect, it } from 'vitest';
 import type { ToolContext } from '../types.js';
 import { createReminderTools, type ReminderToolInfo, type ReminderToolStore } from './reminders.js';
@@ -76,6 +77,28 @@ describe('tool dei promemoria per il modello', () => {
     );
   });
 
+  it('rettifica: presenta un aggiornamento della scheda originale, anche se cambia id', async () => {
+    const f = fakeStore();
+    const id = '00000000-0000-4000-8000-000000000123';
+    const replacement = '00000000-0000-4000-8000-000000000124';
+    f.store.update = async (_user, _id, patch) => ({
+      id: replacement,
+      text: 'Prova',
+      at: new Date(future(3)),
+      ...(typeof patch.location === 'string' ? { location: patch.location } : {}),
+    });
+    const update = createReminderTools(f.store).find((t) => t.id === 'reminder_update');
+    if (!update) throw Error('Missing update');
+    const input = { id, location: 'Via Esempio 4, Padova' };
+    const out = await update.execute(input, ctx());
+    expect(ContentBlock.parse(update.present?.(input, out))).toMatchObject({ replacesId: id });
+    expect(update.present?.(input, out)).toMatchObject({
+      kind: 'reminders',
+      replacesId: id,
+      reminders: [{ id: replacement, location: input.location }],
+    });
+  });
+
   it('reminder_create: fuso non valido → predefinito; sveglia = canali alarm senza email; errori chiari', async () => {
     const { store, created } = fakeStore();
     const [create] = createReminderTools(store, { defaultTimezone: 'Europe/Rome' });
@@ -101,7 +124,8 @@ describe('tool dei promemoria per il modello', () => {
     await create.execute({ text: 'Chiamare Luca', at: future(1) }, ctx());
     const listed = (await list.execute({}, ctx())) as { reminders: Array<{ id: string }> };
     expect(listed.reminders).toHaveLength(1);
-    expect(remindersBlock(list.present?.({}, listed))?.reminders).toHaveLength(1);
+    expect(list.present?.({}, listed)).toBeNull();
+    expect(remindersBlock(list.present?.({ show: true }, listed))?.reminders).toHaveLength(1);
     expect(await cancel.execute({ id: listed.reminders[0]?.id ?? '' }, ctx())).toEqual({
       removed: true,
     });

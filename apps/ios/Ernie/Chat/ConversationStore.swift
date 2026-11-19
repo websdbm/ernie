@@ -821,8 +821,13 @@ final class ConversationStore {
                 break
             }
             onBlock?(p.block)
-            if case .unknown = p.block { break }
-            if case .todoList(let update) = p.block,
+            var block = p.block
+            if case .reminders(let update) = block, update.replacesId != nil {
+                guard let remaining = items.refreshReminderCards(update, excluding: hiddenItemIds) else { persist(); break }
+                block = .reminders(remaining)
+            }
+            if case .unknown = block { break }
+            if case .todoList(let update) = block,
                activeCorrelationId != e.correlationId,
                !items.contains(where: { if case .message(let m) = $0 { return m.correlationId == e.correlationId }; return false }) {
                 // Gli aggiornamenti dei promemoria hanno un correlationId autonomo: non sono nuovi turni.
@@ -831,15 +836,15 @@ final class ConversationStore {
                 break
             }
             upsertAssistant(for: e.correlationId) { m in
-                switch p.block {
+                switch block {
                 case .shoppingList, .todoList:
-                    m.blocks.append(p.block)
+                    m.blocks.append(block)
                     m.coalesceListSnapshots()
                     return
                 default: break
                 }
                 // Più promemoria creati nello stesso turno: una scheda sola con tutti, non una per promemoria.
-                if case .reminders(let incoming) = p.block,
+                if case .reminders(let incoming) = block,
                    let i = m.blocks.firstIndex(where: { if case .reminders = $0 { return true }; return false }),
                    case .reminders(var merged) = m.blocks[i] {
                     for r in incoming.reminders {
@@ -850,7 +855,7 @@ final class ConversationStore {
                     m.blocks[i] = .reminders(merged)
                     return
                 }
-                if !m.blocks.contains(p.block) { m.blocks.append(p.block) }
+                if !m.blocks.contains(block) { m.blocks.append(block) }
             }
         case .avatarEmotion(let p):
             Log.chat.info("espressione dell'avatar: \(p.name, privacy: .public)")

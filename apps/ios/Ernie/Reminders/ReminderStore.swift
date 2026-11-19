@@ -28,6 +28,11 @@ final class ReminderStore {
     func apply(_ block: ContentBlock) {
         guard case .reminders(let b) = block else { return }
         revision += 1
+        if let oldId = b.replacesId, let replacement = b.reminders.first, b.reminders.count == 1,
+           oldId != replacement.id {
+            replaced[oldId] = replacement.id
+            items.removeAll { $0.id == oldId }
+        }
         for r in b.reminders where !firedPlaces.contains(r.id) {
             if r.status == "scheduled" {
                 if let i = items.firstIndex(where: { $0.id == r.id }) { items[i] = r } else { items.append(r) }

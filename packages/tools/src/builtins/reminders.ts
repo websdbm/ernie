@@ -137,7 +137,10 @@ const toInfo = (r: ReminderToolInfo): InfoOut => ({
   ...(r.from ? { from: r.from } : {}),
 });
 
-function block(items: readonly ReminderToolInfo[], title: string): ContentBlock {
+function block(
+  items: readonly ReminderToolInfo[],
+  title: string,
+): Extract<ContentBlock, { kind: 'reminders' }> {
   return {
     kind: 'reminders',
     title,
@@ -359,21 +362,28 @@ export function createReminderTools(
     }),
     defineTool({
       id: 'reminder_list',
-      version: '1',
+      version: '2',
       category: 'reminders',
       description:
-        'Elenca i promemoria futuri dell’utente (e quelli che ha messo a persone collegate). Usalo per rispondere a «che promemoria ho?» o prima di annullarne uno.',
+        'Legge i promemoria futuri. Le letture per identificare un impegno prima di modificarlo o annullarlo sono silenziose: ometti show o usa show:false. Usa show:true SOLO se l’utente chiede esplicitamente di vedere l’elenco («che promemoria ho?»). Non riproporre l’elenco durante una rettifica. Con show:true l’elenco è già visibile nella scheda: non ricopiarlo nel testo.',
       risk: { readsPrivate: true, ingestsUntrusted: false, externalEffect: false, write: false },
       timeoutMs: 5_000,
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        show: z
+          .boolean()
+          .optional()
+          .describe(
+            'Mostra l’elenco in chat solo se richiesto esplicitamente dall’utente. Default: lettura interna senza scheda.',
+          ),
+      }),
       outputSchema: z.object({ reminders: z.array(Info) }),
       execute: async (_input, ctx) => {
         const list = await store.list(ctx.userId);
         lastListed.set(ctx.userId, list);
         return { reminders: list.map(toInfo) };
       },
-      present: (_input, out) => {
-        if (!out.reminders.length) return null;
+      present: (input, out) => {
+        if (input.show !== true || !out.reminders.length) return null;
         const ids = new Set(out.reminders.map((r) => r.id));
         const items = [...lastListed.values()].flat().filter((r) => ids.has(r.id));
         return items.length ? block(items, 'I tuoi promemoria') : null;
@@ -494,10 +504,10 @@ export function createReminderTools(
     defineTool({
       id: 'reminder_update',
       oncePerTurn: true,
-      version: '1',
+      version: '2',
       category: 'reminders',
       description:
-        'Modifica un promemoria esistente senza duplicarlo. Prima usa reminder_list per identificarlo: se più impegni corrispondono chiedi quale con present_choices. Aggiunge, cambia o rimuove luogo (location: indirizzo o etichetta), URL meeting (url) e note (notes), anche in un secondo momento. Campi omessi invariati; null cancella. Può cambiare testo e ora dell’avviso (at ISO con fuso). Non trasformare una sede in un avviso geolocalizzato. Chiedi un dettaglio mirato solo se necessario; non inventare dati.',
+        'Modifica un promemoria esistente senza duplicarlo. Prima usa reminder_list con show:false per identificarlo senza mostrare l’elenco: se più impegni corrispondono chiedi quale con present_choices. Aggiunge, cambia o rimuove luogo (location: indirizzo o etichetta), URL meeting (url) e note (notes), anche in un secondo momento. Campi omessi invariati; null cancella. Può cambiare testo e ora dell’avviso (at ISO con fuso). Non trasformare una sede in un avviso geolocalizzato. Chiedi un dettaglio mirato solo se necessario; non inventare dati.',
       risk: { readsPrivate: false, ingestsUntrusted: false, externalEffect: false, write: true },
       timeoutMs: 8_000,
       inputSchema: z
@@ -534,9 +544,9 @@ export function createReminderTools(
         lastCreated.set(ctx.userId, r);
         return toInfo(r);
       },
-      present: (_input, out) => {
+      present: (input, out) => {
         const r = [...lastCreated.values()].find((x) => x.id === out.id);
-        return r ? block([r], 'Promemoria aggiornato') : null;
+        return r ? { ...block([r], 'Promemoria aggiornato'), replacesId: input.id } : null;
       },
     }),
   ];

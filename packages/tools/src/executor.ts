@@ -317,9 +317,9 @@ export function createGuardedTool(spec: ToolSpec, deps: ExecutorDeps, ctxRef: To
             reason:
               decision === 'expired'
                 ? spec.id === 'reminder_update'
-                  ? 'La richiesta di conferma è scaduta senza una risposta: la modifica non è stata applicata e il promemoria resta invariato. È scaduta la conferma, non il promemoria. Spiegalo all’utente; non riprovare automaticamente. Per riprendere, chiedi una nuova conferma della stessa modifica dopo aver riletto il promemoria.'
-                  : 'La richiesta di conferma è scaduta senza una risposta: questa azione non è stata eseguita. Spiegalo all’utente e non riprovare automaticamente.'
-                : 'L’utente ha annullato la conferma: questa azione non è stata eseguita. Non riproporla automaticamente.',
+                  ? 'Conferma scaduta: modifica non applicata, promemoria invariato. Non riprovare automaticamente.'
+                  : 'Conferma scaduta: azione non eseguita. Non riprovare automaticamente.'
+                : 'Conferma annullata: azione non eseguita. Non riproporla automaticamente.',
             retryable: false,
           } satisfies ToolErrorResult;
         }
