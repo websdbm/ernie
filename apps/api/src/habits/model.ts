@@ -369,13 +369,65 @@ export function reviewHabits(s: HabitState, now: Date, timezone: string) {
     }
   }
 }
-export function questionCandidate(s: HabitState, now: Date) {
+export function latestPlaceVisit(s: HabitState, p: HabitPlace, before = Infinity) {
+  return s.visits
+    .filter(
+      (v) =>
+        credibleVisit(v) &&
+        visitPlace(s, v)?.id === p.id &&
+        Date.parse(v.departure ?? v.observedAt) <= before,
+    )
+    .sort((a, b) => Date.parse(b.arrival as string) - Date.parse(a.arrival as string))[0];
+}
+export function pendingPlaceQuestion(s: HabitState, now: Date) {
   return s.places.find(
     (p) =>
       !p.excluded &&
       !p.confirmedAt &&
-      (!p.askedAt || (p.snoozeUntil && Date.parse(p.snoozeUntil) <= now.getTime())) &&
-      (!p.snoozeUntil || Date.parse(p.snoozeUntil) <= now.getTime()) &&
-      s.visits.some((v) => credibleVisit(v) && visitPlace(s, v)?.id === p.id),
+      !p.snoozeUntil &&
+      p.askedAt &&
+      Date.parse(p.askedAt) <= now.getTime() &&
+      habitLocalDate(new Date(p.askedAt), 'Europe/Rome') === s.lastQuestionDay &&
+      latestPlaceVisit(s, p, Date.parse(p.askedAt)),
   );
+}
+export function describePlaceQuestion(s: HabitState, p: HabitPlace) {
+  const v = latestPlaceVisit(s, p, p.askedAt ? Date.parse(p.askedAt) : Infinity);
+  if (!v?.arrival) return null;
+  const when = new Intl.DateTimeFormat('it-IT', {
+    timeZone: v.timezone,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(v.arrival));
+  return {
+    placeId: p.id,
+    title: 'Riconosci questa sosta?',
+    visitAt: v.arrival,
+    question: `Ho registrato una sosta il ${when}. Che posto è e perché ci sei stato? È una visita occasionale o un posto che frequenti?`,
+  };
+}
+export function questionCandidate(s: HabitState, now: Date) {
+  const lastArrival = new Map<string, number>();
+  for (const v of s.visits) {
+    if (!credibleVisit(v) || Date.parse(v.departure ?? v.observedAt) > now.getTime()) continue;
+    const p = visitPlace(s, v);
+    if (p)
+      lastArrival.set(p.id, Math.max(lastArrival.get(p.id) ?? 0, Date.parse(v.arrival as string)));
+  }
+  return s.places
+    .filter(
+      (p) =>
+        !p.excluded &&
+        !p.confirmedAt &&
+        (!p.askedAt || (p.snoozeUntil && Date.parse(p.snoozeUntil) <= now.getTime())) &&
+        (!p.snoozeUntil || Date.parse(p.snoozeUntil) <= now.getTime()) &&
+        lastArrival.has(p.id),
+    )
+    .sort(
+      (a, b) =>
+        (lastArrival.get(b.id) ?? 0) - (lastArrival.get(a.id) ?? 0) || a.id.localeCompare(b.id),
+    )[0];
 }

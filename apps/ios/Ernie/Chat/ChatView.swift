@@ -266,6 +266,8 @@ struct ChatView: View {
             if voice.isActive { voice.cancelListening() }
             composing = false
             if link == .reminders { showReminders = true } else { showAutomations = true }
+        case .habits:
+            if voice.isActive { voice.cancelListening() }; composing = false; showHabits = true
         case .health:
             openHealth()
         case .family:
@@ -879,6 +881,7 @@ struct NotificationCardView: View {
         case "automation.paused": "pause.circle"
         case "proactive.approval_expiring": "hourglass"
         case "proactive.family_reminder": "person.2.fill"
+        case "proactive.habit_learning": "mappin.and.ellipse"
         case "automation.error", "automation.deadletter": "exclamationmark.triangle"
         default: "sparkles"
         }
@@ -899,6 +902,9 @@ struct NotificationCardView: View {
             if !bodyRepeatsTitle {
                 MarkdownText(text: expanded ? card.body : String(card.body.prefix(420)) + (card.body.count > 420 ? "…" : ""), font: .callout)
                     .onTapGesture { expanded.toggle() }
+            }
+            if card.kind == "proactive.habit_learning" {
+                Link("Apri Abitudini", destination: AppLink.habits.url).buttonStyle(.bordered)
             }
             ForEach(card.pendingActions) { action in
                 VStack(alignment: .leading, spacing: 6) {

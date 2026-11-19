@@ -2,7 +2,7 @@ import Foundation
 
 /// Contratto condiviso fra widget e app. Ogni area apre una sola funzione.
 enum AppLink: String, CaseIterable, Equatable, Sendable {
-    case voice, chat, family, reminders, automations, health
+    case voice, chat, family, reminders, automations, health, habits
 
     var url: URL { URL(string: "ernie://\(rawValue)")! }
 

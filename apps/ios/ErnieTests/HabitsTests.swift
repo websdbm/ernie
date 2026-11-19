@@ -106,6 +106,24 @@ private final class HabitsVisitFixture: CLVisit, @unchecked Sendable {
         #expect(state.visits.isEmpty);#expect(!state.aiAllowed)
         #expect(HabitVisit.date("2026-11-10T08:00:00.000Z") == HabitVisit.date("2026-11-10T08:00:00Z"))
     }
+    @Test func luoghiAnonimiDistinguibiliEConfermeNonRipetonoIlSegnaposto() throws {
+        var snapshot = try state()
+        let first = HabitPlace(id: "first", latitude: 45, longitude: 12, label: "Luogo da conoscere", purpose: "", frequency: "unknown", excluded: false)
+        var second = first; second.id = "second"
+        snapshot.places = [first, second]
+        var a = observation(arrival: Date(timeIntervalSince1970: 1_794_211_200)); a.placeId = first.id
+        var b = observation(arrival: Date(timeIntervalSince1970: 1_794_214_800)); b.placeId = second.id
+        snapshot.visits = [a, b]
+        #expect(snapshot.placeRows.map(\.id) == ["second", "first"])
+        #expect(snapshot.placeRows[0].title != snapshot.placeRows[1].title)
+        #expect(!snapshot.placeRows[0].title.contains("Luogo da conoscere"))
+        second.confirmedAt = b.observedAt; second.purpose = "Biblioteca per studiare"
+        snapshot.places = [first, second]
+        #expect(snapshot.placeRows[0].title == "Biblioteca per studiare")
+        #expect(snapshot.placeRows[0].status == "Confermato da te")
+        second.label = "Biblioteca"; snapshot.places = [first, second]
+        #expect(snapshot.placeRows[0].title == "Biblioteca")
+    }
     @Test func codaCifrataERipresaSoloDopoConsensoEsplicito() throws {
         let q=queue();defer {q.clear()}
         let payload=HabitsQueue.Payload(epoch:UUID().uuidString,enabledAt:.now,leaseUntil:Date().addingTimeInterval(3600),visits:[])
@@ -517,6 +535,31 @@ private final class HabitsVisitFixture: CLVisit, @unchecked Sendable {
         })
         let v=HabitVisit(id:UUID().uuidString,latitude:45,longitude:12,accuracyM:20,arrival:"2026-11-10T08:00:00Z",departure:nil,observedAt:"2026-11-10T08:10:00Z",timezone:"Europe/Rome",placeId:"server-owned")
         try await c.upload(epoch:UUID().uuidString,visits:[v])
+    }
+    @Test func renderingSchedeLuoghiChiaroScuro() async throws {
+        var snapshot = try state()
+        for index in 0..<3 {
+            let id = "synthetic-place-\(index)"
+            let p = HabitPlace(id: id, latitude: 45 + Double(index) / 100, longitude: 12,
+                label: "Luogo da conoscere", purpose: index == 0 ? "Biblioteca per studiare" : "",
+                frequency: "unknown", confirmedAt: index == 0 ? "2026-11-10T12:00:00Z" : nil, excluded: false)
+            snapshot.places.append(p)
+            var v = observation(arrival: Date(timeIntervalSince1970: 1_794_211_200 + Double(index) * 3600))
+            v.placeId = id; snapshot.visits.append(v)
+        }
+        for dark in [false, true] {
+            let content = VStack(alignment: .leading, spacing: 18) {
+                Text("Abitudini").font(.title2.bold())
+                ForEach(snapshot.placeRows) { row in HabitPlaceRowView(row: row); Divider() }
+            }.padding(20).frame(width: 390, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .environment(\.colorScheme, dark ? .dark : .light)
+                .environment(\.dynamicTypeSize, .xxxLarge)
+            let renderer = ImageRenderer(content: content); renderer.scale = 2
+            let image = try #require(renderer.uiImage)
+            #expect(image.size.height < 820)
+            try image.pngData()!.write(to: FileManager.default.temporaryDirectory.appendingPathComponent(dark ? "habits-places-dark.png" : "habits-places-light.png"))
+        }
     }
     @Test func renderingChiaroScuroECaratteriGrandi() async throws {
         let state=try JSONDecoder().decode(HabitsSnapshot.self,from:Data(habitsFixture.utf8));let store=makeStore();store.testConfigure(client:nil,queue:nil,snapshot:state)

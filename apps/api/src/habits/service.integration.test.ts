@@ -413,6 +413,104 @@ describe.skipIf(!local)('Abitudini encrypted runtime with real RLS and HTTP', ()
     expect(await s.question(id, 'Europe/Rome')).toBeNull();
     expect((await s.get(id)).places).toHaveLength(0);
   });
+  it('persists one private inbox alert and restores the same question across concurrent reads and restart', async () => {
+    const { id } = await seed();
+    const deliveries: unknown[] = [];
+    const make = () =>
+      createHabitsService({
+        pool: app,
+        cipher,
+        places: async () => [],
+        now: () => new Date('2026-11-10T12:30:00Z'),
+        notifyQuestion: async (userId, notice) => {
+          deliveries.push({ userId, ...notice });
+        },
+      });
+    const s = make();
+    const [a, b] = await Promise.all([
+      s.question(id, 'Europe/Rome'),
+      s.question(id, 'Europe/Rome'),
+    ]);
+    expect(a).not.toBeNull();
+    expect(b).toEqual(a);
+    expect(a?.question).toContain('10 novembre 2026');
+    expect(a?.question).not.toContain('fai qui');
+    expect(await make().question(id, 'Europe/Rome')).toEqual(a);
+    expect(deliveries).toHaveLength(1);
+    const inbox = (
+      await owner.query('SELECT kind,title,body,payload FROM notifications WHERE user_id=$1', [id])
+    ).rows;
+    expect(inbox).toEqual([
+      {
+        kind: 'proactive.habit_learning',
+        title: 'Ernie ha una domanda',
+        body: 'Apri Abitudini per riconoscere una sosta.',
+        payload: { destination: 'habits' },
+      },
+    ]);
+    expect(JSON.stringify(deliveries)).not.toContain('latitude');
+    const p = (await s.get(id)).places[0];
+    if (!p) throw new Error('missing fixture');
+    await s.updatePlace(id, p.id, {
+      label: 'Biblioteca',
+      purpose: 'Studio',
+      frequency: 'occasional',
+    });
+    expect(await make().question(id, 'Europe/Rome')).toBeNull();
+    expect(deliveries).toHaveLength(1);
+  });
+  it('produces the alert without an app request and does not repeat it after a failed push', async () => {
+    const { id } = await seed();
+    let deliveries = 0;
+    const s = createHabitsService({
+      pool: app,
+      cipher,
+      places: async () => [],
+      now: () => new Date('2026-11-10T12:30:00Z'),
+      notifyQuestion: async (userId) => {
+        if (userId === id) deliveries++;
+        throw new Error('synthetic push failure');
+      },
+    });
+    await s.maintainAll();
+    const pending = await s.question(id, 'Europe/Rome');
+    expect(pending).not.toBeNull();
+    await s.maintainAll();
+    expect(deliveries).toBe(1);
+    expect(
+      (await owner.query('SELECT count(*)::int n FROM notifications WHERE user_id=$1', [id]))
+        .rows[0].n,
+    ).toBe(1);
+  });
+  it('respects quiet hours and the account kill switch before notifying', async () => {
+    const { id } = await seed();
+    let time = new Date('2026-11-10T22:00:00Z');
+    let deliveries = 0;
+    const s = createHabitsService({
+      pool: app,
+      cipher,
+      places: async () => [],
+      now: () => time,
+      notifyQuestion: async () => {
+        deliveries++;
+      },
+    });
+    expect(await s.question(id, 'Europe/Rome')).toBeNull();
+    expect(deliveries).toBe(0);
+    await owner.query(
+      'UPDATE users SET settings=settings || \'{"killSwitch":true}\'::jsonb WHERE id=$1',
+      [id],
+    );
+    time = new Date('2026-11-11T08:00:00Z');
+    expect(await s.question(id, 'Europe/Rome')).toBeNull();
+    expect(deliveries).toBe(0);
+    await owner.query(
+      'UPDATE users SET settings=settings || \'{"killSwitch":false}\'::jsonb WHERE id=$1',
+      [id],
+    );
+    expect(await s.question(id, 'Europe/Rome')).not.toBeNull();
+    expect(deliveries).toBe(1);
+  });
   it('clear and re-enable cannot reset the daily allowance, including concurrent questions', async () => {
     const { id, s, setTime } = await seed();
     expect(await s.question(id, 'Europe/Rome')).not.toBeNull();

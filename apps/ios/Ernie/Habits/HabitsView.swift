@@ -40,25 +40,19 @@ struct HabitsView: View {
                         Text("iOS rileva soste approssimative: non è un tracciamento continuo. I dati sono cifrati sul dispositivo e nel tuo account. Un dispositivo offline recepisce la pausa alla prossima sincronizzazione; il permesso locale scade dopo 24 ore senza contatto con il server.")
                     }
                     if let question = store.question, let place = state.places.first(where: { $0.id == question.placeId }) {
-                        Section("Un luogo da conoscere") {
+                        Section("Domanda di Ernie") {
                             Text(question.question)
-                            Text(place.label).font(.headline)
-                            Button("Descrivi questo luogo") { editing = place }
+                            if !["", "Luogo da conoscere"].contains(place.label) { Text(place.label).font(.headline) }
+                            Button("Vedi sulla mappa e rispondi") { editing = place }
                             Button("Un’altra volta") { Task { await store.act("later", id: place.id) } }
                             Button("Non imparare questo luogo", role: .destructive) { Task { await store.act("exclude_place", id: place.id) } }
                         }
                     }
                     Section("Luoghi") {
                         if state.places.filter({ !$0.excluded }).isEmpty { Text("Le soste compariranno qui. Sarai tu a spiegarne il significato.").foregroundStyle(.secondary) }
-                        ForEach(state.places.filter { !$0.excluded }) { place in
-                            Button { editing = place } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(place.label).font(.headline)
-                                        Text(place.confirmedAt == nil ? "Da confermare" : (place.purpose.isEmpty ? "Confermato da te" : place.purpose)).font(.subheadline).foregroundStyle(.secondary)
-                                    }
-                                    Spacer(); Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                                }.padding(.vertical, 4)
+                        ForEach(state.placeRows) { row in
+                            Button { editing = row.place } label: {
+                                HabitPlaceRowView(row: row)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -111,6 +105,22 @@ struct HabitsView: View {
     static func weekday(_ day: Int) -> String { ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"][max(0, min(day, 6))] }
 }
 
+struct HabitPlaceRowView: View {
+    let row: HabitPlaceRow
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.title).font(.headline).lineLimit(2)
+                if !row.hasPlaceholderName || row.place.confirmedAt != nil,
+                   let when = row.visitDescription { Text("Ultima sosta: \(when)").font(.subheadline).foregroundStyle(.secondary) }
+                Text("\(row.status) · \(row.visitCount) \(row.visitCount == 1 ? "sosta" : "soste")").font(.caption).foregroundStyle(.secondary)
+                if !row.hasPlaceholderName, !row.place.purpose.isEmpty { Text(row.place.purpose).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+            }
+            Spacer(); Image(systemName: "chevron.right").foregroundStyle(.secondary)
+        }.padding(.vertical, 4)
+    }
+}
+
 private struct HabitPlaceEditor: View {
     @State var place: HabitPlace
     @Bindable var store: HabitsStore
@@ -128,6 +138,7 @@ private struct HabitPlaceEditor: View {
                 } footer: { Text("Il significato che inserisci viene registrato come confermato da te. La posizione rilevata da iOS può essere approssimativa.") }
                 if let error = store.error { Text(error).foregroundStyle(.red) }
             }.navigationTitle("Descrivi il luogo")
+                .onAppear { if ["", "Luogo da conoscere"].contains(place.label) { place.label = "" } }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Salva") { Task { await store.update(place); if store.error == nil { dismiss() } } }.disabled(store.busy || place.label.trimmingCharacters(in: .whitespaces).isEmpty) }

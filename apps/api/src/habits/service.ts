@@ -8,12 +8,14 @@ import { guardianSettings } from '../guardian.js';
 import type { HealthCipher } from '../health-protection/crypto.js';
 import { type HabitTeaching, habitLabelKey, habitLocalDate, habitTimezone } from './chat.js';
 import {
+  describePlaceQuestion,
   distanceM,
   forgottenObservation,
   HabitState,
   HabitsModelError,
   ingestVisits,
   initialHabits,
+  pendingPlaceQuestion,
   pruneHabits,
   questionCandidate,
   reviewHabits,
@@ -54,6 +56,10 @@ export interface HabitsOptions {
   pool: Pool;
   cipher: HealthCipher | null;
   now?: () => Date;
+  notifyQuestion?: (
+    userId: string,
+    notice: { id: string; title: string; body: string },
+  ) => Promise<void>;
   places: (
     userId: string,
   ) => Promise<
@@ -333,8 +339,11 @@ export function createHabitsService(opts: HabitsOptions) {
       if (!opts.cipher) return null;
       // Stable service day; a client-supplied timezone cannot reset the daily allowance.
       timezone = 'Europe/Rome';
-      return transaction(userId, async (s, _r, settings, c) => {
+      let notice: { id: string; title: string; body: string } | null = null;
+      const result = await transaction(userId, async (s, _r, settings, c) => {
         if (!enabled(settings) || !s.collecting) return null;
+        const pending = pendingPlaceQuestion(s, now());
+        if (pending) return describePlaceQuestion(s, pending);
         const today = new Intl.DateTimeFormat('en-CA', {
           timeZone: timezone,
           year: 'numeric',
@@ -355,8 +364,8 @@ export function createHabitsService(opts: HabitsOptions) {
           userId,
           kind: 'habit_learning' as const,
           dedupeKey: `habit_learning:${today}`,
-          title: 'Un luogo da conoscere',
-          body: 'C’è una sosta che puoi descrivere nella sezione Abitudini.',
+          title: 'Ernie ha una domanda',
+          body: 'Apri Abitudini per riconoscere una sosta.',
           evidence: { source: 'user' as const, refs: [p.id] },
         };
         if (
@@ -383,13 +392,20 @@ export function createHabitsService(opts: HabitsOptions) {
         );
         if (inserted.rowCount !== 1) return null;
         p.askedAt = now().toISOString();
+        p.snoozeUntil = null;
         s.lastQuestionDay = today;
-        return {
-          placeId: p.id,
-          title: 'Conosci questo luogo?',
-          question: 'Che cosa fai qui? È una visita occasionale o un posto che frequenti?',
-        };
+        const notification = await c.query<{ id: string }>(
+          "INSERT INTO notifications(user_id,kind,title,body,payload) VALUES($1,'proactive.habit_learning',$2,$3,$4) RETURNING id",
+          [userId, candidate.title, candidate.body, JSON.stringify({ destination: 'habits' })],
+        );
+        const id = notification.rows[0]?.id;
+        if (id) notice = { id, title: candidate.title, body: candidate.body };
+        return describePlaceQuestion(s, p);
       });
+      // Persist the question and inbox entry atomically before attempting the external push.
+      // Reopening the app returns the pending question, never a second notification.
+      if (notice) await opts.notifyQuestion?.(userId, notice).catch(() => {});
+      return result;
     },
     async context(userId: string, text: string) {
       // Opt-in contextual disclosure, bounded and only for an explicit habits question. No raw mobility history.
@@ -456,6 +472,7 @@ export function createHabitsService(opts: HabitsOptions) {
       for (const id of ids) {
         try {
           await this.maintenance(id);
+          await this.question(id, 'Europe/Rome');
         } catch {
           failed = true;
         }

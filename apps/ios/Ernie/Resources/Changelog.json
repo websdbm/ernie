@@ -1,5 +1,30 @@
 [
   {
+    "build": 123,
+    "date": "2026-11-19",
+    "title": "Abitudini più chiare, anche nelle notifiche",
+    "items": [
+      {
+        "icon": "mappin.and.ellipse",
+        "title": "Riconosci le tue soste",
+        "detail": "I luoghi ancora da identificare si distinguono per data, ora e numero di soste. Le descrizioni confermate sostituiscono i titoli generici e l’elenco mostra prima le soste più recenti.",
+        "test": "Apri Abitudini e confronta due luoghi senza nome, poi assegna un nome a uno di essi."
+      },
+      {
+        "icon": "questionmark.bubble",
+        "title": "Domande con il contesto giusto",
+        "detail": "Ernie indica a quale sosta si riferisce e quando è avvenuta. Una domanda rimasta aperta si ritrova anche dopo avere chiuso e riaperto l’app.",
+        "test": "Verifica data e posizione sulla mappa prima di rispondere alla domanda di Ernie."
+      },
+      {
+        "icon": "bell.badge",
+        "title": "Ernie ti avvisa quando ha una domanda",
+        "detail": "Il server può preparare una domanda di Abitudini anche ad app chiusa. La notifica apre la sezione corretta e non mostra luoghi o dettagli personali sulla schermata di blocco.",
+        "test": "Con le notifiche abilitate, tocca un avviso di Abitudini: deve aprire la domanda. Riaprire la scheda non deve generare un secondo avviso."
+      }
+    ]
+  },
+  {
     "build": 122,
     "date": "2026-11-13",
     "title": "I tuoi segnalibri con Raindrop",

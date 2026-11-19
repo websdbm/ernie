@@ -686,6 +686,22 @@ async function main(): Promise<void> {
   const habits = createHabitsService({
     pool: postgres.pool,
     cipher: healthCipherFromEnvironment(process.env.HABITS_ENCRYPTION_KEYS),
+    notifyQuestion: async (userId, notice) => {
+      await publishUserEvent(redis.client, {
+        userId,
+        type: 'inbox.updated',
+        payload: { kind: 'proactive.habit_learning' },
+      }).catch(() => logger.warn('notifica live Abitudini non disponibile'));
+      await familyPush
+        ?.notifyUser(userId, {
+          title: notice.title,
+          body: notice.body,
+          data: { kind: 'proactive.habit_learning', notificationId: notice.id },
+          threadId: 'habits',
+          collapseId: notice.id,
+        })
+        .catch(() => logger.warn('push Abitudini non disponibile'));
+    },
     places: async (userId) => (await profiles.get(userId)).places,
   });
   let habitsMaintaining = false;
@@ -698,7 +714,7 @@ async function main(): Promise<void> {
       .finally(() => {
         habitsMaintaining = false;
       });
-  }, 60 * 60_000);
+  }, 5 * 60_000);
   habitsTimer.unref();
   const health = createHealthVaultService({
     pool: postgres.pool,

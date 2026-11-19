@@ -5,6 +5,26 @@ passaggio di consegne fra loro e va aggiornato **a fine di ogni sessione di lavo
 modifiche: cosa è cambiato, cosa è pubblicato e dove, cosa resta aperto. Le regole di rilascio sono in
 [AGENTS.md](../AGENTS.md), le note di ogni build in [releases](releases/).
 
+### Build 123 — correzione Abitudini pronta, rilascio da autorizzare
+
+19 novembre 2026. Verifica account/servizio in sola lettura: luoghi con coordinate distinte presentati
+con lo stesso titolo; risposta conservata ma rimasto il segnaposto. La domanda proattiva si riferiva a
+una sosta storica e usava «qui», senza data. Nessun dato personale modificato o esportato in Git;
+chiesta all’utente conferma dell’eventuale associazione tra descrizione e luogo, ancora in attesa.
+
+Correzione: righe identificabili per data/ora, conteggio, ordinamento recente e descrizioni confermate;
+questionario sulla sosta recente eleggibile, riferimento temporale esplicito e ripresa della domanda
+aperta dopo riavvio. Richiesta aggiuntiva utente: notifica delle domande anche ad app chiusa. Voce inbox
+atomica, push generico senza dettagli del luogo, link diretto Abitudini; timer API ogni cinque minuti,
+revisione inferenziale sempre una volta al giorno, nessuna chiamata LLM. Limiti/quiet hours e skill
+rispettati. Una domanda aperta, una notifica per domanda, nessuna ripetizione per semplice riapertura.
+
+61 test backend passati con PostgreSQL/RLS locale, 38 iOS e rendering chiaro/scuro passati; TS/Biome.
+Build 123/changelog aggiornati. Archivio di distribuzione in preparazione dal commit GitHub verificato.
+**API e TestFlight restano alla 122**: nessuna pubblicazione o scrittura in produzione autorizzata per
+questo incremento. Serve via libera API e TestFlight; nessuna migrazione e worker invariato.
+Dettagli in [build 123](releases/build-123.md). Modifiche estranee preservate.
+
 ### Raindrop OAuth — implementazione locale, non pubblicata
 
 13 novembre 2026. L’utente riferisce di avere completato il collegamento manuale e richiede login

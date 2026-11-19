@@ -94,6 +94,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// Dati della notifica che servono dopo, estratti subito: oggetti e dizionari di UserNotifications non sono Sendable.
     private struct PushInfo: Sendable {
         let family: Bool
+        let habits: Bool
         let urgentId: String?
         let from: String?
         let messageId: String?
@@ -101,6 +102,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         init(_ info: [AnyHashable: Any]) {
             let data = info["ernie"] as? [String: Any]
             family = AppDelegate.isFamilyMessage(info)
+            habits = AppDelegate.habitsLink(info) != nil
             urgentId = AppDelegate.urgentId(info)
             from = data?["from"] as? String
             messageId = data?["id"] as? String
@@ -135,6 +137,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             ? (response as? UNTextInputNotificationResponse)?.userText : nil
         nonisolated(unsafe) let done = completionHandler
         Task { @MainActor in
+            if push.habits { model?.pendingLink = .habits }
             if push.family, let reply, let from = push.from, let id = push.messageId,
                let sent = await Self.sendReply(reply, to: from, replyTo: id) {
                 FamilyLatest(block: sent)?.saveAndReload()
@@ -143,6 +146,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             if push.family { await model?.syncFamilyMessages(urgentId: push.urgentId) }
             done()
         }
+    }
+
+    nonisolated static func habitsLink(_ info: [AnyHashable: Any]) -> AppLink? {
+        (info["ernie"] as? [String: Any])?["kind"] as? String == "proactive.habit_learning" ? .habits : nil
     }
 
     /// Notifica di un messaggio in famiglia (dati sotto la chiave `ernie`).

@@ -21,6 +21,25 @@ struct HabitPlace: Codable, Sendable, Identifiable, Equatable {
     var frequency: String; var confirmedAt: String?; var linkedPlaceId: String?; var excluded: Bool
     var askedAt: String?; var snoozeUntil: String?
 }
+struct HabitPlaceRow: Identifiable {
+    let place: HabitPlace
+    let latestVisit: HabitVisit?
+    let visitCount: Int
+    var id: String { place.id }
+    var hasPlaceholderName: Bool { ["", "Luogo da conoscere", "Luogo da identificare"].contains(place.label.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    var visitDescription: String? {
+        guard let visit = latestVisit, let date = HabitVisit.date(visit.arrival ?? visit.departure ?? visit.observedAt) else { return nil }
+        let f = DateFormatter(); f.locale = Locale(identifier: "it_IT")
+        f.timeZone = TimeZone(identifier: visit.timezone) ?? .current; f.dateFormat = "d MMMM, HH:mm"
+        return f.string(from: date)
+    }
+    var title: String {
+        if !hasPlaceholderName { return place.label }
+        if place.confirmedAt != nil, !place.purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return place.purpose }
+        return visitDescription.map { "Sosta del \($0)" } ?? "Luogo da identificare"
+    }
+    var status: String { place.confirmedAt == nil ? "Da identificare" : "Confermato da te" }
+}
 struct HabitPattern: Codable, Sendable, Identifiable {
     var placeId: String; var weekday: Int; var arrivalStart: String; var arrivalEnd: String
     var days: Int; var spanDays: Int; var updatedAt: String
@@ -30,6 +49,20 @@ struct HabitsSnapshot: Codable, Sendable {
     var revision: Int; var epoch: String; var skillEnabled: Bool; var collecting: Bool; var aiAllowed: Bool
     var enabledAt: String?; var retentionDays: Int; var policyVersion: Int; var policy: String
     var visits: [HabitVisit]; var places: [HabitPlace]; var patterns: [HabitPattern]; var lastReviewDay: String?
+}
+extension HabitsSnapshot {
+    var placeRows: [HabitPlaceRow] {
+        let groups = Dictionary(grouping: visits.compactMap { v -> HabitVisit? in v.placeId == nil ? nil : v }, by: { $0.placeId ?? "" })
+        return places.filter { !$0.excluded }.map { place in
+            let visits = groups[place.id] ?? []
+            let latest = visits.max { ($0.arrival ?? $0.departure ?? $0.observedAt) < ($1.arrival ?? $1.departure ?? $1.observedAt) }
+            return HabitPlaceRow(place: place, latestVisit: latest, visitCount: visits.count)
+        }.sorted { a, b in
+            let left = a.latestVisit?.arrival ?? a.latestVisit?.observedAt ?? ""
+            let right = b.latestVisit?.arrival ?? b.latestVisit?.observedAt ?? ""
+            return left == right ? a.id < b.id : left > right
+        }
+    }
 }
 struct HabitQuestion: Decodable, Sendable, Identifiable {
     var placeId: String; var title: String; var question: String

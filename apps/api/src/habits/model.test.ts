@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  describePlaceQuestion,
   forgottenObservation,
   HabitState,
   ingestVisits,
   initialHabits,
+  pendingPlaceQuestion,
   pruneHabits,
   questionCandidate,
   reviewHabits,
@@ -272,5 +274,55 @@ describe('Abitudini observation and inference boundaries', () => {
     s.visits = [];
     ingestVisits(s, [visit()], now);
     expect(s.visits).toHaveLength(0);
+  });
+  it('asks about the latest eligible observation rather than the first place ever recorded', () => {
+    const s = state();
+    ingestVisits(
+      s,
+      [visit('2026-11-03T09:00:00Z'), visit('2026-11-10T10:00:00Z', { latitude: 45.01 })],
+      now,
+    );
+    expect(questionCandidate(s, now)?.id).toBe(s.places[1]?.id);
+    if (s.places[1]) s.places[1].confirmedAt = now.toISOString();
+    expect(questionCandidate(s, now)?.id).toBe(s.places[0]?.id);
+  });
+  it('anchors a pending question to its observed visit, never to the current position or a later visit', () => {
+    const s = state();
+    ingestVisits(s, [visit('2026-11-09T09:00:00Z')], now);
+    const p = s.places[0];
+    if (!p) throw new Error('missing fixture');
+    p.askedAt = now.toISOString();
+    s.lastQuestionDay = '2026-11-10';
+    ingestVisits(
+      s,
+      [visit('2026-11-10T13:00:00Z', { observedAt: '2026-11-10T14:00:00Z' })],
+      new Date('2026-11-10T14:00:00Z'),
+    );
+    expect(pendingPlaceQuestion(s, now)?.id).toBe(p.id);
+    expect(describePlaceQuestion(s, p)).toMatchObject({
+      placeId: p.id,
+      visitAt: '2026-11-09T09:00:00Z',
+    });
+    expect(describePlaceQuestion(s, p)?.question).toContain('9 novembre 2026');
+    expect(describePlaceQuestion(s, p)?.question).not.toContain('fai qui');
+    p.snoozeUntil = '2026-11-11T12:00:00Z';
+    expect(pendingPlaceQuestion(s, now)).toBeUndefined();
+    p.snoozeUntil = null;
+    p.confirmedAt = now.toISOString();
+    expect(pendingPlaceQuestion(s, now)).toBeUndefined();
+  });
+  it('does not ask about a visit whose reported departure is still in the future', () => {
+    const s = state();
+    ingestVisits(
+      s,
+      [
+        visit('2026-11-10T11:00:00Z', {
+          departure: '2026-11-10T12:01:00Z',
+          observedAt: '2026-11-10T12:01:00Z',
+        }),
+      ],
+      now,
+    );
+    expect(questionCandidate(s, now)).toBeUndefined();
   });
 });
